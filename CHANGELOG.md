@@ -6,6 +6,45 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-06 — "Exception & Access classes"
+
+### Added
+- `Ezdoc\Exceptions\EzdocException` — base exception (extends `\RuntimeException` untuk backward compat)
+- `Ezdoc\Exceptions\AccessDeniedException` — HTTP 403, factory `forAction()` + `missingRole()`
+- `Ezdoc\Exceptions\NotFoundException` — HTTP 404, factory `forResource()`
+- `Ezdoc\Exceptions\ValidationException` — HTTP 400, factory `forField()` + `forFields()`, error map
+- `Ezdoc\Access\PermissionRule` — value object untuk 1 rule (`role:X`, `user:N`, `*`)
+- `Ezdoc\Access\AccessConfig` — wrapper untuk template's `access_config JSON` (support canonical + legacy format)
+- `Ezdoc\Access\AccessDecision` — result object (allow/deny + reason + matched rule)
+- `Ezdoc\Access\AccessControl` — RBAC service, `can()` + `assertCan()` + `hasAnyRole()`
+- `ezdoc_access_control()` — global adapter untuk get default AccessControl instance
+- `ezdoc_check_access(json, action)` — global adapter untuk check dengan AccessConfig JSON
+
+### Changed
+- `Context::fromGlobals()` — throw `EzdocException` instead of raw `\RuntimeException` (backward compat: EzdocException extends \RuntimeException)
+
+## [0.2.0] - 2026-07-06 — "Extract & Harden"
+
+### Added
+- Extract 7 inline handlers dari `form_pembuat_surat_v3.php` ke `ezdoc/actions/`:
+  - `actions/template/analyze_query.php`
+  - `actions/template/list_categories.php`
+  - `actions/template/field_usage.php`
+  - `actions/template/field_usage_all.php`
+  - `actions/template/rename_field.php` (dengan audit log + sanitize)
+  - `actions/template/cleanup_orphans.php` (dengan audit log)
+  - `actions/default_vars/list_vars.php`
+- `_dispatcher.php` whitelist expanded: 12 template actions + 3 default_vars actions (was 3 + 0)
+- HMAC secret hardening di `lib/doc_verify_helpers.php`: env var override via `EZDOC_HMAC_SECRET` (precedence: env → file → auto-generate)
+
+### Changed
+- `form_pembuat_surat_v3.php`: removed ~230 lines inline handler (routed via dispatcher)
+- `list_vars.php`: hilangkan dead-code `CREATE TABLE surat_default_vars` (legacy)
+- `rename_field.php`: tambah sanitize new name, tracking skipped conflicts, audit log
+- `cleanup_orphans.php`: tambah audit log dengan removedKeys list
+
+## [Unreleased-pre-0.2]
+
 ### Added
 - PSR-4 namespace `Ezdoc\*` — library-ready untuk Composer install
 - `Ezdoc\UUID` class — v7 (time-ordered) + v4 (random) + timestamp extraction

@@ -6,6 +6,7 @@ namespace Ezdoc;
 
 use Ezdoc\Auth\HasRoleProvider;
 use Ezdoc\Auth\RoleProvider;
+use Ezdoc\Exceptions\EzdocException;
 use mysqli;
 
 /**
@@ -61,7 +62,9 @@ final class Context
     {
         $db = isset($GLOBALS['conn']) ? $GLOBALS['conn'] : null;
         if (!$db instanceof mysqli) {
-            throw new \RuntimeException(
+            // EzdocException extends \RuntimeException — backward-compat:
+            // existing code yang `catch (\RuntimeException)` tetap catch ini.
+            throw new EzdocException(
                 'Context::fromGlobals() memerlukan $GLOBALS[\'conn\'] sebagai mysqli instance. '
                 . 'Pastikan koneksi.php sudah di-require sebelum call ini.'
             );

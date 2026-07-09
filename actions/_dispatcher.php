@@ -24,13 +24,18 @@
  *   POST ajax=1 action=save                 → template/save_template.php
  *   POST ajax=1 action=toggle_lock          → template/toggle_template_lock.php
  *   POST ajax=1 action=copy_template        → template/copy_template.php
+ *   POST ajax=1 action=analyze_query        → template/analyze_query.php
+ *   POST ajax=1 action=list_categories      → template/list_categories.php
+ *   POST ajax=1 action=field_usage          → template/field_usage.php
+ *   POST ajax=1 action=field_usage_all      → template/field_usage_all.php
+ *   POST ajax=1 action=rename_field         → template/rename_field.php
+ *   POST ajax=1 action=cleanup_orphans      → template/cleanup_orphans.php
  *   POST action=delete (form submit)        → template/delete_template.php
  *
- *   ─ Belum extract (inline di designer) ─
- *   POST ajax=1 action=analyze_query, list_vars, add_var, delete_var,
- *                     list_categories, field_usage, field_usage_all,
- *                     rename_field, cleanup_orphans
- *   → di-handle inline di designer. Extract nanti kalau perlu.
+ *   ─ Default vars actions (extracted) ─
+ *   POST ajax=1 action=list_vars            → default_vars/list_vars.php
+ *   POST ajax=1 action=add_var              → default_vars/add_var.php
+ *   POST ajax=1 action=delete_var           → default_vars/delete_var.php
  */
 
 // Safety: pastikan helper sudah di-load
@@ -70,20 +75,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['_ajax'])) {
     exit;
 }
 
-// ─── POST ajax=1 action=<name> — router untuk template actions (dari designer) ───
+// ─── POST ajax=1 action=<name> — router untuk template & default_vars actions ───
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax']) && isset($_POST['action'])) {
+    // Template actions → actions/template/<file>
     $templateWhitelist = [
-        'save'           => 'save_template.php',
-        'toggle_lock'    => 'toggle_template_lock.php',
-        'copy_template'  => 'copy_template.php',
+        'save'             => 'save_template.php',
+        'toggle_lock'      => 'toggle_template_lock.php',
+        'copy_template'    => 'copy_template.php',
+        'analyze_query'    => 'analyze_query.php',
+        'list_categories'  => 'list_categories.php',
+        'field_usage'      => 'field_usage.php',
+        'field_usage_all'  => 'field_usage_all.php',
+        'rename_field'     => 'rename_field.php',
+        'cleanup_orphans'  => 'cleanup_orphans.php',
     ];
-    $action = (string)$_POST['action'];
+
+    // Default vars actions → actions/default_vars/<file>
+    $defaultVarsWhitelist = [
+        'list_vars'   => 'list_vars.php',
+        'add_var'     => 'add_var.php',
+        'delete_var'  => 'delete_var.php',
+    ];
+
+    $action = (string) $_POST['action'];
+
     if (isset($templateWhitelist[$action])) {
         require __DIR__ . '/template/' . $templateWhitelist[$action];
         exit;
     }
-    // Action lain (analyze_query, list_vars, dll) — biarkan main file yang handle inline.
-    // Ini graceful fallback: tidak return error, biar main file inline handler match.
+
+    if (isset($defaultVarsWhitelist[$action])) {
+        require __DIR__ . '/default_vars/' . $defaultVarsWhitelist[$action];
+        exit;
+    }
+
+    // No match — biarkan main file yang handle (kalau ada inline handler tersisa).
+    // Graceful fallback: tidak return error.
 }
 
 // ─── POST action=delete (non-ajax form submit) — hard-delete template ───

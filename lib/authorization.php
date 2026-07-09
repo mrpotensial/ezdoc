@@ -383,3 +383,43 @@ function ezdoc_require_manage_templates(string $message = 'Tidak berhak modify t
     ezdoc_respond_error($message, 403);
 }
 
+// ═══════════════════════════════════════════════════════════════
+// OOP adapter — Ezdoc\Access\AccessControl (v0.3+)
+// ═══════════════════════════════════════════════════════════════
+//
+// Backward-compat wrapper: existing procedural functions di atas TETAP jalan.
+// Function-function di bawah ini adalah adapter tipis ke OOP AccessControl.
+// Kalau consumer library mau OOP-style, ambil via ezdoc_access_control().
+
+/**
+ * Get default AccessControl instance untuk global helpers.
+ * Cache instance — bypass roles = ['superadmin'] (existing behavior).
+ */
+function ezdoc_access_control(): \Ezdoc\Access\AccessControl
+{
+    static $instance = null;
+    if ($instance === null) {
+        // Build RoleProvider adapter yang wrap fungsi procedural existing
+        $provider = new \Ezdoc\Auth\CallableRoleProvider(
+            function ($roles) { return ezdoc_has_role($roles); },
+            function () { return ezdoc_current_user_id(); },
+            function () { return ezdoc_current_user_roles(); }
+        );
+        $instance = new \Ezdoc\Access\AccessControl($provider, ['superadmin']);
+    }
+    return $instance;
+}
+
+/**
+ * OOP-style: check via AccessConfig (JSON access_config di template).
+ *
+ * @param string|null $accessConfigJson JSON dari ezdoc_templates.access_config
+ * @param string $action Nama action ('create', 'edit', 'lock', 'delete', dll)
+ * @return \Ezdoc\Access\AccessDecision
+ */
+function ezdoc_check_access(?string $accessConfigJson, string $action): \Ezdoc\Access\AccessDecision
+{
+    $config = \Ezdoc\Access\AccessConfig::fromJson($accessConfigJson);
+    return ezdoc_access_control()->can(ezdoc_current_user_id(), $action, $config);
+}
+
