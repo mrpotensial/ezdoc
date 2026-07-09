@@ -1,0 +1,1317 @@
+# ezdoc — Product Requirements Document
+
+> **Status**: Draft v1  · **Owner**: `mrpotensial`  · **Last updated**: 2026-07-06
+> **Target audience**: developer yang extend, deploy, atau consume library ini.
+
+---
+
+## 1. Vision
+
+`ezdoc` adalah **framework-agnostic PHP library** untuk sistem generate dokumen berbasis template dengan:
+
+- Template versioning (family + child versions, immutable snapshot)
+- Document lifecycle (draft → published → locked → archived)
+- RBAC per-template (create/edit/lock/delete) + per-TTD (siapa boleh sign)
+- Public QR verification (HMAC signature + content hash, tamper detection)
+- Audit trail persistent (compliance-ready)
+- Framework portability: plain PHP (monolith), Laravel, Symfony, WordPress, atau consumer app apapun
+- **Domain-agnostic** — bukan hospital-only. Sama kode bisa handle rekam medis, kontrak legal, invoice keuangan, SK karyawan, sertifikat pelatihan, dll.
+- **International-first** — no locale/lang lock-in, no Indonesian-specific field name di core schema. Timestamps UTC, currency ISO 4217, language BCP 47.
+
+Library ini standalone project — tidak vendor-locked ke industry manapun. Dogfood pertama di sebuah hospital app (koneksi.php-based monolith) sebagai use case validation, tapi core sengaja domain-agnostic sejak hari pertama.
+
+**Target use cases** (sample domain — semua pakai schema yang sama):
+
+| Domain | Contoh dokumen | Subject | Signature level yang cocok |
+|--------|----------------|---------|-----------------------------|
+| **Hospital** | Rekam medis, surat rujukan, resep obat, informed consent | Patient (norm/RM) | L2 (internal cert) + A1 (audit publik) untuk compliance |
+| **Legal / Contract** | Perjanjian sewa, MoU, NDA, kontrak kerja | Party (client_id) | L3 (Peruri/Privy) — legally binding |
+| **HR** | SK karyawan, surat peringatan, sertifikat pelatihan | Employee (NIP/emp_id) | L2 (internal cert) atau L3 kalau formal |
+| **Finance / Invoice** | Invoice, kwitansi, purchase order | Invoice / customer | L1 + A1 (blockchain anchor untuk audit trail) |
+| **Education** | Ijazah, sertifikat kelulusan, transkrip nilai | Student (NIM/student_id) | L3 (BSrE) — legally binding untuk ijazah |
+| **Government** | Surat keterangan, izin usaha, dokumen kependudukan | Warga / entity | L3 (BSrE) — mandatory untuk dokumen pemerintah |
+| **Insurance** | Polis, klaim, sertifikat | Policyholder | L3 + A1 untuk high-value |
+| **Real estate** | Akta jual beli, sertifikat, surat pemilikan | Property (SHM number) | L3 + notaris workflow |
+| **Warehouse / Logistics** | Surat jalan, bukti terima barang, packing list | Shipment (BL/AWB) | L1 (internal) atau L2 |
+
+## 2. Success Criteria
+
+### 2.1 v1.0 — PHP native release
+| Criteria | Target |
+|----------|--------|
+| PHP compatibility | 7.4, 8.0, 8.1, 8.2, 8.3, 8.4 (dengan polyfill layer) |
+| Test coverage | ≥ 70% unit + integration |
+| Composer install | `composer require mrpotensial/ezdoc` works standalone (tanpa external app deps) |
+| Framework adapters | Laravel service provider + WordPress plugin bootstrap sample |
+| Docs | README + PRD + API reference + migration guide dari legacy |
+| Security | Hardcoded creds = 0, HMAC secret = env-based, audit RBAC-checked |
+| Signature level | L1 (HMAC), L2 (LocalPKI), L3 (Peruri) semua production-ready + PAdES envelope |
+| Blockchain anchoring | OpenTimestamps + Polygon production-ready (opsional install) |
+| UI packaging | `mrpotensial/ezdoc-ui-blade` publishable via `vendor:publish`, view resolver + slots |
+| **Domain-agnostic** | Core schema tidak punya `norm`/`nopen`/hospital-specific column. Polymorphic subject + `field_values JSON`. Sample profiles: hospital, contract, HR, invoice |
+| **International-ready** | UTF-8 NFC everywhere, ISO 4217 currency, ISO 3166 country, BCP 47 locale, E.164 phone. Label multi-locale JSON. `utf8mb4_0900_ai_ci` collation |
+| **Extensibility** | Consumer bisa register custom profile (mis. `hospital-id`) untuk convenience API tanpa fork core |
+| Performance | Migration idempotent, self-heal orphan registry, < 100ms untuk hot paths |
+
+### 2.2 v2.0 — Cross-language ecosystem
+| Criteria | Target |
+|----------|--------|
+| Language ports | PHP (canonical), Go (`mrpotensial/ezdoc-go`), TypeScript (`@mrpotensial/ezdoc-ts`) |
+| Shared spec | `ezdoc-spec` repo public dengan JSON Schema + OpenAPI 3.1 + conformance test vectors |
+| PSrE integration | Multi-CA support (Peruri + Privy + VIDA, MultiProvider fallback) |
+| Signature level | L1-L3 semua production-ready across all languages, bit-exact identical envelope |
+| Blockchain anchoring | OpenTimestamps + Polygon + BatchAnchor (Merkle tree) di semua language port |
+| PDF envelope | PAdES-B-LT signed PDF (Adobe Reader validation pass) |
+| Timestamping | RFC 3161 TSA support (BSrE atau external) |
+| Cross-language interop | Sign di PHP → verify di Go/TS = same result (contract-tested via conformance) |
+| UI ecosystem | Blade (official) + React (community, shadcn-style) + Vue/Livewire (community) |
+
+## 3. Current State (v0.1-unreleased snapshot)
+
+### 3.1 Foundation ✅ Done
+
+| Layer | File | Status |
+|-------|------|--------|
+| Autoload | `autoload.php` | PSR-4 fallback + polyfill wiring |
+| Composer | `composer.json` | php: `>=7.4`, suggest `symfony/polyfill-php80` |
+| DI Container | `src/Context.php` | Immutable, `withDb()`/`withRoleProvider()`, `fromGlobals()` |
+| UUID | `src/UUID.php` | v7 (RFC 9562), v4, extractTimestampMs, isValid |
+| Auth | `src/Auth/{RoleProvider,HasRoleProvider,CallableRoleProvider}.php` | Interface + 2 impls |
+| Audit | `src/Audit/Logger.php` | 19-field silent-fail writer |
+| Migration | `src/Migrations/Runner.php` | Self-heal orphan registry, batch-continue |
+| Polyfill | `lib/polyfill.php` | str_starts_with, str_ends_with, str_contains, get_debug_type, array_is_list, mb_str_pad |
+| Bootstrap | `bootstrap.php` | Sanity check tables, EZDOC_STRICT_SETUP flag, friendly error page |
+| CLI | `cli/migrate.php` | `status | migrate | reset | fresh` |
+| Schema | `migrations/2026_01_01_*` | 5 canonical migrations (templates, documents, default_vars, audit_log, legacy migrator) |
+
+### 3.2 Endpoint / HTTP layer ✅ Partial
+
+| Path | Files | Status |
+|------|-------|--------|
+| `actions/_dispatcher.php` | 1 | ✅ Routes 5 verbs (GET generate_qr, POST _doc_action=*, _ajax=1, ajax=1 action=save/toggle_lock/copy_template, action=delete) |
+| `actions/document/` | 8 files | ✅ save, delete_slot, delete_version, generate_qr, list_versions, new_version, restore_slot, toggle_lock |
+| `actions/template/` | 10 files | ⚠️  4 done (save, copy, delete, toggle_lock) + 6 empty (analyze_query, cleanup_orphans, field_usage, field_usage_all, list_categories, rename_field) |
+| `actions/default_vars/` | 3 files | ⚠️  2 done (add_var, delete_var) + 1 empty (list_vars) |
+
+### 3.3 Domain layer ❌ Not yet
+
+24 file `src/` masih **empty scaffolding**:
+
+| Namespace | Empty files | Current fallback |
+|-----------|-------------|------------------|
+| `Ezdoc\Access\*` | AccessConfig, AccessControl, AccessDecision, PermissionRule | Function-based di `lib/authorization.php` |
+| `Ezdoc\Document\*` | Document, DocumentRepository, DocumentService, SaveDocumentRequest, SaveDocumentResult | Procedural code di `actions/document/save_document.php` |
+| `Ezdoc\Exceptions\*` | EzdocException, AccessDeniedException, NotFoundException, ValidationException | `\RuntimeException` |
+| `Ezdoc\Template\*` | Template, ParsedTemplate, TemplateParser, TemplateRepository | Procedural di `actions/template/*.php` + inline handlers di `page/form_pembuat_surat_v3.php` |
+
+### 3.4 Migration path 🟡 Legacy still there
+
+- **13 legacy migrations** (`20260701_surat_*` + `20260706_ezdoc_*` + data-migration) masih ada di folder `migrations/`
+- **5 canonical migrations** (`2026_01_01_00000{1..4,99}`) sudah ada
+- Belum jelas: legacy migrations akan di-delete kapan? (butuh cek env production)
+
+### 3.5 Tests 🟡 Minimal
+
+- Unit: `tests/ContextTest.php` (Context DI, CallableRoleProvider normalization, immutability)
+- Belum: Migration runner tests, Audit logger tests, UUID validation tests, integration tests
+
+### 3.6 Signature layer 🟡 L1 only (target: L1 + L2 + L3 + A1)
+
+Sekarang cuma **Level 1 (HMAC signature)** — cukup untuk internal tamper-detection tapi **tidak legally binding** menurut UU ITE Indonesia. Roadmap: tambah L2 (Local PKI), L3 (PSrE Indonesia), dan A1 (blockchain anchor, orthogonal).
+
+| Level | Mechanism | Legal validity (Indonesia) | Status |
+|-------|-----------|---------------------------|--------|
+| **L1** | HMAC-SHA256 dengan shared secret + content hash | ❌ Not legally binding (tapi tamper-detectable) | ✅ Implemented |
+| **L2** | Local PKI — self-signed / internal CA cert (X.509) | 🟡 Non-repudiation within organization | ❌ Planned v0.6 |
+| **L3** | PSrE Indonesia (Peruri, Privy, VIDA, Digisign, BSrE) | ✅ Legally binding per UU ITE 2016 Pasal 11 | ❌ Planned v0.7+ |
+| **L3+** | L3 + TSA timestamp (RFC 3161) → PAdES-B-LT | ✅ Legally binding + verifiable long-term | ❌ Planned v0.8 |
+| **A1** | Blockchain anchor (hash publik di chain) — orthogonal, boleh combine dengan L1-L3 | 🟡 Bukti keberadaan pada waktu X (proof-of-existence). Bukan sertifikasi identitas. Combined dengan L3 → strongest guarantee. | ❌ Planned v0.9.5 |
+
+> **Note pola pikir**: Level 1-3 = "**siapa** yang tanda tangan + integritas isi". Anchoring (A1) = "**bukti publik** bahwa dokumen ini exist pada waktu X yang tidak bisa diubah setelah ter-anchor". Anchoring bisa combined dengan any level — L3 + A1 = signature legally binding + audit trail publik immutable.
+
+### 3.7 UI Layer 🟡 Monolithic — belum di library
+
+Fitur user-facing paling penting **BELUM masuk library** — masih di `page/*.php` di consumer app repo (contoh: `form_pembuat_surat_v3.php` dari dogfood host app):
+
+| File | Line count | Fungsi | Status |
+|------|------------|--------|--------|
+| `page/form_pembuat_surat_v3.php` | 4701 | Template designer — canvas WYSIWYG, field editor, signature slot builder, RBAC config | ❌ Belum extract |
+| `page/form_pembuat_surat_cetak_v3.php` | 4136 | Document generation form — fill fields, sign, generate PDF | ❌ Belum extract |
+| `page/form_pembuat_surat_list_v3.php` | 608 | List all documents dengan filter/search | ❌ Belum extract |
+
+**Masalah kalau tetap monolitik**:
+- Consumer library tidak bisa pakai fitur intinya tanpa copy-paste 9500 baris kode manual
+- Bercampur: business logic (SQL, RBAC) + UI (HTML/CSS/JS) + inline action handler dalam 1 file
+- Testable = 0 (semua inline, tidak ada function boundary)
+- Customization = fork the file, tinggal susah maintain
+
+**Yang perlu dijawab**: bagaimana library ship UI ini + bikin **customizable** untuk consumer?
+
+### 3.8 Cryptography ❌ Minimal
+
+Sekarang: hash `sha256`, HMAC via `hash_hmac()`, UUID v7 via `random_bytes`. Belum ada:
+- ❌ Asymmetric crypto (RSA / ECDSA)
+- ❌ X.509 certificate handling (`openssl_x509_*`)
+- ❌ PKCS#7 / CMS signing envelope
+- ❌ PAdES signed PDF
+- ❌ Timestamp Authority (RFC 3161)
+- ❌ Key management (env var → file → HSM path)
+- ❌ Certificate revocation check (CRL / OCSP)
+
+## 4. Gap Analysis
+
+### 4.1 What's blocking library extraction?
+
+| Blocker | Impact | Effort |
+|---------|--------|--------|
+| **Inline handlers di `page/form_pembuat_surat_v{2,3}.php`** — 9 action masih inline, tidak testable | High: business logic terperangkap di UI file | Medium (extract + write tests) |
+| **No Domain classes** — Document/Template/Access hanya procedural | High: consumer library harus paham SQL internal | High (rewrite as OOP) |
+| **No Exception hierarchy** — semua pakai `\RuntimeException` | Medium: consumer tidak bisa catch spesifik (mis. hanya AccessDenied) | Low (define classes, wire throwing sites) |
+| **Migration legacy masih 13 files** — noise buat consumer baru | Low: functional tapi confusing | Low (delete after production migrated) |
+| **No framework adapter** — Laravel/Symfony consumer harus wire manual | Medium: friction untuk adoption | Medium (bootstrap sample per framework) |
+| **HMAC secret hardcoded** (belum diverifikasi) | High (security) | Low (env var + `getenv()`) |
+| **Tests coverage < 20%** | Medium: risk regressions on refactor | Ongoing |
+
+### 4.2 What's missing untuk 1.0?
+
+Prioritas:
+
+1. **P0** — Extract 9 inline handlers ke `actions/*.php` files
+2. **P0** — Wire proper `Exception` classes + refactor throwing sites
+3. **P1** — Implement `Ezdoc\Document\Document` + Repository + Service (OOP layer)
+4. **P1** — Implement `Ezdoc\Template\Template` + Parser + Repository
+5. **P1** — Implement `Ezdoc\Access\*` untuk RBAC yang testable & swappable
+6. **P2** — Framework adapters (Laravel service provider, WordPress plugin sample)
+7. **P2** — Comprehensive test suite (≥ 70% coverage)
+8. **P3** — API reference docs (auto-generated dari docblocks)
+9. **P3** — Legacy migration cleanup (setelah semua env migrated)
+
+## 5. Architecture
+
+### 5.1 Layered view
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Consumer app (native install, tidak ada bridge/RPC)        │
+│  ─ PHP:  composer require mrpotensial/ezdoc                        │
+│  ─ Go:   go get github.com/mrpotensial/ezdoc-go                    │
+│  ─ TS:   npm install @mrpotensial/ezdoc                            │
+│  Semua bahasa punya library sendiri yang setara — tidak     │
+│  ada backend PHP yang di-remote-call oleh Go/TS.            │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                    HTTP request
+                         │
+┌────────────────────────▼────────────────────────────────────┐
+│  HTTP Layer  (actions/_dispatcher.php + actions/*.php)      │
+│  - Whitelist routing (no arbitrary include)                 │
+│  - JSON responses via ezdoc_respond_*                       │
+│  - RBAC guard via ezdoc_require_*                           │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────────┐
+│  Domain Layer (src/{Document,Template,Access}/*)  ← TODO    │
+│  - Repository (persistence)                                 │
+│  - Service (business logic + orchestration)                 │
+│  - DTO (Request/Result objects)                             │
+│  - Value objects (Template, ParsedTemplate)                 │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────────┐
+│  Signature & Crypto Layer  (src/Signature/*)  ← v0.6+       │
+│  - SignatureProvider interface (adapter pattern)            │
+│  - Impls: HmacProvider (L1), PkiProvider (L2), PSrE (L3)    │
+│  - Envelope: raw hash | X.509 CMS | PAdES for PDF           │
+│  - Timestamping: RFC 3161 TSA client                        │
+│  - Key manager: env → file → HSM (PKCS#11)                  │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────────┐
+│  Infrastructure (src/{Audit,Migrations,Auth}/*)  ← DONE     │
+│  - Context DI container                                     │
+│  - Audit Logger                                             │
+│  - Migration Runner                                         │
+│  - RoleProvider abstraction                                 │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                       mysqli
+                         │
+┌────────────────────────▼────────────────────────────────────┐
+│  Storage (MySQL 8+)                                         │
+│  - ezdoc_templates    (versioning: uuid+is_current+parent)  │
+│  - ezdoc_documents    (JSON fields, HMAC signature)         │
+│  - ezdoc_signatures   (X.509 cert, envelope, TSA response)  │
+│  - ezdoc_default_vars                                       │
+│  - ezdoc_audit_log    (event_uuid, actor, target)           │
+│  - ezdoc_migrations   (registry, self-heal)                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 5.2 Domain model (planned)
+
+```
+Template  ────has-many───▶  TemplateVersion (via is_current flag + parent_version_id chain)
+   │
+   │ owned-by (polymorphic — bisa User, Team, Org)
+   ▼
+Owner (owner_type + owner_id — bukan hardcoded ke Pegawai)
+
+Template  ────generates──▶  Document ────has-many──▶ Signature
+   │                             │                        │
+   ▼                             ▼                        ▼
+signature_config JSON       Subject (polymorphic)     provider-specific
+field_schema JSON               │                     envelope + cert
+                                │
+                    subject_type + subject_id
+                    (Patient / Contract / Employee / Invoice / …)
+```
+
+### 5.2b Universal, dynamic, international schema (revised design)
+
+**Problem yang mau dipecahkan**: schema awal punya kolom `norm` (nomor rekam medis) + `nopen` (nomor pendaftaran) — Indonesian hospital specific. Kalau library dipakai untuk kontrak legal, HR letter, atau invoice → 2 kolom itu meaningless.
+
+**Solusi**: 3 lapisan design pattern
+
+#### 1. Polymorphic subject (universal identifier)
+
+Hilangkan `norm` / `nopen` dari core. Ganti dengan `subject_type` + `subject_id` — pattern polymorphic association (Rails / Doctrine / Django convention).
+
+```sql
+-- ezdoc_documents (revised core)
+CREATE TABLE ezdoc_documents (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid CHAR(36) UNIQUE NOT NULL,
+    template_id INT NOT NULL,
+    template_uuid CHAR(36) NOT NULL,
+    template_version INT NOT NULL,
+
+    -- Universal identity fields (semua domain punya)
+    title VARCHAR(255) NULL,           -- "Surat Rujukan Poli - 92164" (bebas format)
+    reference_number VARCHAR(64) NULL, -- external ref (was 'norm'), any format
+
+    -- Polymorphic subject (nullable — tidak wajib)
+    subject_type VARCHAR(64) NULL,     -- 'patient' | 'contract' | 'employee' | 'invoice' | …
+    subject_id VARCHAR(128) NULL,      -- ID di system consumer (bebas format)
+
+    -- Dynamic content
+    field_values JSON NOT NULL,        -- filled template values (norm, nopen masuk sini)
+    metadata JSON NULL,                -- consumer-specific extra data
+
+    -- ... rest: status, content_hash, signature stuff, timestamps
+);
+
+-- Index untuk lookup polymorphic
+CREATE INDEX idx_subject ON ezdoc_documents (subject_type, subject_id);
+```
+
+**Migration path untuk existing hospital consumer**:
+- `norm` dari kolom → `field_values.norm` + `subject_id = norm` + `subject_type = 'patient'`
+- `nopen` dari kolom → `field_values.nopen`
+- `reference_number` = `norm` (untuk index cepat)
+
+**Contoh multi-domain di same table**:
+
+| id | title | subject_type | subject_id | reference_number | field_values (JSON) |
+|----|-------|--------------|------------|-------------------|---------------------|
+| 1 | Surat Rujukan | `patient` | `92164` | `92164` | `{"norm":"92164","nopen":"P-2026-001","diagnosis":"..."}` |
+| 2 | Perjanjian Sewa | `contract` | `CTR-2026-01` | `CTR-2026-01` | `{"pihak_1":"...","masa_sewa":"12 bulan"}` |
+| 3 | SK Karyawan | `employee` | `EMP-042` | `SK-042-2026` | `{"nama":"Budi","jabatan":"Manager","gaji":8000000}` |
+| 4 | Invoice | `invoice` | `INV-8912` | `INV-8912` | `{"pelanggan":"...","total":15000000,"currency":"IDR"}` |
+
+#### 2. Dynamic field_schema (schema on template, bukan on DB)
+
+Template define fields sendiri. Zero hardcoded columns per domain.
+
+```sql
+-- ezdoc_templates.field_schema JSON
+[
+    {
+        "name": "patient_name",
+        "type": "string",
+        "required": true,
+        "label": {"en": "Patient Name", "id": "Nama Pasien"},
+        "validate": {"min_length": 2, "max_length": 100}
+    },
+    {
+        "name": "diagnosis",
+        "type": "textarea",
+        "required": true,
+        "label": {"en": "Diagnosis", "id": "Diagnosa"}
+    },
+    {
+        "name": "birth_date",
+        "type": "date",
+        "required": false,
+        "label": {"en": "Date of Birth", "id": "Tanggal Lahir"}
+    },
+    {
+        "name": "billed_amount",
+        "type": "money",
+        "required": true,
+        "label": {"en": "Amount"},
+        "currency": "IDR",
+        "validate": {"min": 0}
+    }
+]
+```
+
+Supported field types (universal):
+- **Primitive**: `string`, `textarea`, `integer`, `decimal`, `boolean`
+- **Temporal**: `date`, `time`, `datetime`, `duration` (ISO 8601)
+- **Formatted**: `email`, `url`, `phone` (E.164), `uuid`
+- **Universal ID**: `subject_ref` (link ke subject_type/subject_id)
+- **Money**: `money` (dengan currency code ISO 4217)
+- **Enum**: `enum` (dengan `options: [{value, label: {...}}]`)
+- **Composite**: `array`, `object` (nested schema)
+- **File**: `file`, `image` (dengan `mime`, `max_size`)
+- **Signature slot**: `signature` (link ke ezdoc_signatures)
+
+#### 3. International-first conventions
+
+Zero locale/language lock-in di core schema:
+
+| Concern | Convention (universal) | Contoh |
+|---------|------------------------|--------|
+| **Timestamp** | UTC storage, ISO 8601 dengan ms | `2026-08-15T10:30:00.123Z` |
+| **Currency** | ISO 4217 code + amount as integer minor units | `IDR`, `USD`; amount=1500000 (Rp 15,000) |
+| **Language / Locale** | BCP 47 tag | `id-ID`, `en-US`, `ar-SA` |
+| **Country** | ISO 3166-1 alpha-2 | `ID`, `US`, `SG` |
+| **Phone** | E.164 (`+62 812...`) | `+6281234567890` |
+| **Person name** | UTF-8 NFC, `given_name` + `family_name` (bukan `nama_lengkap`) | Support Chinese, Arabic, Indonesian names |
+| **Label / message** | Multi-locale object `{lang: text}` | `{"en": "Amount", "id": "Jumlah", "ar": "المبلغ"}` |
+| **Number format** | Store as number, format via consumer's locale | Store `1500000`, render `Rp 1.500.000` (id) or `Rp 1,500,000` (en) |
+| **Sort collation** | `utf8mb4_0900_ai_ci` (unicode-aware, accent-insensitive) | Support alfabetis bahasa apapun |
+
+**Charset & collation** (MySQL default per DDL):
+```sql
+CREATE DATABASE ezdoc CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+```
+
+`utf8mb4` support 4-byte characters — emoji, langka CJK, Arabic + Hebrew. `_0900_ai_ci` = Unicode 9.0 aware, accent-insensitive, case-insensitive.
+
+**Label / message pattern**:
+```json
+{
+    "en": "Patient Name",
+    "id": "Nama Pasien",
+    "ms": "Nama Pesakit",
+    "ar": "اسم المريض"
+}
+```
+Fallback: kalau requested locale tidak ada, fall back ke `en`, lalu key pertama.
+
+#### 4. Extensible via profile (optional)
+
+Untuk consumer yang mau custom aggressive tanpa fork:
+
+```php
+// consumer's app
+Ezdoc\Schema\ProfileRegistry::register('hospital-id', [
+    'subject_types' => ['patient'],
+    'convenience_columns' => ['norm', 'nopen', 'poli'],
+    'label_translations' => require 'hospital-id-labels.php',
+    'validators' => [
+        'norm' => fn($v) => preg_match('/^\d{6,10}$/', $v),
+    ],
+]);
+
+Ezdoc\Context::default()->useProfile('hospital-id');
+```
+
+Profile jadi 1 layer di atas core — tetap pakai `field_values JSON` under the hood, tapi expose `->norm` getter untuk ergonomi.
+
+### 5.3 Access model (planned)
+
+```
+AccessConfig (JSON di ezdoc_templates.access_config):
+  {
+    "create": ["role:admin", "role:manager"],
+    "edit":   ["role:admin", "user:42"],
+    "lock":   ["role:admin"],
+    "delete": ["role:admin"]
+  }
+
+AccessDecision:
+  - allow: bool
+  - reason: string  (untuk audit log denied event)
+  - matched_rule: string
+
+AccessControl:
+  - can(User, Action, Template): AccessDecision
+  - assertCan(User, Action, Template): void  throws AccessDeniedException
+```
+
+### 5.4 Signature adapter pattern (planned v0.6+)
+
+Interface tunggal, banyak backend. Sama pattern seperti Laravel's Filesystem drivers.
+
+```
+Ezdoc\Signature\SignatureProvider (interface)
+  sign(SignRequest): SignResult          // hasil = bytes envelope + metadata
+  verify(bytes, VerifyContext): Verdict  // valid | tampered | expired | untrusted
+  capabilities(): ProviderCapabilities   // level, supports timestamping, dll
+
+Impls (Signature — L1 s/d L3):
+  - HmacProvider          — L1 (existing behavior, tetap default)
+  - LocalPkiProvider      — L2, self-signed atau internal CA cert
+  - PeruriProvider        — L3, Peruri Digital Sign API
+  - PrivyProvider         — L3, Privy REST API
+  - VidaProvider          — L3, VIDA e-Sign
+  - BsreProvider          — L3, BSrE (government) — biasanya via cert issuance saja
+  - MultiProvider         — chain of providers (fallback / redundancy)
+```
+
+**Anchoring adapter (orthogonal, boleh combine dengan SignatureProvider level manapun):**
+
+```
+Ezdoc\Anchor\AnchorProvider (interface)
+  anchor(bytes: hash): AnchorReceipt      // publish hash ke chain, return tx receipt
+  verify(receipt): AnchorVerdict          // baca chain, konfirmasi hash exist di waktu X
+  status(receipt): AnchorStatus           // pending | confirmed | orphaned
+  capabilities(): AnchorCapabilities      // chain name, avg cost, avg confirmation time
+
+Impls:
+  - EthereumMainnetAnchor  — mainnet, expensive tapi paling immutable (~$5-50/anchor)
+  - PolygonAnchor          — L2 EVM, murah (~$0.01/anchor), 2-second block time
+  - ArbitrumAnchor         — L2 EVM, tengah-tengah
+  - OpenTimestampsAnchor   — Bitcoin OP_RETURN via OpenTimestamps.org (free, batched)
+  - HyperledgerFabricAnchor — permissioned, untuk consortium (mis. RS-RS Indonesia)
+  - LocalChainAnchor       — Ganache/Anvil untuk dev/test
+  - BatchAnchor            — decorator: aggregate N docs → 1 merkle root → 1 anchor
+```
+
+**Composition pattern** (blockchain adalah decorator, bukan replacement):
+
+```php
+// L3 sign + anchor ke Polygon
+$signer  = new PeruriProvider($peruriConfig);
+$anchor  = new PolygonAnchor($polygonConfig);
+
+$result  = $signer->sign($request);        // → signature envelope + cert
+$receipt = $anchor->anchor($result->contentHash); // → tx hash di Polygon
+
+$doc->signature_envelope = $result->envelope;
+$doc->anchor_receipt     = $receipt;       // stored terpisah, opsional
+```
+
+**Config per template**: `signature_config JSON` di `ezdoc_templates`:
+```json
+{
+  "provider": "peruri",
+  "level": 3,
+  "require_timestamp": true,
+  "signers": [
+    { "role": "dokter_penanggung_jawab", "min_count": 1 },
+    { "role": "kepala_bagian", "min_count": 1 }
+  ],
+  "envelope": "pades-b-lt"
+}
+```
+
+**Storage**: kolom baru `ezdoc_signatures` (v0.6):
+```
+id UUID PRIMARY KEY
+document_id INT NOT NULL
+signer_id INT NOT NULL
+provider VARCHAR(32)    -- 'hmac' | 'local_pki' | 'peruri' | ...
+level TINYINT           -- 1 | 2 | 3
+envelope MEDIUMBLOB     -- raw CMS / PAdES bytes
+certificate_pem TEXT    -- signer's cert (untuk L2/L3)
+tsa_response BLOB       -- RFC 3161 timestamp (kalau ada)
+signed_at DATETIME(3)
+verified_at DATETIME(3) -- last verify
+verify_status ENUM('valid', 'tampered', 'expired', 'revoked', 'untrusted')
+```
+
+**Storage**: kolom baru `ezdoc_anchors` (v0.9.5, untuk blockchain anchoring):
+```
+id UUID PRIMARY KEY
+document_id INT NOT NULL
+signature_id UUID NULL          -- optional link ke signature (kalau anchor'ed post-signing)
+anchor_provider VARCHAR(32)     -- 'ethereum' | 'polygon' | 'opentimestamps' | ...
+chain_id BIGINT NULL            -- 1 (Ethereum), 137 (Polygon), NULL for non-EVM
+tx_hash VARCHAR(128)            -- transaction hash on chain
+block_number BIGINT NULL        -- untuk verifiable ordering
+block_timestamp DATETIME(3)     -- proof-of-existence timestamp
+merkle_root VARCHAR(128) NULL   -- kalau pakai BatchAnchor (multi-doc → 1 anchor)
+merkle_proof JSON NULL          -- inclusion proof kalau batched
+content_hash CHAR(64)           -- SHA-256 hash yang di-anchor
+anchor_status ENUM('pending', 'confirmed', 'orphaned', 'failed')
+gas_fee_wei DECIMAL(30,0) NULL  -- untuk cost accounting
+anchored_at DATETIME(3)
+confirmed_at DATETIME(3) NULL   -- diisi setelah N confirmations
+```
+
+### 5.5 Cryptography layer (planned v0.6+)
+
+**Key management hierarchy** (paling secure duluan):
+```
+Priority:
+  1. HSM via PKCS#11         (production untuk L3)
+  2. Env var                 (secret key untuk L1/HMAC)
+  3. File path               (PEM cert untuk L2, dengan permissions 0600)
+  4. Config file             (fallback dev, tidak untuk prod)
+
+Interface: KeyStore
+  loadPrivateKey(alias: string): PrivateKey
+  loadCertificate(alias: string): X509Certificate
+  loadChain(alias: string): array<X509Certificate>
+```
+
+**Signature envelopes** yang disupport:
+| Envelope | Use case | Standard |
+|----------|----------|----------|
+| Raw HMAC | Internal tamper-detect | (custom) |
+| PKCS#7 / CMS | Signed data blob | RFC 5652 |
+| PAdES-B-B | PDF signed (basic) | ETSI EN 319 142 |
+| PAdES-B-LT | PDF signed + long-term validation | ETSI EN 319 142 |
+| XAdES | Signed XML (untuk BSSN interop) | ETSI EN 319 132 |
+
+**Timestamping** (RFC 3161):
+- Client: `TimestampClient` — POST hash ke TSA, parse response
+- Providers: BSrE TSA, external TSA (freetsa.org untuk dev)
+- Stored di `ezdoc_signatures.tsa_response`
+
+**Verification chain**:
+1. Content hash re-computed match `content_hash`
+2. Signature envelope valid (crypto check)
+3. Certificate valid + not expired
+4. Certificate chain to trusted root (CA bundle)
+5. Certificate not revoked (CRL / OCSP — optional)
+6. Timestamp valid + within cert validity window (L3+)
+7. Anchor receipt (kalau ada) — hash on-chain match, block confirmed, tx not orphaned (A1)
+
+### 5.6 Blockchain anchoring architecture (planned v0.9.5+)
+
+**Model**: anchoring = publikasikan `SHA-256(content)` ke blockchain publik yang immutable + append-only. Bukti dokumen sudah exist pada waktu block X, tidak bisa diubah/di-backdated setelahnya.
+
+**Kenapa orthogonal dari L1-L3 signature**:
+- L1-L3 menjawab: **siapa yang tanda tangan?** (identity + integrity)
+- Anchoring menjawab: **kapan dokumen ini exist?** (proof-of-existence, tamper-evidence publik)
+- Combine: L3 (Peruri) + Polygon anchor → signature legally binding + audit trail publik immutable. Regulator / auditor bisa verify sendiri tanpa akses ke consumer's DB.
+
+**Chain choice matrix**:
+
+| Chain | Cost per anchor (2026 est.) | Confirmation | Immutability | Use case |
+|-------|------------------------------|--------------|--------------|----------|
+| **Ethereum mainnet** | $2-20 (gas) | 12-15 sec/block × N conf | ⭐⭐⭐⭐⭐ Ultimate | High-value docs, insurance, contracts >Rp 100jt |
+| **Polygon PoS** | $0.001-0.01 | 2 sec/block | ⭐⭐⭐⭐ Sangat kuat | Default recommendation — cheap + fast + EVM compat |
+| **Arbitrum One** | $0.05-0.5 | ~250ms | ⭐⭐⭐⭐ (rooted di Ethereum) | Middle ground, EVM compat |
+| **OpenTimestamps (Bitcoin)** | Free (batched) | ~1 jam | ⭐⭐⭐⭐⭐ Ultimate | Free, no wallet, batched per hour. Verify tanpa kita running node. |
+| **Hyperledger Fabric** | Zero (self-hosted) | <1 sec | ⭐⭐⭐ (permissioned) | Konsorsium RS-RS Indonesia dengan governance shared |
+| **BSV** | ~$0.001 | 10 min | ⭐⭐⭐⭐ | Alternatif Bitcoin, dukung OP_RETURN besar |
+
+**Rekomendasi default**: **OpenTimestamps** (free, mature, tidak butuh wallet management) + optional **PolygonAnchor** untuk yang butuh EVM/smart contract capabilities.
+
+**Anchor flow**:
+
+```
+1. Consumer trigger anchor (via config auto-anchor atau explicit call):
+   $anchor = new PolygonAnchor($config);
+   $receipt = $anchor->anchor($doc->content_hash);
+
+2. Adapter internal:
+   a. Sign tx dengan operator private key (env var, tidak per-signer)
+   b. Submit tx ke chain: contract.storeHash(hash, docId)
+   c. Return AnchorReceipt { tx_hash, submitted_at, status='pending' }
+
+3. Background worker (cron / queue) update status:
+   a. Poll receipt status: tx confirmed di block N?
+   b. Update ezdoc_anchors.status = 'confirmed', confirmed_at = ...
+
+4. Verify (later, by regulator/auditor):
+   $verdict = $anchor->verify($receipt);
+   → verdict.exists = true
+   → verdict.block_number = 12345678
+   → verdict.block_timestamp = "2026-08-15T10:30:00Z"
+   → verdict.content_hash_on_chain = 'abc...'  → must match doc's current hash
+```
+
+**Cost mitigation — BatchAnchor decorator**:
+
+Untuk high-volume (mis. semua rekam medis harian), jangan anchor per-doc — build Merkle tree, anchor cuma root:
+
+```
+Daily job (jam 00:00):
+  hashes = SELECT content_hash FROM ezdoc_documents WHERE anchored=0 AND date=today
+  merkle = buildMerkleTree(hashes)
+  receipt = anchor.anchor(merkle.root)
+  for each doc:
+    doc.anchor_receipt_id = receipt.id
+    doc.merkle_proof = merkle.getProof(doc.hash)
+    doc.anchored = 1
+```
+
+Hasil: 10,000 dokumen/hari cuma perlu **1 tx** — cost dari $50 turun jadi $0.001. Individual verify tetap possible via merkle proof.
+
+**Smart contract minimal (Solidity, untuk EVM chains)**:
+
+```solidity
+// EzdocAnchor.sol — deploy sekali per chain
+contract EzdocAnchor {
+    event DocumentAnchored(bytes32 indexed contentHash, string docId, uint256 timestamp);
+    mapping(bytes32 => uint256) public anchoredAt;  // hash → block.timestamp
+
+    function anchor(bytes32 contentHash, string calldata docId) external {
+        require(anchoredAt[contentHash] == 0, "Already anchored");
+        anchoredAt[contentHash] = block.timestamp;
+        emit DocumentAnchored(contentHash, docId, block.timestamp);
+    }
+
+    function verify(bytes32 contentHash) external view returns (uint256) {
+        return anchoredAt[contentHash];  // 0 = not anchored, else timestamp
+    }
+}
+```
+
+**Verifiability (publik, tanpa akses ke library kita)**:
+
+Consumer bisa provide "verify link" ke third-party:
+```
+https://polygonscan.com/tx/0xabc...       ← siapa saja bisa lihat
+                                          ← hash: 0xdef... exists di block 12345 tanggal 2026-08-15
+```
+Anyone can independently verify by:
+1. Compute SHA-256 dari PDF mereka
+2. Compare dengan hash di polygonscan
+3. Kalau match → doc genuinely existed pada waktu block itu
+
+Zero trust ke library maintainer / consumer — proof publik.
+
+**Privacy considerations**:
+- ONLY hash yang di-publish ke chain (never content plaintext)
+- Hash tidak reveal content (SHA-256 preimage resistance)
+- Doc ID juga hashed atau opsional (untuk avoid enumeration attack)
+- Compliance: HIPAA / GDPR / UU PDP OK karena hash bukan PII
+
+**W3C Verifiable Credentials interop (stretch, v2.x+)**:
+- Alternatif untuk hospital consortium: DID (Decentralized Identifier) + VC
+- Signer punya DID (`did:web:yourorg.com/user/handle`) + private key
+- Signature = Ed25519 signature sesuai spec W3C
+- Verifiable di manapun tanpa CA vendor (peer-to-peer trust via DID)
+- Trade-off: butuh signer punya wallet + manage DID (UX friction)
+
+### 5.7 Cross-language native ports (planned v1.5+)
+
+**Model: arsitektur yang di-reuse, implementation di-rewrite native.**
+
+Yang **di-reuse** (bukan di-port, ini SAMA persis di semua bahasa):
+- ✅ DB schema (`ezdoc_*` tables + kolom + index)
+- ✅ Domain model (Template versioning, Document lifecycle, RBAC config JSON)
+- ✅ Signature envelope binary format (PKCS#7 / PAdES bytes)
+- ✅ Content hash algorithm (JSON canonicalization → SHA-256)
+- ✅ QR payload format (versioned struct)
+- ✅ Verify protocol (step-by-step chain check)
+- ✅ Audit event schema
+- ✅ HTTP API contract (kalau consumer expose endpoint)
+
+Yang **di-rewrite native** per bahasa:
+- ❌ Class hierarchy → idiomatic per bahasa (Go struct+interface, TS class, PHP class)
+- ❌ Autoloader / module system
+- ❌ Error handling style (Go error, TS/PHP Exception)
+- ❌ Concurrency model (Go goroutines, TS Promise, PHP sync)
+- ❌ Test framework (PHPUnit, Go testing, Vitest)
+- ❌ Framework adapter (Laravel provider, Nest module, Gin middleware)
+
+Setiap bahasa punya **library standalone** yang consumer install & pakai langsung di runtime mereka. Tidak ada backend PHP yang jadi central; tidak ada REST/gRPC bridge. Container Go pakai `ezdoc-go` binary murni; container Node pakai `@mrpotensial/ezdoc` npm murni. Semua konek ke same DB, produce same signature bytes, verify same envelope — because they follow the same architecture spec.
+
+Alasan pilih native ports (bukan bridge):
+
+| Aspect | Native port | Bridge (PHP backend + client) |
+|--------|-------------|-------------------------------|
+| Deployment | Single container per app | Butuh PHP-fpm + reverse proxy jaringan |
+| Latency | In-process function call (~μs) | Network round-trip (~ms) |
+| Failure mode | Fail with app | New failure surface (network partition, PHP down) |
+| Ops complexity | Zero (built-in library) | Full stack: PHP runtime, DB pool, load balancer |
+| Language DX | Idiomatic per bahasa | Awkward serialize/deserialize on every call |
+| Offline / edge | ✅ Cloudflare Workers, mobile, air-gapped | ❌ Butuh network ke PHP host |
+
+**Spec-first coordination** — supaya port beda-beda tetap kompatibel:
+
+```
+ezdoc-spec/                          # separate repo — single source of truth
+├── schemas/                         # JSON Schema (draft 2020-12)
+│   ├── template.json                # Template model bentuknya apa
+│   ├── document.json                # Document model
+│   ├── signature.json               # SignRequest / SignResult / Verdict
+│   └── audit-event.json             # AuditLog record
+├── protocol/                        # binary & wire formats
+│   ├── signature-envelope.md        # PKCS#7 / PAdES bytes format
+│   ├── content-hash.md              # canonical JSON → SHA-256 algorithm
+│   ├── verify-protocol.md           # verify chain step-by-step
+│   └── qr-payload.md                # QR versioned payload format
+├── db-schema/                       # SQL DDL yang identik across langs
+│   └── mysql-8.sql
+└── conformance/                     # test fixtures untuk cross-lang interop
+    ├── test-vectors.json            # input+expected output pairs
+    └── signatures/*.pem             # sample cert + signature bytes
+```
+
+**Native implementations** — masing-masing repo sendiri, tim/kontributor bisa beda:
+
+| Language | Package | Runtime | Container use case |
+|----------|---------|---------|--------------------|
+| PHP | `mrpotensial/ezdoc` (Packagist) | 7.4+ | Monolith (koneksi.php-based, WordPress, Laravel) |
+| Go | `github.com/mrpotensial/ezdoc-go` | 1.21+ | Standalone verify service, CLI tool, Kubernetes microservice |
+| TypeScript | `@mrpotensial/ezdoc` (npm) | Node 20+ / Bun / Deno | Next.js server actions, Nest API, browser verify UI |
+| Rust *(stretch)* | `mrpotensial-ezdoc` (crates.io) | stable | Cloudflare Workers, embedded, extreme perf |
+
+Each port:
+- Reads same DB tables (`ezdoc_*`)
+- Produces same audit log format
+- Sign/verify menghasilkan bytes yang bit-exact identical
+- Punya own idiomatic API (Go pakai error return, TS pakai Promise, PHP pakai Exception)
+
+**Conformance test contract**:
+- Setiap port punya CI job yang import `ezdoc-spec/conformance/`
+- Test: "given this template JSON + this key, produce this signature envelope byte-for-byte"
+- Test: "given this signed document, verify returns Verdict.valid"
+- Kalau fail → PR blocked. Non-negotiable.
+
+**Deterministic serialization** (kunci interop):
+- Content hash: canonicalized JSON per **RFC 8785 (JCS)** → SHA-256
+- JSON keys sorted lexicographically
+- Numbers pakai IEEE 754 double representation
+- Strings NFC-normalized Unicode
+- Timestamps ISO 8601 UTC dengan millisecond precision (`2026-07-06T14:32:15.123Z`)
+- UUIDs v7 lowercase hyphenated
+- Binary → base64url (RFC 4648 §5, no padding)
+
+**Non-portable parts** (per-language freedom):
+- Autoloader / module system
+- Framework adapter (Laravel provider vs Nest module vs Gin middleware)
+- Test framework (PHPUnit vs Go testing vs Vitest)
+- Idiom (naming convention, error handling style)
+
+### 5.8 UI Layer — headless core + reference UI (planned v0.6.5+)
+
+**Problem**: 3 halaman v3 (designer, generate/cetak, list) = 9500 baris HTML/CSS/JS + inline PHP handler. Ini fitur inti library. Consumer WAJIB bisa pakai out-of-box, TAPI juga WAJIB bisa custom (branding, layout, extra field).
+
+**Pattern industri proven** untuk shipping customizable UI dari library:
+
+| Pattern | Contoh library terkenal | Trade-off |
+|---------|-------------------------|-----------|
+| **A. Publish/eject views** | Laravel Filament, Backpack, Nova; Django templates | Consumer dapat file, edit langsung. Simple, tapi update library break custom-nya kalau ada schema change. |
+| **B. Headless + reference UI** | shadcn/ui, Radix UI, TanStack Table, Headless UI | Core library zero-UI. UI package terpisah. Consumer install atau copy-paste. Most flexible. |
+| **C. Slot/render-prop** | React components (Ariakit, MUI), Vue slots | Component API accept `renderX` props. Bagus untuk small components, susah untuk full page. |
+| **D. Theme override + hook** | WordPress, Shopify, CKEditor 5 | Theme file di path tertentu override default. Butuh view resolver + convention. |
+
+**Recommendation**: **B + A hybrid** — mainstream industri (shadcn model dengan Laravel publish semantic).
+
+```
+Library terdiri dari 3 layer:
+
+┌─────────────────────────────────────────────────────────────┐
+│  Core (headless)  ← "mrpotensial/ezdoc"                            │
+│  - Domain logic, RBAC, migration, audit, signature          │
+│  - Zero HTML, zero CSS, zero JS                             │
+│  - Just PHP classes + REST/action endpoints                 │
+│  - Consumer bisa build UI apapun di atas ini                │
+└─────────────────────────────────────────────────────────────┘
+                              │
+             ┌────────────────┴──────────────┐
+             │                               │
+┌────────────▼────────────┐   ┌──────────────▼──────────────┐
+│  Reference UI (default) │   │  Consumer's own UI (custom) │
+│  "mrpotensial/ezdoc-ui-blade"  │   │  React/Vue/whatever         │
+│  - Blade views          │   │  - Panggil action endpoints │
+│  - Vanilla JS + Bootstrap│   │  - Consumer own layout      │
+│  - Publishable          │   │                             │
+│  - Copy → own it        │   │                             │
+└─────────────────────────┘   └─────────────────────────────┘
+```
+
+**Layer 1: Core (headless)** — `mrpotensial/ezdoc`
+- Zero UI. Cuma domain + endpoint.
+- Consumer bisa 100% skip reference UI, bangun UI sendiri di atas action endpoints.
+
+**Layer 2: Reference UI** — `mrpotensial/ezdoc-ui-blade` (paket terpisah, opsional)
+- Ship 3 view: `designer.blade.php`, `document-form.blade.php`, `document-list.blade.php`
+- Ship CSS + JS assets (Bootstrap-based, vanilla JS, no build step required)
+- Ship publish command: `php artisan vendor:publish --tag=ezdoc-views`
+- Ship view resolver: resolve `ezdoc::designer` → cek consumer's `resources/views/vendor/ezdoc/designer.blade.php` dulu, fallback ke library default
+
+**Layer 3: Consumer customization** — 4 tingkat, dari paling ringan ke paling berat:
+
+| Tingkat | Cara | Effort | Use case |
+|---------|------|--------|----------|
+| **1. Config only** | Setting nama, logo, warna via `ezdoc.config.php` | 5 menit | Rebrand ringan |
+| **2. CSS override** | Load CSS tambahan setelah library CSS | 30 menit | Custom color scheme, spacing |
+| **3. View override (publish)** | `php artisan vendor:publish --tag=ezdoc-views` → edit file | 1-2 jam | Rearrange layout, add fields |
+| **4. Full replacement** | Build UI sendiri, panggil action endpoints saja | 1-2 minggu | Convert ke React/Vue SPA, integrate ke dashboard existing |
+
+**View resolver contract** (industri standar, dari Laravel):
+
+```php
+// bootstrap.php
+Ezdoc\UI\ViewResolver::register([
+    'designer'      => 'ezdoc-ui-blade::designer',
+    'document-form' => 'ezdoc-ui-blade::document-form',
+    'document-list' => 'ezdoc-ui-blade::document-list',
+]);
+
+// resolver logic:
+// 1. Consumer's resources/views/vendor/ezdoc/designer.blade.php  ← if exists, use this
+// 2. Consumer's resources/views/ezdoc/designer.blade.php         ← fallback
+// 3. Library's views/blade/designer.blade.php                    ← default (shipped)
+```
+
+**Publish command** (Laravel-style, port equivalent per bahasa):
+
+```bash
+# PHP (Laravel)
+php artisan vendor:publish --provider="Ezdoc\Providers\EzdocServiceProvider" --tag=views
+php artisan vendor:publish --tag=ezdoc-assets     # CSS + JS
+php artisan vendor:publish --tag=ezdoc-config     # config file
+php artisan vendor:publish --tag=ezdoc-migrations # DB migrations (kalau bukan pakai runner internal)
+
+# PHP (non-Laravel)
+php vendor/mrpotensial/ezdoc/cli/publish.php views      # copy views/ ke consumer's chosen path
+php vendor/mrpotensial/ezdoc/cli/publish.php assets     # copy assets
+
+# TypeScript (shadcn-style)
+npx @mrpotensial/ezdoc-ui add designer                   # copy DesignerPage.tsx ke consumer's project
+npx @mrpotensial/ezdoc-ui add document-form
+npx @mrpotensial/ezdoc-ui add document-list
+
+# Go
+go run github.com/mrpotensial/ezdoc-go/cmd/ezdoc publish views ./resources/views
+```
+
+**Slot / extension points** (untuk consumer yang mau add tanpa fork):
+
+Di dalam default view, sediakan named slots pakai convention:
+
+```blade
+{{-- ezdoc-ui-blade/designer.blade.php --}}
+@yield('ezdoc:designer:before-canvas')   {{-- consumer bisa tambah instruksi di atas canvas --}}
+
+<div class="ezdoc-canvas">
+   ... default designer UI ...
+</div>
+
+@yield('ezdoc:designer:after-canvas')
+@yield('ezdoc:designer:sidebar-extra')   {{-- consumer bisa tambah panel di sidebar --}}
+```
+
+Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa fork.
+
+**Framework adapter (Layer 2 per framework)**:
+
+| Framework | UI adapter package | Notes |
+|-----------|-------------------|-------|
+| Laravel Blade | `mrpotensial/ezdoc-ui-blade` | Blade views + publish command |
+| Plain PHP | `mrpotensial/ezdoc-ui-php` | Plain PHP includes (untuk legacy monolith app tanpa template engine) |
+| Next.js / React | `@mrpotensial/ezdoc-ui-react` | shadcn-style copy, pakai action endpoints |
+| Vue 3 | `@mrpotensial/ezdoc-ui-vue` | (community, stretch) |
+| Livewire | `mrpotensial/ezdoc-ui-livewire` | (community, stretch) |
+
+**Contoh library dunia nyata yang pakai pattern ini**:
+
+- **shadcn/ui** (React) — "not a component library, but a collection". Copy-paste, own it. Publish via `npx shadcn add button`
+- **Laravel Filament v3** — publish views + slots + config. Core admin panel logic terpisah dari Blade views
+- **Radix UI** — headless primitives, style + layout consumer's own
+- **CKEditor 5** — headless editor engine + swappable UI themes (Classic, Balloon, Inline, Decoupled)
+- **TanStack Table** — headless table logic, bring your own `<td>`
+- **TinyMCE** — core headless + separate skin packages
+- **Filament v3 forms** — form logic + shippable views + slot API
+
+## 6. Roadmap
+
+**Total timeline (single dev, focused)**: ~40 weeks (~9 months) untuk v1.0, tambah ~14 weeks (~3.5 bulan) untuk v2.0 = **~1 tahun** ke ecosystem cross-language.
+
+**Fase besar**:
+
+| Fase | Versi | Cumulative | Fokus |
+|------|-------|------------|-------|
+| **Consolidation** | v0.2 - v0.5 | ~5 weeks | Extract, hardening, exception hierarchy, domain classes, framework sample |
+| **Signing core** | v0.6 - v0.6.6 | ~12 weeks | Signature adapter + Local PKI + UI extraction/packaging |
+| **PSrE + PDF** | v0.7 - v0.9 | ~19 weeks | Peruri, PAdES+TSA, more PSrE (Privy/VIDA) |
+| **Anchoring** | v0.9.5 | ~23 weeks | Blockchain anchor (OpenTimestamps + Polygon) |
+| **Extraction** | v1.0 | ~24 weeks | Standalone PHP library di Packagist |
+| **Spec** | v1.1 | ~26 weeks | ezdoc-spec repo publik |
+| **Go port** | v1.5 | ~32 weeks | Native Go implementation |
+| **TS port** | v2.0 | ~40 weeks | Native TypeScript + Next.js sample |
+
+**Catatan estimation**:
+- Timeline asumsi **1 dev fokus purnawaktu**. Parallelization (mis. UI dev sambil PSrE integration) bisa potong 30-40%.
+- Milestone v0.7 (PSrE first CA) beban paling variabel — tergantung vendor cooperation & sandbox availability.
+- Blockchain milestone (v0.9.5) bisa di-defer atau di-parallel karena tidak block v1.0 shipping.
+
+### 6.1 Milestone v0.2 — "Extract & harden"  ⏱ ~1 week
+
+**Goal**: pindahkan business logic dari inline handler UI ke file terpisah yang testable.
+
+- [ ] Extract 6 template action files (analyze_query, cleanup_orphans, field_usage, field_usage_all, list_categories, rename_field) dari `form_pembuat_surat_v3.php`
+- [ ] Extract 1 default_vars file (list_vars) — sudah ada 2 lain (add_var, delete_var)
+- [ ] Update `_dispatcher.php` whitelist untuk route ke file-file baru
+- [ ] Hardening: HMAC secret pindah ke env var (`EZDOC_HMAC_SECRET`)
+- [ ] Delete legacy migrations after verifying production sudah migrated
+- [ ] Bump versi → `0.2.0`
+
+**Definition of Done**:
+- `form_pembuat_surat_v3.php` tidak punya `if ($postAction === '...')` handler lagi (semua routed via dispatcher)
+- `php -l` semua file pass di PHP 7.4 + 8.3
+- Manual smoke test: designer page + document form + verify page semua jalan
+
+### 6.2 Milestone v0.3 — "Exception & Access classes"  ⏱ ~1 week
+
+**Goal**: proper Exception hierarchy + Access classes untuk RBAC yang testable.
+
+- [ ] Implement `Ezdoc\Exceptions\EzdocException` (base) + `AccessDenied`, `NotFound`, `Validation`
+- [ ] Refactor `\RuntimeException` throws → subclass yang tepat
+- [ ] Implement `Ezdoc\Access\{AccessConfig, AccessControl, AccessDecision, PermissionRule}`
+- [ ] Wire `AccessControl` di `lib/authorization.php` sebagai adapter (backward compat)
+- [ ] Tests: unit test untuk Access classes (target 80% coverage untuk `src/Access/*`)
+- [ ] Bump versi → `0.3.0`
+
+**Definition of Done**:
+- Consumer bisa `catch (AccessDeniedException $e)` untuk handle RBAC error spesifik
+- `AccessControl::can($user, 'edit', $template)` return `AccessDecision` yang punya `reason`
+- Unit tests pass
+
+### 6.3 Milestone v0.4 — "Document/Template domain"  ⏱ ~2 weeks
+
+**Goal**: OOP Document + Template layer supaya consumer library tidak perlu tau SQL.
+
+- [ ] Implement `Ezdoc\Document\{Document, DocumentRepository, DocumentService, SaveDocumentRequest, SaveDocumentResult}`
+- [ ] Implement `Ezdoc\Template\{Template, ParsedTemplate, TemplateParser, TemplateRepository}`
+- [ ] Refactor `actions/document/save_document.php` → panggil `DocumentService->save(SaveDocumentRequest)`
+- [ ] Refactor template actions → panggil `TemplateRepository` + `TemplateParser`
+- [ ] Tests: unit + integration untuk domain classes
+- [ ] Bump versi → `0.4.0`
+
+**Definition of Done**:
+- Consumer bisa:
+  ```php
+  $svc = new Ezdoc\Document\DocumentService($ctx);
+  $result = $svc->save(new SaveDocumentRequest([...]));
+  ```
+- Zero direct `mysqli_query()` di `actions/*.php` (semua via Repository)
+
+### 6.4 Milestone v0.5 — "Framework adapters"  ⏱ ~1 week
+
+**Goal**: sample bootstrap untuk Laravel + WordPress supaya consumer tinggal copy-paste.
+
+- [ ] Buat folder `examples/` dengan:
+  - `examples/laravel/EzdocServiceProvider.php`
+  - `examples/wordpress/ezdoc-plugin.php`
+  - `examples/plain-php/index.php`
+- [ ] Docs: quickstart guide per framework
+- [ ] Bump versi → `0.5.0-rc1`
+
+### 6.5 Milestone v0.6 — "Signature adapter + Local PKI"  ⏱ ~2 weeks
+
+**Goal**: pluggable signature backend + L2 (self-signed / internal CA) support.
+
+- [ ] Implement `Ezdoc\Signature\{SignatureProvider, SignRequest, SignResult, Verdict}`
+- [ ] Implement `HmacProvider` (existing behavior, jadi default L1)
+- [ ] Implement `LocalPkiProvider` — pakai `openssl_sign()` + X.509 cert
+- [ ] Implement `KeyStore` — env → file → HSM interface (HSM impl stub dulu)
+- [ ] New migration: `ezdoc_signatures` table
+- [ ] Refactor existing sign/verify code untuk pakai adapter
+- [ ] Tests: unit test HMAC provider + LocalPKI provider
+- [ ] Docs: cara generate self-signed cert untuk L2
+- [ ] Bump versi → `0.6.0`
+
+### 6.6 Milestone v0.6.5 — "UI extraction & headless core"  ⏱ ~3 weeks
+
+**Goal**: pisahkan business logic dari UI di 3 halaman v3 → core headless, UI jadi reference impl publishable.
+
+- [ ] Extract inline PHP handler dari `form_pembuat_surat_v3.php` (~4700 LOC) → action endpoints di `actions/` (~15 endpoints tambahan)
+- [ ] Extract inline handler dari `form_pembuat_surat_cetak_v3.php` (~4100 LOC) → action endpoints
+- [ ] Extract inline handler dari `form_pembuat_surat_list_v3.php` (~600 LOC) → action endpoints
+- [ ] Refactor HTML/CSS/JS jadi Blade partials + component structure
+- [ ] Tests: unit test action endpoints + smoke test view rendering
+- [ ] Dogfood consumer switch: `form_pembuat_surat_v3.php` sekarang cuma `require ezdoc/views/designer.php`
+- [ ] Bump versi → `0.6.5`
+
+**Definition of Done**:
+- Setiap v3 file jadi < 100 LOC (cuma wrapper)
+- Zero SQL query di UI file
+- All actions callable via HTTP endpoints (via dispatcher)
+- Manual smoke test: designer + generate + list semua jalan seperti dulu
+
+### 6.7 Milestone v0.6.6 — "UI packaging & view resolver"  ⏱ ~2 weeks
+
+**Goal**: bikin UI jadi paket terpisah `mrpotensial/ezdoc-ui-blade` yang publishable per pattern Laravel Filament.
+
+- [ ] Buat repo/folder baru `packages/ezdoc-ui-blade/` (monorepo sub-package)
+- [ ] Implement `Ezdoc\UI\ViewResolver` — fallback chain (vendor/consumer → package default)
+- [ ] Move Blade views ke `packages/ezdoc-ui-blade/views/`
+- [ ] Package assets: CSS, JS, images
+- [ ] Implement publish command:
+  - `php artisan vendor:publish --tag=ezdoc-views`
+  - Plain PHP: `php vendor/mrpotensial/ezdoc-ui-blade/cli/publish.php views ./resources/views/vendor/ezdoc`
+- [ ] Implement slot system: `@yield('ezdoc:designer:sidebar-extra')` × 10-15 named slots
+- [ ] Docs: "How to customize" guide (4 tingkat: config → CSS → view publish → full replacement)
+- [ ] Bump versi → `0.6.6`
+
+**Definition of Done**:
+- Consumer bisa install `mrpotensial/ezdoc` saja (core, tanpa UI)
+- Consumer bisa install `mrpotensial/ezdoc + mrpotensial/ezdoc-ui-blade` untuk default UI
+- Publish command works: file ke-copy ke consumer's app, edit di sana take precedence
+- Sample: consumer config.php override warna & logo (config-only), pass Adobe Reader test
+
+### 6.8 Milestone v0.7 — "PSrE integration (first CA)"  ⏱ ~3 weeks
+
+**Goal**: L3 signing via 1 CA Indonesia — Peruri Digital Sign paling dulu (paling banyak dipakai instansi kesehatan).
+
+- [ ] Study Peruri Digital Sign API (register akun sandbox, dapat sample cert)
+- [ ] Implement `Ezdoc\Signature\Providers\PeruriProvider`
+- [ ] Implement `Ezdoc\Signature\Envelope\PkcsSevenEnvelope` (RFC 5652)
+- [ ] Support OTP flow (email/SMS untuk approve signing)
+- [ ] Verification: fetch signer cert from PSrE, validate chain to root
+- [ ] Sandbox integration test (real Peruri sandbox call)
+- [ ] Bump versi → `0.7.0`
+
+### 6.9 Milestone v0.8 — "PAdES + Timestamp"  ⏱ ~2 weeks
+
+**Goal**: signed PDF yang bisa di-verify Adobe Reader + long-term validation.
+
+- [ ] Implement `Ezdoc\Signature\Envelope\PadesEnvelope` (ETSI EN 319 142)
+- [ ] Implement `Ezdoc\Signature\Timestamp\TimestampClient` (RFC 3161)
+- [ ] Support BSrE TSA + external TSA (freetsa.org untuk dev)
+- [ ] Verify PDF di Adobe Reader (green checkmark, no warning)
+- [ ] Docs: PDF signing flow end-to-end
+- [ ] Bump versi → `0.8.0`
+
+### 6.10 Milestone v0.9 — "More PSrE providers"  ⏱ ~2 weeks
+
+**Goal**: multi-CA choice untuk consumer.
+
+- [ ] Implement `PrivyProvider` (Privy REST API)
+- [ ] Implement `VidaProvider` (VIDA e-Sign)
+- [ ] Implement `MultiProvider` (chain fallback / redundancy)
+- [ ] Docs: comparison matrix (biaya, coverage, use case)
+- [ ] Bump versi → `0.9.0`
+
+### 6.11 Milestone v0.9.5 — "Blockchain anchoring"  ⏱ ~3-4 weeks
+
+**Goal**: proof-of-existence layer via blockchain anchor — orthogonal add-on ke existing L1-L3 signature.
+
+- [ ] Implement `Ezdoc\Anchor\{AnchorProvider, AnchorReceipt, AnchorVerdict, AnchorStatus}`
+- [ ] Implement `OpenTimestampsAnchor` (default recommend — free, no wallet, batched)
+- [ ] Implement `PolygonAnchor` (untuk yang butuh smart contract capabilities)
+- [ ] Implement `BatchAnchor` decorator (Merkle tree untuk high-volume cost reduction)
+- [ ] Deploy `EzdocAnchor.sol` ke Polygon mainnet + testnet (Amoy testnet)
+- [ ] New migration: `ezdoc_anchors` table
+- [ ] Background worker: `cli/anchor-worker.php` (poll pending anchors, update status)
+- [ ] Verify service: fetch on-chain, cross-check hash, return `AnchorVerdict`
+- [ ] Cost accounting: `ezdoc_anchor_costs` view (per-provider, per-month rollup)
+- [ ] Public verify page: `/anchor-verify?receipt_id=xxx` — no login, show chain explorer link
+- [ ] Docs: chain choice guide, cost estimator, when-to-use table
+- [ ] Bump versi → `0.9.5`
+
+**Definition of Done**:
+- User bisa `AnchorProvider->anchor($hash)` dari code, dapat `tx_hash`
+- Verify page tampilkan bukti: hash on-chain matches, block timestamp, link ke explorer
+- BatchAnchor: 1000 dokumen di-anchor jadi 1 tx, individual proof tetap works
+- Test: L3 (Peruri) + A1 (Polygon) combined flow end-to-end pass
+
+### 6.12 Milestone v1.0 — "PHP library extraction"  ⏱ ~1 week
+
+**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist.
+
+- [ ] Move `ezdoc/` folder ke repo baru `mrpotensial/ezdoc`
+- [ ] Setup GitHub Actions CI (phpunit + phpstan level 6 + PHP matrix 7.4-8.3)
+- [ ] Tag `v1.0.0`, publish ke Packagist
+- [ ] Dogfood consumer switch dari path-based include → `composer require mrpotensial/ezdoc`
+- [ ] Deprecation notice untuk backward-compat globals
+
+**Definition of Done**:
+- `composer require mrpotensial/ezdoc` works di fresh Laravel project
+- Dogfood consumer production pakai versi Packagist (bukan lokal path)
+- L1 (HMAC), L2 (LocalPKI), L3 (Peruri) semua production-ready
+
+### 6.13 Milestone v1.1 — "Spec extraction"  ⏱ ~1-2 weeks
+
+**Goal**: buat repo `ezdoc-spec/` — the reusable architecture — sebagai persiapan untuk native ports.
+
+- [ ] Extract spec dari PHP impl → repo baru `mrpotensial/ezdoc-spec`
+- [ ] Write JSON Schemas untuk semua domain models
+- [ ] Write protocol docs (envelope format, hash algo, verify chain)
+- [ ] Write conformance test vectors (`conformance/test-vectors.json`)
+- [ ] PHP impl jadi first "reference implementation" yang lulus conformance test
+- [ ] Extract SQL DDL ke `db-schema/mysql-8.sql` (language-agnostic)
+- [ ] Bump versi PHP → `1.1.0`, tag `ezdoc-spec` → `v1.0.0`
+
+**Definition of Done**:
+- `ezdoc-spec` repo public, MIT license
+- PHP CI job runs conformance suite → pass
+- Docs: "How to write a new port" guide
+
+### 6.14 Milestone v1.5 — "Go port"  ⏱ ~4-6 weeks
+
+**Goal**: `ezdoc-go` — native Go implementation, container-friendly.
+
+- [ ] Setup repo `mrpotensial/ezdoc-go` dengan Go modules (1.21+)
+- [ ] Implement domain models sesuai spec
+- [ ] Implement `SignatureProvider` interface + HmacProvider + LocalPkiProvider
+- [ ] Implement conformance test suite (import `ezdoc-spec/conformance/`)
+- [ ] Implement CLI: `ezdoc verify --file doc.pdf` untuk verifikasi standalone
+- [ ] Docker image untuk verify-service microservice
+- [ ] Docs: quickstart Go + Kubernetes deployment sample
+- [ ] Tag `v0.1.0` Go module
+
+**Definition of Done**:
+- `go get github.com/mrpotensial/ezdoc-go` works
+- Conformance test pass (signature dari PHP di-verify oleh Go = same result)
+- Docker image jalan di Kubernetes cluster
+
+### 6.15 Milestone v2.0 — "TypeScript port + full ecosystem"  ⏱ ~6-8 weeks
+
+**Goal**: `@mrpotensial/ezdoc` — TypeScript native untuk Next.js / Node / browser.
+
+- [ ] Setup repo `mrpotensial/ezdoc-ts` dengan tsup untuk dual ESM+CJS build
+- [ ] Implement domain models (Zod schema-parity dengan JSON Schema)
+- [ ] Implement `SignatureProvider` interface + HMAC + WebCrypto backend
+- [ ] Browser-safe subset (verify-only, tidak sign — private key jangan ke browser)
+- [ ] Next.js Server Actions sample project
+- [ ] Docs: quickstart Next.js + edge runtime (Cloudflare Workers)
+- [ ] Tag `v1.0.0` npm
+
+**Definition of Done**:
+- `npm i @mrpotensial/ezdoc` works
+- Conformance test pass (PHP ↔ Go ↔ TS interop verified)
+- Next.js example app deployed di Vercel
+- Browser subset pass di 3 browser latest (Chrome, Firefox, Safari)
+
+## 7. Non-Goals
+
+Explicit apa yang **TIDAK** akan dilakukan library ini:
+
+- ❌ **PDF rendering from scratch** — tetap pakai library external (dompdf, mpdf, TCPDF di sisi consumer). Library ini cuma **sign** PDF (PAdES envelope), bukan generate.
+- ❌ **Domain-specific column di core schema** — TIDAK ADA `norm`, `nopen`, `poli`, `nik`, `nip`, `invoice_no` sebagai kolom hardcoded. Semua domain-specific data masuk `field_values JSON` + `subject_type`/`subject_id`. Consumer boleh bikin profile dengan convenience getter, tapi core schema tetap universal.
+- ❌ **Indonesia-specific default** di code path — no default lang=id / country=ID / currency=IDR di core. Semua explicit config atau UTC/en-US default.
+- ✅ **~~Form UI builder~~** — REVISED: reference UI (designer + generate + list) SEKARANG IN-SCOPE, tapi dikemas sebagai paket terpisah (`mrpotensial/ezdoc-ui-blade`) yang optional install. Core `mrpotensial/ezdoc` tetap headless. Consumer bebas skip reference UI dan bangun sendiri.
+- ❌ **Non-Blade UI packages first-class** — Blade version (`ezdoc-ui-blade`) di-maintain resmi. React/Vue/Livewire adapter = community-driven / stretch goal.
+- ❌ **Multi-tenant native** — kalau butuh, consumer wrap di layer atas (via Context injection)
+- ❌ **Real-time collaboration** — out of scope; snapshot + versioning saja
+- ❌ **Laravel package first-class** — plain PHP dulu, framework adapter menyusul
+- ❌ **Backward compat dengan `surat_*_v2` tables** — legacy migration provided sekali, setelah itu deprecated
+- ❌ **PHP < 7.4** — EOL, tidak worth effort untuk support
+- ❌ **Own CA / issue certificates** — library HANYA konsumsi cert (self-signed atau dari PSrE Indonesia). Tidak jadi Certificate Authority sendiri.
+- ❌ **Hardware Security Module driver** — support HSM via PKCS#11 interface saja (via `ext-openssl` atau external library seperti `pkcs11-tool`). Tidak nulis native HSM driver.
+- ❌ **Bridge / RPC between language ports** — Go port TIDAK panggil PHP backend. Setiap port standalone. Interoperability via shared spec + DB, bukan network protocol.
+- ✅ **~~Blockchain / distributed ledger anchoring~~** — REVISED: **IN-SCOPE** sebagai add-on orthogonal (v0.9.5). Anchor bukan pengganti signature — combine bebas dengan L1-L3. Default backends: OpenTimestamps (free) + Polygon (murah). Consumer bisa custom `AnchorProvider` untuk chain lain.
+- ❌ **Native crypto wallet management** — library tidak simpan private key user's wallet. Untuk EVM anchoring, operator key (env var, satu untuk seluruh org) yang submit tx — bukan per-signer wallet. Full W3C VC / per-user DID flow = stretch v2.x+.
+- ❌ **Cryptocurrency payments / DeFi** — anchoring pakai chain HANYA untuk hash storage, bukan token transfer. Tidak jadi wallet/pembayaran feature.
+- ❌ **AI / OCR / document classification** — out of scope
+- ❌ **Non-Indonesia PSrE support first-class** — DocuSign / Adobe Sign / bisa saja di-integrasi kalau ada demand, tapi bukan roadmap utama. Fokus PSrE Indonesia (Peruri, Privy, VIDA, BSrE).
+
+## 8. Compatibility & Distribution
+
+### 8.1 PHP versions
+
+- **Minimum**: 7.4 (via polyfill layer)
+- **Recommended**: 8.2+
+- **Tested via CI**: 7.4, 8.0, 8.1, 8.2, 8.3 (via `matrix` di GitHub Actions)
+
+### 8.2 Composer package
+
+- Package name: `mrpotensial/ezdoc`
+- Namespace: `Ezdoc\*`
+- License: MIT
+- Repository: TBD (kandidat: `github.com/mrpotensial/ezdoc`)
+
+### 8.3 Semantic versioning
+
+- `0.x` — pre-release, breaking changes allowed
+- `1.x` — stable, breaking changes require major bump
+
+## 9. Security Considerations
+
+- **HMAC secret**: WAJIB via env var (`EZDOC_HMAC_SECRET`), NEVER hardcoded
+- **SQL injection**: semua query via `mysqli_prepare()` + `bind_param()` (no `mysqli_query()` dengan concat)
+- **XSS**: consumer's UI responsibility, tapi library provide `ezdoc_e()` helper untuk output escape
+- **RBAC**: default deny, whitelist role/user IDs
+- **Audit trail**: silent-fail write (business logic never blocked kalau audit table down), tapi log error via `error_log`
+- **Session hijack**: library tidak handle session — delegated ke consumer's auth system
+
+## 10. Open Questions
+
+Berikut point yang perlu decision dari stakeholder:
+
+### 10.1 Baseline (v0.2-v0.5)
+1. **Legacy migrations** — kapan aman di-delete dari folder `migrations/`? Perlu confirm semua production env sudah migrated ke `ezdoc_*` tables.
+2. **HMAC secret rotation** — apakah perlu support key rotation (multiple valid keys)?
+3. **Doc versioning** — apakah document juga versioned seperti template? (skarang document immutable setelah locked)
+4. **Multi-language i18n** — apakah error message perlu i18n dari awal?
+5. **Framework priorities** — Laravel dulu atau WordPress dulu untuk sample?
+
+### 10.2 Signature & PSrE (v0.6-v0.9)
+6. **PSrE prioritas** — Peruri dulu (kandidat teratas karena banyak dipakai instansi kesehatan) atau Privy (pricing lebih ramah startup)? Konfirmasi budget & existing contract.
+7. **Certificate storage** — cert-per-user disimpan di `ezdoc_user_certificates` (baru), atau reference-only ke PSrE user account (fetch on-demand)?
+8. **OTP flow untuk L3** — email, SMS, atau in-app push? Vendor biasanya kasih pilihan multi-channel.
+9. **TSA source** — pakai TSA nya PSrE (bundled), BSrE (government), atau external (freetsa.org)?
+10. **Sign-later flow** — kalau signer offline, apakah document boleh disimpan sebagai draft dengan placeholder signature, atau tolak upfront?
+
+### 10.3 Blockchain anchoring (v0.9.5)
+11a. **Chain default** — OpenTimestamps (free, Bitcoin-rooted, 1h delay) atau Polygon (paid ~$0.01, 2s delay, smart contract)? Kandidat: kombinasi — Polygon untuk real-time, OpenTimestamps untuk backup.
+11b. **Operator wallet management** — private key untuk submit tx disimpan di env var, HSM, atau outsourced (mis. Fireblocks / OpenZeppelin Defender)?
+11c. **Auto-anchor vs manual** — semua doc auto-anchor, atau opt-in per template (via `anchor_config` di `ezdoc_templates`)?
+11d. **BatchAnchor cadence** — daily rollup, hourly, atau on-demand ketika mencapai N pending?
+11e. **Chain di-support kedua** — setelah default, chain apa lagi (Ethereum mainnet untuk gravitas, Hyperledger untuk konsorsium hospital, Solana untuk cost)?
+11f. **Publik-verifiable link** — apakah kita expose halaman `/verify/{receipt_id}` sebagai public URL untuk audit third-party?
+
+### 10.4 Cross-language ports (v1.1+)
+11. **Spec ownership** — `mrpotensial` maintain spec sendiri, atau donate ke lembaga (mis. Kominfo working group / hospital consortium / open governance) supaya jadi standar publik?
+12. **Go port timing** — begitu PHP v1.0 rilis, langsung mulai? Atau tunggu 6 bulan buat validasi stabilitas API?
+13. **TS port scope** — full parity dengan PHP (server + sign) atau verify-only untuk browser?
+14. **Rust port** — apakah masuk roadmap resmi atau community-driven saja?
+15. **Certification interop** — apakah perlu certification dari BSSN / Kominfo untuk klaim "compliant"?
+
+### 10.5 Business & governance
+16. **License** — MIT (permissive, adoption max) atau Apache 2.0 (patent grant, lebih formal)?
+17. **Commercial support** — `mrpotensial` jual support commercial (hosted PSrE, custom adapter), atau full free? Kalau commercial, apakah bundle dengan cloud offering?
+18. **Governance model** — maintainer-only, atau open contributors dengan RFC process? Konsorsium (mis. hospital / legal / edu network) bisa co-govern?
+
+## 11. Reference
+
+### 11.1 Foundation
+- **UUID v7**: [RFC 9562](https://datatracker.ietf.org/doc/rfc9562/) (May 2024)
+- **Semantic Versioning**: https://semver.org/spec/v2.0.0.html
+- **Keep a Changelog**: https://keepachangelog.com/en/1.1.0/
+- **PSR-4 Autoloading**: https://www.php-fig.org/psr/psr-4/
+- **Symfony Polyfill**: https://github.com/symfony/polyfill
+
+### 11.2 Cryptography & Signature
+- **PKCS#7 / CMS**: [RFC 5652](https://datatracker.ietf.org/doc/rfc5652/) — Cryptographic Message Syntax
+- **PAdES**: [ETSI EN 319 142](https://www.etsi.org/deliver/etsi_en/319100_319199/31914201/) — PDF Advanced Electronic Signatures
+- **XAdES**: [ETSI EN 319 132](https://www.etsi.org/deliver/etsi_en/319100_319199/31913201/) — XML Advanced Electronic Signatures
+- **RFC 3161**: Time-Stamp Protocol (TSP)
+- **RFC 8785 (JCS)**: JSON Canonicalization Scheme — untuk deterministic hash
+- **PKCS#11**: HSM interface — https://www.oasis-open.org/committees/tc_home.php?wg_abbrev=pkcs11
+- **X.509**: [RFC 5280](https://datatracker.ietf.org/doc/rfc5280/) — Certificate & CRL Profile
+
+### 11.3 Indonesian PSrE
+- **Peruri Digital Sign**: https://peruri.co.id/produk-layanan/digital-sign
+- **Privy**: https://privy.id/for-developer
+- **VIDA**: https://vida.id/produk/e-sign
+- **Digisign**: https://digisign.id
+- **BSrE (Balai Sertifikasi Elektronik)**: https://bsre.bssn.go.id
+- **UU ITE 2016** Pasal 11 — Tanda tangan elektronik sertifikasi (bersertifikat = kekuatan hukum penuh)
+- **PP 71/2019** — Penyelenggaraan Sistem dan Transaksi Elektronik
+
+### 11.4 Blockchain & anchoring
+- **OpenTimestamps**: https://opentimestamps.org — free Bitcoin anchoring, batched
+- **Chainpoint**: https://chainpoint.org — anchoring standard (v4)
+- **Ethereum Improvement Proposals (EIPs)**: https://eips.ethereum.org/
+- **EIP-712** — typed structured data signing: https://eips.ethereum.org/EIPS/eip-712
+- **EIP-1559** — gas fee mechanism (baseline biaya anchor): https://eips.ethereum.org/EIPS/eip-1559
+- **Polygon docs**: https://docs.polygon.technology
+- **Hyperledger Fabric**: https://hyperledger-fabric.readthedocs.io
+- **W3C Verifiable Credentials Data Model 2.0**: https://www.w3.org/TR/vc-data-model-2.0/
+- **W3C Decentralized Identifiers (DIDs)**: https://www.w3.org/TR/did-core/
+- **Solidity docs**: https://docs.soliditylang.org
+- **web3.php**: https://github.com/web3p/web3.php — Ethereum interaction from PHP
+- **go-ethereum**: https://geth.ethereum.org/docs/developers/dapp-developer/native — Go client
+- **ethers.js**: https://docs.ethers.org — TypeScript client
+
+### 11.5 Cross-language / native ports
+- **Go `crypto/x509`**: https://pkg.go.dev/crypto/x509
+- **Node.js `crypto` (WebCrypto)**: https://nodejs.org/api/webcrypto.html
+- **Rust `openssl` crate**: https://docs.rs/openssl/
+- **JSON Schema draft 2020-12**: https://json-schema.org/draft/2020-12/schema
+- **OpenAPI 3.1**: https://spec.openapis.org/oas/v3.1.0
