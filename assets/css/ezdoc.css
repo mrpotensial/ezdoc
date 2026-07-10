@@ -1,0 +1,173 @@
+/*
+ * ezdoc.css — base stylesheet for Ezdoc starter views.
+ *
+ * All colors/spacing/radii are controlled via CSS variables below.
+ * Override strategy:
+ *   1. Set --ezdoc-* variables via <style> in your layout, OR
+ *   2. Append a custom stylesheet via config.custom_css, which loads
+ *      AFTER this file so any rule wins by cascade.
+ * See docs/UI-CUSTOMIZATION.md for details.
+ */
+
+:root {
+    --ezdoc-primary: #0e7490;
+    --ezdoc-primary-contrast: #ffffff;
+    --ezdoc-primary-hover: #0b5a72;
+    --ezdoc-secondary: #f59e0b;
+    --ezdoc-secondary-contrast: #1f2937;
+
+    --ezdoc-bg: #ffffff;
+    --ezdoc-surface: #f8fafc;
+    --ezdoc-border: #e2e8f0;
+    --ezdoc-text: #1f2937;
+    --ezdoc-text-muted: #64748b;
+
+    --ezdoc-radius: 0.375rem;
+    --ezdoc-radius-lg: 0.625rem;
+
+    --ezdoc-spacing-xs: 0.25rem;
+    --ezdoc-spacing-sm: 0.5rem;
+    --ezdoc-spacing-md: 1rem;
+    --ezdoc-spacing-lg: 1.5rem;
+
+    --ezdoc-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+    --ezdoc-shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+
+    --ezdoc-font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Minimal reset — Bootstrap already handles most of it. */
+.ezdoc-body {
+    font-family: var(--ezdoc-font);
+    color: var(--ezdoc-text);
+    background: var(--ezdoc-bg);
+}
+
+.ezdoc-header {
+    border-bottom: 1px solid var(--ezdoc-border);
+    background: var(--ezdoc-surface);
+}
+
+.ezdoc-logo {
+    height: 32px;
+    width: auto;
+}
+
+.ezdoc-footer {
+    border-top: 1px solid var(--ezdoc-border);
+    margin-top: var(--ezdoc-spacing-lg);
+}
+
+/* Card */
+.ezdoc-card {
+    background: var(--ezdoc-bg);
+    border: 1px solid var(--ezdoc-border);
+    border-radius: var(--ezdoc-radius-lg);
+    box-shadow: var(--ezdoc-shadow-sm);
+    padding: var(--ezdoc-spacing-md);
+}
+
+/* Buttons */
+.ezdoc-btn {
+    border-radius: var(--ezdoc-radius);
+    padding: var(--ezdoc-spacing-sm) var(--ezdoc-spacing-md);
+    font-weight: 500;
+    transition: background-color 120ms ease, box-shadow 120ms ease;
+    border: 1px solid transparent;
+    cursor: pointer;
+}
+
+.ezdoc-btn-primary {
+    background: var(--ezdoc-primary);
+    color: var(--ezdoc-primary-contrast);
+    border-color: var(--ezdoc-primary);
+}
+
+.ezdoc-btn-primary:hover,
+.ezdoc-btn-primary:focus {
+    background: var(--ezdoc-primary-hover);
+    color: var(--ezdoc-primary-contrast);
+    border-color: var(--ezdoc-primary-hover);
+    box-shadow: var(--ezdoc-shadow-md);
+}
+
+.ezdoc-btn-secondary {
+    background: var(--ezdoc-secondary);
+    color: var(--ezdoc-secondary-contrast);
+    border-color: var(--ezdoc-secondary);
+}
+
+/* Table */
+.ezdoc-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--ezdoc-bg);
+    border-radius: var(--ezdoc-radius);
+    overflow: hidden;
+}
+
+.ezdoc-table thead th {
+    background: var(--ezdoc-surface);
+    border-bottom: 1px solid var(--ezdoc-border);
+    text-align: left;
+    padding: var(--ezdoc-spacing-sm) var(--ezdoc-spacing-md);
+    font-weight: 600;
+    color: var(--ezdoc-text-muted);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.ezdoc-table tbody td {
+    padding: var(--ezdoc-spacing-sm) var(--ezdoc-spacing-md);
+    border-bottom: 1px solid var(--ezdoc-border);
+    vertical-align: middle;
+}
+
+.ezdoc-table tbody tr:hover {
+    background: var(--ezdoc-surface);
+}
+
+/* Badges */
+.ezdoc-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.4;
+    background: var(--ezdoc-surface);
+    color: var(--ezdoc-text-muted);
+    border: 1px solid var(--ezdoc-border);
+}
+
+.ezdoc-badge-draft   { background: #f1f5f9; color: #475569; }
+.ezdoc-badge-issued  { background: #dbeafe; color: #1e40af; }
+.ezdoc-badge-signed  { background: #dcfce7; color: #166534; }
+.ezdoc-badge-void    { background: #fee2e2; color: #991b1b; }
+
+/* Empty state */
+.ezdoc-empty-state {
+    background: var(--ezdoc-surface);
+    color: var(--ezdoc-text-muted);
+    border-color: var(--ezdoc-border) !important;
+    border-radius: var(--ezdoc-radius-lg);
+}
+
+/* Filter row */
+.ezdoc-filters {
+    background: var(--ezdoc-surface);
+    padding: var(--ezdoc-spacing-sm) var(--ezdoc-spacing-md);
+    border-radius: var(--ezdoc-radius);
+    border: 1px solid var(--ezdoc-border);
+}
+
+/* Form field values fieldset */
+.ezdoc-field-values legend,
+.ezdoc-signature-slot legend {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--ezdoc-text);
+    padding: 0;
+    margin-bottom: var(--ezdoc-spacing-sm);
+}

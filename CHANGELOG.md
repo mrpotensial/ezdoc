@@ -6,6 +6,68 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+## [0.6.6] - 2026-07-10 — "UI extension framework (ViewResolver + Config + Slot + Publish)"
+
+### Added — UI framework core (6 files, ~26 KB)
+- `src/UI/ViewResolver.php` — chain-of-responsibility view lookup dengan `addPath()` (prepend by default + de-dup on re-add so re-adding just reorders), probes `.blade.php` then `.php`, `render()` uses `EXTR_SKIP` + `ob_start()` try/catch untuk fatal-safe output buffering. Sanitizer rejects empty / non-`[a-zA-Z0-9_/-]` / `..` segments. Throws `NotFoundException::forResource('view', $name)` untuk missing view.
+- `src/UI/Config.php` — nested array store dengan dot-notation `get()`/`set()`/`has()`. `set()` builds intermediate arrays. `merge()` deep-merges assoc + replaces numeric arrays. `fromArray()` + `fromFile()` factories (throws `NotFoundException`/`ValidationException`).
+- `src/UI/SlotRegistry.php` — named slots dengan `register(name, callable|string, priority=10)`. Priority ASC sort dengan **monotonic sequence tiebreaker** karena `usort()` tidak stable pre-PHP 8.0. Callable results coerced to string (scalar/`__toString` check).
+- `src/UI/Slot.php` — pure static facade dengan private constructor. Lazy-inits empty SlotRegistry. `setRegistry()` untuk DI override. `reset()` untuk tests + long-running worker cleanup (Swoole/RoadRunner).
+- `src/UI/Theme.php` — thin wrapper on Config reading `brand.primary_color`, `brand.secondary_color`, `brand.logo_url`, `brand.favicon_url`, `brand.app_name`, `assets.custom_css`, `assets.custom_js`. Also exposes `config()` accessor for non-surfaced keys.
+- `src/UI/PublishCommand.php` — programmatic publish API. `RecursiveIteratorIterator` + `FilesystemIterator::SKIP_DOTS` recursive scan. Path sanitization rejects relative + `..` traversal, accepts Unix `/…` + Windows `C:/…`. Auto-creates target dirs, verifies writability. Ignores `.DS_Store`, `Thumbs.db`, `.git*`, `*.tmp`, `*.swp`, `*.bak`, `*~` (case-insensitive fnmatch).
+
+### Added — CLI + docs (2 files, ~12 KB)
+- `cli/publish.php` — CLI entry point dengan CLI-only guard (`php_sapi_name() !== 'cli'` → exit 1). Loads autoload only (skips DB-dependent bootstrap). Commands: `views`, `assets`, `config`, `all`, `list`, `help`. Reports `[COPY]`/`[SKIP]`/`[FAIL] — reason` per file. Exit codes: 0 success, 1 any failed, 2 usage error.
+- `cli/README.md` — dokumentasi CLI (migrate + publish), syntax table, flags, exit codes, sample outputs, composer integration, programmatic API example.
+
+### Added — Starter templates (7 files, ~29 KB)
+Consumer publish + edit — atau bangun sendiri di atas action endpoints:
+- `views/layout.php` (68 lines) — HTML5 shell, `<style>` block injects `--ezdoc-primary/--secondary` dari Theme (Level-1 → Level-2 bridge, no build step), custom CSS/JS loops, 3 slots: `layout:head-extra`, `layout:header-extra`, `layout:footer-extra`
+- `views/document/list.php` (106 lines) — header + "Buat Dokumen" CTA, search + status filter form, empty state, `.ezdoc-table` (Title/Subject/Status/Created At/Actions). Slots: `document-list:filters-extra`, per-row `document-list:actions-extra`. Uses Document VO getters — **NO** legacy `norm`/`nopen` di top level (domain-agnostic).
+- `views/document/form.php` (113 lines) — template selector, title, `subject_type` + `subject_id` (generic — no hospital coupling), dynamic `field_values[]` area, signature placeholder, CSRF hidden input. Slots: `document-form:before-fields`, `document-form:after-fields`.
+- `assets/css/ezdoc.css` (173 lines) — `:root` CSS-variable palette. Components: `.ezdoc-body/header/footer/logo/card/btn/table/badge` (+ draft/issued/signed/void variants), `.ezdoc-empty-state/filters/field-values`.
+- `assets/js/ezdoc.js` (106 lines) — `window.Ezdoc = { version, config, slots, escapeHtml, formatDate, postJson }`. Idempotent init guard. Slot registry `register(name, cb, priority)`/`render(name, target, context)`/`list()`. Ascending priority, throw isolation per callback.
+- `config/ezdoc.example.php` (52 lines) — sample consumer config dengan `brand.*`, `pages.list.*`, `pages.form.*`, `custom_css`, `custom_js`, `urls.list`. Header shows copy + `Config::fromFile()` bootstrap.
+- `docs/UI-CUSTOMIZATION.md` (341 lines) — comprehensive customization guide:
+  - Table of Contents + 4-level effort table
+  - Level 1: Config only (5 min) — walkthrough + config-key reference table
+  - Level 2: CSS override (30 min) — CSS-variable reference table
+  - Level 3: View publish (1-2 jam) — `php cli/publish.php` example
+  - Level 4: Full UI replacement — 4-layer architecture diagram + `Ezdoc.postJson()` sample
+  - Slot registry (8 named slots documented) — PHP + JS registration + priority notes
+  - Framework adapters: Laravel (pointer v0.5), Plain PHP monolith (SIMpel bootstrap example), WordPress plugin (shortcode + WpRoleProvider)
+
+### Design highlights
+- **4-tier customization pattern** (industry-standard, mirror Laravel Filament / shadcn):
+  - **Tier 1** — Config only (5 min): `Config::fromFile('/app/config/ezdoc.php')`
+  - **Tier 2** — CSS override (30 min): custom CSS setelah `ezdoc.css` load
+  - **Tier 3** — View publish (1-2 jam): `php cli/publish.php views ./resources/views/vendor/ezdoc` → edit copied files
+  - **Tier 4** — Full replacement (days): consumer build own UI, consume `actions/*.php` endpoints
+- **Slot system stable ordering**: SlotRegistry pakai monotonic sequence tiebreaker karena PHP < 8.0 `usort()` tidak stable. Priority ties preserve registration order.
+- **CSS variable bridge**: layout `<head>` inline `<style>` inject `--ezdoc-primary` dari Config → bridge Level-1 config to Level-2 CSS override tanpa build step
+- **Blade guard**: `ViewResolver::render()` explicitly refuses `.blade.php` (throws ValidationException) karena plain include tidak bisa execute Blade — file di-resolve tapi execution blocked. Consumer yang mau Blade harus wire Laravel adapter (v0.7+).
+- **Long-running worker safe**: `Slot::reset()` explicit method untuk clear registry between requests di Swoole/RoadRunner (avoid cross-request state bleed)
+- **Zero SIMRS coupling**: semua file baru, `page/form_pembuat_surat_*_v3.php` **tidak berubah** — additive milestone
+- **CLI safety**: `publish.php` CLI-only guard, path traversal rejection, auto-mkdir dengan writability verify
+
+### Verify agent report — PASS
+- 11/11 PHP files syntax OK
+- 0 PHP 8+ syntax leaks (readonly, promotion, union types, never, nullsafe, enum, trailing comma)
+- 15/15 files exist
+- Integration references resolve correctly (Slot::render calls, PublishCommand instantiation)
+
+### Multi-agent workflow
+4 agents parallel — 3 writer + 1 verify. **~178K tokens, ~16 minutes wall-clock** — jauh lebih cepat dari milestone sebelumnya karena:
+- Semua code path INDEPENDENT (view resolver ≠ CLI ≠ views) — zero cross-agent coupling
+- No complex refactor of existing code
+- No crypto complexity
+
+### Known limitations
+- **PHP not on PATH** di agent shells → syntax not machine-verified during write phase (verify agent later confirmed via PowerShell path). Recommend `php -l` di target server sebelum ship
+- **ViewResolver::is_readable()**: only checks `is_file()`, tidak permission — permission errors surface as include warnings, bukan NotFoundException
+- **Config::fromFile()** pakai `require` (not `include`): fatal parse error di config file halts PHP. Documented di consumer setup guide
+- **Slot global state**: process-wide, long-running workers wajib call `Slot::reset()` between requests
+
 ## [0.6.5] - 2026-07-10 — "Render-path helper extraction (partial UI split)"
 
 ### Scope — realistic assessment vs PRD DoD
