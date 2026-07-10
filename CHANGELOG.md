@@ -6,6 +6,59 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-07-10 — "Render-path helper extraction (partial UI split)"
+
+### Scope — realistic assessment vs PRD DoD
+Original PRD DoD ("v3 files < 100 LOC") was **aspirational** — bulk of the ~9500 LOC across 3 page files is HTML/CSS/JS UI code, not extractable handlers. That true UI split (partials + asset separation) belongs di **v0.6.6 UI packaging**. What v0.6.5 *actually* delivers:
+
+### Added — 3 new helper libraries (~291 lines total, dari cetak + list pages)
+- `ezdoc/lib/doc_meta_helpers.php` (62 lines):
+  - `ezdoc_fetch_creator_name($conn, $id)` — SELECT nama_pegawai untuk display
+  - `ezdoc_load_whitelisted_vars($conn)` — SELECT var_name dari default vars whitelist
+- `ezdoc/lib/doc_template_helpers.php` (162 lines):
+  - `resolveDefault()` — resolve `{{@varname}}` placeholder ke default value
+  - `evalCondExprPHP()` — evaluate conditional expression di template content
+  - `evalSingleCondPHP()` — evaluate single condition
+  - `processConditionalSections()` — apply `{{#if}}...{{/if}}` conditionals
+- `ezdoc/lib/list_helpers.php` (67 lines):
+  - `h_list()` — HTML escape wrapper (function_exists-guarded)
+  - `ezdoc_relative_time($datetimeStr)` — "5d lalu"/"3m lalu"/"2j lalu"/"4h lalu"/tanggal
+  - `ezdoc_doc_link_params($row)` — build cetak URL query params
+
+### Changed — page file slim-down
+| File | Before | After | Removed |
+|------|--------|-------|---------|
+| `page/form_pembuat_surat_v3.php` (designer) | 4478 | 4478 | 0 (all handlers already extracted di v0.2) |
+| `page/form_pembuat_surat_cetak_v3.php` (generate) | 4136 | 4032 | **-104** (helper extraction) |
+| `page/form_pembuat_surat_list_v3.php` (list) | 608 | 593 | **-15** (helper extraction) |
+
+Total page-file reduction: **-119 lines**, dengan +291 lines masuk ke shared lib files.
+
+### Dispatcher unchanged
+Docblock updated dengan "Render-path helpers (v0.6.5)" section — helpers required inline (bukan routed). Whitelist tetap **21 routes** dari v0.2 (12 template + 3 default_vars + 6 doc_action).
+
+### Skipped intentionally — deferred to v0.6.6
+- **UI partials extraction** — HTML render blocks (list mode branch ~150 lines, editor mode ~445 lines, modals ~165 lines) belum di-split ke `views/*.php` files
+- **JS asset extraction** — main JS block dari v3.php (~3525 lines dari line 951-4476) belum di-move ke `assets/editor.js` — butuh PHP-in-JS injection bridge (5 injection points identified: config JSON di line 992-1036, wrapSaveForLockProtection IIFE, TinyMCE init gate, user-context injection)
+- **CSS extraction** — inline `<style>` blocks belum di-split
+- **Legacy inline save handler** di `form_pembuat_surat_cetak_v3.php:577-653` — state-coupled dengan `$saveMessage`/`$dbFields`/`$dbTtd`/`$isEditMode`, complex refactor. Modern save flow sudah via `_ajax=1` → `save_document.php` action, tapi legacy branch belum di-remove untuk backward compat
+- **Document lookup helper** di `form_pembuat_surat_cetak_v3.php:222-302` — 5 SELECT variants dengan 8+ downstream var assignments. MEDIUM risk — defer sampai domain layer full-refactored (v0.4.1)
+
+### Multi-agent workflow
+Milestone di-eksekusi via workflow: 3 research + 3 extract + 1 verify agents. **6/7 agents completed** — list extract agent failed karena JS TDZ error (`${listReport}` typo referencing not-yet-declared var). List extraction dikerjakan manual sequential setelah workflow.
+- **7 agents planned, 6 completed, ~343K tokens, ~1h 12min wall-clock**
+- Verify agent report: syntax PASS all files, dispatcher audit shows 21 routes correctly whitelisted, zero stray inline `$_POST['action']` handlers di v3 pages
+
+### Design highlights
+- **Helper-in-lib pattern** (bukan action-in-actions): 5 SAFE_EXTRACTIONS dari cetak agent semua pure render-path helpers, bukan AJAX endpoints. Dispatch route TIDAK sesuai — moved ke `ezdoc/lib/*.php` sebagai reusable helpers included inline
+- **function_exists-guard everywhere**: kalau ada file lain yang define same helper (mis. `h_list()` di v2.php), no redeclaration error
+- **Backward compat 100%**: page-file behavior tidak berubah — helpers cuma extracted, tidak refactored logic
+
+### Known concerns
+- Legacy save handler di cetak_v3.php:577-653 duplicates modern `save_document.php` flow. Defer removal sampai integration tests exist
+- View partials + asset extraction (bulk of file size) masih di v0.6.6
+- Real "line count < 200" DoD achievable only after v0.6.6 view resolver + Blade partials
+
 ## [0.6.0] - 2026-07-10 — "Signature adapter + LocalPKI + KeyStore"
 
 ### Added

@@ -36,6 +36,11 @@
  *   POST ajax=1 action=list_vars            → default_vars/list_vars.php
  *   POST ajax=1 action=add_var              → default_vars/add_var.php
  *   POST ajax=1 action=delete_var           → default_vars/delete_var.php
+ *
+ *   ─ Render-path helpers (v0.6.5 extraction, NOT dispatched — required inline) ─
+ *   ezdoc/lib/doc_meta_helpers.php     — ezdoc_fetch_creator_name(), ezdoc_load_whitelisted_vars()
+ *   ezdoc/lib/doc_template_helpers.php — resolveDefault(), evalCondExprPHP(),
+ *                                        evalSingleCondPHP(), processConditionalSections()
  */
 
 // Safety: pastikan helper sudah di-load
