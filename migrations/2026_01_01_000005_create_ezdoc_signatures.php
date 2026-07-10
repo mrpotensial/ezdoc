@@ -25,16 +25,19 @@
 return [
     'name' => '2026_01_01_000005_create_ezdoc_signatures',
     'up' => function ($conn): void {
-        $conn->query("
+        // NOTE (bugfix v0.7.1): id + document_id + signer_user_id di-align ke BIGINT (bukan UNSIGNED)
+        // untuk match ezdoc_documents.id (BIGINT SIGNED). FK constraint requires exact type match
+        // termasuk sign/unsigned modifier — sebelumnya BIGINT UNSIGNED bikin FK create gagal silently.
+        $ok = $conn->query("
             CREATE TABLE IF NOT EXISTS ezdoc_signatures (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
                 uuid CHAR(36) NOT NULL,
-                document_id BIGINT UNSIGNED NOT NULL COMMENT 'FK to ezdoc_documents.id',
+                document_id BIGINT NOT NULL COMMENT 'FK to ezdoc_documents.id',
                 signature_id_within_doc TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0..N for multi-signer docs',
                 -- Signer identity
                 signer_id VARCHAR(128) NOT NULL COMMENT 'Opaque identity string (domain-agnostic)',
                 signer_role VARCHAR(64) NULL COMMENT 'Role at signing time (snapshot)',
-                signer_user_id BIGINT UNSIGNED NULL COMMENT 'Consumer user id if available',
+                signer_user_id BIGINT NULL COMMENT 'Consumer user id if available',
                 -- Signature envelope
                 provider VARCHAR(32) NOT NULL COMMENT 'hmac | local_pki | peruri | ...',
                 level TINYINT UNSIGNED NOT NULL COMMENT '1 | 2 | 3 (assurance level)',
@@ -75,5 +78,13 @@ return [
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             COMMENT='Signature envelopes per document — L1 HMAC, L2 LocalPKI, L3 PSrE'
         ");
+
+        // Fail-loudly: mysqli_query returns false on SQL error tanpa throw.
+        // Explicit check supaya Runner catch it dan tidak record as applied.
+        if ($ok === false) {
+            throw new \RuntimeException(
+                'ezdoc_signatures CREATE TABLE failed: ' . $conn->error
+            );
+        }
     },
 ];

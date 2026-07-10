@@ -1,6 +1,14 @@
 # UI Customization Guide (v0.6.6+)
 
-Ezdoc ships with **starter** views, CSS, and JS. Nothing here is meant to be the final look — the point is to give you a working skeleton in under 5 minutes, then peel back exactly as much of it as you need to make it feel like *your* product.
+Ezdoc ships with **starter** views styled dengan **Tailwind CSS** (via Play CDN — zero build step). Semua tampilan default menggunakan utility-first classes yang industri standar, dengan CSS variable bridge untuk brand theming. Consumer bebas swap ke Bootstrap/plain CSS/framework lain via publish + edit.
+
+## Why Tailwind?
+
+- **Industry standard 2024+** — dominant utility-first CSS (React/Vue/Next.js/Laravel default)
+- **Zero build step** untuk starter — Play CDN load dari `<script>`, no npm/webpack required
+- **Consumer-flexible** — production consumer bisa compile Tailwind sendiri untuk tree-shaking + smaller bundle
+- **CSS variable bridge** — brand colors via `--ezdoc-primary` diambil dari `Config`, jadi consumer bisa Level-1 override tanpa touch CSS
+- **Fallback graceful** — `ezdoc.css` defines `.ezdoc-*` component classes untuk consumer TANPA Tailwind (mis. plain PHP monolith)
 
 ## Table of contents
 
@@ -11,6 +19,7 @@ Ezdoc ships with **starter** views, CSS, and JS. Nothing here is meant to be the
 5. [Level 4 — Full UI replacement](#level-4--full-ui-replacement)
 6. [Slot system reference](#slot-system-reference)
 7. [Framework adapter samples](#framework-adapter-samples)
+8. [Tailwind production build](#tailwind-production-build)
 
 ---
 
@@ -73,9 +82,11 @@ That's it. No view changes required.
 
 When config strings aren't enough — you need to change spacing, override a component style, or add whole new visual affordances — reach for CSS.
 
-### Pattern: append a stylesheet
+### Pattern A — Override CSS variables (recommended, easiest)
 
-`assets/css/ezdoc.css` uses **CSS variables** for every color, radius, and spacing token. Your custom sheet loads *after* it, so anything you re-declare wins:
+`assets/css/ezdoc.css` defines **CSS variables** untuk every color, radius, shadow. Layout `<head>` inline `<style>` juga inject variables dari your `Config` — jadi Level-1 config override propagates ke Level-2 CSS otomatis.
+
+Custom sheet loads *after* library CSS, so anything you re-declare wins:
 
 ```css
 /* /public/css/branding.css */
@@ -86,14 +97,9 @@ When config strings aren't enough — you need to change spacing, override a com
     --ezdoc-radius-lg:      1rem;
     --ezdoc-font:           "Inter", system-ui, sans-serif;
 }
-
-/* Component-level override */
-.ezdoc-card {
-    box-shadow: 0 10px 30px rgba(124, 58, 237, 0.15);
-}
 ```
 
-Register it via config:
+Register via config:
 
 ```php
 return [
@@ -101,18 +107,71 @@ return [
 ];
 ```
 
-The layout loops `$theme->getCustomCssPaths()` and appends each after core CSS.
+Layout loops `$theme->getCustomCssPaths()` dan append each after core CSS.
+
+### Pattern B — Tailwind utility overrides (kalau kau install Tailwind CLI)
+
+Kalau kau punya build step (Vite / Webpack / Tailwind CLI), extend the Tailwind config supaya `--ezdoc-*` variables juga jadi Tailwind color tokens:
+
+```js
+// tailwind.config.js di consumer app
+module.exports = {
+    content: [
+        './resources/views/**/*.php',
+        './vendor/rsia/ezdoc/views/**/*.php',  // scan starter views
+    ],
+    theme: {
+        extend: {
+            colors: {
+                'ezdoc-primary':   'var(--ezdoc-primary)',
+                'ezdoc-secondary': 'var(--ezdoc-secondary)',
+            },
+        },
+    },
+};
+```
+
+Kemudian pakai utility classes seperti `bg-ezdoc-primary`, `text-ezdoc-secondary` di custom views.
+
+### Pattern C — Component-level style overrides
+
+Kalau kau prefer semantic classes over utilities:
+
+```css
+/* /public/css/branding.css */
+.ezdoc-card {
+    box-shadow: 0 10px 30px rgba(124, 58, 237, 0.15);
+    border-radius: 1rem;
+}
+
+.ezdoc-btn-primary {
+    background: linear-gradient(135deg, #7c3aed, #4f46e5);
+}
+```
+
+Component classes `.ezdoc-*` di `ezdoc.css` designed sebagai fallback untuk consumer TANPA Tailwind.
 
 ### Full variable reference
 
-Every token is defined in `assets/css/ezdoc.css` under `:root`:
+Setiap token defined di `assets/css/ezdoc.css` under `:root`:
 
-- Palette — `--ezdoc-primary`, `--ezdoc-primary-contrast`, `--ezdoc-primary-hover`, `--ezdoc-secondary`, `--ezdoc-secondary-contrast`
-- Surfaces — `--ezdoc-bg`, `--ezdoc-surface`, `--ezdoc-border`, `--ezdoc-text`, `--ezdoc-text-muted`
-- Shape — `--ezdoc-radius`, `--ezdoc-radius-lg`
-- Rhythm — `--ezdoc-spacing-xs`, `--ezdoc-spacing-sm`, `--ezdoc-spacing-md`, `--ezdoc-spacing-lg`
-- Elevation — `--ezdoc-shadow-sm`, `--ezdoc-shadow-md`
-- Typography — `--ezdoc-font`
+- **Palette** — `--ezdoc-primary`, `--ezdoc-primary-contrast`, `--ezdoc-primary-hover`, `--ezdoc-secondary`, `--ezdoc-secondary-contrast`
+- **Surfaces** — `--ezdoc-bg`, `--ezdoc-surface`, `--ezdoc-border`, `--ezdoc-text`, `--ezdoc-muted`
+- **Shape** — `--ezdoc-radius`, `--ezdoc-radius-lg`
+- **Elevation** — `--ezdoc-shadow-sm`, `--ezdoc-shadow`, `--ezdoc-shadow-lg`
+- **Typography** — `--ezdoc-font`
+- **Status** — `--ezdoc-status-draft/issued/signed/void` (badge colors)
+
+### Dark mode
+
+Toggle via `<html class="dark">`. `ezdoc.css` provides dark mode variable overrides:
+
+```js
+// Simple JS toggle
+document.documentElement.classList.toggle('dark');
+```
+
+Consumer bisa persist preference via localStorage + system preference detection.
 
 ---
 
@@ -339,3 +398,114 @@ add_shortcode('ezdoc_documents', function () {
 ---
 
 **Next steps.** Start at Level 1. If you find yourself editing a Level-1 config with `!important` in a nearby CSS file, that's the signal to move to Level 2 (or 3). Don't reach for Level 4 until you've confirmed you actually need it — the starter views cover more ground than they look like they do.
+
+---
+
+## Tailwind production build
+
+Play CDN (`https://cdn.tailwindcss.com`) yang di-load default oleh `layout.php` **tidak recommended untuk production** — bundle size ~350 KB uncompressed, tidak tree-shaken. Fine untuk starter/prototyping, tapi production consumer harus compile Tailwind sendiri untuk get 10-20 KB compressed bundle.
+
+### Step 1 — Install Tailwind
+
+```bash
+# Di consumer app root
+npm install -D tailwindcss @tailwindcss/forms @tailwindcss/typography
+npx tailwindcss init
+```
+
+### Step 2 — Configure `tailwind.config.js`
+
+Scan library views + your own views:
+
+```js
+module.exports = {
+    content: [
+        './resources/views/**/*.php',
+        './public/**/*.html',
+        // Scan Ezdoc starter views + your published copies
+        './vendor/rsia/ezdoc/views/**/*.php',
+        './resources/views/vendor/ezdoc/**/*.php',
+    ],
+    theme: {
+        extend: {
+            colors: {
+                'ezdoc-primary':   'var(--ezdoc-primary)',
+                'ezdoc-secondary': 'var(--ezdoc-secondary)',
+                'ezdoc-surface':   'var(--ezdoc-surface)',
+                'ezdoc-muted':     'var(--ezdoc-muted)',
+            },
+            borderRadius: {
+                'ezdoc': 'var(--ezdoc-radius)',
+            },
+        },
+    },
+    plugins: [
+        require('@tailwindcss/forms'),
+        require('@tailwindcss/typography'),
+    ],
+};
+```
+
+### Step 3 — Create your CSS entrypoint
+
+```css
+/* resources/css/app.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Ezdoc CSS variables + component fallbacks */
+@import 'vendor/ezdoc/assets/css/ezdoc.css';
+```
+
+### Step 4 — Compile
+
+```bash
+# Development (watch mode)
+npx tailwindcss -i ./resources/css/app.css -o ./public/css/app.css --watch
+
+# Production (minified + purged)
+npx tailwindcss -i ./resources/css/app.css -o ./public/css/app.css --minify
+```
+
+### Step 5 — Swap CDN with compiled bundle
+
+Publish `layout.php` (Level 3) dan replace Tailwind Play CDN dengan compiled CSS:
+
+```html
+<!-- Sebelum (starter default) -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+
+<!-- Sesudah (production compiled) -->
+<link rel="stylesheet" href="/css/app.css">
+```
+
+**Sample bundle sizes**:
+- Play CDN: ~350 KB (uncompressed) — starter default
+- Compiled + purged: ~15-25 KB — production recommended
+- With Brotli/gzip: ~5-8 KB over wire
+
+### Alternative — plain Tailwind (no consumer build)
+
+Kalau kau tidak mau install Node.js/build step tapi masih mau optimized bundle, download Tailwind standalone binary:
+
+```bash
+# One-time download (Linux/Mac/Windows binaries available)
+curl -sLo tailwindcss https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
+chmod +x tailwindcss
+
+# Compile
+./tailwindcss -i input.css -o output.css --minify
+```
+
+Standalone binary bundle Tailwind + Node.js in a single ~50 MB executable. Zero npm/webpack config.
+
+### Skip Tailwind entirely
+
+Kalau consumer app tidak pakai Tailwind, layout.php Play CDN akan tetap load Tailwind di client. Untuk skip:
+
+1. Publish `layout.php` (Level 3)
+2. Remove `<script src="...tailwindcss..."></script>` line
+3. `ezdoc.css` component classes (`.ezdoc-btn`, `.ezdoc-card`, `.ezdoc-table`, dll) akan take over sebagai fallback styles
+
+Semua starter views tetap render fine (mungkin sedikit unstyled kalau kau publish view yang pakai Tailwind utilities heavy — edit sesuai preference).

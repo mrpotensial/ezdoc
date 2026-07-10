@@ -6,6 +6,108 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-07-10 — "Hotfix: signatures migration + Tailwind UI + query() portability"
+
+### 🚨 Fixed — critical migration bug (ezdoc_signatures FK type mismatch)
+
+`ezdoc_signatures` CREATE TABLE gagal silently sejak v0.6 karena FK constraint type mismatch. Bootstrap sanity check show "Setup Database Diperlukan" page di semua halaman consumer.
+
+**Root cause**:
+- `ezdoc_documents.id` = `BIGINT` (SIGNED)
+- `ezdoc_signatures.document_id` = `BIGINT UNSIGNED` ❌
+- MySQL FK requires exact type match (sign/unsigned modifier included)
+- `$conn->query()` return `false` (bukan throw) → Runner `\Throwable` catch tidak trigger → migration recorded as applied padahal table tidak dibuat
+
+**Fixes applied**:
+1. **Migration file** (`migrations/2026_01_01_000005_create_ezdoc_signatures.php`):
+   - `id BIGINT UNSIGNED` → `BIGINT`
+   - `document_id BIGINT UNSIGNED` → `BIGINT`
+   - `signer_user_id BIGINT UNSIGNED` → `BIGINT`
+   - Added explicit `if ($ok === false) throw new RuntimeException(...)` with `$conn->error` context
+2. **Runner self-heal** (`src/Migrations/Runner.php`):
+   - Default `coreTables` sekarang include `ezdoc_signatures` — auto-detect orphan + clear registry
+3. **Runner fail-loudly mode**:
+   - Enable `MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT` selama migration execute
+   - Legacy `$conn->query()` sekarang throw `mysqli_sql_exception` on SQL error
+   - `try/catch/finally` restore previous report mode setelah selesai
+   - **Prevents future silent-failure bugs** untuk migration lain
+
+Consumer action: **reload halaman** — self-heal akan trigger + re-run migrations dengan fixed types.
+
+### 🚨 Fixed — form_pembuat_surat_list_v3.php fatal `query()` undefined
+
+File di-akses langsung (bypass `index.php?page=...` router yang biasanya load `koneksi.php`) → `query()` undefined → fatal error di line 65.
+
+**Fix**: added defensive `require_once __DIR__ . '/../koneksi.php';` guarded dengan `function_exists('query')` check + `require_once __DIR__ . '/../ezdoc/bootstrap.php';` at top of file. Idempotent (function_exists guard + require_once).
+
+### Added — Portable DB helper (`ezdoc/lib/db_helpers.php`)
+
+Industry-standard prepared-statement wrapper untuk consumer library user yang tidak punya legacy SIMRS `query()` global function.
+
+**Preference order (best → worst)**:
+1. Repository classes (`Ezdoc\Document\DocumentRepository`, dll) — v0.4+ pattern
+2. `ezdoc_query_prepared($sql, $params, $types)` — prepared statement wrapper dengan auto-type detection
+3. `ezdoc_query($sql)` — legacy `query()` fallback, backward compat only (marked deprecated)
+
+Functions provided:
+- `ezdoc_query_prepared($sql, array $params = [], string $types = ''): array`
+  - Empty `$params` → raw query fallback
+  - Auto-detect types kalau tidak disediakan (string, int, float, blob)
+  - Validate types length matches params count
+  - Returns array of assoc rows atau empty on error (silent + error_log)
+- `ezdoc_query($sql)` — backward-compat wrapper:
+  - Priority 1: pakai legacy `query()` kalau available (koneksi.php)
+  - Priority 2: fallback native mysqli via `ezdoc_get_db_connection()`
+- `ezdoc_get_db_connection(): ?\mysqli`:
+  - Priority 1: `\Ezdoc\Context::default()->db` (v0.3+ library-ready)
+  - Priority 2: `$GLOBALS['conn']` (legacy koneksi.php)
+- `ezdoc_escape_identifier(string): string` — whitelist `[a-zA-Z0-9_]`, backtick-wrap, throw ValidationException on invalid
+
+### Changed — UI starter templates: Bootstrap → Tailwind CSS
+
+Industry-standard shift dari Bootstrap ke Tailwind CSS (utility-first, dominant di React/Vue/Next.js/Laravel ecosystem 2024+).
+
+**Files converted**:
+- `views/layout.php` — Tailwind Play CDN + `@tailwindcss/forms` + `@tailwindcss/typography` plugins, CSS variable bridge yang inject `--ezdoc-*` dari Config
+- `views/document/list.php` — utility classes (grid, table, badges), status badges dengan Tailwind ring + color palette, empty state dengan SVG icon
+- `views/document/form.php` — form fields dengan Tailwind Forms plugin styling, fieldset borders, monospace code hints
+
+**Design highlights**:
+- **CSS variable bridge**: layout `<head>` inline `<style>` inject `--ezdoc-primary` dari `$theme` → Level-1 Config override propagates ke Level-2 CSS otomatis
+- **Zero build step** starter — Play CDN load dari `<script>`, tidak perlu npm/webpack
+- **Production path documented** — consumer bisa swap ke compiled Tailwind untuk 15-25 KB bundle (vs ~350 KB CDN)
+- **Fallback graceful** — `ezdoc.css` defines `.ezdoc-*` component classes untuk consumer TANPA Tailwind
+
+### Changed — `assets/css/ezdoc.css` refactored
+
+- Removed Bootstrap-specific overrides
+- Added Tailwind-compatible token palette (matches Tailwind hue conventions: gray-500 base, blue-600 issued, emerald-600 signed, red-600 void)
+- Component fallback classes (`.ezdoc-btn`, `.ezdoc-card`, `.ezdoc-table`, `.ezdoc-badge`, `.ezdoc-input`) untuk consumer tanpa Tailwind
+- Dark mode support via `<html class="dark">` toggle
+- Extended variables: `--ezdoc-shadow-sm/md/lg`, `--ezdoc-status-draft/issued/signed/void`
+
+### Changed — `docs/UI-CUSTOMIZATION.md` updated
+
+- Added "Why Tailwind?" preface with industry-standard justification
+- Updated Level 2 dengan 3 patterns: CSS variables (recommended) / Tailwind utility overrides / component-level style overrides
+- Added "Dark mode" subsection dengan JS toggle example
+- New comprehensive "Tailwind production build" section (~80 lines):
+  - npm install + tailwind.config.js dengan library views scan
+  - CSS entrypoint pattern
+  - Compile commands (dev watch + production minify)
+  - Swap CDN with compiled bundle (Level 3 view publish)
+  - Sample bundle sizes (350 KB CDN → 15-25 KB compiled)
+  - Standalone Tailwind binary alternative (no Node.js)
+  - Skip Tailwind entirely pattern (use ezdoc.css fallback only)
+
+### Notes on `query()` migration scope
+
+Grep menunjukkan **4,114 `query()` calls** di seluruh pengeluaran/ folder (bukan cuma ezdoc). Wholesale migration ke prepared statements = weeks of refactor + high regression risk. Library scope untuk ezdoc:
+- ✅ `ezdoc/lib/db_helpers.php` provides portable alternatives
+- ✅ Repository classes (v0.4+) sudah pakai prepared statements internally
+- ❌ Existing SIMRS pages tetap pakai `query()` — that's consumer legacy code, not library concern
+- ✅ Consumer library user (non-SIMRS) dapat pakai `ezdoc_query_prepared()` atau Repository directly
+
 ## [0.7.0] - 2026-07-10 — "PSrE integration foundation (Envelope + HttpClient + Peruri/Privy stubs)"
 
 ### Added — Envelope layer (5 files, ~31 KB)

@@ -1,173 +1,215 @@
-/*
- * ezdoc.css — base stylesheet for Ezdoc starter views.
+/**
+ * ezdoc.css — brand tokens + component fallback styles yang complement Tailwind CSS.
  *
- * All colors/spacing/radii are controlled via CSS variables below.
- * Override strategy:
- *   1. Set --ezdoc-* variables via <style> in your layout, OR
- *   2. Append a custom stylesheet via config.custom_css, which loads
- *      AFTER this file so any rule wins by cascade.
- * See docs/UI-CUSTOMIZATION.md for details.
+ * Strategy:
+ *   1. Tailwind Play CDN loaded di layout.php <head> menyediakan semua utility classes
+ *   2. File ini defines CSS variables (--ezdoc-*) untuk consumer branding
+ *   3. File ini juga defines .ezdoc-* component classes as fallback kalau consumer
+ *      TIDAK install Tailwind (mis. plain PHP monolith tanpa build step)
+ *
+ * Precedence order (dari layout.php):
+ *   Tailwind Play CDN → ezdoc.css (this file) → consumer custom CSS paths
+ *
+ * Consumer override:
+ *   - via CSS variables (change --ezdoc-primary di :root)
+ *   - via Tailwind utility overrides (custom classes)
+ *   - via config.custom_css yang loaded terakhir
  */
 
+/* ═══════════════════════════════════════════════════════════════
+   Brand tokens — fallback defaults.
+   layout.php inline <style> overrides these dengan Config values.
+   ═══════════════════════════════════════════════════════════════ */
 :root {
-    --ezdoc-primary: #0e7490;
-    --ezdoc-primary-contrast: #ffffff;
-    --ezdoc-primary-hover: #0b5a72;
-    --ezdoc-secondary: #f59e0b;
+    --ezdoc-primary:            #0e7490;
+    --ezdoc-primary-contrast:   #ffffff;
+    --ezdoc-primary-hover:      #0b5a72;
+    --ezdoc-secondary:          #f59e0b;
     --ezdoc-secondary-contrast: #1f2937;
 
-    --ezdoc-bg: #ffffff;
-    --ezdoc-surface: #f8fafc;
-    --ezdoc-border: #e2e8f0;
-    --ezdoc-text: #1f2937;
-    --ezdoc-text-muted: #64748b;
+    --ezdoc-bg:       #ffffff;
+    --ezdoc-surface:  #f8fafc;
+    --ezdoc-border:   #e5e7eb;
+    --ezdoc-text:     #1f2937;
+    --ezdoc-muted:    #6b7280;
 
-    --ezdoc-radius: 0.375rem;
-    --ezdoc-radius-lg: 0.625rem;
+    --ezdoc-radius:    0.5rem;
+    --ezdoc-radius-lg: 0.75rem;
 
-    --ezdoc-spacing-xs: 0.25rem;
-    --ezdoc-spacing-sm: 0.5rem;
-    --ezdoc-spacing-md: 1rem;
-    --ezdoc-spacing-lg: 1.5rem;
+    --ezdoc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --ezdoc-shadow:    0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+    --ezdoc-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 
-    --ezdoc-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-    --ezdoc-shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+    --ezdoc-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
-    --ezdoc-font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    /* Status colors — matches Tailwind hue conventions */
+    --ezdoc-status-draft:  #6b7280;   /* gray-500 */
+    --ezdoc-status-issued: #2563eb;   /* blue-600 */
+    --ezdoc-status-signed: #059669;   /* emerald-600 */
+    --ezdoc-status-void:   #dc2626;   /* red-600 */
 }
 
-/* Minimal reset — Bootstrap already handles most of it. */
-.ezdoc-body {
-    font-family: var(--ezdoc-font);
-    color: var(--ezdoc-text);
-    background: var(--ezdoc-bg);
+/* ═══════════════════════════════════════════════════════════════
+   Extra utilities (Tailwind Preflight covers most resets)
+   ═══════════════════════════════════════════════════════════════ */
+.ezdoc-monospace {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
 }
 
-.ezdoc-header {
-    border-bottom: 1px solid var(--ezdoc-border);
-    background: var(--ezdoc-surface);
-}
+/* ═══════════════════════════════════════════════════════════════
+   Component classes — fallback untuk consumer TANPA Tailwind
+   (mis. plain PHP monolith tanpa build step).
+   Consumer dengan Tailwind cukup pakai utility classes di view files.
+   ═══════════════════════════════════════════════════════════════ */
 
-.ezdoc-logo {
-    height: 32px;
-    width: auto;
-}
-
-.ezdoc-footer {
-    border-top: 1px solid var(--ezdoc-border);
-    margin-top: var(--ezdoc-spacing-lg);
-}
-
-/* Card */
-.ezdoc-card {
-    background: var(--ezdoc-bg);
-    border: 1px solid var(--ezdoc-border);
-    border-radius: var(--ezdoc-radius-lg);
-    box-shadow: var(--ezdoc-shadow-sm);
-    padding: var(--ezdoc-spacing-md);
-}
-
-/* Buttons */
+/* ── Buttons ── */
 .ezdoc-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.875rem;
     border-radius: var(--ezdoc-radius);
-    padding: var(--ezdoc-spacing-sm) var(--ezdoc-spacing-md);
     font-weight: 500;
-    transition: background-color 120ms ease, box-shadow 120ms ease;
-    border: 1px solid transparent;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    text-decoration: none;
     cursor: pointer;
+    transition: opacity 0.15s ease, background-color 0.15s ease, transform 0.05s ease;
+    border: 1px solid transparent;
+    box-shadow: var(--ezdoc-shadow-sm);
+}
+.ezdoc-btn:hover  { opacity: 0.9; }
+.ezdoc-btn:active { transform: translateY(1px); }
+.ezdoc-btn:focus  {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.25);
 }
 
 .ezdoc-btn-primary {
-    background: var(--ezdoc-primary);
+    background-color: var(--ezdoc-primary);
     color: var(--ezdoc-primary-contrast);
-    border-color: var(--ezdoc-primary);
 }
-
-.ezdoc-btn-primary:hover,
-.ezdoc-btn-primary:focus {
-    background: var(--ezdoc-primary-hover);
-    color: var(--ezdoc-primary-contrast);
-    border-color: var(--ezdoc-primary-hover);
-    box-shadow: var(--ezdoc-shadow-md);
-}
+.ezdoc-btn-primary:hover { background-color: var(--ezdoc-primary-hover); opacity: 1; }
 
 .ezdoc-btn-secondary {
-    background: var(--ezdoc-secondary);
+    background-color: var(--ezdoc-secondary);
     color: var(--ezdoc-secondary-contrast);
-    border-color: var(--ezdoc-secondary);
 }
 
-/* Table */
+.ezdoc-btn-outline {
+    background-color: #fff;
+    color: #374151;
+    border-color: #d1d5db;
+}
+.ezdoc-btn-outline:hover { background-color: #f9fafb; opacity: 1; }
+
+.ezdoc-btn-sm {
+    padding: 0.25rem 0.625rem;
+    font-size: 0.75rem;
+}
+
+/* ── Cards ── */
+.ezdoc-card {
+    background-color: var(--ezdoc-bg);
+    border: 1px solid var(--ezdoc-border);
+    border-radius: var(--ezdoc-radius);
+    box-shadow: var(--ezdoc-shadow);
+    padding: 1.5rem;
+}
+
+/* ── Tables ── */
 .ezdoc-table {
     width: 100%;
     border-collapse: collapse;
-    background: var(--ezdoc-bg);
-    border-radius: var(--ezdoc-radius);
-    overflow: hidden;
+    font-size: 0.875rem;
 }
-
-.ezdoc-table thead th {
-    background: var(--ezdoc-surface);
-    border-bottom: 1px solid var(--ezdoc-border);
+.ezdoc-table th {
     text-align: left;
-    padding: var(--ezdoc-spacing-sm) var(--ezdoc-spacing-md);
+    padding: 0.75rem 1rem;
+    background-color: var(--ezdoc-surface);
+    color: var(--ezdoc-muted);
     font-weight: 600;
-    color: var(--ezdoc-text-muted);
-    font-size: 0.85rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.02em;
-}
-
-.ezdoc-table tbody td {
-    padding: var(--ezdoc-spacing-sm) var(--ezdoc-spacing-md);
+    letter-spacing: 0.05em;
     border-bottom: 1px solid var(--ezdoc-border);
-    vertical-align: middle;
 }
-
-.ezdoc-table tbody tr:hover {
-    background: var(--ezdoc-surface);
+.ezdoc-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #f3f4f6;
+    color: var(--ezdoc-text);
 }
+.ezdoc-table tbody tr:hover { background-color: var(--ezdoc-surface); }
 
-/* Badges */
+/* ── Badges ── */
 .ezdoc-badge {
-    display: inline-block;
-    padding: 0.15rem 0.5rem;
-    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem 0.625rem;
+    border-radius: 9999px;
     font-size: 0.75rem;
     font-weight: 500;
-    line-height: 1.4;
-    background: var(--ezdoc-surface);
-    color: var(--ezdoc-text-muted);
-    border: 1px solid var(--ezdoc-border);
+    line-height: 1rem;
 }
+.ezdoc-badge-draft  { background-color: #f3f4f6; color: #374151; }
+.ezdoc-badge-issued { background-color: #dbeafe; color: #1e40af; }
+.ezdoc-badge-signed { background-color: #d1fae5; color: #065f46; }
+.ezdoc-badge-void   { background-color: #fee2e2; color: #991b1b; }
 
-.ezdoc-badge-draft   { background: #f1f5f9; color: #475569; }
-.ezdoc-badge-issued  { background: #dbeafe; color: #1e40af; }
-.ezdoc-badge-signed  { background: #dcfce7; color: #166534; }
-.ezdoc-badge-void    { background: #fee2e2; color: #991b1b; }
-
-/* Empty state */
+/* ── Empty state ── */
 .ezdoc-empty-state {
-    background: var(--ezdoc-surface);
-    color: var(--ezdoc-text-muted);
-    border-color: var(--ezdoc-border) !important;
-    border-radius: var(--ezdoc-radius-lg);
-}
-
-/* Filter row */
-.ezdoc-filters {
-    background: var(--ezdoc-surface);
-    padding: var(--ezdoc-spacing-sm) var(--ezdoc-spacing-md);
+    border: 2px dashed #d1d5db;
     border-radius: var(--ezdoc-radius);
-    border: 1px solid var(--ezdoc-border);
+    background-color: var(--ezdoc-bg);
+    padding: 3rem 1.5rem;
+    text-align: center;
+    color: var(--ezdoc-muted);
 }
 
-/* Form field values fieldset */
-.ezdoc-field-values legend,
-.ezdoc-signature-slot legend {
-    font-size: 0.95rem;
-    font-weight: 600;
+/* ── Form fallback ── */
+.ezdoc-input {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    box-shadow: var(--ezdoc-shadow-sm);
+    background-color: var(--ezdoc-bg);
     color: var(--ezdoc-text);
-    padding: 0;
-    margin-bottom: var(--ezdoc-spacing-sm);
+}
+.ezdoc-input:focus {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    border-color: #9ca3af;
+    box-shadow: 0 0 0 1px #9ca3af;
+}
+.ezdoc-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ezdoc-text);
+    margin-bottom: 0.25rem;
+}
+
+/* ── Logo ── */
+.ezdoc-logo {
+    height: 2rem;
+    width: auto;
+    max-width: 8rem;
+    object-fit: contain;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Dark mode — opt-in via <html class="dark">
+   Consumer bisa activate via JS toggle atau system preference.
+   ═══════════════════════════════════════════════════════════════ */
+.dark {
+    --ezdoc-bg:      #1f2937;
+    --ezdoc-surface: #111827;
+    --ezdoc-border:  #374151;
+    --ezdoc-text:    #f9fafb;
+    --ezdoc-muted:   #9ca3af;
 }

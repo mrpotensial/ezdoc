@@ -120,13 +120,18 @@ final class Runner
 
     /**
      * Detect orphan registry — registry punya records tapi core tables tidak ada.
-     * Terjadi saat user manual DROP tables tanpa TRUNCATE registry.
+     * Terjadi saat:
+     *   1. User manual DROP tables tanpa TRUNCATE registry (fresh install desync)
+     *   2. Migration silently gagal (mis. FK constraint error) — table not created
+     *      tapi Runner record as applied karena mysqli_query return false tanpa throw
+     *      (bugfix v0.7.1 — sekarang migration file wajib throw on SQL error)
+     *
      * Kalau detected, auto-clear registry supaya fresh migrate bisa jalan.
      *
      * @param array<string> $coreTables Tables yang wajib ada
      * @return bool true kalau ada auto-heal, false kalau tidak perlu
      */
-    public function selfHealOrphanRegistry(array $coreTables = ['ezdoc_templates', 'ezdoc_documents']): bool
+    public function selfHealOrphanRegistry(array $coreTables = ['ezdoc_templates', 'ezdoc_documents', 'ezdoc_signatures']): bool
     {
         // Kalau registry table sendiri tidak ada, tidak ada orphan
         $rs = @$this->db->query("SHOW TABLES LIKE 'ezdoc_migrations'");
@@ -196,6 +201,18 @@ final class Runner
             }
 
             $start = microtime(true);
+
+            // Fail-loudly mode: enable mysqli exceptions selama migration execute.
+            // Legacy migrations pakai $conn->query() yang return false on error
+            // (no throw) — jadi Runner tidak tau failure dan mark as applied wrong.
+            // Dengan MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT, SQL errors jadi
+            // mysqli_sql_exception yang catch di block di bawah.
+            $prevReportMode = null;
+            if (class_exists('mysqli_driver', false)) {
+                $prevReportMode = (new \mysqli_driver())->report_mode;
+                @mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+            }
+
             try {
                 call_user_func($spec['up'], $this->db);
                 $execMs = (int) ((microtime(true) - $start) * 1000);
@@ -205,6 +222,11 @@ final class Runner
                 $result['failed'][$name] = $e->getMessage();
                 @error_log("[ezdoc:migrate] FAILED {$name}: " . $e->getMessage());
                 // Continue — don't stop batch on 1 failure
+            } finally {
+                // Restore previous mysqli report mode
+                if ($prevReportMode !== null) {
+                    @mysqli_report($prevReportMode);
+                }
             }
         }
 
