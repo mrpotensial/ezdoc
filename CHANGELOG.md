@@ -6,6 +6,120 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-10 — "PSrE integration foundation (Envelope + HttpClient + Peruri/Privy stubs)"
+
+### Added — Envelope layer (5 files, ~31 KB)
+`src/Signature/Envelope/*` — signature envelope format abstraction
+- `Envelope` — interface dengan `getFormat()`, `pack()`, `unpack()`, `verify()`, `canDetached()`
+- `RawEnvelope` — passthrough (no wrapping) untuk L1/L2
+- `HmacEnvelope` — `hmac:<hex>` prefix wrapper (tolerant of already-prefixed input)
+- `PkcsSevenEnvelope` — **full RFC 5652 CMS/PKCS#7 implementation** via `openssl_pkcs7_sign|verify|read`:
+  - Uses `tempnam()` + `chmod 0600` + `try/finally` untuk temp file safety (openssl_pkcs7_* functions require file paths, no string buffer support)
+  - `PKCS7_BINARY | PKCS7_DETACHED` flags default (avoid CRLF canonicalization)
+  - Static `isPkcs7(bytes): bool` — sniffs PEM armor `-----BEGIN PKCS7-----` atau DER signedData OID
+  - Drains OpenSSL error queue before + after operations
+- `EnvelopeRegistry` — format string → Envelope map dengan `defaultRegistry()` yang pre-register raw + hmac + pkcs7
+
+### Added — Remote/HTTP layer (6 files, ~50 KB)
+`src/Signature/Remote/*` — HTTP client abstraction + async signing infrastructure
+- `HttpClient` — interface (`request(method, url, options): HttpResponse`)
+- `HttpResponse` — immutable DTO dengan case-insensitive `getHeader()`, `isSuccess()` (2xx), `getJsonBody()` (throws ValidationException on invalid JSON)
+- `CurlHttpClient` — final class implementing `HttpClient` via curl:
+  - Constructor validates `extension_loaded('curl')` — throws ValidationException if missing
+  - Auto-encodes JSON body + Content-Type, form-urlencodes array body
+  - Parses response headers robustly (handles redirect chains)
+  - Throws `EzdocException` on curl transport error dengan errno/errstr context
+  - Supports mTLS + CA bundle + proxy via default curl opts
+- `SignSession` — DTO for multi-step signing state:
+  - Constants: STATUS_PENDING / OTP_REQUIRED / PROCESSING / COMPLETED / EXPIRED / FAILED
+  - Methods: `isCompleted()`, `isExpired()`, `needsOtp()`, `toArray()`
+- `OtpChallenge` — DTO for "waiting for OTP" state:
+  - Constants: CHANNEL_EMAIL / SMS / APP / WA
+  - Fields: sessionId, channel, maskedTarget (mis. 'a***@example.com'), expiresAt, attemptsRemaining
+- `BaseRemoteProvider` — **abstract class implements SignatureProvider** (~26 KB) dengan template-method pattern:
+  - **9 abstract methods** subclass MUST implement (getProviderName, endpoints, authHeaders, buildSignRequestPayload, parseSignResponse, parseSessionResponse, parseOtpChallenge)
+  - `final sign()`: initiate → auto-poll async session dengan exponential backoff sampai completed/expired/failed
+  - `final verify()`: POST ke `/verify` endpoint dengan base64 envelope + content, maps JSON back to Verdict
+  - `final capabilities()` returns `getCaps()` (overridable hook, default L2)
+  - Public multi-step API: `initiate()`, `submitOtp()`, `getSession()`
+  - `final protected httpGet/httpPost/httpPut` — auto-inject `X-Request-Id` for idempotency, merge `authHeaders()` + default_headers
+  - `final protected requireSuccess()` — maps HTTP status ke canonical exception:
+    * 401/403 → `AccessDeniedException`
+    * 404 → `NotFoundException`
+    * 400/422 → `ValidationException`
+    * others → `EzdocException`
+  - Extracts provider error code/message/request_id dari JSON error envelope
+  - **Retry**: 3 attempts (configurable), exponential backoff dengan jitter, retryable on network error + 5xx + 429
+  - Optional `Logger` injection → silent `audit()` calls on state transitions
+
+### Added — PSrE Provider stubs (2 files, ~32 KB, 34 TODO markers)
+`src/Signature/Providers/*` — Peruri + Privy stubs dengan STRUCTURED TODO for real API integration
+- `PeruriProvider` (423 lines, **19 `TODO(v0.7-real)` markers**):
+  - `getProviderName(): 'peruri'`
+  - Config required: `base_url`, `client_id`, `client_secret`, `signer_id` (NIK)
+  - Config optional: `timeout` (default 30), `callback_url` for async, `test_mode`
+  - `getCaps()`: level=3, formats=[pkcs7, pades], supportsTimestamping=true
+  - Auth: `Bearer $accessToken` (TODO markers explain OAuth2 client credentials OR API key + HMAC)
+  - Static `fromConfig(array): self` helper
+  - Extensive docblocks: sandbox onboarding pointers, test cert acquisition, likely auth paths
+- `PrivyProvider` (425 lines, **15 `TODO(v0.7-real)` markers**):
+  - `getProviderName(): 'privy'`
+  - Config: `base_url`, `client_id`, `client_secret`, `merchant_id` (Privy-specific), `signer_email`
+  - `getCaps()`: level=3, formats=[pkcs7, pades], supportsTimestamping=true
+  - Privy uses **signer_email** lookup (not NIK)
+  - Mobile-push default (`PRIVY_APP`) dengan OTP fallback
+  - Includes `maskEmail()` helper untuk OtpChallenge target masking
+
+### Added — Documentation
+`docs/PSRE-INTEGRATION.md` (14 KB, 388 lines):
+- Overview: what PSrE is, why L3, legal validity under UU ITE 2016
+- Supported providers status (Peruri stub v0.7, Privy stub v0.7, VIDA + BSrE planned v0.9)
+- Architecture: BaseRemoteProvider abstract, HttpClient interface, SignSession/OtpChallenge state, Envelope layer
+- Getting started dengan Peruri sample: register di dev portal, config setup, multi-step sign code sample
+- Envelope format PKCS#7 (RFC 5652): pack/unpack examples, cert chain + CA bundle verify
+- Testing without live API: FakeRemoteProvider (planned v0.7.1), test vectors
+- Cost estimates per PSrE vendor (rough)
+- Legal validity checklist (UU ITE requirements, registered PSrE cert, timestamping v0.8)
+- Known limitations di v0.7 (stubs need real API mapping, no webhook handler yet, no cert revocation check)
+
+### Design highlights
+
+**PKCS7 pack signature contradiction resolved** — Agent flagged spec conflict:
+- Spec: "signature already computed by SignatureProvider, this just wraps"
+- Reality: PKCS#7 SignedData **cannot** be built dari pre-computed raw signature — needs signer info (issuer, serial, signedAttrs) yang cuma bisa dari signing operation
+- **Resolution**: `pack()` requires `X509Certificate $cert` + `PrivateKey` via `options['private_key']`, `$signature` parameter di-ignore. Documented di docblock.
+
+**HTTP client fully swappable** — consumer bisa inject Guzzle, Symfony HttpClient, PSR-18 sebagai gantinya (implements HttpClient interface). Default `CurlHttpClient` untuk immediate usability.
+
+**Idempotency built-in** — `BaseRemoteProvider` auto-injects `X-Request-Id` UUID di setiap POST/PUT untuk prevent duplicate charges/sessions kalau PSrE endpoint idempotent-key aware.
+
+**Canonical exception mapping** — HTTP status → domain exception:
+- Auth failures (401/403) → `AccessDeniedException`
+- Missing resources (404) → `NotFoundException`
+- Validation errors (400/422) → `ValidationException`
+- Others → `EzdocException`
+
+Consumer bisa catch specific exception type tanpa parse HTTP status.
+
+**Retry policy conservative** — 3 attempts dengan exponential backoff + jitter. Only retries network errors + 5xx + 429. **NEVER** retries POST /sign automatically kalau tidak idempotency-key aware (avoid duplicate PSrE charges).
+
+**PHP 7.x/8+ dual-safe** throughout — zero `OpenSSLAsymmetricKey`/`OpenSSLCertificate` type-hints di signatures. Docblocks explain pattern untuk subclasses.
+
+### Known limitations di v0.7 (deferred ke v0.7.1)
+
+- **Stubs need real API mapping** — 34 total `TODO(v0.7-real)` markers between Peruri + Privy providers. Consumer library user dengan sandbox credentials tinggal fill in specifics (endpoint URLs, payload JSON schema, response field mapping, actual auth flow)
+- **No FakeRemoteProvider** untuk testing tanpa live API — planned v0.7.1
+- **No auto-webhook handler** untuk async callbacks — planned v0.7.1
+- **No cert revocation check** (CRL/OCSP) — planned v0.8 sebagai bagian dari PAdES-LT support
+- **Detached PKCS7 verify limitation** — `openssl_pkcs7_verify()` 6th `$content` parameter is OUTPUT (extracted content), not input. Untuk bare DER-detached-only envelopes, PHP verify tidak bisa cross-check content tanpa re-attach atau CLI shell-out. Documented inline di PkcsSevenEnvelope.
+
+### Multi-agent workflow
+6 agents parallel (2 research + 3 write + 1 verify). **~299K tokens, ~20 minutes wall-clock**. All 13 PHP files pass syntax + zero PHP 8+ leaks. Verify agent confirmed:
+- Integration: PeruriProvider + PrivyProvider extend BaseRemoteProvider ✓
+- PkcsSevenEnvelope + RawEnvelope + HmacEnvelope implement Envelope ✓
+- CurlHttpClient implements HttpClient ✓
+- 34 TODO markers detected between stubs (as expected)
+
 ## [0.6.6] - 2026-07-10 — "UI extension framework (ViewResolver + Config + Slot + Publish)"
 
 ### Added — UI framework core (6 files, ~26 KB)
