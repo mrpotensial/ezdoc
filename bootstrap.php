@@ -59,7 +59,7 @@ if (EZDOC_AUTO_MIGRATE && isset($GLOBALS['conn']) && $GLOBALS['conn']) {
 // tampilkan error page friendly (bukan blank white PHP fatal downstream).
 if (EZDOC_STRICT_SETUP && isset($GLOBALS['conn']) && $GLOBALS['conn']) {
     $__ezdocConn = $GLOBALS['conn'];
-    $__ezdocTables = ['ezdoc_templates', 'ezdoc_documents'];
+    $__ezdocTables = ['ezdoc_templates', 'ezdoc_documents', 'ezdoc_signatures'];
     $__ezdocMissing = [];
     foreach ($__ezdocTables as $__t) {
         $__rs = @mysqli_query($__ezdocConn, "SHOW TABLES LIKE '{$__t}'");
