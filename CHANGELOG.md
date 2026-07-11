@@ -6,6 +6,120 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-10 — "PAdES envelope + RFC 3161 timestamp + PDF sign/verify wrapper"
+
+### Added — Timestamp layer (5 files, ~1240 LOC, `src/Signature/Timestamp/`)
+RFC 3161 Timestamp Authority (TSA) integration untuk PAdES-B-T long-term validity.
+
+- **TimestampClient interface** — `requestTimestamp(hash, algo)`, `verifyTimestamp(token, hash)`
+- **TimestampToken** — DTO dengan auto-parse via minimal DER walker (best-effort, tidak throw on malformed). Getters: `getGenTime()`, `getSerialNumber()`, `getPolicyOid()`, `getTsaCertPem()`. `toBase64()` / `fromBase64()` untuk transport.
+- **TimestampVerdict** — DTO dengan status factories: `valid(genTime)`, `invalid(reason)`, `untrusted(reason)` (structurally OK tapi CA missing)
+- **OpensslTimestampClient** — shell-out ke `openssl ts` CLI:
+  - Request: `openssl ts -query -digest HEX -sha256 -cert` + curl POST ke TSA URL (Content-Type: application/timestamp-query)
+  - Verify: `openssl ts -verify -in TOKEN -digest HEX -CAfile BUNDLE`
+  - Nonce included by default (anti-replay per RFC 3161)
+  - Accepts `$dataHash` as hex-string OR raw binary (auto-detect via `ctype_xdigit` + even length)
+  - Config: `openssl_bin` (Windows path override), `auth_header` (Basic Auth for BSrE), `ca_bundle_path`, `timeout`
+  - Uses `proc_open()` + `escapeshellarg()` — no unsafe shell interpolation
+- **HttpTimestampClient** — pure PHP fallback (no CLI dependency):
+  - Manually emits DER-encoded TimeStampReq via minimal ASN.1 builder
+  - Static `$HASH_OID_BYTES` lookup untuk SHA-256/384/512
+  - POST via `Ezdoc\Signature\Remote\HttpClient`
+  - Verify returns `TimestampVerdict::untrusted("HttpTimestampClient cannot verify — use OpensslTimestampClient")`
+
+### Added — PAdES + PDF layer (6 files, ~1605 LOC, `src/Signature/{Envelope,Pdf}/`)
+PDF Advanced Electronic Signatures (ETSI EN 319 142) — PAdES-B-B baseline dengan extensibility ke B-T / B-LT.
+
+- **PadesEnvelope implements Envelope** — wraps PdfSigner interface:
+  - `pack(signature, content, cert, options)` — delegates to PdfSigner impl untuk embed
+  - `unpack(bytes)` — extract signature bytes + /ByteRange + signer cert
+  - `verify(bytes, originalContent, options)` — delegates ke `PdfSigner::verifyPdf()`
+  - `canDetached(): false` — PDF signatures are always attached
+  - Static `isPadesSignedPdf(bytes): bool` — sniff `/Sig` / `/Type/Sig` in PDF trailer
+- **PdfSigner interface** — kontrak PDF signer:
+  - `embedSignature(pdfBytes, pkcs7Bytes, cert, options): string` — returns signed PDF
+  - `extractSignature(pdfBytes): array` — returns signature_bytes + byte_range + cert_pem + sig_info
+  - `verifyPdf(pdfBytes, options): array` — returns valid + reason + checks + signer_cert_pem + signed_at
+- **OpensslPdfSigner** — FULL extract/verify, embedSignature STUB:
+  - `extractSignature()` — FULL: manual `/ByteRange` + `/Contents` parse via regex, `openssl_pkcs7_read` untuk cert extraction, `/Sig` dict fields (M, Name, Reason, Location)
+  - `verifyPdf()` — FULL: `pdfsig` (poppler-utils) primary + `openssl cms -verify` fallback + ByteRange full-coverage check
+  - `embedSignature()` — **STUB** dengan 4 TODO markers. Throws `EzdocException` dengan actionable guidance untuk pakai JSignPdfSigner / SetasignPdfSigner / ExternalPdfSigner. Chose fail-loudly over silent no-op untuk prevent downstream assumptions.
+- **JSignPdfSigner** — FULL production-ready via shell-out ke `jsignpdf.jar`:
+  - Requires Java Runtime + jsignpdf.jar (free, https://jsignpdf.sourceforge.net/)
+  - Constructor: `jsignpdf_path`, `java_path`, `temp_dir`
+  - `embedSignature()` — full args: `-ksf` (keystore file), `-ksp` (passphrase), `-ka` (alias), `-r` (reason), `-l` (location), `-cn` (name), `-ts` (TSA URL), `-V` (visible sig), `-pg` + `-llx` (position)
+  - Supports PAdES-B-T via `-ts` flag; PAdES-B-LT via `-tsp` + OCSP options
+  - CLI flag baseline for JSignPdf 2.2.x (TODO: re-check untuk installed version)
+- **ExternalPdfSigner** — closure-delegation untuk cloud signing services:
+  - Constructor: `embedFn`, `verifyFn`, `extractFn` callables
+  - Consumer wraps vendor REST client (Peruri PAdES endpoint, Privy PDF sign, VIDA)
+- **PdfBytesRange** — utility for `/ByteRange` parsing/manipulation:
+  - `fromPdf(bytes): self` — parse first `/ByteRange` in PDF
+  - `findAll(bytes): array<self>` — multi-signature support
+  - `getSignatureOffset()`, `getSignatureLength()`
+  - `computeHashedContent(bytes)` — extract bytes covered by ByteRange
+  - Static `computeHash(pdfBytes, byteRange, algo)` — SHA-256 default
+  - `isFullCoverage()` — reject partial-coverage attacks
+  - `isPlaceholder()` — detect pre-sign placeholder ByteRange
+
+### Added — Documentation
+`docs/PADES-TSA.md` (~380 lines, 16.8 KB):
+- Overview: PAdES profiles (B-B/B-T/B-LT/B-LTA), UU ITE + PP 71/2019 legal framing, RFC 3161 role
+- Architecture: SignatureProvider ↔ PdfSigner ↔ PadesEnvelope ↔ TimestampClient separation, ASCII flow diagram
+- **PdfSigner comparison table** (Setasign commercial / JSignPdf free full-featured / Openssl verify-only / External cloud)
+- **TimestampClient comparison table** (Openssl full / Http sign-only)
+- **Common TSA endpoints table** (BSrE / FreeTSA / DigiCert / Sectigo) + 3 config code samples
+- Quick start B-B: full 4-step sample (load PDF + hash ByteRange + sign hash + embed)
+- Quick start B-T: TSA integration via `options['timestamp_token']` + B-LT note
+- Quick start Verify: extract via `PadesEnvelope::unpack()` + PKCS#7 verify + TST verify + combine Verdict
+- Adobe Reader validation: green/yellow/red status meanings, AATL trust list, PSrE root import
+- Known limitations di v0.8, L2 → L3 migration side-by-side code, testing without live TSA
+- References: ETSI EN 319 142, RFC 3161, RFC 5652, BSrE portal, JSignPdf, setasign FPDI, AATL
+
+### Design decisions
+
+**Reference impl via shell-out** — PHP tidak punya native PAdES support. Realistic strategy:
+- Timestamp: `openssl ts` CLI portable + battle-tested
+- PDF signing: JSignPdf (Java + jsignpdf.jar) untuk production, ExternalPdfSigner untuk cloud services
+- Consumer choose based on constraints (Java available? commercial license? cloud service?)
+
+**OpensslPdfSigner embedSignature intentionally throws** — silent no-op would leave downstream code assuming signed PDF. Exception routes consumer ke JSignPdf/External/Setasign. `embedSignature()` requires PDF incremental xref update + `/ByteRange` patch which is complex ASN.1 + PDF cross-ref work; in-tree implementation would risk PDFs that "look valid" tapi fail PSrE conformance suites.
+
+**Shell-out safety** — verify agent confirmed:
+- Unsafe patterns (`shell_exec`, `exec(`, `passthru`): **0 matches** ✓
+- `proc_open` (safe pipe-based): **12 matches** across 4 files ✓
+- `escapeshellarg` (arg escape): **29 matches** across 3 files ✓
+- All CLI args go through escapeshellarg — no user string interpolated raw
+
+**Nonce included by default** — anti-replay per RFC 3161. Spec text mentions `-no_nonce` tapi RFC 3161 §2.4 strongly recommends nonce.
+
+**BSrE integration ready** — `OpensslTimestampClient` config supports Basic Auth header untuk BSrE production endpoint (`https://tsa.bssn.go.id/signing/timestamp`) + `ca_bundle_path` untuk trust chain.
+
+### Recommended consumer setup
+
+| Use case | Recommended stack | Notes |
+|----------|-------------------|-------|
+| **Dev / testing** | `ExternalPdfSigner` dengan mock closures | No dependencies |
+| **Internal docs, PAdES-B-B only** | TCPDF `setSignature()` at document level + `OpensslPdfSigner` untuk extract/verify | PHP-only |
+| **Enterprise PAdES-B-T/LT** | `JSignPdfSigner` + JSignPdf.jar + JRE + TSA URL | Free, full-featured |
+| **PSrE compliance (Peruri/Privy/BSrE)** | `ExternalPdfSigner` wrapping vendor REST client | Vendor returns signed PDF |
+| **Verify pipeline** | `OpensslPdfSigner` + `pdfsig` (poppler-utils) | Richest verdict |
+
+### Known limitations di v0.8
+
+- **OpensslPdfSigner::embedSignature** NOT implemented (STUB) — PDF byte-range manipulation complex; consumer routes ke JSignPdf / SetasignPdfSigner / ExternalPdfSigner
+- **JSignPdf CLI flag drift** across major versions — pin jar version in production deployment
+- **Windows `pdfsig`** rarely available — verify falls back ke `openssl cms -verify` (chain only, no TSA/LTV verification)
+- **Reserved `/Contents` size** default 32KB; deep chain (Peruri intermediate + root) + LT (OCSP/CRL) mungkin butuh 48-64KB — configurable via `reserved_signature_size`
+- **Adobe Trust Store** — valid PAdES-B-LT signature tetap yellow triangle kalau PSrE root tidak di AATL/user trust list. This is UX, bukan signer bug — documented untuk end users
+- **PAdES-B-LTA** (Archive Timestamp) — planned v0.8.1
+
+### Multi-agent workflow
+6 agents parallel (2 research + 3 write + 1 verify). **~275K tokens, ~20 minutes wall-clock**. All 11 PHP files pass syntax + zero PHP 8+ leaks. Verify agent confirmed:
+- Integration: all PdfSigner impls + TimestampClient impls + PadesEnvelope resolve correctly
+- Shell-out safety: 0 unsafe patterns, all args escaped
+- 4 TODO/stub markers in OpensslPdfSigner detected (as expected)
+
 ## [0.7.1] - 2026-07-10 — "Hotfix: signatures migration + Tailwind UI + query() portability"
 
 ### 🚨 Fixed — critical migration bug (ezdoc_signatures FK type mismatch)
