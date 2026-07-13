@@ -66,6 +66,11 @@ final class Config
     /**
      * Get value by dot-notation key.
      *
+     * Accepts BOTH flat and nested storage — untuk DX yang forgiving:
+     *   Nested:  fromArray(['assets' => ['base_url' => 'x']])->get('assets.base_url')
+     *   Flat:    fromArray(['assets.base_url' => 'x'])->get('assets.base_url')
+     * Flat lookup ditest dulu (O(1)), fallback ke nested (O(depth)).
+     *
      * @param mixed $default
      * @return mixed
      */
@@ -74,9 +79,14 @@ final class Config
         if ($key === '') {
             return $default;
         }
-        if (strpos($key, '.') === false) {
-            return array_key_exists($key, $this->data) ? $this->data[$key] : $default;
+        // Fast path: literal flat key match (consumers who pass ['a.b' => v])
+        if (array_key_exists($key, $this->data)) {
+            return $this->data[$key];
         }
+        if (strpos($key, '.') === false) {
+            return $default;
+        }
+        // Fallback: dot-notation nested traversal
         $ref = $this->data;
         foreach (explode('.', $key) as $segment) {
             if (!is_array($ref) || !array_key_exists($segment, $ref)) {
@@ -115,15 +125,18 @@ final class Config
     }
 
     /**
-     * True if key exists (even if value is null).
+     * True if key exists (even if value is null). Accepts flat + nested.
      */
     public function has(string $key): bool
     {
         if ($key === '') {
             return false;
         }
+        if (array_key_exists($key, $this->data)) {
+            return true;
+        }
         if (strpos($key, '.') === false) {
-            return array_key_exists($key, $this->data);
+            return false;
         }
         $ref = $this->data;
         foreach (explode('.', $key) as $segment) {

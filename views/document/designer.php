@@ -83,13 +83,18 @@ $urlCleanupOrphans = (string) $config->get('urls.actions.template.cleanup_orphan
 $urlListVars       = (string) $config->get('urls.actions.default_vars.list_vars',   'actions/default_vars/list_vars.php');
 $urlAddVar         = (string) $config->get('urls.actions.default_vars.add_var',     'actions/default_vars/add_var.php');
 $urlDeleteVar      = (string) $config->get('urls.actions.default_vars.delete_var',  'actions/default_vars/delete_var.php');
-$urlVerifyPreview  = (string) $config->get('urls.verify_preview',                   'verifikasi_preview.php');
-$urlPrint          = (string) $config->get('urls.print',                            'form_pembuat_surat_cetak_v3.php');
+$urlVerifyPreview  = (string) $config->get('urls.verify_preview',                   '');
+$urlPrint          = (string) $config->get('urls.print',                            '');
 $urlList           = (string) $config->get('urls.list',                             '?action=list');
 $urlCreate         = (string) $config->get('urls.create',                           '?action=create');
 $urlEditPattern    = (string) $config->get('urls.edit',                             '?action=edit&id={id}');
-$urlBackLink       = (string) $config->get('urls.back',                             '../?page=form_pembuat_surat_list_v3');
-$urlV1             = (string) $config->get('urls.v1',                               'form_pembuat_surat.php');
+$urlBackLink       = (string) $config->get('urls.back',                             '');
+
+// Copy control — config-driven titles + optional back-link visibility
+// Consumer boleh override untuk branding, atau default English yg generic.
+$designerPageTitle = (string) $config->get('designer.page_title', 'Template Designer');
+$designerListTitle = (string) $config->get('designer.list_title', 'Templates');
+$designerShowBack  = $urlBackLink !== '';
 
 // Consolidated URL bag for JS (data-attribute injection)
 $ezdocUrls = [
@@ -168,7 +173,7 @@ if (!isset($existingCategories) || !is_array($existingCategories)) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Generator Template Surat V2</title>
+    <title><?= h($designerPageTitle) ?></title>
     <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
     <script>
         tailwind.config = {
@@ -227,9 +232,11 @@ if (!isset($existingCategories) || !is_array($existingCategories)) {
 
         <div class="bg-white rounded-lg shadow border border-gray-200">
             <div class="px-4 py-3 border-b border-gray-200 flex justify-between items-center text-white rounded-t-lg bg-primary">
-                <span class="flex items-center"><i class="bi bi-file-earmark-text mr-2"></i>Template Surat V2 (WYSIWYG)</span>
+                <span class="flex items-center"><i class="bi bi-file-earmark-text mr-2"></i><?= h($designerListTitle) ?></span>
                 <div class="flex items-center gap-2">
-                    <a href="<?= h($urlV1) ?>" class="inline-flex items-center px-2 py-1 rounded text-xs border border-white text-white hover:bg-white/10">V1</a>
+                    <?php if ($designerShowBack): ?>
+                    <a href="<?= h($urlBackLink) ?>" class="inline-flex items-center px-2 py-1 rounded text-xs border border-white text-white hover:bg-white/10" title="Kembali"><i class="bi bi-arrow-left mr-1"></i>Back</a>
+                    <?php endif; ?>
                     <a href="<?= h($urlCreate) ?>" class="inline-flex items-center px-2 py-1 rounded text-xs bg-white text-gray-900 hover:bg-gray-100"><i class="bi bi-plus-lg mr-1"></i>Buat Baru</a>
                 </div>
             </div>
@@ -1647,8 +1654,12 @@ if (!isset($existingCategories) || !is_array($existingCategories)) {
                         // Sync Preview link href so it points to the saved template
                         const btnPrev = document.getElementById('btnPreview');
                         if (btnPrev) {
-                            const printBase = EZDOC_URLS.print || 'form_pembuat_surat_cetak_v3.php';
-                            btnPrev.href = printBase + (printBase.indexOf('?') !== -1 ? '&' : '?') + 'template_id=' + data.id;
+                            const printBase = EZDOC_URLS.print || '';
+                            if (printBase) {
+                                btnPrev.href = printBase + (printBase.indexOf('?') !== -1 ? '&' : '?') + 'template_id=' + data.id;
+                            } else {
+                                btnPrev.style.display = 'none';
+                            }
                         }
                         // Update URL only if transitioning from create (no id in URL yet)
                         if (!new URLSearchParams(window.location.search).get('id')) {
@@ -1724,7 +1735,11 @@ if (!isset($existingCategories) || !is_array($existingCategories)) {
             });
 
             // Build URL — use configured print URL
-            const base = EZDOC_URLS.print || 'form_pembuat_surat_cetak_v3.php';
+            const base = EZDOC_URLS.print || '';
+            if (!base) {
+                alert('Print/preview endpoint belum di-configure. Set urls.print di Config untuk enable preview.');
+                return;
+            }
             const qs = params.map(p => encodeURIComponent(p.key) + '=' + encodeURIComponent(p.placeholder)).join('&');
             // If base is a relative filename, resolve against current dir; if it's a full path/URL, use as-is
             let baseUrl;
