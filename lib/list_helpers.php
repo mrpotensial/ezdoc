@@ -48,12 +48,20 @@ if (!function_exists('ezdoc_relative_time')) {
  * Build cetak URL query params dari document row.
  * Skip label param kalau label=='-' (kosong).
  *
- * @param array $row Document row dengan template_id, norm, nopen, label
- * @return string URL-encoded query params (tanpa leading ?)
+ * Defensive: accept any type (not just array). Non-array input → return
+ * empty query string (safe fallback). Prevents Fatal TypeError kalau caller
+ * pass malformed row from failed query() (which returns ['error' => msg]).
+ *
+ * @param mixed $row Document row (assoc array). Non-array → empty string.
+ * @return string URL-encoded query params (tanpa leading ?), empty kalau invalid
  */
 if (!function_exists('ezdoc_doc_link_params')) {
-    function ezdoc_doc_link_params(array $row): string
+    function ezdoc_doc_link_params($row): string
     {
+        if (!is_array($row)) {
+            return ''; // safe fallback — caller can render broken link tapi tidak crash
+        }
+
         $params = 'template_id=' . (int) ($row['template_id'] ?? 0)
                 . '&norm=' . urlencode((string) ($row['norm'] ?? ''))
                 . '&nopen=' . urlencode((string) ($row['nopen'] ?? ''));
