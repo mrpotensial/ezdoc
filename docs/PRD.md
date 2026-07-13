@@ -51,6 +51,8 @@ Library ini standalone project — tidak vendor-locked ke industry manapun. Dogf
 | **Domain-agnostic** | Core schema tidak punya `norm`/`nopen`/hospital-specific column. Polymorphic subject + `field_values JSON`. Sample profiles: hospital, contract, HR, invoice |
 | **International-ready** | UTF-8 NFC everywhere, ISO 4217 currency, ISO 3166 country, BCP 47 locale, E.164 phone. Label multi-locale JSON. `utf8mb4_0900_ai_ci` collation |
 | **Extensibility** | Consumer bisa register custom profile (mis. `hospital-id`) untuk convenience API tanpa fork core |
+| **Full-featured views** | `views/document/{designer,generate,list}.php` ported dari dogfood consumer app — WYSIWYG designer (TinyMCE), document generator (form + TTD signature + materai + PDF), list dengan RBAC filter. Publish + customize pattern (Filament-style). **Consumer install → langsung punya working editor + generator tanpa build sendiri** |
+| **Alpine.js interactivity** | All modals + dropdowns + collapse pakai gold-standard Alpine pattern (backdrop no explicit z-index, content wins via DOM order). 22 slot injection points untuk consumer extension |
 | Performance | Migration idempotent, self-heal orphan registry, < 100ms untuk hot paths |
 
 ### 2.2 v2.0 — Cross-language ecosystem
@@ -129,23 +131,34 @@ Sekarang cuma **Level 1 (HMAC signature)** — cukup untuk internal tamper-detec
 
 > **Note pola pikir**: Level 1-3 = "**siapa** yang tanda tangan + integritas isi". Anchoring (A1) = "**bukti publik** bahwa dokumen ini exist pada waktu X yang tidak bisa diubah setelah ter-anchor". Anchoring bisa combined dengan any level — L3 + A1 = signature legally binding + audit trail publik immutable.
 
-### 3.7 UI Layer 🟡 Monolithic — belum di library
+### 3.7 UI Layer 🟡 Framework done, full views deferred to v0.9.7
 
-Fitur user-facing paling penting **BELUM masuk library** — masih di `page/*.php` di consumer app repo (contoh: `form_pembuat_surat_v3.php` dari dogfood host app):
+**UI framework (v0.6.6) DONE**:
+- `Ezdoc\UI\{ViewResolver, Config, Theme, Slot, SlotRegistry, PublishCommand}` — publish-based extension pattern
+- Minimal starter templates: `views/{layout,document/list,document/form}.php` (~300 LOC combined)
+- Tailwind CSS + Alpine.js CDN loaded via `views/layout.php`
+- CSS variable bridge for brand theming
+
+**Full-featured views MASIH di consumer repo** (belum di library):
 
 | File | Line count | Fungsi | Status |
 |------|------------|--------|--------|
-| `page/form_pembuat_surat_v3.php` | 4701 | Template designer — canvas WYSIWYG, field editor, signature slot builder, RBAC config | ❌ Belum extract |
-| `page/form_pembuat_surat_cetak_v3.php` | 4136 | Document generation form — fill fields, sign, generate PDF | ❌ Belum extract |
-| `page/form_pembuat_surat_list_v3.php` | 608 | List all documents dengan filter/search | ❌ Belum extract |
+| `page/form_pembuat_surat_v3.php` | 4465 (post-Tailwind) | Template designer — WYSIWYG TinyMCE, field editor, signature slot builder, RBAC config | ⏳ Planned v0.9.7-a |
+| `page/form_pembuat_surat_cetak_v3.php` | 4040 (post-Tailwind) | Document generator — fill fields, sign TTD, materai, generate PDF, print, verify QR | ⏳ Planned v0.9.7-b |
+| `page/form_pembuat_surat_list_v3.php` | ~600 | List documents + recent widget + category filter + RBAC per-template | ⏳ Planned v0.9.7-c |
 
-**Masalah kalau tetap monolitik**:
-- Consumer library tidak bisa pakai fitur intinya tanpa copy-paste 9500 baris kode manual
-- Bercampur: business logic (SQL, RBAC) + UI (HTML/CSS/JS) + inline action handler dalam 1 file
-- Testable = 0 (semua inline, tidak ada function boundary)
-- Customization = fork the file, tinggal susah maintain
+**Sudah selesai (partial UI progress)**:
+- ✅ v0.2: Extract 7 inline handlers ke `actions/template/*.php` + `actions/default_vars/*.php`
+- ✅ v0.6.5: Extract render-path helpers ke `lib/{doc_meta,doc_template,list}_helpers.php`
+- ✅ v0.6.5: Tailwind conversion + Alpine.js modals + backdrop z-index fix (gold standard pattern)
+- ✅ v0.6.6: UI framework (ViewResolver + Slot + Config + Theme + PublishCommand)
+- ✅ v0.7.1: `db_helpers.php` (`ezdoc_query_prepared()`) untuk portable DB access
 
-**Yang perlu dijawab**: bagaimana library ship UI ini + bikin **customizable** untuk consumer?
+**Gap identified**: Consumer library user butuh **working editor + generator out-of-box**. Library tanpa full views tidak akan di-adopt — majority consumer tidak akan build 9000 LOC WYSIWYG editor sendiri. Framework-only library cocok untuk consumer minority yang mau bangun sendiri.
+
+**Solution**: **v0.9.7 milestone** — port full designer + generator + list dari dogfood consumer app (post-Tailwind versions) ke `ezdoc/views/document/*.php`. Abstract SIMRS-specific globals (`query()`, `hasRole()`, `$author_id`) ke `Context` + `RoleProvider`. Add 22 slot injection points untuk consumer extension. Publish + customize pattern (industri standard: Filament, shadcn/ui).
+
+**Reference implementation**: SIMRS dogfood app pages sudah dogfooded end-to-end di production RSIA Anugrah — proven featureset yang consumer library user akan expect.
 
 ### 3.8 Cryptography ❌ Minimal
 
@@ -783,9 +796,35 @@ Each port:
 - Test framework (PHPUnit vs Go testing vs Vitest)
 - Idiom (naming convention, error handling style)
 
-### 5.8 UI Layer — headless core + reference UI (planned v0.6.5+)
+### 5.8 UI Layer — headless core + reference UI (planned v0.6.5+ / v0.9.7)
 
-**Problem**: 3 halaman v3 (designer, generate/cetak, list) = 9500 baris HTML/CSS/JS + inline PHP handler. Ini fitur inti library. Consumer WAJIB bisa pakai out-of-box, TAPI juga WAJIB bisa custom (branding, layout, extra field).
+**Problem**: 3 halaman v3 (designer, generate/cetak, list) = 9500 baris HTML/CSS/JS + inline PHP handler. Ini fitur inti library. Consumer WAJIB bisa pakai out-of-box, TAPI juga WAJIB bisa custom (branding, layout, extra field), AND WAJIB portable ke framework lain (Laravel, Next.js, Rust) untuk cross-language ecosystem.
+
+**Cross-framework portability design principle** (mandatory untuk v0.9.7+):
+
+Views di library WAJIB dumb — cuma HTML + fetch calls ke endpoints. Semua business logic di Service classes yang expose via HTTP contract. Consumer boleh:
+- Pakai library's PHP views out-of-box (TinyMCE + Alpine + Tailwind)
+- Publish + edit (Filament-style)
+- Ignore library views total, build sendiri di React/Vue/Rust — YANG PENTING mereka honor endpoint contract + template content spec
+
+Contract sources of truth (framework-agnostic):
+- `ezdoc-spec/openapi.yaml` (v1.1 milestone) — REST API contract
+- `ezdoc-spec/schemas/*.json` (v1.1 milestone) — data models (Document, Template, Signature)
+- `ezdoc-spec/protocol/*.md` (v1.1 milestone) — template content format, field markers, signature envelope
+- `ezdoc-spec/conformance/test-vectors.json` (v1.1 milestone) — cross-language interop tests
+
+Framework adapters (per language):
+- **PHP** (library default v0.9.7): `ezdoc/views/document/*.php` — plain PHP + TinyMCE + Alpine
+- **Laravel Blade** (v0.5 or v0.9.7 companion): `packages/ezdoc-ui-blade/` — Blade wrapper
+- **React/Next.js** (v2.0): `@mrpotensial/ezdoc-ui-react` — TipTap + shadcn
+- **Vue** (community stretch): `@mrpotensial/ezdoc-ui-vue` — Quill + Headless UI
+- **Livewire** (community stretch): `mrpotensial/ezdoc-ui-livewire`
+- **HTMX** (community stretch): plain HTML + HTMX + Alpine — universal
+- **Rust** (community stretch): Yew/Leptos WASM
+
+Semua framework adapters implement SAME endpoint contract + SAME content spec → user data portable across frameworks. Consumer boleh migrate dari PHP monolith ke Next.js SPA tanpa lose data.
+
+
 
 **Pattern industri proven** untuk shipping customizable UI dari library:
 
@@ -918,7 +957,9 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 
 ## 6. Roadmap
 
-**Total timeline (single dev, focused)**: ~40 weeks (~9 months) untuk v1.0, tambah ~14 weeks (~3.5 bulan) untuk v2.0 = **~1 tahun** ke ecosystem cross-language.
+**Total timeline (single dev, focused)**: ~44 weeks (~10 months) untuk v1.0 (termasuk v0.9.7 full views), tambah ~14 weeks (~3.5 bulan) untuk v2.0 = **~13 bulan** ke ecosystem cross-language.
+
+**Note on v0.9.7 (added post-review)**: Milestone ini insertion baru based on user feedback "library tanpa WYSIWYG editor tidak akan di-adopt". Port full designer + generator dari dogfood consumer app ke library views = **~3-4 weeks extra** — critical blocker untuk v1.0 realistic adoption.
 
 **Fase besar**:
 
@@ -928,10 +969,11 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 | **Signing core** | v0.6 - v0.6.6 | ~12 weeks | Signature adapter + Local PKI + UI extraction/packaging |
 | **PSrE + PDF** | v0.7 - v0.9 | ~19 weeks | Peruri, PAdES+TSA, more PSrE (Privy/VIDA) |
 | **Anchoring** | v0.9.5 | ~23 weeks | Blockchain anchor (OpenTimestamps + Polygon) |
-| **Extraction** | v1.0 | ~24 weeks | Standalone PHP library di Packagist |
-| **Spec** | v1.1 | ~26 weeks | ezdoc-spec repo publik |
-| **Go port** | v1.5 | ~32 weeks | Native Go implementation |
-| **TS port** | v2.0 | ~40 weeks | Native TypeScript + Next.js sample |
+| **Full views** | v0.9.7 | ~27 weeks | Migrate designer + generator + list dari consumer app ke library (WYSIWYG editor + PDF gen) |
+| **Extraction** | v1.0 | ~28 weeks | Standalone PHP library di Packagist |
+| **Spec** | v1.1 | ~30 weeks | ezdoc-spec repo publik |
+| **Go port** | v1.5 | ~36 weeks | Native Go implementation |
+| **TS port** | v2.0 | ~44 weeks | Native TypeScript + Next.js sample |
 
 **Catatan estimation**:
 - Timeline asumsi **1 dev fokus purnawaktu**. Parallelization (mis. UI dev sambil PSrE integration) bisa potong 30-40%.
@@ -1109,9 +1151,155 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 - BatchAnchor: 1000 dokumen di-anchor jadi 1 tx, individual proof tetap works
 - Test: L3 (Peruri) + A1 (Polygon) combined flow end-to-end pass
 
-### 6.12 Milestone v1.0 — "PHP library extraction"  ⏱ ~1 week
+### 6.12 Milestone v0.9.7 — "Full-featured library views (designer + generator)"  ⏱ ~3-4 weeks
 
-**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist.
+**Goal**: Port full-featured designer + document generator UI dari dogfood consumer app (SIMRS `page/form_pembuat_surat_*_v3.php`) ke `ezdoc/views/document/` sebagai starter templates library. Consumer library user dapat WYSIWYG designer + generator out-of-box tanpa build sendiri.
+
+**Rationale**: Library tanpa full-featured UI (designer WYSIWYG + document generator) tidak akan di-adopt. Consumer akan pilih library lain yang sudah "batteries-included". Framework-only library (v0.6.6) cocok untuk consumer yang mau bangun sendiri, tapi majority butuh working starter.
+
+**Industri standar reference pattern**: **publish + customize** (Laravel Filament v3, shadcn/ui, Radix UI). Library ships **full-featured views AS-IS**, consumer runs `php cli/publish.php views` untuk copy ke app, edit copies at will. ViewResolver picks consumer's copy first, falls back ke library default.
+
+**Scope migration**:
+
+Files yang di-migrate dari `page/*.php` → `ezdoc/views/document/*.php`:
+
+| Source (SIMRS) | Target (ezdoc library) | LOC (post-Tailwind conversion) |
+|----------------|------------------------|--------------------------------|
+| `page/form_pembuat_surat_v3.php` | `views/document/designer.php` | 4465 |
+| `page/form_pembuat_surat_cetak_v3.php` | `views/document/generate.php` | 4040 |
+| `page/form_pembuat_surat_list_v3.php` | Enhance existing `views/document/list.php` | 608 |
+
+**Total ~9100 LOC** migration dengan preservation semua interactivity + fitur.
+
+**SIMRS-specific dependencies yang HARUS di-abstract**:
+
+- [ ] `global $conn` → `$ctx->db` (Context DI)
+- [ ] `query($sql)` → `Ezdoc\Document\DocumentRepository::listByX()` OR `ezdoc_query_prepared()` (v0.7.1)
+- [ ] `esc($val)` → `mysqli_prepare + bind_param` prepared statements
+- [ ] `hasRole($role)` → `$ctx->roleProvider->hasRole($role)`
+- [ ] `$author_id` → `$ctx->roleProvider->currentUserId()`
+- [ ] `$author_role_array` → `$ctx->roleProvider->currentUserRoles()`
+- [ ] Hardcoded `?page=form_pembuat_surat_*` URLs → `$config->get('urls.designer/generate/list', ...)`  patterns dengan `{uuid}` placeholder
+- [ ] Hardcoded AJAX action URLs → route via `Ezdoc\UI\Config::get('urls.actions_base', 'actions/')` + Dispatcher
+
+**Fitur yang HARUS preserved (non-negotiable)**:
+
+Designer (`views/document/designer.php`):
+- [ ] TinyMCE 6 WYSIWYG init + custom toolbar
+- [ ] Field marker `{{field_name}}` placeholders (parseTemplate)
+- [ ] TTD placeholder drag-drop positioning (floating + inline)
+- [ ] Materai placeholder insert
+- [ ] QR field placeholder
+- [ ] Logo insert dengan sizing
+- [ ] Sidebar panels (Field/TTD/Materai lists dengan filter search)
+- [ ] Variable Manager modal
+- [ ] Field Inspector modal (usage count + rename + cleanup orphans)
+- [ ] Query DB modal (dynamic table binding)
+- [ ] URL Parameters modal
+- [ ] Verify Preview modal
+- [ ] Save template dengan versioning + access_config RBAC
+- [ ] Copy template
+- [ ] Toggle lock
+- [ ] Delete template (superadmin only)
+- [ ] Alpine.js state untuk semua modals (gold-standard pattern)
+
+Generator (`views/document/generate.php`):
+- [ ] Template picker fallback screen (kalau no template_id)
+- [ ] Form auto-generate dari template `field_values` + `signature_config`
+- [ ] TTD signature canvas (mouse + touch drawing)
+- [ ] Materai upload (file → base64 data URL, 30-char serial + upload timestamp)
+- [ ] QR code generation via `?action=generate_qr` endpoint
+- [ ] Verify QR mode toggle
+- [ ] Save document via `_ajax=1` action → `DocumentService::save()`
+- [ ] New version create
+- [ ] Version selector dropdown
+- [ ] Document info popup
+- [ ] Keyboard shortcuts (Ctrl+S, Ctrl+/)
+- [ ] Delete slot / restore slot (superadmin)
+- [ ] **PDF render via dompdf** — preserve `renderContentForPdf()` + inline PDF `<style>` block verbatim
+- [ ] Print mode dengan `@page` PHP-interpolated paper size
+
+**Slot injection points** (consumer boleh inject custom UI tanpa fork):
+
+Designer slots (12 slots):
+- [ ] `designer:toolbar-extra` — tambah button di top-bar
+- [ ] `designer:sidebar-extra` — tambah panel di sidebar
+- [ ] `designer:modals-extra` — tambah modal
+- [ ] `designer:field-context-menu` — right-click menu per field
+- [ ] `designer:ttd-context-menu` — right-click menu per TTD
+- [ ] `designer:save-hook` — pre-save validation callback
+
+Generator slots (10 slots):
+- [ ] `generate:before-form` — heading, breadcrumbs, custom nav
+- [ ] `generate:after-form` — footer notes
+- [ ] `generate:signature-extra` — custom sign panel
+- [ ] `generate:preview-header` — PDF preview toolbar
+- [ ] `generate:field-picker` — custom autocomplete for specific fields
+- [ ] `generate:save-hook` — pre-save validation
+
+**Migration approach — 3 sub-milestones**:
+
+- [ ] **v0.9.7-a** (~1 week): Migrate `designer.php`. Workflow multi-agent dengan careful research phase. Backup `.bak` before touch.
+- [ ] **v0.9.7-b** (~1 week): Migrate `generate.php`. Same pattern. PDF preservation adalah highest risk.
+- [ ] **v0.9.7-c** (~1 week): Migrate `list.php` enhancement (recent docs widget, category filter pills, RBAC per-template badge). Update demo showcase.
+- [ ] Docs update: `docs/UI-CUSTOMIZATION.md` tambah "Full-featured views" section dengan publish + customize workflow
+
+**Definition of Done**:
+
+- `ezdoc/views/document/designer.php` fully functional standalone, tanpa SIMRS-specific globals
+- `ezdoc/views/document/generate.php` fully functional, dompdf PDF gen works
+- `ezdoc/views/document/list.php` enhanced dengan recent docs + category filter
+- Consumer fresh install: `composer require mrpotensial/ezdoc && php cli/publish.php views` → langsung dapat working designer + generator
+- Demo dogfood consumer app (SIMRS) switch dari `page/form_pembuat_surat_*_v3.php` inline require → publish views to `page/vendor/ezdoc/document/*.php` OR `require ezdoc/views/document/*.php` directly
+- Backward compat: SIMRS pages tetap functional selama migration period (paralel deployment)
+- Slot injection tested: 22 slots (12 designer + 10 generator) demoed di `page/ezdoc_ui_demo.php`
+- Verified end-to-end: save template → generate document → sign TTD → PDF preview → verify QR → all works via library views only
+
+**Cross-framework portability constraints (mandatory)**:
+
+Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (Laravel v0.5, Next.js/React v2.0, Go v1.5, Rust) bisa remake dengan safety. Consumer boleh implement UI di framework apapun selama mereka honor spec + endpoint contract.
+
+**7 principles**:
+
+1. **Views are dumb** — Zero business logic di `views/*.php`. Cuma HTML + JS + fetch calls ke endpoints. Semua save/load/sign flow via `actions/*.php` REST endpoints. Business logic ada di `Ezdoc\Document\DocumentService` + `Ezdoc\Template\TemplateService` (v0.4).
+2. **HTTP endpoints as contract** — Semua interactivity via documented REST-like endpoints. Contract = ezdoc-spec (v1.1 milestone). Any language yang implement same endpoint contract bisa host UI.
+3. **Data format = portable JSON** — Zero PHP-specific serialization (no `serialize()`, no `var_export`). Semua requests/responses = standard JSON. Field values, signature config, verify config = JSON di database (already schema).
+4. **Template content format = spec** — Field markers `{{name}}`, TTD placeholders (`<div class="ttd-placeholder" data-ttd data-nama-field data-allowed-roles>`), materai placeholders documented di `ezdoc-spec/protocol/`. Any WYSIWYG editor yang produce spec-compliant content = valid.
+5. **Editor is swappable** — TinyMCE 6 = reference impl untuk PHP library. Consumer boleh swap ke framework-native editor: Laravel Filament Rich Editor, Next.js TipTap/BlockNote, Vue Quill. Content format tetap sama (spec-compliant HTML).
+6. **Signature envelope = ISO standards** — PKCS#7 (RFC 5652), PAdES (ETSI EN 319 142), RFC 3161 TSA. Bit-exact identical across languages (per v0.7 + v0.8 spec). Signed dokumen dari PHP dapat di-verify oleh Go / TS client.
+7. **Client state = DOM + fetch API** — Views pakai vanilla JS + Alpine.js (v0.6.5 conversion). Zero framework-specific state (Redux, MobX, Vuex). Portable ke framework apapun yang punya DOM + fetch (semua modern JS/TS).
+
+**Anti-patterns (banned untuk v0.9.7)**:
+
+- ❌ PHP-serialized data di response (`serialize()`, `var_export`, `json_encode` with PHP object metadata)
+- ❌ Session-based state passing (`$_SESSION['designer_state']`)
+- ❌ Direct DB access dari view file (`mysqli_query` di HTML)
+- ❌ PHP-specific templating primitives yang tight-coupled (Blade `@if`, Twig `{% %}`) — plain PHP `<?= ?>` OK karena tidak bikin dependency
+- ❌ TinyMCE-specific data yang tidak documented di spec (mis. proprietary data attrs)
+- ❌ jQuery-specific selectors, Angular directives, Vue templates — vanilla JS only
+- ❌ Custom URL routing (mis. hash-based routing) — semua URLs via Config pattern
+
+**Portability test criteria untuk v0.9.7 DoD**:
+
+- [ ] Designer views di-render tanpa modification kalau consumer swap `koneksi.php` → PDO/Doctrine/Eloquent (data access via Repository, not direct SQL di view)
+- [ ] Semua AJAX call punya JSON request + JSON response, tidak ada form-encoded state di URL beyond query params `?uuid=X&action=Y`
+- [ ] Template content JSON export dari SIMRS bisa di-import ke Laravel Filament project (bit-identical `field_values`, `signature_config`)
+- [ ] Signed document dari PHP library bisa di-verify oleh Go client (v1.5) end-to-end (conformance test vector di ezdoc-spec)
+- [ ] `actions/*.php` endpoints documented di `ezdoc-spec/openapi.yaml` sebagai reference — endpoints yang consumer boleh implement in Next.js/Rust/Go/CI4
+- [ ] `views/document/designer.php` bisa di-copy ke fresh Laravel project + require dari Blade layout, no fatal error (asalkan consumer wire `Context::default()` dengan mysqli/PDO adapter)
+- [ ] Zero references ke SIMRS-specific vendor libraries di views (no `koneksi.php`, no `SImpel/*` classes, no `RSIA_*` constants)
+
+**Concerns / risks**:
+
+- **dompdf PDF style block** MUST NOT be Tailwind — dompdf tidak parse Tailwind CDN. Keep inline `<style>` block verbatim. **Cross-framework note**: dompdf PHP-only. Native ports (Node/Go/Rust) pakai equivalent (Puppeteer, wkhtmltopdf, printpdf). PDF spec tetap sama (PAdES envelope).
+- **TinyMCE iframe content styles** — Tailwind CDN loaded di outer document tidak apply ke iframe. Preserve inline styles OR configure TinyMCE to load ezdoc.css. **Cross-framework note**: kalau consumer swap TinyMCE → TipTap/BlockNote, inline styles jadi non-issue (native React/Vue components).
+- **Print @page rules** dengan PHP interpolation (`<?= $paperDim ?>`) — cannot be Tailwind. **Cross-framework note**: paper size = template metadata, portable across languages.
+- **Alpine state coupling** — designer + generator sudah pakai Alpine post-Tailwind conversion (v0.6.5 workflow). Preserve state names. **Cross-framework note**: Alpine = DOM-based, works di React/Vue via web components jika consumer mau. Alternative native: React `useState`, Vue `ref`.
+- **Repository refactor complexity** — 4114 `query()` calls across pengeluaran/ folder, tapi cuma yang di 2 files ini yang perlu di-refactor untuk migration.
+
+### 6.13 Milestone v1.0 — "PHP library extraction (Packagist)"  ⏱ ~1 week
+
+**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Requires v0.9.7 (full views) completed**.
 
 - [ ] Move `ezdoc/` folder ke repo baru `mrpotensial/ezdoc`
 - [ ] Setup GitHub Actions CI (phpunit + phpstan level 6 + PHP matrix 7.4-8.3)
@@ -1123,8 +1311,10 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 - `composer require mrpotensial/ezdoc` works di fresh Laravel project
 - Dogfood consumer production pakai versi Packagist (bukan lokal path)
 - L1 (HMAC), L2 (LocalPKI), L3 (Peruri) semua production-ready
+- **Full-featured designer + generator views included** (from v0.9.7) — consumer bisa langsung pakai
+- Fresh consumer test: install → publish views → save template → generate doc → sign → verify (semua works out-of-box)
 
-### 6.13 Milestone v1.1 — "Spec extraction"  ⏱ ~1-2 weeks
+### 6.14 Milestone v1.1 — "Spec extraction"  ⏱ ~1-2 weeks
 
 **Goal**: buat repo `ezdoc-spec/` — the reusable architecture — sebagai persiapan untuk native ports.
 
@@ -1141,7 +1331,7 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 - PHP CI job runs conformance suite → pass
 - Docs: "How to write a new port" guide
 
-### 6.14 Milestone v1.5 — "Go port"  ⏱ ~4-6 weeks
+### 6.15 Milestone v1.5 — "Go port"  ⏱ ~4-6 weeks
 
 **Goal**: `ezdoc-go` — native Go implementation, container-friendly.
 
@@ -1159,7 +1349,7 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 - Conformance test pass (signature dari PHP di-verify oleh Go = same result)
 - Docker image jalan di Kubernetes cluster
 
-### 6.15 Milestone v2.0 — "TypeScript port + full ecosystem"  ⏱ ~6-8 weeks
+### 6.16 Milestone v2.0 — "TypeScript port + full ecosystem"  ⏱ ~6-8 weeks
 
 **Goal**: `@mrpotensial/ezdoc` — TypeScript native untuk Next.js / Node / browser.
 
