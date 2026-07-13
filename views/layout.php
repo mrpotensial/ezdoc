@@ -55,6 +55,12 @@ $pageTitle = isset($title) && $title !== ''
     };
 </script>
 
+<!-- Alpine.js — declarative interactivity (modals, dropdowns, tabs, toggles).
+     Consumer views yang butuh state management pakai x-data / x-show / @click.
+     Standard stack industri: Tailwind (styling) + Alpine (behavior). -->
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.13.5/dist/cdn.min.js"></script>
+
 <!-- Ezdoc component tokens + @apply patterns -->
 <link rel="stylesheet" href="<?= htmlspecialchars($theme->assetUrl('css/ezdoc.css'), ENT_QUOTES, 'UTF-8') ?>">
 

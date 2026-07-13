@@ -64,6 +64,34 @@ final class Theme
     }
 
     /**
+     * Resolve asset URL relative to library `assets/` directory.
+     *
+     * Consumer boleh set `assets.base_url` di Config untuk override default
+     * (mis. CDN path atau app-specific mount point). Default fallback:
+     * `ezdoc/assets/<path>` (relative — works untuk plain PHP host).
+     *
+     * @param string $relativePath Asset path (mis. 'css/ezdoc.css' or 'js/ezdoc.js')
+     * @return string Absolute or relative URL untuk src="..." / href="..."
+     *
+     * @example Basic (no config override):
+     *   $theme->assetUrl('css/ezdoc.css') → 'ezdoc/assets/css/ezdoc.css'
+     *
+     * @example With CDN override in config:
+     *   Config: ['assets.base_url' => 'https://cdn.example.com/ezdoc']
+     *   $theme->assetUrl('js/ezdoc.js') → 'https://cdn.example.com/ezdoc/js/ezdoc.js'
+     */
+    public function assetUrl(string $relativePath): string
+    {
+        $base = $this->config->get('assets.base_url', 'ezdoc/assets');
+        if (!is_string($base) || $base === '') {
+            $base = 'ezdoc/assets';
+        }
+        $base = rtrim($base, '/');
+        $path = '/' . ltrim($relativePath, '/');
+        return $base . $path;
+    }
+
+    /**
      * Extra CSS URLs loaded after the library core stylesheet.
      *
      * @return array<int,string>
