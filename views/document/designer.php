@@ -468,7 +468,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                 <!-- Editor Wrapper (paper background) — overflow-hidden supaya cuma
                      1 scroll (di dalam TinyMCE iframe). Google Docs pattern. -->
-                <div class="bg-slate-500 p-5 flex-1 overflow-hidden" id="editorWrapper">
+                <div class="bg-slate-500 p-1 flex-1 overflow-hidden" id="editorWrapper">
                     <div class="bg-white mx-auto shadow-[0_4px_20px_rgba(0,0,0,0.3)]" id="editorContainer">
                         <textarea id="editor"><?= h($template['template_html'] ?? '') ?></textarea>
                     </div>
@@ -2075,6 +2075,15 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     margin: 0;
                     box-sizing: border-box;
                     position: relative;
+                }
+                /* Scroll room bottom — pseudo-element supaya persist even ketika
+                   updatePageSize() reset body.style.padding. Industri: Google Docs
+                   / Notion editor invisible "scroll spacer" pattern. */
+                body::after {
+                    content: '';
+                    display: block;
+                    height: 120px;
+                    pointer-events: none;
                 }
                 p { margin: 8px 0; }
                 table { border-collapse: collapse; width: 100%; }
