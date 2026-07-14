@@ -339,6 +339,11 @@ $padLeft = (int)($padding['left'] ?? 20);
 $dokumen = null;
 $dbFields = [];
 $dbTtd = [];
+// BUG FIX: init $GLOBALS['dbFields'] + $GLOBALS['dbTtd'] awal supaya helper
+// functions `v()`, `vRaw()` yang pakai `global $dbFields` selalu work walau
+// generate.php di-include dari method scope (Router::renderView).
+$GLOBALS['dbFields'] = $dbFields;
+$GLOBALS['dbTtd']    = $dbTtd;
 $isEditMode = false;
 // Allow superadmin to preview soft-deleted document via ?preview_deleted=1 (read-only mode)
 $preview_deleted = !empty($_GET['preview_deleted']) && $isSuperadmin;
@@ -358,6 +363,9 @@ if ($doc_id > 0) {
         $isEditMode = true;
         $dbFields = json_decode($dokumen['field_values'] ?: '{}', true) ?: [];
         $dbTtd = json_decode($dokumen['signature_values'] ?: '{}', true) ?: [];
+        // BUG FIX (see note near line 344) — promote ke GLOBALS untuk v()/vRaw()
+        $GLOBALS['dbFields'] = $dbFields;
+        $GLOBALS['dbTtd']    = $dbTtd;
         $param_norm = $dokumen['norm'] ?? $param_norm;
         $param_nopen = $dokumen['nopen'] ?? $param_nopen;
         $param_label = $dokumen['label'] ?? $param_label;
@@ -385,15 +393,11 @@ if ($isGeneralDoc) {
 } else {
     $canLookup = ($param_norm !== '' && $param_nopen !== '');
 }
+// Init client-side debug bag (dump ke window.EZDOC_DEBUG lewat script inline di bawah)
+$__ezdocLoadDebug = null;
+
 if (!$dokumen && $canLookup) {
     $delClause = $preview_deleted ? '' : ' AND deleted_at IS NULL';
-    // spec: ezdoc-spec/observability/audit.md — diagnostic log LOAD query params
-    // untuk debug mismatch dengan SAVED log (v0.9.9 target: replace dengan
-    // Repository unit tests).
-    @error_log(sprintf(
-        '[ezdoc:load] QUERY template_id=%d norm=[%s] nopen=[%s] label=[%s] version=%d scope=%s',
-        $template_id, $param_norm, $param_nopen, $param_label, $param_version, $isGeneralDoc ? 'general' : 'patient'
-    ));
     if ($isGeneralDoc) {
         // General: lookup by (template_id, label, [version])
         if ($param_version > 0) {
@@ -415,15 +419,32 @@ if (!$dokumen && $canLookup) {
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
     $dokumen = mysqli_fetch_assoc($result);
-    @error_log(sprintf(
-        '[ezdoc:load] RESULT dokumen=%s doc_id=%s',
-        $dokumen ? 'FOUND' : 'null', $dokumen['id'] ?? '-'
-    ));
     if ($dokumen) {
         $isEditMode = true;
         $doc_id = $dokumen['id'];
         $dbFields = json_decode($dokumen['field_values'] ?: '{}', true) ?: [];
         $dbTtd = json_decode($dokumen['signature_values'] ?: '{}', true) ?: [];
+        // BUG FIX: promote $dbFields + $dbTtd ke $GLOBALS supaya helper functions
+        // `v()`, `t()`, `dbFieldRaw()` (yang pakai `global $dbFields`) bisa akses
+        // saat generate.php di-include dari method Router::renderView() (scope
+        // isolation antara caller method dan include file).
+        $GLOBALS['dbFields'] = $dbFields;
+        $GLOBALS['dbTtd']    = $dbTtd;
+        // Client-side debug — expose diagnostic ke window.EZDOC_DEBUG.load
+        // supaya user cek via F12 Console tanpa akses server error log.
+        $__ezdocLoadDebug = [
+            'query'  => compact('template_id') + ['norm' => $param_norm, 'nopen' => $param_nopen, 'label' => $param_label],
+            'result' => ['found' => true, 'doc_id' => (int)$dokumen['id']],
+            'raw'    => [
+                'field_values'     => (string)($dokumen['field_values'] ?? ''),
+                'signature_values' => (string)($dokumen['signature_values'] ?? ''),
+            ],
+            'parsed' => [
+                'dbFields_keys' => array_keys($dbFields),
+                'dbFields'      => $dbFields,
+                'dbTtd_keys'    => array_keys($dbTtd),
+            ],
+        ];
         $param_version = (int)($dokumen['version'] ?? 1);
         $param_is_locked = (int)($dokumen['is_locked'] ?? 0);
         $param_is_deleted = !empty($dokumen['deleted_at']) ? 1 : 0;
@@ -435,6 +456,15 @@ if (!$dokumen && $canLookup) {
             'created_by_name' => null,
             'created_at' => $dokumen['created_at'] ?? null,
             'updated_at' => $dokumen['updated_at'] ?? null,
+        ];
+    } else {
+        // Client-side debug — dokumen not found scenario
+        $__ezdocLoadDebug = [
+            'query'  => ['template_id' => $template_id, 'norm' => $param_norm, 'nopen' => $param_nopen, 'label' => $param_label, 'version' => $param_version, 'scope' => $isGeneralDoc ? 'general' : 'patient'],
+            'result' => ['found' => false, 'doc_id' => null],
+            'raw'    => null,
+            'parsed' => null,
+            'hint'   => 'Query no match — cek exact values (whitespace, case-sensitive) vs DB row',
         ];
     }
 }
@@ -677,6 +707,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['_save'])) {
             if (!$isEditMode) { $doc_id = mysqli_insert_id($conn); $isEditMode = true; }
             $dbFields = $fieldData;
             $dbTtd = $ttdData;
+            // BUG FIX: promote ke GLOBALS untuk v()/vRaw() helper functions
+            $GLOBALS['dbFields'] = $dbFields;
+            $GLOBALS['dbTtd']    = $dbTtd;
             $param_norm = $norm;
             $param_nopen = $nopen;
             $param_label = $label;
@@ -2802,10 +2835,26 @@ function renderFieldForPdf($name, $type, $val, $label) {
         window._ezdocQrUrl = function(data) {
             var base = window._ezdocEndpoint('generateQr', '?action=generate_qr');
             var sep  = base.indexOf('?') >= 0 ? '&' : '?';
-            return base + sep + 'data=' + encodeURIComponent(data);
+            // Ensure dispatcher-recognized signal (action=generate_qr) di URL.
+            // App orchestrator route ke ?ezdoc_page=action tapi dispatcher tetap
+            // butuh $_GET['action'] === 'generate_qr' untuk route ke generate_qr.php.
+            var url = base;
+            if (url.indexOf('action=generate_qr') < 0) {
+                url += sep + 'action=generate_qr';
+                sep = '&';
+            }
+            return url + sep + 'data=' + encodeURIComponent(data);
         };
     </script>
     <script>
+        // ===== EZDOC_DEBUG — client-side diagnostic bag =====
+        // Buka F12 → Console tab → ketik `EZDOC_DEBUG` untuk inspect load state.
+        // Save log akan tampil di console tiap kali klik Simpan (via saveDocument()).
+        window.EZDOC_DEBUG = window.EZDOC_DEBUG || {};
+        window.EZDOC_DEBUG.load = <?= json_encode($__ezdocLoadDebug ?? ['result' => ['found' => false], 'hint' => 'No lookup performed (missing norm/nopen or new doc)'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        window.EZDOC_DEBUG.saves = [];
+        console.log('%c[ezdoc:load]', 'color:#0e7490;font-weight:bold', window.EZDOC_DEBUG.load);
+
         const templateId = <?= $template_id ?>;
         const isEditMode = <?= $isEditMode ? 'true' : 'false' ?>;
         // editMode is driven by the document lock state (inverse of is_locked)
@@ -3036,14 +3085,22 @@ function renderFieldForPdf($name, $type, $val, $label) {
 
             try {
                 const resp = await fetch(_ezdocQrUrl(data));
-                const result = await resp.json();
+                let result;
+                try {
+                    result = await resp.json();
+                } catch (jsonErr) {
+                    // Response bukan JSON — show HTTP status + partial body untuk debug
+                    const txt = await resp.text().catch(() => '');
+                    preview.innerHTML = '<div class="p-2.5 text-red-600 text-[10px]">HTTP ' + resp.status + ' — ' + (txt.slice(0, 80) || 'no response') + '</div>';
+                    return;
+                }
                 if (result.success) {
-                    preview.innerHTML = '<img src="' + result.qr + '" class="qr-img" class="w-full h-auto" alt="QR">';
+                    preview.innerHTML = '<img src="' + result.qr + '" class="qr-img w-full h-auto" alt="QR">';
                 } else {
-                    preview.innerHTML = '<div class="p-2.5 text-red-600 text-[10px]">Error: ' + result.message + '</div>';
+                    preview.innerHTML = '<div class="p-2.5 text-red-600 text-[10px]">Error: ' + (result.message || 'unknown') + '</div>';
                 }
             } catch (e) {
-                preview.innerHTML = '<div class="p-2.5 text-red-600 text-[10px]">Error generating QR</div>';
+                preview.innerHTML = '<div class="p-2.5 text-red-600 text-[10px]">Network: ' + e.message + '</div>';
             }
         }
 
@@ -3162,8 +3219,21 @@ function renderFieldForPdf($name, $type, $val, $label) {
             } catch (e) { /* CustomEvent unsupported — skip hook */ }
 
             try {
+                // Snapshot FormData sent (client-side diagnostic)
+                const _postSnapshot = {};
+                for (const [k, v] of formData.entries()) {
+                    // Truncate long values (signature base64 dll) untuk keep console readable
+                    _postSnapshot[k] = (typeof v === 'string' && v.length > 200) ? v.slice(0, 100) + '…(' + v.length + ' chars)' : v;
+                }
+
                 const resp = await fetch(_ezdocEndpoint('save'), { method: 'POST', body: formData });
                 const data = await resp.json();
+
+                // Push diagnostic ke debug bag + console.log — F12 inspect
+                const _dbg = { post: _postSnapshot, response: data };
+                (window.EZDOC_DEBUG = window.EZDOC_DEBUG || {}).saves = (window.EZDOC_DEBUG.saves || []);
+                window.EZDOC_DEBUG.saves.push(_dbg);
+                console.log('%c[ezdoc:save]', 'color:#059669;font-weight:bold', _dbg);
 
                 if (data.success) {
                     showToast(data.message, 'success');

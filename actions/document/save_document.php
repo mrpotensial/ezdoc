@@ -108,6 +108,15 @@ foreach ($allFields as $fn => $v) {
     $fieldData[$fn] = $_POST[$fn] ?? '';
 }
 
+// Diagnostic bag — di-return di response JSON supaya user cek di F12 Console
+// (tanpa akses server error log). Non-sensitive metadata only.
+$__ezdocSaveDebug = [
+    'allFields_keys'      => array_keys($allFields),
+    'POST_keys'           => array_keys($_POST ?? []),
+    'collected_nonempty'  => array_keys(array_filter($fieldData, fn($v) => $v !== '')),
+    'field_values_count'  => count(array_filter($fieldData, fn($v) => $v !== '')),
+];
+
 // ─── TTD custom fields (mode + per-doc QR content) ───
 foreach ($configTtd as $ttd) {
     $tid = $ttd['id'];
@@ -302,4 +311,7 @@ ezdoc_respond_success([
     'verify_url' => $verifyUrl,
     'data_hash' => $hashInfo['hash'] ?? null,
     'data_hash_at' => $hashInfo['hash_at'] ?? null,
+    // Client-side debug — cek di F12 Console tanpa akses server error log.
+    // Response ini di-log ke window.EZDOC_DEBUG.saves[] oleh saveDocument() di generate.php.
+    'debug' => $__ezdocSaveDebug,
 ], 'Dokumen berhasil disimpan');
