@@ -468,7 +468,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                 <!-- Editor Wrapper (paper background) — overflow-hidden supaya cuma
                      1 scroll (di dalam TinyMCE iframe). Google Docs pattern. -->
-                <div class="bg-slate-500 p-1 flex-1 overflow-hidden" id="editorWrapper">
+                <div class="bg-slate-500 p-3 flex-1 overflow-hidden" id="editorWrapper">
                     <div class="bg-white mx-auto shadow-[0_4px_20px_rgba(0,0,0,0.3)]" id="editorContainer">
                         <textarea id="editor"><?= h($template['template_html'] ?? '') ?></textarea>
                     </div>
@@ -2015,13 +2015,16 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             // Sizing strategy (Google Docs / Notion pattern):
             //   TinyMCE fills editorWrapper viewport = window height minus top bar.
             //   Edit-area iframe scrolls internally (1 scroll only), toolbar sticky.
-            // Consumer boleh override via config atau CSS var (--ezdoc-editor-height).
+            //   Bottom gap ~5% viewport untuk breathing room (industri: Notion /
+            //   Linear editor pattern — paper tidak nempel edge viewport).
             const wrapper = document.getElementById('editorWrapper');
             const topBar = wrapper?.previousElementSibling; // dark top bar
             const topH = topBar ? topBar.offsetHeight : 60;
-            // Padding buffer (editorWrapper has p-5 = 20px each side vertically)
+            // p-5 wrapper padding = 20px top + 20px bottom
             const wrapperPadding = 40;
-            return Math.max(400, window.innerHeight - topH - wrapperPadding);
+            // Extra bottom gap — 5% viewport, min 40px, max 90px (klamp)
+            const bottomGap = Math.min(90, Math.max(40, Math.round(window.innerHeight * 0.05)));
+            return Math.max(400, window.innerHeight - topH - wrapperPadding - bottomGap);
         }
 
         tinymce.init({
