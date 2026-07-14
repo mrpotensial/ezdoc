@@ -113,6 +113,47 @@ final class DocumentRepository
     }
 
     /**
+     * List recent documents across all statuses (for main list view).
+     * Supports filter by status ('' = all) and title/norm/nopen search.
+     *
+     * @return array<int,Document>
+     */
+    public function findRecent(string $statusFilter = '', string $searchQ = '', int $limit = 100): array
+    {
+        if ($limit < 1)  $limit = 1;
+        if ($limit > 1000) $limit = 1000;
+
+        $where  = ['deleted_at IS NULL'];
+        $params = [];
+        $types  = '';
+
+        if ($statusFilter !== '' && in_array($statusFilter, ['draft', 'published', 'locked', 'archived'], true)) {
+            $where[]  = 'status = ?';
+            $types   .= 's';
+            $params[] = $statusFilter;
+        }
+        if ($searchQ !== '') {
+            $where[]  = '(title LIKE ? OR norm LIKE ? OR nopen LIKE ?)';
+            $needle   = '%' . $searchQ . '%';
+            $types   .= 'sss';
+            $params[] = $needle;
+            $params[] = $needle;
+            $params[] = $needle;
+        }
+
+        $sql = 'SELECT ' . self::$SELECT_COLS
+            . ' FROM ezdoc_documents WHERE ' . implode(' AND ', $where)
+            . ' ORDER BY id DESC LIMIT ?';
+        $types   .= 'i';
+        $params[] = $limit;
+
+        $stmt = mysqli_prepare($this->db, $sql);
+        if (!$stmt) return [];
+        mysqli_stmt_bind_param($stmt, $types, ...$params);
+        return $this->fetchMany($stmt);
+    }
+
+    /**
      * INSERT if $req->documentId is null; UPDATE otherwise.
      *
      * @throws NotFoundException   when updating a nonexistent id

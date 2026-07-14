@@ -1170,22 +1170,32 @@ if (!isset($existingCategories) || !is_array($existingCategories)) {
 
         function showToast(message, type = 'success') {
             const container = document.getElementById('toastContainer');
+            const isErr = type === 'error';
             const toast = document.createElement('div');
-            const color = type === 'error'
-                ? 'bg-red-50 border-l-4 border-red-400 text-red-800'
-                : 'bg-green-50 border-l-4 border-green-400 text-green-800';
-            toast.className = `p-3 rounded mb-2 flex items-start justify-between shadow ${color}`;
+            const color = isErr
+                ? 'bg-red-600 border-l-4 border-red-800 text-white font-semibold'
+                : 'bg-green-600 border-l-4 border-green-800 text-white';
+            toast.className = `p-4 rounded-lg mb-2 flex items-start justify-between shadow-xl min-w-[280px] max-w-[420px] ${color}`;
+            const icon = document.createElement('span');
+            icon.className = 'mr-2 text-lg leading-none';
+            icon.innerHTML = isErr ? '⚠' : '✓';
             const msgSpan = document.createElement('span');
+            msgSpan.className = 'flex-1';
             msgSpan.innerHTML = message;
             const closeBtn = document.createElement('button');
             closeBtn.type = 'button';
-            closeBtn.className = 'ml-4 text-current opacity-70 hover:opacity-100';
+            closeBtn.className = 'ml-4 text-current opacity-80 hover:opacity-100 text-xl leading-none';
             closeBtn.innerHTML = '&times;';
             closeBtn.onclick = () => toast.remove();
-            toast.appendChild(msgSpan);
+            const msgWrap = document.createElement('div');
+            msgWrap.className = 'flex items-start';
+            msgWrap.appendChild(icon);
+            msgWrap.appendChild(msgSpan);
+            toast.appendChild(msgWrap);
             toast.appendChild(closeBtn);
             container.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
+            // Error toast stays 8s (longer so user notices); success 3s.
+            setTimeout(() => toast.remove(), isErr ? 8000 : 3000);
         }
 
         // ================== QUERY DB (Tabledb) Manager ==================

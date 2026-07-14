@@ -178,8 +178,14 @@ if ($template_id <= 0) {
                             </p>
                             <?php else: ?>
                             <div class="flex flex-col rounded overflow-hidden border border-gray-200">
-                                <?php foreach ($templates as $t): ?>
-                                <a href="?template_id=<?= $t['id'] ?>" class="block px-4 py-3 border-b border-gray-200 last:border-b-0 hover:bg-gray-50 text-gray-800 transition"><?= h($t['nama_template']) ?></a>
+                                <?php
+                                // Preserve routing prefix — kalau $urlSelf udah punya `?` (mis. `?ezdoc_page=generate`),
+                                // append template_id dengan `&`, else `?`. Tanpa ini, `?template_id=X` bakal wipe
+                                // `ezdoc_page=` param dan App fallback ke default page.
+                                $__pickerJoiner = strpos($urlSelf, '?') !== false ? '&' : '?';
+                                foreach ($templates as $t):
+                                ?>
+                                <a href="<?= h($urlSelf . $__pickerJoiner . 'template_id=' . $t['id']) ?>" class="block px-4 py-3 border-b border-gray-200 last:border-b-0 hover:bg-gray-50 text-gray-800 transition"><?= h($t['nama_template']) ?></a>
                                 <?php endforeach; ?>
                             </div>
                             <?php endif; ?>
@@ -3237,12 +3243,17 @@ function renderFieldForPdf($name, $type, $val, $label) {
             }
 
             const modal = document.getElementById('verifyQrConfirmModal');
+            // Tailwind `hidden` !important — must remove class BEFORE inline display works.
+            modal.classList.remove('hidden');
             modal.style.display = 'flex';
         }
 
         function closeVerifyQrModal() {
             const modal = document.getElementById('verifyQrConfirmModal');
-            if (modal) modal.style.display = 'none';
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.style.display = 'none';
+            }
         }
 
         async function confirmVerifyQrMode() {
@@ -3392,12 +3403,18 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 else if (radioCustom) radioCustom.checked = true;
             }
 
+            // Tailwind `hidden` utility uses !important, jadi harus di-remove
+            // via classList (inline style.display='flex' tidak menang lawan !important).
+            modal.classList.remove('hidden');
             modal.style.display = 'flex';
         }
 
         function closeQrFieldModal() {
             const modal = document.getElementById('qrFieldModal');
-            if (modal) modal.style.display = 'none';
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.style.display = 'none';
+            }
             _qrFieldModalCurrentField = null;
         }
 

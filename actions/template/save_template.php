@@ -84,9 +84,14 @@ if ($template_id > 0) {
          owner_id, is_active, is_locked)
         VALUES (?, ?, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
     ");
+    if (!$stmt) {
+        ezdoc_respond_error('Prepare INSERT failed: ' . mysqli_error($conn), 500);
+    }
+    // 11 placeholders: 10s (uuid, slug, name, category, scope, content,
+    // signature_config, layout_config, verify_config, access_config) + 1i (owner_id)
     mysqli_stmt_bind_param(
         $stmt,
-        "sssssssssssi",
+        "ssssssssssi",
         $newUuid, $newSlug,
         $name, $category, $scope, $content,
         $signatureConfig, $layoutConfig, $verifyConfig, $accessConfig,
@@ -115,5 +120,7 @@ if (mysqli_stmt_execute($stmt)) {
         'id' => $newId,
     ]);
 } else {
-    ezdoc_respond_error('Gagal menyimpan: ' . mysqli_error($conn));
+    $err = mysqli_stmt_error($stmt) ?: mysqli_error($conn);
+    if ($err === '') $err = 'Unknown DB error (check server error log)';
+    ezdoc_respond_error('Gagal menyimpan: ' . $err, 500);
 }

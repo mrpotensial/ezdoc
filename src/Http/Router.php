@@ -192,11 +192,31 @@ final class Router
 
     public function handleList(RequestContext $req, ResponseWriter $res): ?string
     {
+        $qParam      = (string) $req->query('q', '');
+        $statusParam = (string) $req->query('status', '');
+
+        // Priority 1: runtime.documents kalau consumer inject (test/mock scenarios).
+        $documents = $this->config->get('runtime.documents');
+        if (!is_array($documents)) {
+            $documents = [];
+            // Priority 2: kalau db mysqli available, auto-query real docs via Repository.
+            // (SQLite/PDO belum di-support di Repository — pending v0.9.9 DB abstraction.)
+            if ($this->db instanceof \mysqli) {
+                try {
+                    $repo = new \Ezdoc\Document\DocumentRepository($this->db);
+                    $documents = $repo->findRecent($statusParam, $qParam, 100);
+                } catch (\Throwable $e) {
+                    // Query failed (mis. table not migrated yet) — silent empty
+                    $documents = [];
+                }
+            }
+        }
+
         return $this->renderView(__DIR__ . '/../../views/document/list.php', [
-            'documents' => $this->config->get('runtime.documents', []),
+            'documents' => $documents,
             'filters'   => [
-                'q'      => (string) $req->query('q', ''),
-                'status' => (string) $req->query('status', ''),
+                'q'      => $qParam,
+                'status' => $statusParam,
             ],
             'baseUrl'   => (string) $this->config->get('app.base_path', ''),
         ], $res);
