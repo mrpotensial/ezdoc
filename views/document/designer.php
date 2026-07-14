@@ -478,63 +478,79 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             </div>
 
             <!-- Sidebar -->
-            <div class="w-full md:w-1/3 lg:w-1/4 bg-white h-screen overflow-y-auto p-3">
-                <?= \Ezdoc\UI\Slot::render('designer:sidebar-header', ['template' => $template]) ?>
-                <!-- Page Settings -->
-                <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-2.5">
-                    <h6 class="text-base font-semibold mb-2"><i class="bi bi-file-earmark mr-1"></i>Ukuran Kertas</h6>
-                    <select class="w-full rounded border-gray-300 shadow-sm text-xs mb-2 px-2 py-1" id="paperSize" onchange="updatePageSize()">
-                        <option value="A4">A4 (210 x 297 mm)</option>
-                        <option value="A5">A5 (148 x 210 mm)</option>
-                        <option value="Letter">Letter (216 x 279 mm)</option>
-                        <option value="Legal">Legal (216 x 356 mm)</option>
-                        <option value="F4">F4/Folio (215 x 330 mm)</option>
-                        <option value="Custom">Custom...</option>
-                    </select>
-                    <!-- Custom Size -->
-                    <div id="customSizePanel" class="grid grid-cols-2 gap-1 mb-2" style="display:none;">
-                        <div>
-                            <label class="block text-xs text-gray-700 mb-0">Lebar (mm)</label>
-                            <input type="number" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1" id="customWidth" value="210" min="50" max="500" oninput="updatePageSize()">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-700 mb-0">Tinggi (mm)</label>
-                            <input type="number" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1" id="customHeight" value="297" min="50" max="500" oninput="updatePageSize()">
+            <div class="w-full md:w-1/3 lg:w-1/4 bg-white h-screen overflow-y-auto border-l border-gray-200">
+                <div class="px-3">
+                    <?= \Ezdoc\UI\Slot::render('designer:sidebar-header', ['template' => $template]) ?>
+                </div>
+                <!-- Kertas Panel (Collapsible — collapse default after first setup) -->
+                <div class="border-b border-gray-200" x-data="{ open: false }">
+                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
+                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-file-earmark"></i>Kertas</h6>
+                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
+                    </div>
+                    <div x-show="open" x-collapse>
+                        <div class="px-3 pb-3 space-y-2">
+                            <select class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="paperSize" onchange="updatePageSize()">
+                                <option value="A4">A4 (210 x 297 mm)</option>
+                                <option value="A5">A5 (148 x 210 mm)</option>
+                                <option value="Letter">Letter (216 x 279 mm)</option>
+                                <option value="Legal">Legal (216 x 356 mm)</option>
+                                <option value="F4">F4/Folio (215 x 330 mm)</option>
+                                <option value="Custom">Custom...</option>
+                            </select>
+                            <div id="customSizePanel" class="grid grid-cols-2 gap-1.5" style="display:none;">
+                                <div>
+                                    <label class="block text-[10px] text-gray-500 mb-0.5">Lebar (mm)</label>
+                                    <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="customWidth" value="210" min="50" max="500" oninput="updatePageSize()">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] text-gray-500 mb-0.5">Tinggi (mm)</label>
+                                    <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="customHeight" value="297" min="50" max="500" oninput="updatePageSize()">
+                                </div>
+                            </div>
+                            <div class="inline-flex w-full rounded-md overflow-hidden border border-gray-300" role="group">
+                                <input type="radio" class="hidden peer/portrait" name="orientation" id="orientPortrait" value="portrait" checked onchange="updatePageSize()">
+                                <label class="flex-1 text-center text-xs px-2 py-1.5 cursor-pointer bg-white hover:bg-gray-50 peer-checked/portrait:bg-gray-800 peer-checked/portrait:text-white" for="orientPortrait">Portrait</label>
+                                <input type="radio" class="hidden peer/landscape" name="orientation" id="orientLandscape" value="landscape" onchange="updatePageSize()">
+                                <label class="flex-1 text-center text-xs px-2 py-1.5 cursor-pointer bg-white hover:bg-gray-50 peer-checked/landscape:bg-gray-800 peer-checked/landscape:text-white border-l border-gray-300" for="orientLandscape">Landscape</label>
+                            </div>
                         </div>
                     </div>
-                    <!-- Orientation -->
-                    <div class="inline-flex w-full mb-2 rounded overflow-hidden border border-gray-300" role="group">
-                        <input type="radio" class="hidden peer/portrait" name="orientation" id="orientPortrait" value="portrait" checked onchange="updatePageSize()">
-                        <label class="flex-1 text-center text-xs px-2 py-1 cursor-pointer bg-gray-50 hover:bg-gray-100 peer-checked/portrait:bg-gray-700 peer-checked/portrait:text-white" for="orientPortrait"><i class="bi bi-phone"></i> Portrait</label>
-                        <input type="radio" class="hidden peer/landscape" name="orientation" id="orientLandscape" value="landscape" onchange="updatePageSize()">
-                        <label class="flex-1 text-center text-xs px-2 py-1 cursor-pointer bg-gray-50 hover:bg-gray-100 peer-checked/landscape:bg-gray-700 peer-checked/landscape:text-white border-l border-gray-300" for="orientLandscape"><i class="bi bi-phone-landscape"></i> Landscape</label>
+                </div>
+
+                <!-- Margin Panel (Collapsible) -->
+                <div class="border-b border-gray-200" x-data="{ open: false }">
+                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
+                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-border-outer"></i>Margin (mm)</h6>
+                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
                     </div>
-                    <h6 class="text-base font-semibold mb-2 mt-3"><i class="bi bi-border-outer mr-1"></i>Padding (mm)</h6>
-                    <div class="grid grid-cols-2 gap-1">
-                        <div>
-                            <label class="block text-xs text-gray-700 mb-0">Atas</label>
-                            <input type="number" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1" id="padTop" value="20" min="0" max="100" oninput="updatePageSize()">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-700 mb-0">Bawah</label>
-                            <input type="number" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1" id="padBottom" value="20" min="0" max="100" oninput="updatePageSize()">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-700 mb-0">Kiri</label>
-                            <input type="number" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1" id="padLeft" value="20" min="0" max="100" oninput="updatePageSize()">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-700 mb-0">Kanan</label>
-                            <input type="number" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1" id="padRight" value="20" min="0" max="100" oninput="updatePageSize()">
+                    <div x-show="open" x-collapse>
+                        <div class="px-3 pb-3 grid grid-cols-2 gap-1.5">
+                            <div>
+                                <label class="block text-[10px] text-gray-500 mb-0.5">Atas</label>
+                                <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="padTop" value="20" min="0" max="100" oninput="updatePageSize()">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] text-gray-500 mb-0.5">Bawah</label>
+                                <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="padBottom" value="20" min="0" max="100" oninput="updatePageSize()">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] text-gray-500 mb-0.5">Kiri</label>
+                                <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="padLeft" value="20" min="0" max="100" oninput="updatePageSize()">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] text-gray-500 mb-0.5">Kanan</label>
+                                <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="padRight" value="20" min="0" max="100" oninput="updatePageSize()">
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Field Panel (Collapsible) -->
-                <div class="bg-slate-50 border border-slate-200 rounded-lg p-0 mb-2.5" x-data="{ open: true }">
-                    <div class="panel-header cursor-pointer bg-gray-50 hover:bg-gray-200 border-b border-gray-200 flex justify-between items-center p-2" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
-                        <h6 class="mb-0 text-xs font-semibold"><i class="bi bi-input-cursor-text mr-1"></i>Fields <span id="fieldCount" class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800">0</span></h6>
-                        <i class="bi bi-chevron-down collapse-icon"></i>
+                <div class="border-b border-gray-200" x-data="{ open: true }">
+                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
+                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-input-cursor-text"></i>Fields <span id="fieldCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
+                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
                     </div>
                     <div x-show="open" x-collapse>
                         <div class="p-2 pt-0">
@@ -557,10 +573,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- Logo Panel (Collapsible) -->
-                <div class="bg-slate-50 border border-slate-200 rounded-lg p-0 mb-2.5" x-data="{ open: false }">
-                    <div class="panel-header cursor-pointer bg-gray-50 hover:bg-gray-200 border-b border-gray-200 flex justify-between items-center p-2" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
-                        <h6 class="mb-0 text-xs font-semibold"><i class="bi bi-image mr-1"></i>Logo <span id="logoCount" class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800">0</span></h6>
-                        <i class="bi bi-chevron-down collapse-icon"></i>
+                <div class="border-b border-gray-200" x-data="{ open: false }">
+                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
+                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-image"></i>Logo <span id="logoCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
+                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
                     </div>
                     <div x-show="open" x-collapse>
                         <div class="p-2 pt-0">
@@ -573,10 +589,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- TTD Panel (Collapsible) -->
-                <div class="bg-slate-50 border border-slate-200 rounded-lg p-0 mb-2.5" x-data="{ open: false }">
-                    <div class="panel-header cursor-pointer bg-gray-50 hover:bg-gray-200 border-b border-gray-200 flex justify-between items-center p-2" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
-                        <h6 class="mb-0 text-xs font-semibold"><i class="bi bi-pen mr-1"></i>Tanda Tangan <span id="ttdCount" class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-800">0</span></h6>
-                        <i class="bi bi-chevron-down collapse-icon"></i>
+                <div class="border-b border-gray-200" x-data="{ open: false }">
+                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
+                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-pen"></i>Tanda Tangan <span id="ttdCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
+                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
                     </div>
                     <div x-show="open" x-collapse>
                         <div class="p-2 pt-0">
@@ -596,10 +612,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- Materai Panel (Collapsible) -->
-                <div class="bg-slate-50 border border-slate-200 rounded-lg p-0 mb-2.5" x-data="{ open: false }">
-                    <div class="panel-header cursor-pointer bg-gray-50 hover:bg-gray-200 border-b border-gray-200 flex justify-between items-center p-2" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
-                        <h6 class="mb-0 text-xs font-semibold text-[#c2410c]"><i class="bi bi-stamp mr-1"></i>Materai <span id="materaiCount" class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-[#c2410c] text-white">0</span></h6>
-                        <i class="bi bi-chevron-down collapse-icon"></i>
+                <div class="border-b border-gray-200" x-data="{ open: false }">
+                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
+                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-stamp"></i>Materai <span id="materaiCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
+                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
                     </div>
                     <div x-show="open" x-collapse>
                         <div class="p-2 pt-0">
@@ -619,10 +635,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- Query DB Panel (Collapsible) -->
-                <div class="bg-slate-50 border border-slate-200 rounded-lg p-0 mb-2.5" x-data="{ open: false }">
-                    <div class="panel-header cursor-pointer bg-gray-50 hover:bg-gray-200 border-b border-gray-200 flex justify-between items-center p-2" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
-                        <h6 class="mb-0 text-xs font-semibold text-cyan-700"><i class="bi bi-database mr-1"></i>Query DB <span id="tabledbCount" class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-cyan-700 text-white">0</span></h6>
-                        <i class="bi bi-chevron-down collapse-icon"></i>
+                <div class="border-b border-gray-200" x-data="{ open: false }">
+                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
+                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-database"></i>Query DB <span id="tabledbCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
+                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
                     </div>
                     <div x-show="open" x-collapse>
                         <div class="p-2 pt-0">
@@ -637,10 +653,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- QR Panel (Collapsible) -->
-                <div class="bg-slate-50 border border-slate-200 rounded-lg p-0 mb-2.5" x-data="{ open: false }">
-                    <div class="panel-header cursor-pointer bg-gray-50 hover:bg-gray-200 border-b border-gray-200 flex justify-between items-center p-2" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
-                        <h6 class="mb-0 text-xs font-semibold"><i class="bi bi-qr-code mr-1"></i>QR Code <span id="qrCount" class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-cyan-100 text-cyan-800">0</span></h6>
-                        <i class="bi bi-chevron-down collapse-icon"></i>
+                <div class="border-b border-gray-200" x-data="{ open: false }">
+                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
+                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-qr-code"></i>QR Code <span id="qrCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
+                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
                     </div>
                     <div x-show="open" x-collapse>
                         <div class="p-2 pt-0">
@@ -654,9 +670,9 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                 <!-- Konfigurasi Verifikasi Publik (Collapsible) -->
                 <div class="bg-slate-50 border border-slate-200 rounded-lg p-0 mb-2.5" x-data="{ open: false }" x-init="$watch('open', v => { if(v) window.dispatchEvent(new CustomEvent('verify-panel-shown')) })">
-                    <div class="panel-header cursor-pointer bg-gray-50 hover:bg-gray-200 border-b border-gray-200 flex justify-between items-center p-2" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
-                        <h6 class="mb-0 text-xs font-semibold text-sky-700"><i class="bi bi-shield-check mr-1"></i>Konfig Verifikasi <span id="verifyFieldCount" class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800">0</span></h6>
-                        <i class="bi bi-chevron-down collapse-icon"></i>
+                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
+                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-shield-check"></i>Konfig Verifikasi <span id="verifyFieldCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
+                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
                     </div>
                     <div x-show="open" x-collapse id="verifyConfigCollapse">
                         <div class="p-2 pt-0">
@@ -697,10 +713,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- Konfigurasi Akses Template (Collapsible) - RBAC per template -->
-                <div class="bg-slate-50 border border-slate-200 rounded-lg p-0 mb-2.5" x-data="{ open: false }">
-                    <div class="panel-header cursor-pointer bg-gray-50 hover:bg-gray-200 border-b border-gray-200 flex justify-between items-center p-2" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
-                        <h6 class="mb-0 text-xs font-semibold text-emerald-800"><i class="bi bi-lock-fill mr-1"></i>Konfig Akses <span id="accessConfigCount" class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800">0</span></h6>
-                        <i class="bi bi-chevron-down collapse-icon"></i>
+                <div class="border-b border-gray-200" x-data="{ open: false }">
+                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
+                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-lock-fill"></i>Konfig Akses <span id="accessConfigCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
+                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
                     </div>
                     <div x-show="open" x-collapse>
                         <div class="p-2 pt-0">
