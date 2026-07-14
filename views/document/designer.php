@@ -466,10 +466,12 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                 <input type="hidden" id="templateId" value="<?= $template['id'] ?? 0 ?>">
 
-                <!-- Editor Wrapper (paper background) — overflow-hidden supaya cuma
-                     1 scroll (di dalam TinyMCE iframe). Google Docs pattern. -->
-                <div class="bg-slate-500 p-3 flex-1 overflow-hidden" id="editorWrapper">
-                    <div class="bg-white mx-auto shadow-[0_4px_20px_rgba(0,0,0,0.3)]" id="editorContainer">
+                <!-- Editor Wrapper — paper visualization pindah ke iframe body CSS
+                     (Google Docs pattern). Wrapper cuma flex container, TinyMCE
+                     iframe handle paper card + gray backdrop consistent di normal
+                     + fullscreen mode. -->
+                <div class="flex-1 overflow-hidden" id="editorWrapper">
+                    <div class="w-full h-full" id="editorContainer">
                         <textarea id="editor"><?= h($template['template_html'] ?? '') ?></textarea>
                     </div>
                 </div>
@@ -1502,28 +1504,28 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             configHeader.orientation = orientation;
             configHeader.padding = { top: padTop, right: padRight, bottom: padBottom, left: padLeft };
 
+            // editorContainer: simplified — TinyMCE widget fills wrapper.
+            // Paper visualization diberikan oleh iframe body CSS (Google Docs pattern).
             const container = document.getElementById('editorContainer');
             if (container) {
-                container.style.width = paperWidth + 'mm';
-                // Container height = auto-fit dari TinyMCE widget (viewport-fill).
-                // Paper visualization diberikan oleh iframe BODY minHeight (di bawah).
-                // Kalau kita set minHeight paper size di editorContainer, dia jadi
-                // lebih tinggi dari viewport → editorWrapper scroll = 2 scroll.
-                container.style.minHeight = '';
+                container.style.width = '100%';       // fill wrapper (was: paper width)
+                container.style.minHeight = '';       // TinyMCE controls height
             }
 
-            // Update TinyMCE body padding — paper dimensions untuk PDF export.
+            // Update TinyMCE iframe body — paper dimensions + padding via inline style.
             const editor = tinymce.get('editor');
             if (editor) {
                 const iframe = editor.getContainer().querySelector('iframe');
                 if (iframe && iframe.contentDocument) {
                     const body = iframe.contentDocument.body;
+                    // Padding = paper margin (dompdf will read same values untuk export)
                     body.style.padding = `${padTop}mm ${padRight}mm ${padBottom}mm ${padLeft}mm`;
+                    // max-width = paper width (constrains body to paper card look)
+                    body.style.maxWidth = paperWidth + 'mm';
                     body.style.minHeight = (paperHeight - padTop - padBottom) + 'mm';
                 }
 
-                // TinyMCE widget height = viewport-fill (getEditorHeight), NOT paper
-                // height. Iframe scrolls internally kalau content > viewport.
+                // TinyMCE widget height = viewport-fill (getEditorHeight).
                 const editorContainer = editor.getContainer();
                 if (editorContainer) {
                     editorContainer.style.height = getEditorHeight() + 'px';
@@ -2094,11 +2096,24 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             // Prevent cleanup of styles and classes
             valid_children: '+body[style|div|span],+div[style|div|span|p]',
             content_style: `
+                /* Google Docs pattern — paper visualization DI DALAM iframe:
+                   - html = gray backdrop (fills iframe viewport)
+                   - body = paper card (fixed width A4, centered on backdrop)
+                   Consistent di normal + fullscreen mode (TinyMCE tidak override
+                   iframe internal CSS). */
+                html {
+                    background: #64748b;
+                    padding: 20px 0;
+                    box-sizing: border-box;
+                }
                 body {
                     font-family: "Times New Roman", serif;
                     font-size: 12pt;
                     line-height: 1.6;
-                    margin: 0;
+                    max-width: 210mm;      /* A4 width — updated dinamis via updatePageSize() */
+                    margin: 0 auto;         /* center on gray backdrop */
+                    background: white;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
                     box-sizing: border-box;
                     position: relative;
                 }
