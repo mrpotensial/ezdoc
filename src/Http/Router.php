@@ -249,11 +249,15 @@ final class Router
         if (!in_array($action, ['list', 'create', 'edit'], true)) {
             $action = 'list';
         }
+        // List mode → fragment (layout.php wraps dengan primary nav).
+        // Editor mode (create/edit) → full page (own layout, no nav).
+        // Industri: Rails render partial / Symfony partial-vs-full toggle.
         return $this->renderView(__DIR__ . '/../../views/document/designer.php', [
-            'action'      => $action,
-            'id'          => (int) $req->query('id', 0),
-            'message'     => '',
-            'messageType' => '',
+            'action'           => $action,
+            'id'               => (int) $req->query('id', 0),
+            'message'          => '',
+            'messageType'      => '',
+            '__ezdoc_fragment' => ($action === 'list'),
         ], $res);
     }
 
@@ -263,7 +267,12 @@ final class Router
         if (!defined('EZDOC_APP_ORCHESTRATED')) {
             define('EZDOC_APP_ORCHESTRATED', true);
         }
-        return $this->renderView(__DIR__ . '/../../views/document/generate.php', [], $res);
+        // Picker mode (template_id <= 0) → fragment. Full render (template_id > 0)
+        // → full page (dompdf-oriented, own layout).
+        $templateId = (int) $req->query('template_id', 0);
+        return $this->renderView(__DIR__ . '/../../views/document/generate.php', [
+            '__ezdoc_fragment' => ($templateId <= 0),
+        ], $res);
     }
 
     public function handleNewDocument(RequestContext $req, ResponseWriter $res): ?string

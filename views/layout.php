@@ -61,6 +61,9 @@ $pageTitle = isset($title) && $title !== ''
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.13.5/dist/cdn.min.js"></script>
 
+<!-- Bootstrap Icons — dipakai designer + generate icons (bi bi-*) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
 <!-- Ezdoc component tokens + @apply patterns -->
 <link rel="stylesheet" href="<?= htmlspecialchars($theme->assetUrl('css/ezdoc.css'), ENT_QUOTES, 'UTF-8') ?>">
 
@@ -83,14 +86,69 @@ $pageTitle = isset($title) && $title !== ''
 <?= \Ezdoc\UI\Slot::render('layout:head-extra') ?>
 </head>
 <body class="min-h-full bg-gray-50 text-gray-900 antialiased" style="font-family: var(--ezdoc-font);">
-    <header class="bg-white border-b border-gray-200 shadow-sm">
-        <div class="max-w-7xl mx-auto flex items-center gap-3 px-4 sm:px-6 lg:px-8 py-3">
-            <?php if ($logo = $theme->getLogoUrl()): ?>
-                <img src="<?= htmlspecialchars($logo, ENT_QUOTES, 'UTF-8') ?>" alt="" class="h-8 w-auto">
-            <?php endif; ?>
-            <strong class="text-lg font-semibold" style="color: var(--ezdoc-primary);">
-                <?= htmlspecialchars((string) $config->get('brand.app_name', 'Ezdoc'), ENT_QUOTES, 'UTF-8') ?>
-            </strong>
+    <header class="bg-white border-b border-gray-200">
+        <div class="max-w-7xl mx-auto flex items-stretch px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center gap-3 py-4 pr-6">
+                <?php if ($logo = $theme->getLogoUrl()): ?>
+                    <img src="<?= htmlspecialchars($logo, ENT_QUOTES, 'UTF-8') ?>" alt="" class="h-7 w-auto">
+                <?php endif; ?>
+                <span class="text-base font-semibold tracking-tight text-gray-900">
+                    <?= htmlspecialchars((string) $config->get('brand.app_name', 'Ezdoc'), ENT_QUOTES, 'UTF-8') ?>
+                </span>
+            </div>
+
+            <?php
+            // Primary nav — industri pattern minimalist (Notion / Linear / Adminer):
+            // clean sans-serif labels, subtle underline for active state, no emoji.
+            // Consumer bisa hide via layout.nav.enabled=false, custom items via
+            // layout.nav.items, atau replace via slot 'layout:nav-replace'.
+            $navEnabled = (bool) $config->get('layout.nav.enabled', true);
+            if ($navEnabled):
+                $qk       = (string) $config->get('app.query_key', 'ezdoc_page');
+                $base     = (string) $config->get('app.base_path', '');
+                $join     = (strpos($base, '?') === false) ? '?' : '&';
+                $navItems = $config->get('layout.nav.items');
+                if (!is_array($navItems)) {
+                    $navItems = [
+                        ['label' => 'Documents', 'page' => 'list'],
+                        ['label' => 'Templates', 'page' => 'designer'],
+                        ['label' => 'Create',    'page' => 'generate'],
+                    ];
+                }
+                $currentPage = '';
+                if (isset($_GET[$qk]) && is_string($_GET[$qk])) {
+                    $currentPage = $_GET[$qk];
+                }
+                $navReplace = \Ezdoc\UI\Slot::render('layout:nav-replace');
+                if ($navReplace !== ''): ?>
+                    <nav class="ml-8 flex items-center gap-6"><?= $navReplace ?></nav>
+                <?php else: ?>
+                    <nav class="ml-8 hidden md:flex items-center gap-1 self-stretch" aria-label="Primary">
+                        <?php foreach ($navItems as $item):
+                            $itemPage  = (string) ($item['page'] ?? '');
+                            $itemLabel = (string) ($item['label'] ?? $itemPage);
+                            $itemHref  = isset($item['url'])
+                                ? (string) $item['url']
+                                : ($base . $join . $qk . '=' . rawurlencode($itemPage));
+                            $active    = ($currentPage === $itemPage);
+                            $cls       = $active
+                                ? 'text-gray-900 border-b-2'
+                                : 'text-gray-500 hover:text-gray-900 border-b-2 border-transparent';
+                            $activeStyle = $active ? 'border-color: var(--ezdoc-primary);' : '';
+                        ?>
+                            <a href="<?= htmlspecialchars($itemHref, ENT_QUOTES, 'UTF-8') ?>"
+                               class="inline-flex items-center px-3 text-sm font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-gray-400 <?= $cls ?>"
+                               style="<?= $activeStyle ?>"
+                               <?= $active ? 'aria-current="page"' : '' ?>>
+                                <?= htmlspecialchars($itemLabel, ENT_QUOTES, 'UTF-8') ?>
+                            </a>
+                        <?php endforeach; ?>
+                        <?= \Ezdoc\UI\Slot::render('layout:nav-extra') ?>
+                    </nav>
+                <?php endif;
+            endif;
+            ?>
+
             <div class="ml-auto flex items-center gap-3">
                 <?= \Ezdoc\UI\Slot::render('layout:header-extra') ?>
             </div>

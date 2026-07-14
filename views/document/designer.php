@@ -95,6 +95,19 @@ $urlBackLink       = (string) $config->get('urls.back',                         
 $designerPageTitle = (string) $config->get('designer.page_title', 'Template Designer');
 $designerListTitle = (string) $config->get('designer.list_title', 'Templates');
 $designerShowBack  = $urlBackLink !== '';
+// Back button di editor mode (create/edit) natural pointing ke templates list.
+// Priority: urls.back explicit → urls.designer (App default = ?ezdoc_page=designer)
+// → urls.list (self action=list) fallback ultima.
+// NOTE: App-orchestrated context, urls.list maps ke DOCUMENTS list not templates —
+// jadi kita prefer urls.designer supaya "back" tetap di designer scope.
+$urlDesignerNav    = (string) $config->get('urls.designer', '');
+if ($urlBackLink !== '') {
+    $urlEditorBack = $urlBackLink;
+} elseif ($urlDesignerNav !== '') {
+    $urlEditorBack = $urlDesignerNav;
+} else {
+    $urlEditorBack = $urlList;
+}
 
 // Consolidated URL bag for JS (data-attribute injection)
 $ezdocUrls = [
@@ -167,7 +180,12 @@ if (!isset($existingCategories) || !is_array($existingCategories)) {
         while ($cr = mysqli_fetch_assoc($catRes)) $existingCategories[] = $cr['category'];
     }
 }
+
+// Fragment mode: list mode wrapped oleh layout.php (dapat primary nav).
+// Editor mode selalu full page (dompdf + TinyMCE punya assumption own layout).
+$__ezdoc_isFragment = !empty($__ezdoc_fragment);
 ?>
+<?php if (!$__ezdoc_isFragment): ?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -218,6 +236,7 @@ if (!isset($existingCategories) || !is_array($existingCategories)) {
     </style>
 </head>
 <body>
+<?php endif; /* !$__ezdoc_isFragment */ ?>
     <div class="fixed top-5 right-5 z-[9999]" id="toastContainer"></div>
 
     <?php if ($action === 'list'): ?>
@@ -231,7 +250,7 @@ if (!isset($existingCategories) || !is_array($existingCategories)) {
         <?php endif; ?>
 
         <div class="bg-white rounded-lg shadow border border-gray-200">
-            <div class="px-4 py-3 border-b border-gray-200 flex justify-between items-center text-white rounded-t-lg bg-primary">
+            <div class="px-4 py-3 border-b border-gray-200 flex justify-between items-center rounded-t-lg bg-primary">
                 <span class="flex items-center"><i class="bi bi-file-earmark-text mr-2"></i><?= h($designerListTitle) ?></span>
                 <div class="flex items-center gap-2">
                     <?php if ($designerShowBack): ?>
@@ -401,7 +420,7 @@ if (!isset($existingCategories) || !is_array($existingCategories)) {
                 <!-- Top Bar -->
                 <div class="bg-gray-900 text-white p-2 flex justify-between items-center shrink-0">
                     <div class="flex items-center flex-wrap gap-1.5">
-                        <a href="<?= h($urlBackLink) ?>" class="inline-flex items-center px-2 py-1 rounded text-xs border border-white text-white hover:bg-white/10"><i class="bi bi-arrow-left"></i></a>
+                        <a href="<?= h($urlEditorBack) ?>" class="inline-flex items-center px-2 py-1 rounded text-xs border border-white text-white hover:bg-white/10" title="Kembali ke daftar template"><i class="bi bi-arrow-left"></i></a>
                         <input type="text" id="namaTemplate" class="rounded border-gray-300 shadow-sm text-xs px-2 py-1 text-gray-900 w-[220px]" value="<?= h($template['nama_template'] ?? '') ?>" placeholder="Nama Template *">
                         <input type="text" id="templateCategory" list="categoryList" class="rounded border-gray-300 shadow-sm text-xs px-2 py-1 text-gray-900 w-[160px]" value="<?= h($template['category'] ?? '') ?>" placeholder="Kategori (opsional)" title="Kategori/folder pengelompokan template" maxlength="100">
                         <datalist id="categoryList">
@@ -1167,7 +1186,7 @@ if (!isset($existingCategories) || !is_array($existingCategories)) {
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
         }
-
+ 
         function showToast(message, type = 'success') {
             const container = document.getElementById('toastContainer');
             const isErr = type === 'error';
@@ -4637,5 +4656,7 @@ if (!isset($existingCategories) || !is_array($existingCategories)) {
             }
         });
     </script>
+<?php if (!$__ezdoc_isFragment): ?>
 </body>
 </html>
+<?php endif; ?>

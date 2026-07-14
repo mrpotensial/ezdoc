@@ -154,7 +154,10 @@ if ($template_id <= 0) {
             while ($row = mysqli_fetch_assoc($result)) $templates[] = $row;
         }
     }
+    // Fragment mode: picker di-wrap layout.php (dapat primary nav).
+    $__ezdoc_isFragment = !empty($__ezdoc_fragment);
     ?>
+    <?php if (!$__ezdoc_isFragment): ?>
     <!DOCTYPE html>
     <html lang="id">
     <head>
@@ -164,6 +167,7 @@ if ($template_id <= 0) {
         <!-- Alpine.js NOT loaded here — template picker uses zero interactivity, keep bundle lean. -->
     </head>
     <body class="bg-gray-100 min-h-screen">
+    <?php endif; ?>
         <div class="max-w-7xl mx-auto px-4 py-12">
             <div class="flex flex-wrap justify-center">
                 <div class="w-full md:w-1/2 px-2">
@@ -203,10 +207,15 @@ if ($template_id <= 0) {
                 </div>
             </div>
         </div>
+    <?php if (!$__ezdoc_isFragment): ?>
     </body>
     </html>
+    <?php endif; ?>
     <?php
-    exit;
+    // return (bukan exit) supaya kalau di-include Router::renderView, ob buffer
+    // captured untuk layout wrapping. Di standalone mode, return top-level sama
+    // efeknya dengan exit (script terminates cleanly).
+    return;
 }
 
 // Load template — pakai alias supaya kode rendering existing tetap works
