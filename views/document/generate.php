@@ -2690,7 +2690,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     <button type="button" class="btn-success col-span-2 !m-0 !py-1.5 !text-[12px]" onclick="submitForm()" <?= $param_is_locked ? 'disabled title="Locked - tidak bisa update"' : '' ?>>
                         <?= $isEditMode ? ($param_is_locked ? '🔒 Locked' : 'Update') : 'Simpan Baru' ?>
                     </button>
-                    <button type="button" class="!m-0 !py-1.5 !text-[12px]" onclick="window.print()" title="Print (Ctrl+P)"><i class="bi bi-printer"></i></button>
+                    <button type="button" class="!m-0 !py-1.5 !px-1 !text-[11px]" onclick="window.print()" title="Print (Ctrl+P)"><i class="bi bi-printer"></i> Print</button>
                 </div>
 
                 <?php // Slot: toolbar-extra-actions — consumer buttons (Export Excel, WhatsApp, Email PDF, e-Sign, Copy Link) ?>
