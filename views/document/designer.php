@@ -1,7 +1,7 @@
 ﻿<?php
 /**
  * ezdoc/views/document/designer.php — full-featured WYSIWYG template designer.
- * Ported dari form_pembuat_surat_v3.php (SIMRS reference implementation).
+ * Ported dari reference implementation (monolith consumer app).
  *
  * Expected vars in scope:
  *   @var \Ezdoc\Context      $ctx      DB + role provider
@@ -22,7 +22,7 @@
  */
 
 // ═══════════════════════════════════════════════════════════════
-// Bootstrap fallback — support standalone invocation dari SIMRS page/
+// Bootstrap fallback — support standalone invocation dari consumer's page/ dir
 // (kalau consumer wire manual, $ctx sudah ter-inject sebelum include ini)
 // ═══════════════════════════════════════════════════════════════
 if (!isset($ctx) || !($ctx instanceof \Ezdoc\Context)) {
@@ -45,7 +45,7 @@ if (!isset($config) || !($config instanceof \Ezdoc\UI\Config)) {
     $config = new \Ezdoc\UI\Config([]);
 }
 
-// SIMRS globals → abstracted via Context
+// Consumer-app globals → abstracted via Context DI
 $conn              = $ctx->db;
 $author_id         = $ctx->roleProvider->currentUserId();
 $author_role_array = $ctx->roleProvider->currentUserRoles();

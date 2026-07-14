@@ -324,7 +324,7 @@ Until then, follow the Plain PHP pattern below inside a Laravel controller.
 
 ### Plain PHP monolith (available now)
 
-The starter setup used by SIMpel:
+Example starter setup for a plain PHP monolith consumer app:
 
 ```php
 // bootstrap.php — run once per request, e.g. from index.php

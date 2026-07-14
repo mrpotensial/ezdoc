@@ -156,7 +156,7 @@ File di-akses langsung (bypass `index.php?page=...` router yang biasanya load `k
 
 ### Added — Portable DB helper (`ezdoc/lib/db_helpers.php`)
 
-Industry-standard prepared-statement wrapper untuk consumer library user yang tidak punya legacy SIMRS `query()` global function.
+Industry-standard prepared-statement wrapper untuk consumer library user yang tidak punya legacy monolith `query()` global function.
 
 **Preference order (best → worst)**:
 1. Repository classes (`Ezdoc\Document\DocumentRepository`, dll) — v0.4+ pattern
@@ -219,8 +219,8 @@ Industry-standard shift dari Bootstrap ke Tailwind CSS (utility-first, dominant 
 Grep menunjukkan **4,114 `query()` calls** di seluruh pengeluaran/ folder (bukan cuma ezdoc). Wholesale migration ke prepared statements = weeks of refactor + high regression risk. Library scope untuk ezdoc:
 - ✅ `ezdoc/lib/db_helpers.php` provides portable alternatives
 - ✅ Repository classes (v0.4+) sudah pakai prepared statements internally
-- ❌ Existing SIMRS pages tetap pakai `query()` — that's consumer legacy code, not library concern
-- ✅ Consumer library user (non-SIMRS) dapat pakai `ezdoc_query_prepared()` atau Repository directly
+- ❌ Existing monolith consumer pages tetap pakai `query()` — that's consumer legacy code, not library concern
+- ✅ Consumer library user (framework or fresh install) dapat pakai `ezdoc_query_prepared()` atau Repository directly
 
 ## [0.7.0] - 2026-07-10 — "PSrE integration foundation (Envelope + HttpClient + Peruri/Privy stubs)"
 
@@ -365,7 +365,7 @@ Consumer publish + edit — atau bangun sendiri di atas action endpoints:
   - Level 3: View publish (1-2 jam) — `php cli/publish.php` example
   - Level 4: Full UI replacement — 4-layer architecture diagram + `Ezdoc.postJson()` sample
   - Slot registry (8 named slots documented) — PHP + JS registration + priority notes
-  - Framework adapters: Laravel (pointer v0.5), Plain PHP monolith (SIMpel bootstrap example), WordPress plugin (shortcode + WpRoleProvider)
+  - Framework adapters: Laravel (pointer v0.5), Plain PHP monolith (koneksi.php bootstrap example), WordPress plugin (shortcode + WpRoleProvider)
 
 ### Design highlights
 - **4-tier customization pattern** (industry-standard, mirror Laravel Filament / shadcn):
@@ -377,7 +377,7 @@ Consumer publish + edit — atau bangun sendiri di atas action endpoints:
 - **CSS variable bridge**: layout `<head>` inline `<style>` inject `--ezdoc-primary` dari Config → bridge Level-1 config to Level-2 CSS override tanpa build step
 - **Blade guard**: `ViewResolver::render()` explicitly refuses `.blade.php` (throws ValidationException) karena plain include tidak bisa execute Blade — file di-resolve tapi execution blocked. Consumer yang mau Blade harus wire Laravel adapter (v0.7+).
 - **Long-running worker safe**: `Slot::reset()` explicit method untuk clear registry between requests di Swoole/RoadRunner (avoid cross-request state bleed)
-- **Zero SIMRS coupling**: semua file baru, `page/form_pembuat_surat_*_v3.php` **tidak berubah** — additive milestone
+- **Zero consumer coupling**: semua file baru, `page/form_pembuat_surat_*_v3.php` **tidak berubah** — additive milestone
 - **CLI safety**: `publish.php` CLI-only guard, path traversal rejection, auto-mkdir dengan writability verify
 
 ### Verify agent report — PASS

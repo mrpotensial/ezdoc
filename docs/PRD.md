@@ -53,6 +53,7 @@ Library ini standalone project — tidak vendor-locked ke industry manapun. Dogf
 | **Extensibility** | Consumer bisa register custom profile (mis. `hospital-id`) untuk convenience API tanpa fork core |
 | **Full-featured views** | `views/document/{designer,generate,list}.php` ported dari dogfood consumer app — WYSIWYG designer (TinyMCE), document generator (form + TTD signature + materai + PDF), list dengan RBAC filter. Publish + customize pattern (Filament-style). **Consumer install → langsung punya working editor + generator tanpa build sendiri** |
 | **Alpine.js interactivity** | All modals + dropdowns + collapse pakai gold-standard Alpine pattern (backdrop no explicit z-index, content wins via DOM order). 22 slot injection points untuk consumer extension |
+| **1-line mount pattern** | `Ezdoc\App::run($config)` works out-of-box — front controller + internal router (Filament / Livewire / Nova pattern). Zero manual wiring boilerplate (koneksi + bootstrap + URL config + wrapper page). Plus `Ezdoc\App::demo()` zero-config SQLite mode untuk instant install verification |
 | Performance | Migration idempotent, self-heal orphan registry, < 100ms untuk hot paths |
 
 ### 2.2 v2.0 — Cross-language ecosystem
@@ -156,9 +157,11 @@ Sekarang cuma **Level 1 (HMAC signature)** — cukup untuk internal tamper-detec
 
 **Gap identified**: Consumer library user butuh **working editor + generator out-of-box**. Library tanpa full views tidak akan di-adopt — majority consumer tidak akan build 9000 LOC WYSIWYG editor sendiri. Framework-only library cocok untuk consumer minority yang mau bangun sendiri.
 
-**Solution**: **v0.9.7 milestone** — port full designer + generator + list dari dogfood consumer app (post-Tailwind versions) ke `ezdoc/views/document/*.php`. Abstract SIMRS-specific globals (`query()`, `hasRole()`, `$author_id`) ke `Context` + `RoleProvider`. Add 22 slot injection points untuk consumer extension. Publish + customize pattern (industri standard: Filament, shadcn/ui).
+**Solution**: **v0.9.7 milestone** — port full designer + generator + list dari dogfood consumer app (post-Tailwind versions) ke `ezdoc/views/document/*.php`. Abstract consumer-app-specific globals (`query()`, `hasRole()`, `$author_id`) ke `Context` + `RoleProvider`. Add 22 slot injection points untuk consumer extension. Publish + customize pattern (industri standard: Filament, shadcn/ui).
 
-**Reference implementation**: SIMRS dogfood app pages sudah dogfooded end-to-end di production RSIA Anugrah — proven featureset yang consumer library user akan expect.
+**Follow-up (v0.9.8)**: Views yang di-port di v0.9.7 masih butuh manual wiring — consumer harus setup koneksi.php + bootstrap.php + URL config + wrapper page untuk dispatch. **v0.9.8** adds `Ezdoc\App` orchestrator (front controller + internal router) supaya consumer cukup 1-line `Ezdoc\App::run($config)` untuk mount semua (list, designer, generator, action, asset routes). Deprecate manual boilerplate. Adopt industri standard mount pattern (Filament, Livewire, Nova).
+
+**Reference implementation**: dogfood consumer app pages sudah dogfooded end-to-end di production — proven featureset yang consumer library user akan expect.
 
 ### 3.8 Cryptography ❌ Minimal
 
@@ -191,13 +194,14 @@ Prioritas:
 
 1. **P0** — Extract 9 inline handlers ke `actions/*.php` files
 2. **P0** — Wire proper `Exception` classes + refactor throwing sites
-3. **P1** — Implement `Ezdoc\Document\Document` + Repository + Service (OOP layer)
-4. **P1** — Implement `Ezdoc\Template\Template` + Parser + Repository
-5. **P1** — Implement `Ezdoc\Access\*` untuk RBAC yang testable & swappable
-6. **P2** — Framework adapters (Laravel service provider, WordPress plugin sample)
-7. **P2** — Comprehensive test suite (≥ 70% coverage)
-8. **P3** — API reference docs (auto-generated dari docblocks)
-9. **P3** — Legacy migration cleanup (setelah semua env migrated)
+3. **P0** — `Ezdoc\App` orchestrator (front controller + internal router) — 1-line mount, deprecate ~200 LOC manual wiring boilerplate per consumer install (v0.9.8)
+4. **P1** — Implement `Ezdoc\Document\Document` + Repository + Service (OOP layer)
+5. **P1** — Implement `Ezdoc\Template\Template` + Parser + Repository
+6. **P1** — Implement `Ezdoc\Access\*` untuk RBAC yang testable & swappable
+7. **P2** — Framework adapters (Laravel service provider, WordPress plugin sample)
+8. **P2** — Comprehensive test suite (≥ 70% coverage)
+9. **P3** — API reference docs (auto-generated dari docblocks)
+10. **P3** — Legacy migration cleanup (setelah semua env migrated)
 
 ## 5. Architecture
 
@@ -957,9 +961,11 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 
 ## 6. Roadmap
 
-**Total timeline (single dev, focused)**: ~44 weeks (~10 months) untuk v1.0 (termasuk v0.9.7 full views), tambah ~14 weeks (~3.5 bulan) untuk v2.0 = **~13 bulan** ke ecosystem cross-language.
+**Total timeline (single dev, focused)**: ~31 weeks (~7 months) untuk v1.0 (termasuk v0.9.7 full views + v0.9.8 App orchestrator), tambah ~16 weeks (~4 bulan) untuk v2.0 = ~47 weeks (**~11 bulan**) ke ecosystem cross-language.
 
 **Note on v0.9.7 (added post-review)**: Milestone ini insertion baru based on user feedback "library tanpa WYSIWYG editor tidak akan di-adopt". Port full designer + generator dari dogfood consumer app ke library views = **~3-4 weeks extra** — critical blocker untuk v1.0 realistic adoption.
+
+**Note on v0.9.8 (added post-review)**: Milestone ini insertion baru based on user feedback "manual wiring bikin path errors dan boilerplate ~200 LOC per consumer install". Industri standar (Filament, Livewire, Nova) ship 1-line `App::run()` mount pattern. `Ezdoc\App` front controller + internal router + zero-config demo = **~2-3 weeks extra** — critical for adoption ergonomics.
 
 **Fase besar**:
 
@@ -970,10 +976,11 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 | **PSrE + PDF** | v0.7 - v0.9 | ~19 weeks | Peruri, PAdES+TSA, more PSrE (Privy/VIDA) |
 | **Anchoring** | v0.9.5 | ~23 weeks | Blockchain anchor (OpenTimestamps + Polygon) |
 | **Full views** | v0.9.7 | ~27 weeks | Migrate designer + generator + list dari consumer app ke library (WYSIWYG editor + PDF gen) |
-| **Extraction** | v1.0 | ~28 weeks | Standalone PHP library di Packagist |
-| **Spec** | v1.1 | ~30 weeks | ezdoc-spec repo publik |
-| **Go port** | v1.5 | ~36 weeks | Native Go implementation |
-| **TS port** | v2.0 | ~44 weeks | Native TypeScript + Next.js sample |
+| **App orchestrator** | v0.9.8 | ~30 weeks | `Ezdoc\App::run()` 1-line mount + internal router + zero-config demo |
+| **Extraction** | v1.0 | ~31 weeks | Standalone PHP library di Packagist |
+| **Spec** | v1.1 | ~33 weeks | ezdoc-spec repo publik |
+| **Go port** | v1.5 | ~39 weeks | Native Go implementation |
+| **TS port** | v2.0 | ~47 weeks | Native TypeScript + Next.js sample |
 
 **Catatan estimation**:
 - Timeline asumsi **1 dev fokus purnawaktu**. Parallelization (mis. UI dev sambil PSrE integration) bisa potong 30-40%.
@@ -1153,7 +1160,7 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 
 ### 6.12 Milestone v0.9.7 — "Full-featured library views (designer + generator)"  ⏱ ~3-4 weeks
 
-**Goal**: Port full-featured designer + document generator UI dari dogfood consumer app (SIMRS `page/form_pembuat_surat_*_v3.php`) ke `ezdoc/views/document/` sebagai starter templates library. Consumer library user dapat WYSIWYG designer + generator out-of-box tanpa build sendiri.
+**Goal**: Port full-featured designer + document generator UI dari dogfood consumer app (reference: `page/form_pembuat_surat_*_v3.php`) ke `ezdoc/views/document/` sebagai starter templates library. Consumer library user dapat WYSIWYG designer + generator out-of-box tanpa build sendiri.
 
 **Rationale**: Library tanpa full-featured UI (designer WYSIWYG + document generator) tidak akan di-adopt. Consumer akan pilih library lain yang sudah "batteries-included". Framework-only library (v0.6.6) cocok untuk consumer yang mau bangun sendiri, tapi majority butuh working starter.
 
@@ -1163,7 +1170,7 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 
 Files yang di-migrate dari `page/*.php` → `ezdoc/views/document/*.php`:
 
-| Source (SIMRS) | Target (ezdoc library) | LOC (post-Tailwind conversion) |
+| Source (dogfood reference app) | Target (ezdoc library) | LOC (post-Tailwind conversion) |
 |----------------|------------------------|--------------------------------|
 | `page/form_pembuat_surat_v3.php` | `views/document/designer.php` | 4465 |
 | `page/form_pembuat_surat_cetak_v3.php` | `views/document/generate.php` | 4040 |
@@ -1171,7 +1178,7 @@ Files yang di-migrate dari `page/*.php` → `ezdoc/views/document/*.php`:
 
 **Total ~9100 LOC** migration dengan preservation semua interactivity + fitur.
 
-**SIMRS-specific dependencies yang HARUS di-abstract**:
+**consumer-app-specific dependencies yang HARUS di-abstract**:
 
 - [ ] `global $conn` → `$ctx->db` (Context DI)
 - [ ] `query($sql)` → `Ezdoc\Document\DocumentRepository::listByX()` OR `ezdoc_query_prepared()` (v0.7.1)
@@ -1246,12 +1253,12 @@ Generator slots (10 slots):
 
 **Definition of Done**:
 
-- `ezdoc/views/document/designer.php` fully functional standalone, tanpa SIMRS-specific globals
+- `ezdoc/views/document/designer.php` fully functional standalone, tanpa consumer-app-specific globals
 - `ezdoc/views/document/generate.php` fully functional, dompdf PDF gen works
 - `ezdoc/views/document/list.php` enhanced dengan recent docs + category filter
 - Consumer fresh install: `composer require mrpotensial/ezdoc && php cli/publish.php views` → langsung dapat working designer + generator
-- Demo dogfood consumer app (SIMRS) switch dari `page/form_pembuat_surat_*_v3.php` inline require → publish views to `page/vendor/ezdoc/document/*.php` OR `require ezdoc/views/document/*.php` directly
-- Backward compat: SIMRS pages tetap functional selama migration period (paralel deployment)
+- Demo dogfood consumer app switch dari `page/form_pembuat_surat_*_v3.php` inline require → publish views to `page/vendor/ezdoc/document/*.php` OR `require ezdoc/views/document/*.php` directly
+- Backward compat: legacy consumer pages tetap functional selama migration period (paralel deployment)
 - Slot injection tested: 22 slots (12 designer + 10 generator) demoed di `page/ezdoc_ui_demo.php`
 - Verified end-to-end: save template → generate document → sign TTD → PDF preview → verify QR → all works via library views only
 
@@ -1283,11 +1290,11 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 
 - [ ] Designer views di-render tanpa modification kalau consumer swap `koneksi.php` → PDO/Doctrine/Eloquent (data access via Repository, not direct SQL di view)
 - [ ] Semua AJAX call punya JSON request + JSON response, tidak ada form-encoded state di URL beyond query params `?uuid=X&action=Y`
-- [ ] Template content JSON export dari SIMRS bisa di-import ke Laravel Filament project (bit-identical `field_values`, `signature_config`)
+- [ ] Template content JSON export dari one consumer bisa di-import ke Laravel Filament project (bit-identical `field_values`, `signature_config`)
 - [ ] Signed document dari PHP library bisa di-verify oleh Go client (v1.5) end-to-end (conformance test vector di ezdoc-spec)
 - [ ] `actions/*.php` endpoints documented di `ezdoc-spec/openapi.yaml` sebagai reference — endpoints yang consumer boleh implement in Next.js/Rust/Go/CI4
 - [ ] `views/document/designer.php` bisa di-copy ke fresh Laravel project + require dari Blade layout, no fatal error (asalkan consumer wire `Context::default()` dengan mysqli/PDO adapter)
-- [ ] Zero references ke SIMRS-specific vendor libraries di views (no `koneksi.php`, no `SImpel/*` classes, no `RSIA_*` constants)
+- [ ] Zero references ke consumer-app-specific vendor libraries di views (no `koneksi.php`, no `SImpel/*` classes, no `RSIA_*` constants)
 
 **Concerns / risks**:
 
@@ -1297,9 +1304,54 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - **Alpine state coupling** — designer + generator sudah pakai Alpine post-Tailwind conversion (v0.6.5 workflow). Preserve state names. **Cross-framework note**: Alpine = DOM-based, works di React/Vue via web components jika consumer mau. Alternative native: React `useState`, Vue `ref`.
 - **Repository refactor complexity** — 4114 `query()` calls across pengeluaran/ folder, tapi cuma yang di 2 files ini yang perlu di-refactor untuk migration.
 
-### 6.13 Milestone v1.0 — "PHP library extraction (Packagist)"  ⏱ ~1 week
+### 6.13 Milestone v0.9.8 — "App orchestrator + Zero-config install"  ⏱ ~2-3 weeks
 
-**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Requires v0.9.7 (full views) completed**.
+**Goal**: 1-line `Ezdoc\App::run()` untuk consumer mount → deprecate manual wiring boilerplate. Zero-config demo mode dengan SQLite in-memory untuk instant install verification. Adopt industry-standard "front controller + mount pattern" (Filament, Livewire, Nova).
+
+**Problem context**:
+- Sekarang (v0.9.7): consumer harus wire manual — koneksi.php require + bootstrap.php require + Config::fromArray dengan ~30 keys + Slot::register untuk custom + URL config untuk 15 action endpoints + wrapper page untuk dispatch. Total ~200 LOC boilerplate + sering path errors.
+- Industri: 1-line install. Filament: `->plugin(\Filament\Admin::make())`. Livewire: `\Livewire\Livewire::route()`. Nova: `Route::any('nova/{any}', ...)`.
+
+**Deliverables**:
+- [ ] `Ezdoc\App` class — front controller + internal router (spec: ezdoc-spec/api/app.md)
+  - Static `App::run(array $config)` — main entry point
+  - Static `App::demo(array $overrides = [])` — zero-config demo mode dengan SQLite
+- [ ] `Ezdoc\Http\Router` — resolve internal URLs (?ezdoc_page=list|designer|generate|action|asset)
+- [ ] `Ezdoc\Http\RequestContext` + `ResponseWriter` — typed request/response abstraction (framework-agnostic)
+- [ ] Asset serving route: `?ezdoc_asset=css/ezdoc.css` — App streams file dengan proper MIME (fixes relative path breakage)
+- [ ] Action dispatch internal — deprecate manual `ezdoc_action.php` wrapper (soft deprecate: still works)
+- [ ] SQLite migrations variant (parallel dengan MySQL) — di `ezdoc/migrations/sqlite/`
+- [ ] CLI `php ezdoc/cli/serve.php` — start PHP built-in server + auto-migrate SQLite + seed 3 sample templates + open browser
+- [ ] Docs `docs/QUICKSTART.md` — 5-line consumer setup guide
+- [ ] Docs `docs/APP-API.md` — App::run() config schema reference
+- [ ] Deprecation notice untuk manual boilerplate (soft, keep working untuk 1 minor version)
+- [ ] Update `ezdoc_ui_demo.php` → refactor to use App::run() (dogfood + regression test)
+
+**Cross-framework portability constraints** (mandatory):
+- App class MUST NOT assume specific framework
+- All request/response via RequestContext (no global $_GET/$_POST reads in library code)
+- Support BOTH mysqli AND PDO out of the box (auto-detect)
+- Session/auth via RoleProvider abstraction (already exists)
+- Asset URLs via App-generated (never hardcoded)
+- Should work in: plain PHP, Laravel route, Slim route, CI4 controller, Symfony controller
+
+**Definition of Done**:
+- Fresh consumer: `composer require` → 1 PHP file dengan `Ezdoc\App::demo()` → full working UI (list + designer + generator + PDF render) tanpa DB config
+- Consumer app: `Ezdoc\App::run(['db' => $conn])` → semua URL bekerja, semua asset load
+- Zero path errors: browser accesses any URL under App base_path → correct route (list, designer, generate, action, asset)
+- Existing monolith consumer (page/ezdoc_ui_demo.php via manual wiring) TETAP works — no breaking during migration period
+- Round-trip test: install → open designer → create template → save → open generator → pick template → render PDF → all works with zero manual URL wiring
+
+**Anti-patterns to avoid**:
+- ❌ Forcing consumer to route ALL app URLs through Ezdoc\App (should be opt-in prefix)
+- ❌ Hardcoded framework detection (Laravel-specific code paths, etc.)
+- ❌ Requiring composer autoload (should work with plain include/require too)
+- ❌ Owning the entire response cycle (should return output, not exit)
+- ❌ Silent path resolution "magic" — path decisions must be traceable
+
+### 6.14 Milestone v1.0 — "PHP library extraction (Packagist)"  ⏱ ~1 week
+
+**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Depends on v0.9.7 (full views) + v0.9.8 (App orchestrator)** completed.
 
 - [ ] Move `ezdoc/` folder ke repo baru `mrpotensial/ezdoc`
 - [ ] Setup GitHub Actions CI (phpunit + phpstan level 6 + PHP matrix 7.4-8.3)
@@ -1312,9 +1364,10 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - Dogfood consumer production pakai versi Packagist (bukan lokal path)
 - L1 (HMAC), L2 (LocalPKI), L3 (Peruri) semua production-ready
 - **Full-featured designer + generator views included** (from v0.9.7) — consumer bisa langsung pakai
-- Fresh consumer test: install → publish views → save template → generate doc → sign → verify (semua works out-of-box)
+- **`Ezdoc\App::run()` 1-line mount + `Ezdoc\App::demo()` zero-config SQLite mode** (from v0.9.8) — consumer install verification tanpa DB config
+- Fresh consumer test: install → `Ezdoc\App::demo()` → save template → generate doc → sign → verify (semua works out-of-box, tanpa manual wiring)
 
-### 6.14 Milestone v1.1 — "Spec extraction"  ⏱ ~1-2 weeks
+### 6.15 Milestone v1.1 — "Spec extraction"  ⏱ ~1-2 weeks
 
 **Goal**: buat repo `ezdoc-spec/` — the reusable architecture — sebagai persiapan untuk native ports.
 
@@ -1331,7 +1384,7 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - PHP CI job runs conformance suite → pass
 - Docs: "How to write a new port" guide
 
-### 6.15 Milestone v1.5 — "Go port"  ⏱ ~4-6 weeks
+### 6.16 Milestone v1.5 — "Go port"  ⏱ ~4-6 weeks
 
 **Goal**: `ezdoc-go` — native Go implementation, container-friendly.
 
@@ -1349,7 +1402,7 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - Conformance test pass (signature dari PHP di-verify oleh Go = same result)
 - Docker image jalan di Kubernetes cluster
 
-### 6.16 Milestone v2.0 — "TypeScript port + full ecosystem"  ⏱ ~6-8 weeks
+### 6.17 Milestone v2.0 — "TypeScript port + full ecosystem"  ⏱ ~6-8 weeks
 
 **Goal**: `@mrpotensial/ezdoc` — TypeScript native untuk Next.js / Node / browser.
 
