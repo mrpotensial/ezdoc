@@ -2014,19 +2014,14 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         <?php if ($action !== 'list'): ?>
         // Calculate initial height based on paper size
         function getEditorHeight() {
-            // Sizing strategy (Google Docs / Notion pattern):
-            //   TinyMCE fills editorWrapper viewport = window height minus top bar.
-            //   Edit-area iframe scrolls internally (1 scroll only), toolbar sticky.
-            //   Bottom gap ~5% viewport untuk breathing room (industri: Notion /
-            //   Linear editor pattern — paper tidak nempel edge viewport).
+            // Sizing strategy (Google Docs pattern):
+            //   TinyMCE fills editorWrapper = window height minus top bar.
+            //   Paper visualization + backdrop di dalam iframe body CSS (bukan wrapper).
+            //   Backdrop gray natural extend ke bawah paper tanpa artificial gap.
             const wrapper = document.getElementById('editorWrapper');
             const topBar = wrapper?.previousElementSibling; // dark top bar
             const topH = topBar ? topBar.offsetHeight : 60;
-            // p-5 wrapper padding = 20px top + 20px bottom
-            const wrapperPadding = 40;
-            // Extra bottom gap — 5% viewport, min 40px, max 90px (klamp)
-            const bottomGap = Math.min(90, Math.max(40, Math.round(window.innerHeight * 0.05)));
-            return Math.max(400, window.innerHeight - topH - wrapperPadding - bottomGap);
+            return Math.max(400, window.innerHeight - topH);
         }
 
         tinymce.init({
