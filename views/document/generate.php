@@ -2222,12 +2222,12 @@ function renderFieldForPdf($name, $type, $val, $label) {
             top: 20px;
             right: 20px;
             background: #222;
-            padding: 10px;
+            padding: 8px;
             border-radius: 8px;
             z-index: 1000;
             max-height: 90vh;
             overflow-y: auto;
-            width: 190px;
+            width: 210px;
             transition: width 0.2s ease, height 0.2s ease, padding 0.2s ease, max-height 0.2s ease, background 0.2s ease;
             box-sizing: border-box;
         }
@@ -2361,33 +2361,55 @@ function renderFieldForPdf($name, $type, $val, $label) {
         }
         .toolbar .doc-info.new { color: #fbbf24; }
         .toolbar .meta-section {
-            background: #333;
-            padding: 8px;
+            background: #2a2a2a;
+            padding: 6px 7px;
             border-radius: 6px;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
         }
         .toolbar .meta-section label {
             display: block;
-            color: #aaa;
-            font-size: 10px;
-            margin-bottom: 2px;
+            color: #94a3b8;
+            font-size: 9px;
+            margin-bottom: 1px;
+            margin-top: 4px;
             text-transform: uppercase;
+            letter-spacing: 0.03em;
         }
-        .toolbar .meta-section input {
+        .toolbar .meta-section label:first-child { margin-top: 0; }
+        .toolbar .meta-section label small { display:none; }
+        .toolbar .meta-section input, .toolbar .meta-section select {
             width: 100%;
-            padding: 5px 8px;
-            border: 1px solid #555;
-            border-radius: 4px;
-            background: #444;
+            padding: 3px 6px;
+            border: 1px solid #444;
+            border-radius: 3px;
+            background: #1a1a1a;
             color: #fff;
-            font-size: 12px;
-            margin-bottom: 6px;
+            font-size: 11px;
             box-sizing: border-box;
+            height: 24px;
         }
-        .toolbar .meta-section input:focus {
+        .toolbar .meta-section input:focus,
+        .toolbar .meta-section select:focus {
             outline: none;
             border-color: #4ade80;
         }
+        .toolbar .meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px 6px;
+        }
+        .toolbar .meta-grid > div { min-width: 0; }
+        /* Compact icon-grid for collapsed sections */
+        .toolbar .icon-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+        .toolbar .icon-grid button {
+            margin: 0 !important;
+            padding: 6px 4px !important;
+            font-size: 10px !important;
+            line-height: 1.15;
+            text-align: center;
+        }
+        .toolbar .icon-grid button i { display: block; font-size: 14px; margin-bottom: 2px; }
+        .toolbar .icon-grid button.wide { grid-column: span 2; }
 
         @media screen and (max-width: 1024px) {
             .toolbar { top: auto; bottom: 10px; right: 10px; max-height: 50vh; width: 170px; }
@@ -2593,35 +2615,35 @@ function renderFieldForPdf($name, $type, $val, $label) {
         <div class="toolbar" id="toolbarPanel">
             <button type="button" class="toolbar-toggle" id="toolbarToggleBtn" onclick="toggleToolbar()" title="Tampilkan/Sembunyikan Toolbar">&#9776;</button>
             <div class="toolbar-body">
-                <div class="template-name"><?= h($template['nama_template']) ?></div>
-                <div class="paper-info text-violet-500 text-[10px] text-center mb-[5px]">
-                    <?= h($paperSize) ?> (<?= $paperDim['width'] ?>×<?= $paperDim['height'] ?>mm)
-                </div>
-                <?php if ($param_is_deleted): ?>
-                <div class="bg-red-900 text-white p-2 rounded-md mb-2 text-[11px] text-center border border-dashed border-red-300">
-                    <i class="bi bi-trash-fill"></i> <strong>DOKUMEN TERHAPUS</strong><br>
-                    <span class="text-[10px] text-[#fecaca]">
-                        Mode preview (read-only)<br>
-                        Hapus pada: <?= h(date('d/m/Y H:i', strtotime($param_deleted_at))) ?><br>
-                        Oleh: <?= h($param_deleted_by ?: '-') ?>
-                    </span>
-                </div>
-                <?php endif; ?>
-                <div class="doc-info <?= $isEditMode ? '' : 'new' ?>" id="docInfoText">
+                <!-- ═══ HEADER (compact 1-line stack) ═══ -->
+                <div class="flex items-center justify-between gap-1 mb-1">
+                    <div class="min-w-0 flex-1">
+                        <div class="text-[11px] text-gray-200 font-medium truncate leading-tight" title="<?= h($template['nama_template']) ?>"><?= h($template['nama_template']) ?></div>
+                        <div class="text-[9px] text-gray-400 leading-tight">
+                            <?= h($paperSize) ?> <?= $paperDim['width'] ?>×<?= $paperDim['height'] ?>
+                            <?php if ($isEditMode): ?>
+                                · <span class="<?= $param_is_deleted ? 'text-red-400' : ($param_is_locked ? 'text-amber-400' : 'text-emerald-400') ?>">
+                                    #<?= $doc_id ?> v<?= $param_version ?>
+                                    <?php if ($param_is_deleted): ?><i class="bi bi-trash-fill"></i>
+                                    <?php elseif ($param_is_locked): ?><i class="bi bi-lock-fill"></i>
+                                    <?php endif; ?>
+                                </span>
+                            <?php else: ?>
+                                · <span class="text-amber-400">Baru</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
                     <?php if ($isEditMode): ?>
-                        ID: <?= $doc_id ?> · v<?= $param_version ?>
-                        <?php if ($param_is_deleted): ?>
-                            <span class="text-red-400"><i class="bi bi-trash-fill"></i> Deleted</span>
-                        <?php elseif ($param_is_locked): ?>
-                            <span class="text-amber-500"><i class="bi bi-lock-fill"></i> Locked</span>
-                        <?php else: ?>
-                            (Edit)
-                        <?php endif; ?>
-                        <button class="ml-1 py-0 px-1.5 bg-gray-700 border border-gray-500 text-gray-300 rounded-full cursor-pointer text-[10px] w-[18px] h-[18px] leading-[14px]" type="button" onclick="showDocInfo()" title="Detail dokumen">i</button>
-                    <?php else: ?>
-                        Dokumen Baru
+                    <button class="!bg-gray-700 !text-gray-300 hover:!bg-gray-600 !rounded-full !w-[18px] !h-[18px] !p-0 !m-0 !text-[10px] !leading-none flex-shrink-0" type="button" onclick="showDocInfo()" title="Detail dokumen">i</button>
                     <?php endif; ?>
                 </div>
+                <?php if ($param_is_deleted): ?>
+                <div class="bg-red-900 text-white p-1.5 rounded-md mb-1.5 text-[10px] text-center border border-dashed border-red-300">
+                    <i class="bi bi-trash-fill"></i> <strong>TERHAPUS</strong> · <?= h(date('d/m/Y', strtotime($param_deleted_at))) ?>
+                    <div class="text-[9px] text-[#fecaca]">Oleh: <?= h($param_deleted_by ?: '-') ?></div>
+                </div>
+                <?php endif; ?>
+                <div class="border-t border-gray-700 mb-2"></div>
 
                 <?php // Slot: toolbar-metadata — barcode, workflow status, external system ref, badge chips
                 // spec: ezdoc-spec/slots/generate.md#toolbar-metadata ?>
@@ -2634,93 +2656,117 @@ function renderFieldForPdf($name, $type, $val, $label) {
 
                 <div class="meta-section">
                     <?php if ($isGeneralDoc): ?>
-                        <!-- Template scope=general: tidak butuh NORM/NOPEN. Kirim hidden supaya form tetap valid -->
-                        <div class="bg-indigo-50 text-indigo-700 py-1.5 px-2 rounded text-[11px] mb-1.5">
-                            <i class="bi bi-info-circle"></i> Surat Umum — tidak butuh data pasien
+                        <div class="bg-indigo-950 text-indigo-300 py-1 px-1.5 rounded text-[10px] mb-1.5 leading-tight">
+                            <i class="bi bi-info-circle"></i> Surat Umum
                         </div>
                         <input type="hidden" name="_norm" id="inputNorm" value="">
                         <input type="hidden" name="_nopen" id="inputNopen" value="">
-                        <label>Label Dokumen <small class="text-gray-400">(pembeda antar dokumen)</small></label>
+                        <label>Label <span class="text-red-400">*</span></label>
                         <input type="text" name="_label" id="inputLabel" value="<?= h($param_label) ?>" placeholder="- (default)" <?= $param_is_locked ? 'readonly' : '' ?>>
                     <?php else: ?>
-                        <label>No Rekam Medis *</label>
-                        <input type="text" name="_norm" id="inputNorm" value="<?= h($param_norm) ?>" placeholder="No RM" required <?= $param_is_locked ? 'readonly' : '' ?>>
-                        <label>No Pendaftaran *</label>
-                        <input type="text" name="_nopen" id="inputNopen" value="<?= h($param_nopen) ?>" placeholder="No Pendaftaran" required <?= $param_is_locked ? 'readonly' : '' ?>>
-                        <label>Label Dokumen <small class="text-gray-400">(pembeda jika nopen sama)</small></label>
+                        <div class="meta-grid">
+                            <div>
+                                <label>NORM <span class="text-red-400">*</span></label>
+                                <input type="text" name="_norm" id="inputNorm" value="<?= h($param_norm) ?>" placeholder="No RM" required <?= $param_is_locked ? 'readonly' : '' ?>>
+                            </div>
+                            <div>
+                                <label>NOPEN <span class="text-red-400">*</span></label>
+                                <input type="text" name="_nopen" id="inputNopen" value="<?= h($param_nopen) ?>" placeholder="Pendaftaran" required <?= $param_is_locked ? 'readonly' : '' ?>>
+                            </div>
+                        </div>
+                        <label>Label <span class="text-gray-500 normal-case">(opsional)</span></label>
                         <input type="text" name="_label" id="inputLabel" value="<?= h($param_label) ?>" placeholder="- (default)" <?= $param_is_locked ? 'readonly' : '' ?>>
+                    <?php endif; ?>
+                    <?php if ($isEditMode): ?>
+                    <label>Versi</label>
+                    <select id="versionSelect" onchange="switchVersion(this.value)">
+                        <option value="<?= $param_version ?>">v<?= $param_version ?> (current)</option>
+                    </select>
                     <?php endif; ?>
                 </div>
 
-                <!-- Version picker (only shown when doc exists) -->
-                <?php if ($isEditMode): ?>
-                <div class="meta-section" id="versionSection">
-                    <label>Versi Dokumen</label>
-                    <select class="w-full" id="versionSelect" onchange="switchVersion(this.value)">
-                        <option value="<?= $param_version ?>">v<?= $param_version ?> (current)</option>
-                    </select>
+                <!-- ═══ PRIMARY ROW: Update (2/3) + Print (1/3 icon) ═══ -->
+                <div class="grid grid-cols-3 gap-1 mt-1">
+                    <button type="button" class="btn-success col-span-2 !m-0 !py-1.5 !text-[12px]" onclick="submitForm()" <?= $param_is_locked ? 'disabled title="Locked - tidak bisa update"' : '' ?>>
+                        <?= $isEditMode ? ($param_is_locked ? '🔒 Locked' : 'Update') : 'Simpan Baru' ?>
+                    </button>
+                    <button type="button" class="!m-0 !py-1.5 !text-[12px]" onclick="window.print()" title="Print (Ctrl+P)"><i class="bi bi-printer"></i></button>
                 </div>
-                <?php endif; ?>
 
-                <button type="button" class="btn-success" onclick="submitForm()" <?= $param_is_locked ? 'disabled title="Locked - tidak bisa update"' : '' ?>>
-                    <?= $isEditMode ? ($param_is_locked ? '🔒 Locked' : 'Update') : 'Simpan Baru' ?>
-                </button>
-                <button type="button" id="btnToggleVerifyQr"
-                        onclick="toggleVerifyQrMode()"
-                        title="Ganti TTD gambar dengan QR verifikasi (untuk share dokumen yang bisa di-verify oleh penerima)"
-                        style="background:<?= $__showVerifyQrInit ? '#0d9488' : '#64748b' ?>;color:#fff;">
-                    <i class="bi bi-qr-code"></i>
-                    <span id="btnToggleVerifyQrLabel"><?= $__showVerifyQrInit ? 'Mode Verify QR: ON' : 'Mode Verify QR: OFF' ?></span>
-                </button>
-                <button type="button" onclick="window.print()" title="Print (Ctrl+P)">Print</button>
-                <?php // Slot: toolbar-extra-actions — consumer buttons (Export Excel, WhatsApp, Email PDF, e-Sign, Copy Link)
-                // spec: ezdoc-spec/slots/generate.md#toolbar-extra-actions ?>
+                <?php // Slot: toolbar-extra-actions — consumer buttons (Export Excel, WhatsApp, Email PDF, e-Sign, Copy Link) ?>
                 <?= \Ezdoc\UI\Slot::render('generate:toolbar-extra-actions', [
                     'doc_id'    => (int)$doc_id,
                     'template'  => $template,
                     'is_locked' => (bool)$param_is_locked,
                 ]) ?>
-                <button class="bg-slate-600 text-[10px] py-1 px-2" type="button" onclick="showShortcutsHelp()" title="Lihat keyboard shortcuts (Ctrl+/)"><i class="bi bi-keyboard"></i> Shortcuts</button>
-                <?php if ($isSuperadmin): ?>
-                    <button class="bg-emerald-600" type="button" onclick="viewPdfRaw()" title="Lihat hasil PDF mentah (superadmin)"><i class="bi bi-file-earmark-pdf"></i> Lihat PDF</button>
-                <?php endif; ?>
+
                 <?php if ($isEditMode && $param_is_deleted && $isSuperadmin): ?>
-                    <!-- Deleted document preview: show only Restore action -->
-                    <button class="bg-green-600" type="button" onclick="restoreDeletedSlot()" title="Pulihkan slot ini">
+                    <button class="bg-green-600 mt-2" type="button" onclick="restoreDeletedSlot()" title="Pulihkan slot ini">
                         <i class="bi bi-arrow-counterclockwise"></i> Restore Slot
                     </button>
-                    <?php
-                    // Trash-list URL — config-driven, {template_id} placeholder replaced.
-                    // spec: ezdoc-spec/config/urls.md#trash_list
-                    if ($urlTrashList !== ''):
+                    <?php if ($urlTrashList !== ''):
                         $__trashHref = str_replace('{template_id}', (string)$template_id, $urlTrashList);
                     ?>
                     <a href="<?= h($__trashHref) ?>" style="background:#374151;color:#fff;padding:6px 10px;border-radius:4px;text-decoration:none;display:inline-block;text-align:center;font-size:13px;margin-top:4px;">
                         <i class="bi bi-arrow-left"></i> Trash List
                     </a>
                     <?php endif; ?>
-                <?php elseif ($isEditMode): ?>
-                    <?php if (!$param_is_locked): ?>
-                        <button class="bg-gray-500" type="button" id="btnDocLock" onclick="toggleDocLock()" title="Kunci versi ini (final) — setelah locked hanya superadmin yang bisa unlock">
-                            <i class="bi bi-lock"></i> Lock Final
-                        </button>
-                    <?php elseif ($isSuperadmin): ?>
-                        <button class="bg-amber-500" type="button" id="btnDocLock" onclick="toggleDocLock()" title="Unlock versi ini (superadmin)">
-                            <i class="bi bi-unlock"></i> Unlock (Admin)
-                        </button>
-                    <?php else: ?>
-                        <button class="bg-gray-600 opacity-60 cursor-not-allowed" type="button" disabled title="Locked — unlock hanya oleh superadmin. Untuk revisi, buat versi baru.">
-                            <i class="bi bi-lock-fill"></i> Locked
-                        </button>
-                    <?php endif; ?>
-                    <button class="bg-violet-500" type="button" onclick="showNewVersionModal()"><i class="bi bi-plus-circle"></i> Versi Baru</button>
-                    <?php if ($isSuperadmin): ?>
-                    <button type="button" onclick="deleteThisVersion()" style="background:#dc2626;" <?= $param_is_locked ? 'disabled title="Locked - unlock dulu"' : '' ?>><i class="bi bi-trash"></i> Hapus Versi</button>
-                    <?php endif; ?>
+                <?php else: ?>
+
+                    <!-- ═══ Accordion: hanya 1 section terbuka biar hemat ruang ═══ -->
+                    <div x-data="{ open: '' }" class="mt-2">
+
+                        <!-- ▸ LAINNYA (icon grid 2-col) -->
+                        <div class="border-t border-gray-700 pt-1.5">
+                            <button type="button" @click="open = (open === 'more' ? '' : 'more')"
+                                    class="!bg-transparent !text-gray-400 hover:!text-gray-100 !py-0.5 !px-1 !text-[10px] !m-0 flex items-center gap-1 w-full uppercase tracking-wider">
+                                <i class="bi bi-chevron-right text-[9px]" :class="open === 'more' && 'rotate-90'" style="transition:transform .15s"></i>Lainnya
+                            </button>
+                            <div x-show="open === 'more'" x-collapse>
+                                <div class="icon-grid mt-1.5">
+                                    <button type="button" id="btnToggleVerifyQr"
+                                            onclick="toggleVerifyQrMode()"
+                                            title="Ganti TTD gambar dengan QR verifikasi"
+                                            class="wide"
+                                            style="background:<?= $__showVerifyQrInit ? '#0d9488' : '#475569' ?>;color:#fff;">
+                                        <i class="bi bi-qr-code"></i>
+                                        <span>QR: <span id="btnToggleVerifyQrLabel"><?= $__showVerifyQrInit ? 'ON' : 'OFF' ?></span></span>
+                                    </button>
+                                    <?php if ($isEditMode): ?>
+                                        <?php if (!$param_is_locked): ?>
+                                            <button class="bg-gray-500" type="button" id="btnDocLock" onclick="toggleDocLock()" title="Kunci versi ini (final)"><i class="bi bi-lock"></i>Lock Final</button>
+                                        <?php elseif ($isSuperadmin): ?>
+                                            <button class="bg-amber-500" type="button" id="btnDocLock" onclick="toggleDocLock()" title="Unlock versi ini (superadmin)"><i class="bi bi-unlock"></i>Unlock</button>
+                                        <?php else: ?>
+                                            <button class="bg-gray-600 opacity-60 cursor-not-allowed" type="button" disabled title="Locked — unlock hanya oleh superadmin"><i class="bi bi-lock-fill"></i>Locked</button>
+                                        <?php endif; ?>
+                                        <button class="bg-violet-500" type="button" onclick="showNewVersionModal()" title="Buat versi baru"><i class="bi bi-plus-circle"></i>Versi Baru</button>
+                                    <?php endif; ?>
+                                    <button class="!bg-slate-600 wide" type="button" onclick="showShortcutsHelp()" title="Keyboard shortcuts (Ctrl+/)"><i class="bi bi-keyboard"></i>Shortcuts</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <?php if ($isSuperadmin): ?>
+                        <!-- ▸ ADMIN (icon grid) -->
+                        <div class="border-t border-gray-700 mt-1 pt-1.5">
+                            <button type="button" @click="open = (open === 'admin' ? '' : 'admin')"
+                                    class="!bg-transparent !text-amber-400 hover:!text-amber-200 !py-0.5 !px-1 !text-[10px] !m-0 flex items-center gap-1 w-full uppercase tracking-wider">
+                                <i class="bi bi-chevron-right text-[9px]" :class="open === 'admin' && 'rotate-90'" style="transition:transform .15s"></i><i class="bi bi-shield-lock text-[9px]"></i>Admin
+                            </button>
+                            <div x-show="open === 'admin'" x-collapse>
+                                <div class="icon-grid mt-1.5">
+                                    <button class="!bg-emerald-700 hover:!bg-emerald-600<?= $isEditMode ? '' : ' wide' ?>" type="button" onclick="viewPdfRaw()" title="Lihat hasil PDF mentah"><i class="bi bi-file-earmark-pdf"></i>PDF Raw</button>
+                                    <?php if ($isEditMode): ?>
+                                        <button type="button" onclick="deleteThisVersion()" class="!bg-red-700 hover:!bg-red-600" <?= $param_is_locked ? 'disabled title="Locked - unlock dulu"' : 'title="Hapus versi ini"' ?>><i class="bi bi-trash"></i>Hapus</button>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+
+                    </div>
                 <?php endif; ?>
-                <?php // "Change template" button intentionally omitted from library default.
-                // Consumers who want it can inject via generate:toolbar-extra-actions slot.
-                ?>
             </div>
         </div>
     </form>
