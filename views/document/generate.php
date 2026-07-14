@@ -1191,7 +1191,9 @@ function renderFieldInput($name, $type, $val, $options, $label, $validation = []
 
     switch ($type) {
         case 'number':
-            return '<span class="f-wrap"' . $vAttrs . '><span class="f field-number" contenteditable="true" inputmode="numeric" data-field="' . $hName . '">' . ($hVal ?: '') . '</span><input type="hidden" name="' . $hName . '" value="' . $hVal . '">' . $reqMark . '</span>';
+            // Filter non-numeric on input (contenteditable tidak respect type="number").
+            // Allowed: digits + optional decimal point + leading minus (industri standard).
+            return '<span class="f-wrap"' . $vAttrs . '><span class="f field-number" contenteditable="true" inputmode="decimal" data-field="' . $hName . '" oninput="filterNumeric(this)" onpaste="handleNumericPaste(event)">' . ($hVal ?: '') . '</span><input type="hidden" name="' . $hName . '" value="' . $hVal . '">' . $reqMark . '</span>';
 
         case 'date':
             return '<span class="f-wrap"' . $vAttrs . '><input type="date" class="field-date" name="' . $hName . '" value="' . $hVal . '" data-field="' . $hName . '">' . $reqMark . '</span>';
@@ -3102,6 +3104,64 @@ function renderFieldForPdf($name, $type, $val, $label) {
             } catch (e) {
                 preview.innerHTML = '<div class="p-2.5 text-red-600 text-[10px]">Network: ' + e.message + '</div>';
             }
+        }
+
+        // ===== Numeric field filter — contenteditable doesn't respect type=number =====
+        // Allow: digits (0-9), decimal point (single), leading minus.
+        // Strip: alphabetic + other symbols.
+        function filterNumeric(el) {
+            const original = el.textContent;
+            // Restore caret position after DOM mutation
+            const sel = window.getSelection();
+            const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+            const caretOffset = range ? range.startOffset : original.length;
+
+            let filtered = original.replace(/[^\d.\-]/g, '');
+            // Only 1 decimal point (keep first)
+            const dotIdx = filtered.indexOf('.');
+            if (dotIdx !== -1) {
+                filtered = filtered.slice(0, dotIdx + 1) + filtered.slice(dotIdx + 1).replace(/\./g, '');
+            }
+            // Minus only at start
+            if (filtered.includes('-')) {
+                const hasLeading = filtered.startsWith('-');
+                filtered = (hasLeading ? '-' : '') + filtered.replace(/-/g, '');
+            }
+
+            if (filtered !== original) {
+                el.textContent = filtered;
+                // Restore caret
+                try {
+                    const newRange = document.createRange();
+                    const textNode = el.firstChild || el;
+                    const pos = Math.min(caretOffset - (original.length - filtered.length), filtered.length);
+                    newRange.setStart(textNode, Math.max(0, pos));
+                    newRange.collapse(true);
+                    sel.removeAllRanges();
+                    sel.addRange(newRange);
+                } catch (e) { /* focus lost, skip */ }
+            }
+
+            // Sync hidden input
+            const wrap = el.closest('.f-wrap');
+            const hidden = wrap && wrap.querySelector('input[type="hidden"]');
+            if (hidden) hidden.value = filtered;
+        }
+
+        // Block paste of non-numeric content; replace with sanitized text
+        function handleNumericPaste(e) {
+            e.preventDefault();
+            const raw = (e.clipboardData || window.clipboardData).getData('text');
+            let cleaned = raw.replace(/[^\d.\-]/g, '');
+            const dotIdx = cleaned.indexOf('.');
+            if (dotIdx !== -1) {
+                cleaned = cleaned.slice(0, dotIdx + 1) + cleaned.slice(dotIdx + 1).replace(/\./g, '');
+            }
+            if (cleaned.includes('-')) {
+                const hasLeading = cleaned.startsWith('-');
+                cleaned = (hasLeading ? '-' : '') + cleaned.replace(/-/g, '');
+            }
+            document.execCommand('insertText', false, cleaned);
         }
 
         // AJAX Save - no reload
