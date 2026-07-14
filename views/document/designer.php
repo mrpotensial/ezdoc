@@ -687,6 +687,25 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     </div>
                 </div>
 
+                <!-- Kondisi Panel (Collapsible) — conditional sections -->
+                <div class="border-b border-gray-200" x-data="{ open: false }">
+                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
+                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-diamond-half"></i>Kondisi <span id="condCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
+                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
+                    </div>
+                    <div x-show="open" x-collapse>
+                        <div class="p-2 pt-0">
+                            <div id="condList"></div>
+                            <div id="condEmpty" class="text-center text-gray-500 text-xs py-2">
+                                Klik "Kondisi" di toolbar editor
+                            </div>
+                            <div class="mt-1 text-[10px] text-gray-500 leading-tight">
+                                <i class="bi bi-info-circle"></i> Operator: <code>= != &gt; &lt; &gt;= &lt;=</code> · Gabung: <code>AND</code> <code>OR</code>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Konfigurasi Verifikasi Publik (Collapsible) -->
                 <div class="bg-slate-50 border border-slate-200 rounded-lg p-0 mb-2.5" x-data="{ open: false }" x-init="$watch('open', v => { if(v) window.dispatchEvent(new CustomEvent('verify-panel-shown')) })">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
@@ -2696,6 +2715,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         scanMateraiPlaceholders();
                         scanFieldPlaceholders();
                         scanQrPlaceholders();
+                        scanCondSections();
                         scanDynTables();
                     }, 300);
                 });
@@ -2708,6 +2728,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         scanMateraiPlaceholders();
                         scanFieldPlaceholders();
                         scanQrPlaceholders();
+                        scanCondSections();
                         scanDynTables();
                         if (typeof renderTabledbList === 'function') renderTabledbList();
                         updateAllLogosInEditor(); // Show actual logos
@@ -3502,6 +3523,109 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             content = content.replace(regex, '');
             editor.setContent(content);
             scanQrPlaceholders();
+        }
+
+        // ===== CONDITIONAL SECTIONS =====
+        // Scan .conditional-section elements dari iframe body (bukan raw content string)
+        // supaya data-cond attribute paths reliable + support element reference untuk scroll/edit.
+        function scanCondSections() {
+            const editor = tinymce.get('editor');
+            if (!editor) return;
+            const iframeDoc = editor.getDoc();
+            if (!iframeDoc) return;
+            const nodes = iframeDoc.querySelectorAll('.conditional-section');
+            const items = [];
+            nodes.forEach((el, idx) => {
+                if (!el.dataset.condId) {
+                    el.dataset.condId = 'cond_' + Date.now() + '_' + idx;
+                }
+                items.push({
+                    id: el.dataset.condId,
+                    expr: el.getAttribute('data-cond') || ''
+                });
+            });
+            renderCondPanel(items);
+        }
+
+        function renderCondPanel(items) {
+            const list = document.getElementById('condList');
+            const empty = document.getElementById('condEmpty');
+            const countBadge = document.getElementById('condCount');
+            if (!list) return;
+            if (countBadge) countBadge.textContent = items.length;
+
+            if (items.length === 0) {
+                list.innerHTML = '';
+                if (empty) empty.style.display = 'block';
+                return;
+            }
+            if (empty) empty.style.display = 'none';
+
+            list.innerHTML = items.map((it, idx) => {
+                const eExpr = escapeHtml(it.expr);
+                const eId = escapeHtml(it.id);
+                return `
+                <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-cyan-400 before:content-['']">
+                    <div class="pl-2.5 pr-2 py-1.5">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-[10px] font-semibold uppercase tracking-wide text-cyan-700"><i class="bi bi-diamond-half"></i> #${idx + 1}</span>
+                            <div class="flex gap-1">
+                                <button type="button" class="inline-flex items-center py-0 px-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 text-[10px]" onclick="gotoCondSection('${eId}')" title="Scroll ke elemen"><i class="bi bi-crosshair"></i></button>
+                                <button type="button" class="inline-flex items-center py-0 px-1 rounded border border-red-500 text-red-600 hover:bg-red-50 text-[10px]" onclick="removeCondSection('${eId}')" title="Hapus"><i class="bi bi-trash"></i></button>
+                            </div>
+                        </div>
+                        <label class="block text-[9px] font-semibold uppercase tracking-wide text-gray-400 mb-0.5">Ekspresi</label>
+                        <input type="text" class="w-full rounded border-gray-300 shadow-sm text-[11px] px-2 py-1 font-mono"
+                               value="${eExpr}"
+                               onchange="updateCondExpr('${eId}', this.value)"
+                               placeholder="jenis_kelamin=P">
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function _condFindEl(id) {
+            const editor = tinymce.get('editor');
+            if (!editor) return null;
+            const doc = editor.getDoc();
+            if (!doc) return null;
+            return doc.querySelector(`.conditional-section[data-cond-id="${id}"]`);
+        }
+
+        function updateCondExpr(id, expr) {
+            const el = _condFindEl(id);
+            if (!el) return;
+            const trimmed = (expr || '').trim();
+            if (!trimmed) return;
+            el.setAttribute('data-cond', trimmed);
+            // Update badge label di dalam section
+            const badge = el.querySelector('div[style*="ecfeff"], div[style*="ECFEFF"]');
+            if (badge) {
+                badge.innerHTML = '⏱ Tampil jika: <strong>' + escapeHtml(trimmed) + '</strong>';
+            }
+            const editor = tinymce.get('editor');
+            if (editor) editor.setDirty(true);
+        }
+
+        function gotoCondSection(id) {
+            const el = _condFindEl(id);
+            if (!el) return;
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Flash highlight
+            const oldOutline = el.style.outline;
+            el.style.outline = '2px solid #06b6d4';
+            el.style.outlineOffset = '2px';
+            setTimeout(() => { el.style.outline = oldOutline; el.style.outlineOffset = ''; }, 900);
+        }
+
+        function removeCondSection(id) {
+            if (!confirm('Hapus section kondisi ini beserta seluruh konten di dalamnya?')) return;
+            const el = _condFindEl(id);
+            if (!el) return;
+            el.parentNode.removeChild(el);
+            const editor = tinymce.get('editor');
+            if (editor) editor.setDirty(true);
+            scanCondSections();
         }
 
         // ===== DYNAMIC TABLES (LEGACY — REMOVED) =====
