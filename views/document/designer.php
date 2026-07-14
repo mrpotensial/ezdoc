@@ -482,65 +482,64 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 <div class="px-3">
                     <?= \Ezdoc\UI\Slot::render('designer:sidebar-header', ['template' => $template]) ?>
                 </div>
-                <!-- Kertas Panel (Collapsible — collapse default after first setup) -->
+                <!-- Halaman Panel — Kertas + Orientasi + Margin combined (collapsed default after first setup) -->
                 <div class="border-b border-gray-200" x-data="{ open: false }">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
-                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-file-earmark"></i>Kertas</h6>
+                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-file-earmark"></i>Halaman</h6>
                         <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
                     </div>
                     <div x-show="open" x-collapse>
-                        <div class="px-3 pb-3 space-y-2">
-                            <select class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="paperSize" onchange="updatePageSize()">
-                                <option value="A4">A4 (210 x 297 mm)</option>
-                                <option value="A5">A5 (148 x 210 mm)</option>
-                                <option value="Letter">Letter (216 x 279 mm)</option>
-                                <option value="Legal">Legal (216 x 356 mm)</option>
-                                <option value="F4">F4/Folio (215 x 330 mm)</option>
-                                <option value="Custom">Custom...</option>
-                            </select>
-                            <div id="customSizePanel" class="grid grid-cols-2 gap-1.5" style="display:none;">
-                                <div>
-                                    <label class="block text-[10px] text-gray-500 mb-0.5">Lebar (mm)</label>
-                                    <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="customWidth" value="210" min="50" max="500" oninput="updatePageSize()">
+                        <div class="px-3 pb-3 space-y-3">
+                            <!-- Subsection: Ukuran -->
+                            <div class="space-y-1.5">
+                                <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Ukuran</div>
+                                <select class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="paperSize" onchange="updatePageSize()">
+                                    <option value="A4">A4 (210 x 297 mm)</option>
+                                    <option value="A5">A5 (148 x 210 mm)</option>
+                                    <option value="Letter">Letter (216 x 279 mm)</option>
+                                    <option value="Legal">Legal (216 x 356 mm)</option>
+                                    <option value="F4">F4/Folio (215 x 330 mm)</option>
+                                    <option value="Custom">Custom...</option>
+                                </select>
+                                <div id="customSizePanel" class="grid grid-cols-2 gap-1.5" style="display:none;">
+                                    <div>
+                                        <label class="block text-[10px] text-gray-500 mb-0.5">Lebar (mm)</label>
+                                        <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="customWidth" value="210" min="50" max="500" oninput="updatePageSize()">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] text-gray-500 mb-0.5">Tinggi (mm)</label>
+                                        <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="customHeight" value="297" min="50" max="500" oninput="updatePageSize()">
+                                    </div>
                                 </div>
-                                <div>
-                                    <label class="block text-[10px] text-gray-500 mb-0.5">Tinggi (mm)</label>
-                                    <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="customHeight" value="297" min="50" max="500" oninput="updatePageSize()">
+                                <div class="inline-flex w-full rounded-md overflow-hidden border border-gray-300" role="group">
+                                    <input type="radio" class="hidden peer/portrait" name="orientation" id="orientPortrait" value="portrait" checked onchange="updatePageSize()">
+                                    <label class="flex-1 text-center text-xs px-2 py-1.5 cursor-pointer bg-white hover:bg-gray-50 peer-checked/portrait:bg-gray-800 peer-checked/portrait:text-white" for="orientPortrait">Portrait</label>
+                                    <input type="radio" class="hidden peer/landscape" name="orientation" id="orientLandscape" value="landscape" onchange="updatePageSize()">
+                                    <label class="flex-1 text-center text-xs px-2 py-1.5 cursor-pointer bg-white hover:bg-gray-50 peer-checked/landscape:bg-gray-800 peer-checked/landscape:text-white border-l border-gray-300" for="orientLandscape">Landscape</label>
                                 </div>
                             </div>
-                            <div class="inline-flex w-full rounded-md overflow-hidden border border-gray-300" role="group">
-                                <input type="radio" class="hidden peer/portrait" name="orientation" id="orientPortrait" value="portrait" checked onchange="updatePageSize()">
-                                <label class="flex-1 text-center text-xs px-2 py-1.5 cursor-pointer bg-white hover:bg-gray-50 peer-checked/portrait:bg-gray-800 peer-checked/portrait:text-white" for="orientPortrait">Portrait</label>
-                                <input type="radio" class="hidden peer/landscape" name="orientation" id="orientLandscape" value="landscape" onchange="updatePageSize()">
-                                <label class="flex-1 text-center text-xs px-2 py-1.5 cursor-pointer bg-white hover:bg-gray-50 peer-checked/landscape:bg-gray-800 peer-checked/landscape:text-white border-l border-gray-300" for="orientLandscape">Landscape</label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Margin Panel (Collapsible) -->
-                <div class="border-b border-gray-200" x-data="{ open: false }">
-                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
-                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-border-outer"></i>Margin (mm)</h6>
-                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
-                    </div>
-                    <div x-show="open" x-collapse>
-                        <div class="px-3 pb-3 grid grid-cols-2 gap-1.5">
-                            <div>
-                                <label class="block text-[10px] text-gray-500 mb-0.5">Atas</label>
-                                <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="padTop" value="20" min="0" max="100" oninput="updatePageSize()">
-                            </div>
-                            <div>
-                                <label class="block text-[10px] text-gray-500 mb-0.5">Bawah</label>
-                                <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="padBottom" value="20" min="0" max="100" oninput="updatePageSize()">
-                            </div>
-                            <div>
-                                <label class="block text-[10px] text-gray-500 mb-0.5">Kiri</label>
-                                <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="padLeft" value="20" min="0" max="100" oninput="updatePageSize()">
-                            </div>
-                            <div>
-                                <label class="block text-[10px] text-gray-500 mb-0.5">Kanan</label>
-                                <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="padRight" value="20" min="0" max="100" oninput="updatePageSize()">
+                            <!-- Subsection: Margin -->
+                            <div class="space-y-1.5">
+                                <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Margin (mm)</div>
+                                <div class="grid grid-cols-2 gap-1.5">
+                                    <div>
+                                        <label class="block text-[10px] text-gray-500 mb-0.5">Atas</label>
+                                        <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="padTop" value="20" min="0" max="100" oninput="updatePageSize()">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] text-gray-500 mb-0.5">Bawah</label>
+                                        <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="padBottom" value="20" min="0" max="100" oninput="updatePageSize()">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] text-gray-500 mb-0.5">Kiri</label>
+                                        <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="padLeft" value="20" min="0" max="100" oninput="updatePageSize()">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] text-gray-500 mb-0.5">Kanan</label>
+                                        <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="padRight" value="20" min="0" max="100" oninput="updatePageSize()">
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2926,19 +2925,21 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 'select': 'Select'
             };
 
-            const typeColors = {
-                'text': '#3b82f6',
-                'number': '#f59e0b',
-                'date': '#8b5cf6',
-                'checkbox': '#22c55e',
-                'radio': '#ec4899',
-                'select': '#a855f7'
+            // Subtle badge colors per field type (mirror list.php Status badge pattern)
+            const typeBadgeClasses = {
+                'text':     'bg-blue-50 text-blue-700 ring-blue-200',
+                'number':   'bg-amber-50 text-amber-700 ring-amber-200',
+                'date':     'bg-violet-50 text-violet-700 ring-violet-200',
+                'checkbox': 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+                'radio':    'bg-pink-50 text-pink-700 ring-pink-200',
+                'select':   'bg-purple-50 text-purple-700 ring-purple-200'
             };
 
             list.innerHTML = fields.map((field, i) => {
                 const needsOptions = ['radio', 'select'].includes(field.type);
                 const needsLabel = ['checkbox'].includes(field.type);
-                const color = typeColors[field.type] || '#3b82f6';
+                const badgeCls = typeBadgeClasses[field.type] || typeBadgeClasses['text'];
+                const tLabel = typeLabels[field.type] || field.type;
                 const eName = escapeHtml(field.name);
                 const eLabel = escapeHtml(field.label || '');
                 const eOptions = escapeHtml(field.options || '');
@@ -2946,56 +2947,74 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                 const searchText = (eName + ' ' + (field.label || '') + ' ' + field.type).toLowerCase();
                 return `
-                <div class="mb-2 p-2 bg-gray-100 rounded panel-list-item" data-search-text="${escapeHtml(searchText)}" style="border-left: 3px solid ${color};">
-                    <div class="flex justify-between items-center mb-1">
-                        <strong class="text-xs" style="color:${color};">{{${eName}}}</strong>
-                        <button type="button" class="inline-flex items-center py-0 px-1 rounded border border-red-600 text-red-600 hover:bg-red-50" onclick="removeField('${eName}')"><i class="bi bi-trash"></i></button>
+                <div class="mb-1.5 p-2.5 bg-white border border-gray-200 rounded-md hover:border-gray-300 transition-colors panel-list-item" data-search-text="${escapeHtml(searchText)}">
+                    <div class="flex justify-between items-center mb-2 gap-2">
+                        <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                            <code class="text-xs font-mono text-gray-800 truncate">{{${eName}}}</code>
+                            <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${badgeCls} shrink-0">${tLabel}</span>
+                        </div>
+                        <button type="button" class="inline-flex items-center p-1 rounded-md border border-gray-300 bg-white text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-300 shrink-0" onclick="removeField('${eName}')" title="Hapus"><i class="bi bi-trash text-xs"></i></button>
                     </div>
-                    <div class="flex mb-1">
-                        <span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">Nama</span>
-                        <input type="text" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${eName}" onchange="updateFieldName('${eName}', this.value)">
+                    <div class="space-y-1.5">
+                        <div>
+                            <label class="block text-[10px] text-gray-500 mb-0.5">Nama</label>
+                            <input type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" value="${eName}" onchange="updateFieldName('${eName}', this.value)">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-gray-500 mb-0.5">Tipe</label>
+                            <select class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" onchange="updateFieldType('${eName}', this.value)">
+                                <option value="text" ${field.type === 'text' ? 'selected' : ''}>Text</option>
+                                <option value="number" ${field.type === 'number' ? 'selected' : ''}>Number</option>
+                                <option value="date" ${field.type === 'date' ? 'selected' : ''}>Date</option>
+                                <option value="checkbox" ${field.type === 'checkbox' ? 'selected' : ''}>Checkbox</option>
+                                <option value="radio" ${field.type === 'radio' ? 'selected' : ''}>Radio</option>
+                                <option value="select" ${field.type === 'select' ? 'selected' : ''}>Select</option>
+                            </select>
+                        </div>
+                        ${needsLabel ? `
+                        <div>
+                            <label class="block text-[10px] text-gray-500 mb-0.5">Label <span class="text-gray-400">(opsional)</span></label>
+                            <input type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" value="${eLabel}" onchange="updateFieldLabel('${eName}', this.value)" placeholder="(kosongkan jika tanpa label)">
+                        </div>
+                        ` : ''}
+                        ${needsOptions ? `
+                        <div>
+                            <label class="block text-[10px] text-gray-500 mb-0.5">Opsi <span class="text-gray-400">(pisah koma)</span></label>
+                            <input type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" value="${eOptions}" onchange="updateFieldOptions('${eName}', this.value)" placeholder="Ya,Tidak,Mungkin">
+                        </div>
+                        ` : ''}
+                        <div>
+                            <label class="block text-[10px] text-gray-500 mb-0.5">Default</label>
+                            <input type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" value="${eDefault}" onchange="updateFieldDefault('${eName}', this.value)" placeholder="text, date:d F Y, $author_nama">
+                        </div>
                     </div>
-                    <select class="w-full rounded border-gray-300 shadow-sm text-xs mb-1 px-2 py-1" onchange="updateFieldType('${eName}', this.value)">
-                        <option value="text" ${field.type === 'text' ? 'selected' : ''}>Text</option>
-                        <option value="number" ${field.type === 'number' ? 'selected' : ''}>Number</option>
-                        <option value="date" ${field.type === 'date' ? 'selected' : ''}>Date</option>
-                        <option value="checkbox" ${field.type === 'checkbox' ? 'selected' : ''}>Checkbox</option>
-                        <option value="radio" ${field.type === 'radio' ? 'selected' : ''}>Radio</option>
-                        <option value="select" ${field.type === 'select' ? 'selected' : ''}>Select</option>
-                    </select>
-                    ${needsLabel ? `
-                    <div class="flex mb-1">
-                        <span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">Label</span>
-                        <input type="text" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${eLabel}" onchange="updateFieldLabel('${eName}', this.value)" placeholder="(kosongkan jika tanpa label)">
-                    </div>
-                    <small class="text-gray-500 block mb-1 text-xs">Opsional &mdash; kosongkan untuk checkbox tanpa teks</small>
-                    ` : ''}
-                    ${needsOptions ? `
-                    <div class="flex">
-                        <span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">Opsi</span>
-                        <input type="text" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${eOptions}" onchange="updateFieldOptions('${eName}', this.value)" placeholder="Ya,Tidak,Mungkin">
-                    </div>
-                    <small class="text-gray-500 text-xs">Pisah dengan koma</small>
-                    ` : ''}
-                    <div class="flex mt-1">
-                        <span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">Default</span>
-                        <input type="text" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${eDefault}" onchange="updateFieldDefault('${eName}', this.value)" placeholder="text, date:d F Y, $author_nama">
-                    </div>
-                    <details class="mt-1" style="font-size:11px;" data-field-details="${eName}">
-                        <summary style="cursor:pointer;color:#0e7490;"><i class="bi bi-sliders mr-1"></i>Validasi (opsional)</summary>
-                        <div class="p-1 mt-1" style="background:#f0f9ff;border-radius:3px;" data-field-row="${eName}">
-                            <div class="flex items-center gap-2 mb-1">
-                                <input class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" type="checkbox" id="req_${eName}" ${field.required ? 'checked' : ''} data-validate-key="required-${eName}" onchange="updateFieldValidation('${eName}', 'required', this.checked ? '1' : '')">
-                                <label class="text-xs" for="req_${eName}">Wajib diisi (required)</label>
-                            </div>
+                    <details class="mt-2 border-t border-gray-100 pt-2" data-field-details="${eName}">
+                        <summary class="cursor-pointer text-[11px] font-medium text-gray-600 hover:text-gray-900 flex items-center gap-1 select-none"><i class="bi bi-sliders text-[10px]"></i>Validasi (opsional)</summary>
+                        <div class="mt-2 space-y-1.5" data-field-row="${eName}">
+                            <label class="flex items-center gap-2 text-xs text-gray-700">
+                                <input class="rounded border-gray-300 text-gray-700 focus:ring-1 focus:ring-gray-400" type="checkbox" id="req_${eName}" ${field.required ? 'checked' : ''} data-validate-key="required-${eName}" onchange="updateFieldValidation('${eName}', 'required', this.checked ? '1' : '')">
+                                Wajib diisi
+                            </label>
                             ${['text', 'number'].includes(field.type) ? `
-                            <div class="grid grid-cols-2 gap-1 mb-1">
-                                <div class="flex"><span class="inline-flex items-center px-1 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50" style="font-size:10px;">Min</span><input type="number" class="flex-1 rounded-r border border-gray-300 text-xs px-1 py-1" value="${escapeHtml(field.min || '')}" data-validate-key="min-${eName}" onchange="updateFieldValidation('${eName}', 'min', this.value)" placeholder="${field.type === 'number' ? 'nilai' : 'panjang'}"></div>
-                                <div class="flex"><span class="inline-flex items-center px-1 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50" style="font-size:10px;">Max</span><input type="number" class="flex-1 rounded-r border border-gray-300 text-xs px-1 py-1" value="${escapeHtml(field.max || '')}" data-validate-key="max-${eName}" onchange="updateFieldValidation('${eName}', 'max', this.value)" placeholder="${field.type === 'number' ? 'nilai' : 'panjang'}"></div>
+                            <div class="grid grid-cols-2 gap-1.5">
+                                <div>
+                                    <label class="block text-[10px] text-gray-500 mb-0.5">Min</label>
+                                    <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" value="${escapeHtml(field.min || '')}" data-validate-key="min-${eName}" onchange="updateFieldValidation('${eName}', 'min', this.value)" placeholder="${field.type === 'number' ? 'nilai' : 'panjang'}">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] text-gray-500 mb-0.5">Max</label>
+                                    <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" value="${escapeHtml(field.max || '')}" data-validate-key="max-${eName}" onchange="updateFieldValidation('${eName}', 'max', this.value)" placeholder="${field.type === 'number' ? 'nilai' : 'panjang'}">
+                                </div>
                             </div>
-                            <div class="flex mb-1"><span class="inline-flex items-center px-1 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50" style="font-size:10px;">Regex</span><input type="text" class="flex-1 rounded-r border border-gray-300 text-xs px-1 py-1 font-mono" value="${escapeHtml(field.pattern || '')}" data-validate-key="pattern-${eName}" onchange="updateFieldValidation('${eName}', 'pattern', this.value)" placeholder="^[0-9]+$ (opsional)"></div>
+                            <div>
+                                <label class="block text-[10px] text-gray-500 mb-0.5">Regex</label>
+                                <input type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 font-mono" value="${escapeHtml(field.pattern || '')}" data-validate-key="pattern-${eName}" onchange="updateFieldValidation('${eName}', 'pattern', this.value)" placeholder="^[0-9]+$ (opsional)">
+                            </div>
                             ` : ''}
-                            <div class="flex"><span class="inline-flex items-center px-1 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50" style="font-size:10px;">Pesan error</span><input type="text" class="flex-1 rounded-r border border-gray-300 text-xs px-1 py-1" value="${escapeHtml(field.errorMsg || '')}" data-validate-key="errorMsg-${eName}" onchange="updateFieldValidation('${eName}', 'errorMsg', this.value)" placeholder="Pesan kalau tidak valid"></div>
+                            <div>
+                                <label class="block text-[10px] text-gray-500 mb-0.5">Pesan error</label>
+                                <input type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" value="${escapeHtml(field.errorMsg || '')}" data-validate-key="errorMsg-${eName}" onchange="updateFieldValidation('${eName}', 'errorMsg', this.value)" placeholder="Pesan kalau tidak valid">
+                            </div>
                         </div>
                     </details>
                 </div>`;
