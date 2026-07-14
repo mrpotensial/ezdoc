@@ -2036,12 +2036,18 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             toolbar_sticky: true,
             toolbar_sticky_offset: 0,
             plugins: 'advlist anchor autolink charmap code fullscreen help hr image insertdatetime lists link nonbreaking pagebreak preview searchreplace table visualblocks visualchars wordcount',
+            // 2-row layout (industri: Notion/Google Docs — essentials visible,
+            // overflow via floating popup). Rarely-used items (line-height,
+            // strikethrough/sub/super, blockquote/hr/pagebreak, charmap, anchor,
+            // insertdatetime, visualblocks/visualchars) tetap accessible via
+            // toolbar overflow menu.
             toolbar: [
-                'undo redo | blocks fontfamily fontsize lineheightbtn | bold italic underline strikethrough subscript superscript | forecolor backcolor removeformat',
-                'alignleft aligncenter alignright alignjustify | outdent indent | bullist numlist | blockquote hr pagebreak | table link anchor charmap insertdatetime nonbreaking image',
-                'insertlogo insertqr insertfield insertttd insertmaterai insertcond inserttable | searchreplace visualblocks visualchars wordcount | code preview fullscreen help'
+                'undo redo | blocks fontfamily fontsize | bold italic underline | forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist | outdent indent | link table image | removeformat',
+                'insertlogo insertqr insertfield insertttd insertmaterai insertcond inserttable | searchreplace wordcount | code preview fullscreen help'
             ],
-            toolbar_mode: 'sliding',
+            // 'floating' mode: overflow items masuk popup "More" (bukan wrap ke baris
+            // baru). Konsisten 2 baris di semua screen widths.
+            toolbar_mode: 'floating',
             font_size_formats: '8pt 9pt 10pt 11pt 12pt 14pt 16pt 18pt 20pt 24pt 28pt 36pt 48pt',
             font_family_formats: 'Times New Roman=Times New Roman,serif; Arial=arial,helvetica,sans-serif; Calibri=calibri,sans-serif; Courier New=courier new,courier,monospace; Georgia=georgia,serif; Tahoma=tahoma,arial,helvetica,sans-serif; Verdana=verdana,geneva,sans-serif; Helvetica=helvetica,arial,sans-serif',
             insertdatetime_formats: ['%d/%m/%Y', '%d %B %Y', '%H:%M', '%d/%m/%Y %H:%M'],
