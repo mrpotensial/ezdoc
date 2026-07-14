@@ -233,6 +233,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
         /* PRESERVE: JS-toggled class for filter (JS adds/removes at runtime) */
         .panel-list-item-hidden { display: none !important; }
+
+        /* Field card details — hide default triangle marker (Safari + Firefox) */
+        details.group summary::-webkit-details-marker { display: none; }
+        details.group summary::marker { display: none; }
     </style>
 </head>
 <body>
@@ -2925,7 +2929,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 'select': 'Select'
             };
 
-            // Subtle badge colors per field type (mirror list.php Status badge pattern)
+            // Type badge + icon per field type (mirror list.php Status badge + icon)
             const typeBadgeClasses = {
                 'text':     'bg-blue-50 text-blue-700 ring-blue-200',
                 'number':   'bg-amber-50 text-amber-700 ring-amber-200',
@@ -2934,12 +2938,42 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 'radio':    'bg-pink-50 text-pink-700 ring-pink-200',
                 'select':   'bg-purple-50 text-purple-700 ring-purple-200'
             };
+            // Header gradient bg per type — subtle color hint for visual variety
+            // (Airtable/Linear record-color pattern) tanpa going full-rainbow
+            const typeHeaderBg = {
+                'text':     'from-blue-50/70 to-white',
+                'number':   'from-amber-50/70 to-white',
+                'date':     'from-violet-50/70 to-white',
+                'checkbox': 'from-emerald-50/70 to-white',
+                'radio':    'from-pink-50/70 to-white',
+                'select':   'from-purple-50/70 to-white'
+            };
+            // Left accent border color per type — Airtable "record color" pattern
+            const typeAccent = {
+                'text':     'before:bg-blue-400',
+                'number':   'before:bg-amber-400',
+                'date':     'before:bg-violet-400',
+                'checkbox': 'before:bg-emerald-400',
+                'radio':    'before:bg-pink-400',
+                'select':   'before:bg-purple-400'
+            };
+            const typeIcons = {
+                'text':     'bi-fonts',
+                'number':   'bi-123',
+                'date':     'bi-calendar-event',
+                'checkbox': 'bi-check-square',
+                'radio':    'bi-record-circle',
+                'select':   'bi-chevron-expand'
+            };
 
             list.innerHTML = fields.map((field, i) => {
                 const needsOptions = ['radio', 'select'].includes(field.type);
                 const needsLabel = ['checkbox'].includes(field.type);
                 const badgeCls = typeBadgeClasses[field.type] || typeBadgeClasses['text'];
+                const headerBg  = typeHeaderBg[field.type] || typeHeaderBg['text'];
+                const accentCls = typeAccent[field.type] || typeAccent['text'];
                 const tLabel = typeLabels[field.type] || field.type;
+                const tIcon = typeIcons[field.type] || typeIcons['text'];
                 const eName = escapeHtml(field.name);
                 const eLabel = escapeHtml(field.label || '');
                 const eOptions = escapeHtml(field.options || '');
@@ -2947,73 +2981,84 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                 const searchText = (eName + ' ' + (field.label || '') + ' ' + field.type).toLowerCase();
                 return `
-                <div class="mb-1.5 p-2.5 bg-white border border-gray-200 rounded-md hover:border-gray-300 transition-colors panel-list-item" data-search-text="${escapeHtml(searchText)}">
-                    <div class="flex justify-between items-center mb-2 gap-2">
-                        <div class="flex items-center gap-1.5 min-w-0 flex-1">
-                            <code class="text-xs font-mono text-gray-800 truncate">{{${eName}}}</code>
-                            <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${badgeCls} shrink-0">${tLabel}</span>
-                        </div>
-                        <button type="button" class="inline-flex items-center p-1 rounded-md border border-gray-300 bg-white text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-300 shrink-0" onclick="removeField('${eName}')" title="Hapus"><i class="bi bi-trash text-xs"></i></button>
+                <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${accentCls} before:content-['']" data-search-text="${escapeHtml(searchText)}">
+                    <!-- Card Header — single line inline dengan type color hint -->
+                    <div class="flex items-center gap-1.5 pl-3 pr-2 py-1.5 bg-gradient-to-b ${headerBg} border-b border-gray-200">
+                        <span class="inline-flex items-center justify-center w-5 h-5 rounded ring-1 ring-inset ${badgeCls} shrink-0"><i class="bi ${tIcon} text-[10px]"></i></span>
+                        <code class="text-xs font-mono text-gray-900 truncate flex-1 min-w-0">{{${eName}}}</code>
+                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium text-gray-600 bg-white/80 ring-1 ring-inset ring-gray-200 shrink-0">${tLabel}</span>
+                        <button type="button" class="inline-flex items-center p-0.5 rounded text-gray-400 hover:bg-red-50 hover:text-red-600 shrink-0" onclick="removeField('${eName}')" title="Hapus"><i class="bi bi-trash text-xs"></i></button>
                     </div>
-                    <div class="space-y-1.5">
-                        <div>
-                            <label class="block text-[10px] text-gray-500 mb-0.5">Nama</label>
-                            <input type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" value="${eName}" onchange="updateFieldName('${eName}', this.value)">
+                    <!-- Card Body — compact 2-column grid, tight spacing -->
+                    <div class="pl-3 pr-2 py-2 space-y-1.5 bg-gradient-to-b from-white to-gray-50/30">
+                        <!-- Row 1: Nama (2/3) + Tipe (1/3) -->
+                        <div class="grid grid-cols-3 gap-1.5">
+                            <div class="col-span-2">
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Nama</label>
+                                <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 font-mono bg-white" value="${eName}" onchange="updateFieldName('${eName}', this.value)">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Tipe</label>
+                                <select class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-1.5 py-1 bg-white" onchange="updateFieldType('${eName}', this.value)">
+                                    <option value="text" ${field.type === 'text' ? 'selected' : ''}>Text</option>
+                                    <option value="number" ${field.type === 'number' ? 'selected' : ''}>Number</option>
+                                    <option value="date" ${field.type === 'date' ? 'selected' : ''}>Date</option>
+                                    <option value="checkbox" ${field.type === 'checkbox' ? 'selected' : ''}>Checkbox</option>
+                                    <option value="radio" ${field.type === 'radio' ? 'selected' : ''}>Radio</option>
+                                    <option value="select" ${field.type === 'select' ? 'selected' : ''}>Select</option>
+                                </select>
+                            </div>
                         </div>
+                        <!-- Row 2: Default value — full width -->
                         <div>
-                            <label class="block text-[10px] text-gray-500 mb-0.5">Tipe</label>
-                            <select class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" onchange="updateFieldType('${eName}', this.value)">
-                                <option value="text" ${field.type === 'text' ? 'selected' : ''}>Text</option>
-                                <option value="number" ${field.type === 'number' ? 'selected' : ''}>Number</option>
-                                <option value="date" ${field.type === 'date' ? 'selected' : ''}>Date</option>
-                                <option value="checkbox" ${field.type === 'checkbox' ? 'selected' : ''}>Checkbox</option>
-                                <option value="radio" ${field.type === 'radio' ? 'selected' : ''}>Radio</option>
-                                <option value="select" ${field.type === 'select' ? 'selected' : ''}>Select</option>
-                            </select>
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Default</label>
+                            <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${eDefault}" onchange="updateFieldDefault('${eName}', this.value)" placeholder="text, date:d F Y, \$author_nama">
                         </div>
+                        <!-- Row 3: Conditional (Label / Opsi) -->
                         ${needsLabel ? `
                         <div>
-                            <label class="block text-[10px] text-gray-500 mb-0.5">Label <span class="text-gray-400">(opsional)</span></label>
-                            <input type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" value="${eLabel}" onchange="updateFieldLabel('${eName}', this.value)" placeholder="(kosongkan jika tanpa label)">
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Label <span class="text-gray-400 font-normal normal-case">(teks di sebelah checkbox)</span></label>
+                            <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${eLabel}" onchange="updateFieldLabel('${eName}', this.value)" placeholder="(kosongkan jika tanpa label)">
                         </div>
                         ` : ''}
                         ${needsOptions ? `
                         <div>
-                            <label class="block text-[10px] text-gray-500 mb-0.5">Opsi <span class="text-gray-400">(pisah koma)</span></label>
-                            <input type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" value="${eOptions}" onchange="updateFieldOptions('${eName}', this.value)" placeholder="Ya,Tidak,Mungkin">
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Opsi <span class="text-gray-400 font-normal normal-case">(pisah koma)</span></label>
+                            <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${eOptions}" onchange="updateFieldOptions('${eName}', this.value)" placeholder="Ya, Tidak, Mungkin">
                         </div>
                         ` : ''}
-                        <div>
-                            <label class="block text-[10px] text-gray-500 mb-0.5">Default</label>
-                            <input type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" value="${eDefault}" onchange="updateFieldDefault('${eName}', this.value)" placeholder="text, date:d F Y, $author_nama">
-                        </div>
                     </div>
-                    <details class="mt-2 border-t border-gray-100 pt-2" data-field-details="${eName}">
-                        <summary class="cursor-pointer text-[11px] font-medium text-gray-600 hover:text-gray-900 flex items-center gap-1 select-none"><i class="bi bi-sliders text-[10px]"></i>Validasi (opsional)</summary>
-                        <div class="mt-2 space-y-1.5" data-field-row="${eName}">
-                            <label class="flex items-center gap-2 text-xs text-gray-700">
-                                <input class="rounded border-gray-300 text-gray-700 focus:ring-1 focus:ring-gray-400" type="checkbox" id="req_${eName}" ${field.required ? 'checked' : ''} data-validate-key="required-${eName}" onchange="updateFieldValidation('${eName}', 'required', this.checked ? '1' : '')">
+                    <!-- Card Footer: Validasi collapsible -->
+                    <details class="border-t border-gray-200 group bg-gray-50/40" data-field-details="${eName}">
+                        <summary class="cursor-pointer text-[11px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100/60 flex items-center gap-1.5 pl-3 pr-2 py-1.5 select-none list-none transition-colors">
+                            <i class="bi bi-chevron-right text-[10px] text-gray-400 transition-transform group-open:rotate-90"></i>
+                            <i class="bi bi-shield-check text-[10px]"></i>
+                            Validasi
+                        </summary>
+                        <div class="pl-3 pr-2 py-1.5 bg-gray-50 border-t border-gray-200/60 space-y-1.5" data-field-row="${eName}">
+                            <label class="flex items-center gap-1.5 text-[11px] text-gray-700 cursor-pointer">
+                                <input class="rounded border-gray-400 text-gray-800 focus:ring-1 focus:ring-gray-400 shadow-sm" type="checkbox" id="req_${eName}" ${field.required ? 'checked' : ''} data-validate-key="required-${eName}" onchange="updateFieldValidation('${eName}', 'required', this.checked ? '1' : '')">
                                 Wajib diisi
                             </label>
                             ${['text', 'number'].includes(field.type) ? `
                             <div class="grid grid-cols-2 gap-1.5">
                                 <div>
-                                    <label class="block text-[10px] text-gray-500 mb-0.5">Min</label>
-                                    <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" value="${escapeHtml(field.min || '')}" data-validate-key="min-${eName}" onchange="updateFieldValidation('${eName}', 'min', this.value)" placeholder="${field.type === 'number' ? 'nilai' : 'panjang'}">
+                                    <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Min</label>
+                                    <input type="number" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(field.min || '')}" data-validate-key="min-${eName}" onchange="updateFieldValidation('${eName}', 'min', this.value)" placeholder="${field.type === 'number' ? 'nilai' : 'panjang'}">
                                 </div>
                                 <div>
-                                    <label class="block text-[10px] text-gray-500 mb-0.5">Max</label>
-                                    <input type="number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" value="${escapeHtml(field.max || '')}" data-validate-key="max-${eName}" onchange="updateFieldValidation('${eName}', 'max', this.value)" placeholder="${field.type === 'number' ? 'nilai' : 'panjang'}">
+                                    <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Max</label>
+                                    <input type="number" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(field.max || '')}" data-validate-key="max-${eName}" onchange="updateFieldValidation('${eName}', 'max', this.value)" placeholder="${field.type === 'number' ? 'nilai' : 'panjang'}">
                                 </div>
                             </div>
                             <div>
-                                <label class="block text-[10px] text-gray-500 mb-0.5">Regex</label>
-                                <input type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 font-mono" value="${escapeHtml(field.pattern || '')}" data-validate-key="pattern-${eName}" onchange="updateFieldValidation('${eName}', 'pattern', this.value)" placeholder="^[0-9]+$ (opsional)">
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Regex</label>
+                                <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 font-mono bg-white" value="${escapeHtml(field.pattern || '')}" data-validate-key="pattern-${eName}" onchange="updateFieldValidation('${eName}', 'pattern', this.value)" placeholder="^[0-9]+$ (opsional)">
                             </div>
                             ` : ''}
                             <div>
-                                <label class="block text-[10px] text-gray-500 mb-0.5">Pesan error</label>
-                                <input type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" value="${escapeHtml(field.errorMsg || '')}" data-validate-key="errorMsg-${eName}" onchange="updateFieldValidation('${eName}', 'errorMsg', this.value)" placeholder="Pesan kalau tidak valid">
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Pesan error</label>
+                                <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(field.errorMsg || '')}" data-validate-key="errorMsg-${eName}" onchange="updateFieldValidation('${eName}', 'errorMsg', this.value)" placeholder="Pesan kalau tidak valid">
                             </div>
                         </div>
                     </details>
@@ -4069,41 +4114,78 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             }
             if (empty) empty.style.display = 'none';
 
+            // Materai posMode accent — inline (rose), floating (amber/slate)
+            const mateModeMap = {
+                'inline':  { accent: 'before:bg-rose-400',  headerBg: 'from-rose-50/70 to-white',   badgeCls: 'bg-rose-50 text-rose-700 ring-rose-200',   label: 'Inline' },
+                'front':   { accent: 'before:bg-amber-400', headerBg: 'from-amber-50/70 to-white',  badgeCls: 'bg-amber-50 text-amber-700 ring-amber-200', label: 'Depan' },
+                'behind':  { accent: 'before:bg-slate-400', headerBg: 'from-slate-50/70 to-white',  badgeCls: 'bg-slate-50 text-slate-700 ring-slate-200', label: 'Belakang' }
+            };
+
             list.innerHTML = configMateraiList.map((m, i) => {
                 const eId = escapeHtml(m.id);
-                const labelDisp = (m.label && m.label.trim()) ? escapeHtml(m.label) : '<em style="color:#9ca3af;">(tanpa label)</em>';
+                const labelDisp = (m.label && m.label.trim()) ? escapeHtml(m.label) : '<span class="italic text-gray-400">(tanpa label)</span>';
                 const posMode = m.posMode || 'inline';
                 const isFloating = posMode !== 'inline';
                 const w = parseInt(m.width) || 100;
                 const h = parseInt(m.height) || 140;
+                const mm = mateModeMap[posMode] || mateModeMap['inline'];
                 const searchText = ((m.label || '') + ' ' + (m.mode || '') + ' ' + posMode + ' ' + m.id).toLowerCase();
                 return `
-                <div class="mb-2 p-2 bg-gray-100 rounded panel-list-item" data-search-text="${escapeHtml(searchText)}" style="border-left: 3px solid #c2410c;">
-                    <div class="flex justify-between mb-1">
-                        <strong class="text-xs" style="color:#c2410c;">${labelDisp}</strong>
-                        <button type="button" class="inline-flex items-center py-0 px-1 rounded border border-red-600 text-red-600 hover:bg-red-50" onclick="deleteMaterai(${i})"><i class="bi bi-trash"></i></button>
+                <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${mm.accent} before:content-['']" data-search-text="${escapeHtml(searchText)}">
+                    <!-- Card Header -->
+                    <div class="flex items-center gap-1.5 pl-3 pr-2 py-1.5 bg-gradient-to-b ${mm.headerBg} border-b border-gray-200">
+                        <span class="inline-flex items-center justify-center w-5 h-5 rounded ring-1 ring-inset ${mm.badgeCls} shrink-0"><i class="bi bi-stamp text-[10px]"></i></span>
+                        <span class="text-xs font-medium text-gray-900 truncate flex-1 min-w-0">${labelDisp}</span>
+                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium text-gray-600 bg-white/80 ring-1 ring-inset ring-gray-200 shrink-0">${mm.label}</span>
+                        <button type="button" class="inline-flex items-center p-0.5 rounded text-gray-400 hover:bg-red-50 hover:text-red-600 shrink-0" onclick="deleteMaterai(${i})" title="Hapus"><i class="bi bi-trash text-xs"></i></button>
                     </div>
-                    <input type="text" class="w-full rounded border-gray-300 shadow-sm text-xs mb-1 px-2 py-1" value="${escapeHtml(m.label || '')}" oninput="updateMateraiAttr('${eId}', 'label', this.value, ${i})" placeholder="Label (kosongkan jika tanpa label)">
-                    <select class="w-full rounded border-gray-300 shadow-sm text-xs mb-1 px-2 py-1" onchange="updateMateraiAttr('${eId}', 'mode', this.value, ${i})">
-                        <option value="upload" ${m.mode === 'upload' ? 'selected' : ''}>Upload e-Materai</option>
-                        <option value="kosong" ${m.mode === 'kosong' ? 'selected' : ''}>Kosong (tempel manual)</option>
-                    </select>
-                    <select class="w-full rounded border-gray-300 shadow-sm text-xs mb-1 px-2 py-1" onchange="updateMateraiPosMode('${eId}', this.value, ${i})">
-                        <option value="inline" ${posMode === 'inline' ? 'selected' : ''}>Inline (dalam teks)</option>
-                        <option value="front" ${posMode === 'front' ? 'selected' : ''}>Floating - Di Depan</option>
-                        <option value="behind" ${posMode === 'behind' ? 'selected' : ''}>Floating - Di Belakang</option>
-                    </select>
-                    <div class="grid grid-cols-2 gap-1 mb-1">
-                        <div class="flex"><span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">W</span><input type="number" min="20" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${w}" onchange="updateMateraiSize('${eId}', 'width', this.value, ${i})"></div>
-                        <div class="flex"><span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">H</span><input type="number" min="20" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${h}" onchange="updateMateraiSize('${eId}', 'height', this.value, ${i})"></div>
+                    <!-- Card Body -->
+                    <div class="pl-3 pr-2 py-2 space-y-1.5 bg-gradient-to-b from-white to-gray-50/30">
+                        <div>
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Label</label>
+                            <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(m.label || '')}" oninput="updateMateraiAttr('${eId}', 'label', this.value, ${i})" placeholder="(kosongkan jika tanpa label)">
+                        </div>
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Tipe</label>
+                                <select class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-1.5 py-1 bg-white" onchange="updateMateraiAttr('${eId}', 'mode', this.value, ${i})">
+                                    <option value="upload" ${m.mode === 'upload' ? 'selected' : ''}>Upload</option>
+                                    <option value="kosong" ${m.mode === 'kosong' ? 'selected' : ''}>Kosong</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Posisi</label>
+                                <select class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-1.5 py-1 bg-white" onchange="updateMateraiPosMode('${eId}', this.value, ${i})">
+                                    <option value="inline" ${posMode === 'inline' ? 'selected' : ''}>Inline</option>
+                                    <option value="front" ${posMode === 'front' ? 'selected' : ''}>Depan</option>
+                                    <option value="behind" ${posMode === 'behind' ? 'selected' : ''}>Belakang</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Width</label>
+                                <input type="number" min="20" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${w}" onchange="updateMateraiSize('${eId}', 'width', this.value, ${i})">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Height</label>
+                                <input type="number" min="20" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${h}" onchange="updateMateraiSize('${eId}', 'height', this.value, ${i})">
+                            </div>
+                        </div>
+                        ${isFloating ? `
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Pos X</label>
+                                <input type="number" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${m.posX || 350}" onchange="updateMateraiPos('${eId}', 'x', this.value)">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Pos Y</label>
+                                <input type="number" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${m.posY || 500}" onchange="updateMateraiPos('${eId}', 'y', this.value)">
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-gray-500 italic">Drag materai di editor untuk ubah posisi</p>
+                        ` : ''}
                     </div>
-                    ${isFloating ? `
-                    <div class="grid grid-cols-2 gap-1">
-                        <div class="flex"><span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">X</span><input type="number" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${m.posX || 350}" onchange="updateMateraiPos('${eId}', 'x', this.value)"></div>
-                        <div class="flex"><span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">Y</span><input type="number" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${m.posY || 500}" onchange="updateMateraiPos('${eId}', 'y', this.value)"></div>
-                    </div>
-                    <small class="text-gray-500 text-xs">Drag materai di editor untuk ubah posisi</small>
-                    ` : ''}
                 </div>`;
             }).join('');
 
@@ -4276,6 +4358,13 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             }
             if (empty) empty.style.display = 'none';
 
+            // Mode accent — inline (green — anchored) vs floating (amber — draggable)
+            const modeMap = {
+                'inline':  { accent: 'before:bg-emerald-400', headerBg: 'from-emerald-50/70 to-white', badgeCls: 'bg-emerald-50 text-emerald-700 ring-emerald-200', label: 'Inline' },
+                'front':   { accent: 'before:bg-amber-400',   headerBg: 'from-amber-50/70 to-white',   badgeCls: 'bg-amber-50 text-amber-700 ring-amber-200',       label: 'Depan' },
+                'behind':  { accent: 'before:bg-slate-400',   headerBg: 'from-slate-50/70 to-white',   badgeCls: 'bg-slate-50 text-slate-700 ring-slate-200',       label: 'Belakang' }
+            };
+
             list.innerHTML = logos.map(logo => {
                 const src = configHeader.logos[logo.name] || '';
                 const width = configHeader.logoSizes[logo.name] || logo.width || '80px';
@@ -4283,37 +4372,52 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 const isFloating = mode !== 'inline';
                 const eName = escapeHtml(logo.name);
                 const eWidth = escapeHtml(width);
+                const m = modeMap[mode] || modeMap['inline'];
 
                 return `
-                <div class="mb-2 p-2 bg-gray-100 rounded">
-                    <div class="flex justify-between items-center mb-1">
-                        <strong class="text-xs">${eName}</strong>
-                        ${src ? `<button type="button" class="inline-flex items-center py-0 px-1 rounded border border-red-600 text-red-600 hover:bg-red-50" onclick="removeLogo('${eName}')"><i class="bi bi-trash"></i></button>` : ''}
+                <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${m.accent} before:content-['']">
+                    <!-- Card Header -->
+                    <div class="flex items-center gap-1.5 pl-3 pr-2 py-1.5 bg-gradient-to-b ${m.headerBg} border-b border-gray-200">
+                        <span class="inline-flex items-center justify-center w-5 h-5 rounded ring-1 ring-inset ${m.badgeCls} shrink-0"><i class="bi bi-image text-[10px]"></i></span>
+                        <code class="text-xs font-mono text-gray-900 truncate flex-1 min-w-0">${eName}</code>
+                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium text-gray-600 bg-white/80 ring-1 ring-inset ring-gray-200 shrink-0">${m.label}</span>
+                        ${src ? `<button type="button" class="inline-flex items-center p-0.5 rounded text-gray-400 hover:bg-red-50 hover:text-red-600 shrink-0" onclick="removeLogo('${eName}')" title="Hapus"><i class="bi bi-trash text-xs"></i></button>` : ''}
                     </div>
-                    ${src ? `<img src="${src}" style="max-width:${eWidth};max-height:60px;display:block;margin-bottom:8px;">` : ''}
-                    <div class="flex mb-1">
-                        <span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">W</span>
-                        <input type="text" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${eWidth}" onchange="updateLogoSize('${eName}', this.value)">
-                    </div>
-                    <select class="w-full rounded border-gray-300 shadow-sm text-xs mb-1 px-2 py-1" onchange="updateLogoMode('${eName}', this.value)">
-                        <option value="inline" ${mode === 'inline' ? 'selected' : ''}>Inline</option>
-                        <option value="front" ${mode === 'front' ? 'selected' : ''}>Floating Depan</option>
-                        <option value="behind" ${mode === 'behind' ? 'selected' : ''}>Floating Belakang</option>
-                    </select>
-                    ${isFloating ? `
-                    <div class="grid grid-cols-2 gap-1 mb-1">
-                        <div class="flex">
-                            <span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">X</span>
-                            <input type="number" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${logo.posX}" onchange="updateLogoPos('${eName}', 'x', this.value)">
+                    <!-- Card Body -->
+                    <div class="pl-3 pr-2 py-2 space-y-1.5 bg-gradient-to-b from-white to-gray-50/30">
+                        ${src ? `<img src="${src}" style="max-width:${eWidth};max-height:60px;display:block;" class="rounded border border-gray-200 mx-auto">` : ''}
+                        <div class="grid grid-cols-3 gap-1.5">
+                            <div class="col-span-2">
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Mode</label>
+                                <select class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-1.5 py-1 bg-white" onchange="updateLogoMode('${eName}', this.value)">
+                                    <option value="inline" ${mode === 'inline' ? 'selected' : ''}>Inline</option>
+                                    <option value="front" ${mode === 'front' ? 'selected' : ''}>Floating Depan</option>
+                                    <option value="behind" ${mode === 'behind' ? 'selected' : ''}>Floating Belakang</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Width</label>
+                                <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${eWidth}" onchange="updateLogoSize('${eName}', this.value)">
+                            </div>
                         </div>
-                        <div class="flex">
-                            <span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">Y</span>
-                            <input type="number" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${logo.posY}" onchange="updateLogoPos('${eName}', 'y', this.value)">
+                        ${isFloating ? `
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Pos X</label>
+                                <input type="number" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${logo.posX}" onchange="updateLogoPos('${eName}', 'x', this.value)">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Pos Y</label>
+                                <input type="number" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${logo.posY}" onchange="updateLogoPos('${eName}', 'y', this.value)">
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-gray-500 italic">Drag logo di editor untuk ubah posisi</p>
+                        ` : ''}
+                        <div>
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Upload gambar</label>
+                            <input type="file" class="w-full text-[11px] file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-100 file:text-gray-700 file:cursor-pointer hover:file:bg-gray-200" accept="image/*" onchange="uploadLogo('${eName}', this)">
                         </div>
                     </div>
-                    <small class="text-gray-500 text-xs">Drag logo di editor untuk ubah posisi</small>
-                    ` : ''}
-                    <input type="file" class="w-full text-xs" accept="image/*" onchange="uploadLogo('${eName}', this)">
                 </div>`;
             }).join('');
         }
@@ -4642,77 +4746,111 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             if (configTtd.length === 0) { list.innerHTML = ''; if (empty) empty.style.display = 'block'; return; }
             if (empty) empty.style.display = 'none';
 
+            // Mode accent — inline (emerald), floating (amber for front, slate for behind)
+            const ttdModeMap = {
+                'inline':  { accent: 'before:bg-emerald-400', headerBg: 'from-emerald-50/70 to-white', badgeCls: 'bg-emerald-50 text-emerald-700 ring-emerald-200', label: 'Inline' },
+                'front':   { accent: 'before:bg-amber-400',   headerBg: 'from-amber-50/70 to-white',   badgeCls: 'bg-amber-50 text-amber-700 ring-amber-200',       label: 'Depan' },
+                'behind':  { accent: 'before:bg-slate-400',   headerBg: 'from-slate-50/70 to-white',   badgeCls: 'bg-slate-50 text-slate-700 ring-slate-200',       label: 'Belakang' }
+            };
+
             list.innerHTML = configTtd.map((ttd, i) => {
                 const mode = ttd.mode || 'inline';
                 const isFloating = mode !== 'inline';
                 const eLabel = escapeHtml(ttd.label || 'TTD ' + (i + 1));
                 const eNamaField = escapeHtml(ttd.nama_field || '');
                 const eId = escapeHtml(ttd.id);
-                const searchText = ((ttd.label || '') + ' ' + (ttd.nama_field || '') + ' ' + mode + ' ' + (ttd.ttdModes || '')).toLowerCase();
-
+                const m = ttdModeMap[mode] || ttdModeMap['inline'];
+                const ttdModes = ttd.ttdModes || 'image';
+                const hasQr = ttdModes.includes('qr');
+                const searchText = ((ttd.label || '') + ' ' + (ttd.nama_field || '') + ' ' + mode + ' ' + ttdModes).toLowerCase();
                 const verifyActive = (ttd.qrData || '').includes('{verify_url}');
+
                 return `
-                <div class="mb-2 p-2 bg-gray-100 rounded panel-list-item" data-search-text="${escapeHtml(searchText)}" style="border-left: 3px solid #10b981;">
-                    <div class="flex justify-between mb-1">
-                        <strong class="text-xs text-green-600">${eLabel}</strong>
-                        <button type="button" class="inline-flex items-center py-0 px-1 rounded border border-red-600 text-red-600 hover:bg-red-50" onclick="deleteTtd(${i})"><i class="bi bi-trash"></i></button>
+                <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${m.accent} before:content-['']" data-search-text="${escapeHtml(searchText)}">
+                    <!-- Card Header -->
+                    <div class="flex items-center gap-1.5 pl-3 pr-2 py-1.5 bg-gradient-to-b ${m.headerBg} border-b border-gray-200">
+                        <span class="inline-flex items-center justify-center w-5 h-5 rounded ring-1 ring-inset ${m.badgeCls} shrink-0"><i class="bi bi-pen text-[10px]"></i></span>
+                        <span class="text-xs font-medium text-gray-900 truncate flex-1 min-w-0">${eLabel}</span>
+                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium text-gray-600 bg-white/80 ring-1 ring-inset ring-gray-200 shrink-0">${m.label}</span>
+                        <button type="button" class="inline-flex items-center p-0.5 rounded text-gray-400 hover:bg-red-50 hover:text-red-600 shrink-0" onclick="deleteTtd(${i})" title="Hapus"><i class="bi bi-trash text-xs"></i></button>
                     </div>
-                    <input type="text" class="w-full rounded border-gray-300 shadow-sm text-xs mb-1 px-2 py-1" value="${escapeHtml(ttd.label || '')}" oninput="updateTtd(${i}, 'label', this.value)" placeholder="Label">
-                    <input type="text" class="w-full rounded border-gray-300 shadow-sm text-xs mb-1 px-2 py-1" value="${eNamaField}" oninput="updateTtd(${i}, 'nama_field', this.value)" placeholder="Field nama">
-                    <select class="w-full rounded border-gray-300 shadow-sm text-xs mb-1 px-2 py-1" onchange="updateTtdMode('${eId}', this.value)">
-                        <option value="inline" ${mode === 'inline' ? 'selected' : ''}>Inline</option>
-                        <option value="front" ${mode === 'front' ? 'selected' : ''}>Floating Depan</option>
-                        <option value="behind" ${mode === 'behind' ? 'selected' : ''}>Floating Belakang</option>
-                    </select>
-                    ${isFloating ? `
-                    <div class="grid grid-cols-2 gap-1">
-                        <div class="flex">
-                            <span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">X</span>
-                            <input type="number" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${ttd.posX || 50}" onchange="updateTtdPos('${eId}', 'x', this.value)">
+                    <!-- Card Body -->
+                    <div class="pl-3 pr-2 py-2 space-y-1.5 bg-gradient-to-b from-white to-gray-50/30">
+                        <!-- Row 1: Label + Nama field (2-col) -->
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Label</label>
+                                <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(ttd.label || '')}" oninput="updateTtd(${i}, 'label', this.value)" placeholder="Label TTD">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Field nama</label>
+                                <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white font-mono" value="${eNamaField}" oninput="updateTtd(${i}, 'nama_field', this.value)" placeholder="nama_dokter">
+                            </div>
                         </div>
-                        <div class="flex">
-                            <span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">Y</span>
-                            <input type="number" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${ttd.posY || 100}" onchange="updateTtdPos('${eId}', 'y', this.value)">
+                        <!-- Row 2: Mode select -->
+                        <div>
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Posisi</label>
+                            <select class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-1.5 py-1 bg-white" onchange="updateTtdMode('${eId}', this.value)">
+                                <option value="inline" ${mode === 'inline' ? 'selected' : ''}>Inline</option>
+                                <option value="front" ${mode === 'front' ? 'selected' : ''}>Floating Depan</option>
+                                <option value="behind" ${mode === 'behind' ? 'selected' : ''}>Floating Belakang</option>
+                            </select>
                         </div>
-                    </div>
-                    <small class="text-gray-500 text-xs">Drag TTD di editor untuk ubah posisi</small>
-                    ` : ''}
-                    <div class="flex mt-1">
-                        <span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">Mode</span>
-                        <select class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" onchange="updateTtdAttr('${eId}', 'ttdModes', this.value, ${i})">
-                            <option value="image" ${(ttd.ttdModes || 'image') === 'image' ? 'selected' : ''}>Gambar</option>
-                            <option value="qr" ${(ttd.ttdModes || 'image') === 'qr' ? 'selected' : ''}>QR Code</option>
-                            <option value="image,qr" ${(ttd.ttdModes || 'image') === 'image,qr' ? 'selected' : ''}>Gambar + QR</option>
-                        </select>
-                    </div>
-                    ${(ttd.ttdModes || 'image').includes('qr') ? `
-                    <div class="flex mt-1">
-                        <span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">QR</span>
-                        <input type="text" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" id="ttdQrInput_${i}" value="${escapeHtml(ttd.qrData || '')}" onchange="updateTtdAttr('${eId}', 'qrData', this.value, ${i})" placeholder="Data QR, misal: {nama_dokter}">
-                    </div>
-                    <div class="flex justify-between items-center mt-1 flex-wrap gap-1">
-                        <small class="text-gray-500" style="font-size:10.5px;">Pakai {nama_field} untuk data dinamis</small>
-                        <button type="button" class="inline-flex items-center py-0 px-2 rounded ${verifyActive ? 'bg-green-600 text-white hover:bg-green-700' : 'border border-blue-600 text-blue-600 hover:bg-blue-50'}" style="font-size:11px;" onclick="setTtdVerifyUrl('${eId}', ${i})" title="QR untuk verifikasi keaslian dokumen — di-scan akan buka halaman verify">
-                            <i class="bi bi-shield-check"></i> ${verifyActive ? 'Verifikasi Aktif' : 'Pakai Verifikasi Dokumen'}
+                        ${isFloating ? `
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Pos X</label>
+                                <input type="number" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${ttd.posX || 50}" onchange="updateTtdPos('${eId}', 'x', this.value)">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Pos Y</label>
+                                <input type="number" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${ttd.posY || 100}" onchange="updateTtdPos('${eId}', 'y', this.value)">
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-gray-500 italic">Drag TTD di editor untuk ubah posisi</p>
+                        ` : ''}
+                        <!-- Row 3: TTD Mode (image/qr/both) -->
+                        <div>
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Tampilan</label>
+                            <select class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-1.5 py-1 bg-white" onchange="updateTtdAttr('${eId}', 'ttdModes', this.value, ${i})">
+                                <option value="image" ${ttdModes === 'image' ? 'selected' : ''}>Gambar</option>
+                                <option value="qr" ${ttdModes === 'qr' ? 'selected' : ''}>QR Code</option>
+                                <option value="image,qr" ${ttdModes === 'image,qr' ? 'selected' : ''}>Gambar + QR</option>
+                            </select>
+                        </div>
+                        ${hasQr ? `
+                        <div>
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Data QR <span class="text-gray-400 font-normal normal-case">— pakai {nama_field}</span></label>
+                            <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white font-mono" id="ttdQrInput_${i}" value="${escapeHtml(ttd.qrData || '')}" onchange="updateTtdAttr('${eId}', 'qrData', this.value, ${i})" placeholder="{nama_dokter}">
+                        </div>
+                        <button type="button" class="w-full inline-flex items-center justify-center gap-1 rounded text-[11px] font-medium py-1 ${verifyActive ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}" onclick="setTtdVerifyUrl('${eId}', ${i})" title="QR untuk verifikasi keaslian dokumen">
+                            <i class="bi bi-shield-check"></i>${verifyActive ? 'Verifikasi aktif' : 'Pakai verifikasi dokumen'}
                         </button>
-                    </div>
-                    ` : ''}
-                    <div class="flex mt-1">
-                        <span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs" title="Nama yang tampil kalau field belum diisi">Default</span>
-                        <input type="text" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${escapeHtml(ttd.defaultNama || '')}" onchange="updateTtdAttr('${eId}', 'defaultNama', this.value, ${i})" placeholder="Default nama, contoh: dr. Hilmi...">
-                    </div>
-                    <!-- RBAC per-TTD: siapa yang boleh sign TTD ini -->
-                    <div class="mt-1 pt-1 border-t border-gray-300">
-                        <small class="text-gray-500 block mb-1" style="font-size:10px;"><i class="bi bi-lock"></i> <strong>Akses TTD</strong> (kosong = semua)</small>
-                        <div class="flex">
-                            <span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50" style="font-size:10px;">Roles</span>
-                            <input type="text" class="flex-1 rounded-r border border-gray-300 px-2 py-1" value="${escapeHtml(ttd.allowedRoles || '')}" onchange="updateTtdAttr('${eId}', 'allowedRoles', this.value, ${i})" placeholder="dokter_dpjp,perawat" style="font-size:11px;">
-                        </div>
-                        <div class="flex mt-1">
-                            <span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50" style="font-size:10px;">Users</span>
-                            <input type="text" class="flex-1 rounded-r border border-gray-300 px-2 py-1" value="${escapeHtml(ttd.allowedUsers || '')}" onchange="updateTtdAttr('${eId}', 'allowedUsers', this.value, ${i})" placeholder="42,99 (id_pegawai)" style="font-size:11px;">
+                        ` : ''}
+                        <!-- Row: Default nama -->
+                        <div>
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Default nama</label>
+                            <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(ttd.defaultNama || '')}" onchange="updateTtdAttr('${eId}', 'defaultNama', this.value, ${i})" placeholder="dr. Hilmi...">
                         </div>
                     </div>
+                    <!-- Card Footer: RBAC collapsible -->
+                    <details class="border-t border-gray-200 group bg-gray-50/40">
+                        <summary class="cursor-pointer text-[11px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100/60 flex items-center gap-1.5 pl-3 pr-2 py-1.5 select-none list-none transition-colors">
+                            <i class="bi bi-chevron-right text-[10px] text-gray-400 transition-transform group-open:rotate-90"></i>
+                            <i class="bi bi-lock text-[10px]"></i>
+                            Akses <span class="text-gray-400 font-normal">(kosong = semua)</span>
+                        </summary>
+                        <div class="pl-3 pr-2 py-1.5 bg-gray-50 border-t border-gray-200/60 space-y-1.5">
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Roles</label>
+                                <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white font-mono" value="${escapeHtml(ttd.allowedRoles || '')}" onchange="updateTtdAttr('${eId}', 'allowedRoles', this.value, ${i})" placeholder="dokter_dpjp,perawat">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Users <span class="text-gray-400 font-normal normal-case">(id_pegawai)</span></label>
+                                <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white font-mono" value="${escapeHtml(ttd.allowedUsers || '')}" onchange="updateTtdAttr('${eId}', 'allowedUsers', this.value, ${i})" placeholder="42,99">
+                            </div>
+                        </div>
+                    </details>
                 </div>`;
             }).join('');
 
