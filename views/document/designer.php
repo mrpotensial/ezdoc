@@ -2096,6 +2096,49 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             noneditable_class: 'mceNonEditable',
             // Import CSS from consumer app supaya template preview match production styling
             importcss_append: true,
+            // ===== Paste hygiene (industri: PowerPaste-equivalent via built-in options) =====
+            // MS Word paste ninggalin Mso*, mso-*, dan empty <p><span></span> — invisible
+            // di editor tapi render sebagai blank rows di preview + dompdf PDF.
+            // Whitelist tag berguna, strip Word garbage inline styles, remove empty nodes.
+            paste_data_images: true,          // allow inline base64 images (screenshots)
+            paste_merge_formats: true,        // merge adjacent identical spans
+            paste_webkit_styles: 'none',      // strip webkit-specific inline styles
+            paste_remove_styles_if_webkit: true,
+            paste_word_valid_elements: 'b,strong,i,em,u,s,strike,sub,sup,br,p,span,ul,ol,li,table,tbody,thead,tfoot,tr,td,th,h1,h2,h3,h4,h5,h6,blockquote,pre,code,a[href]',
+            paste_retain_style_properties: 'text-align,color,background-color,font-weight,font-style,text-decoration,vertical-align',
+            paste_preprocess: function(_plugin, args) {
+                let c = args.content;
+                // Strip Word Mso* / MsoNormal classes
+                c = c.replace(/\s*class="[^"]*Mso[^"]*"/gi, '');
+                // Strip mso-* inline style properties
+                c = c.replace(/mso-[^:]+:[^;"}]+;?\s*/gi, '');
+                // Strip empty style attribute leftovers
+                c = c.replace(/\s*style="\s*"/gi, '');
+                c = c.replace(/\s*class="\s*"/gi, '');
+                // Remove Word garbage empty paragraphs: <p><span></span></p>
+                c = c.replace(/<p[^>]*>\s*<span[^>]*>\s*<\/span>\s*<\/p>/gi, '');
+                // Remove other empty paragraphs (just whitespace/nbsp/br)
+                c = c.replace(/<p[^>]*>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>/gi, '');
+                // Remove empty spans
+                c = c.replace(/<span[^>]*>\s*<\/span>/gi, '');
+                args.content = c;
+            },
+            paste_postprocess: function(_plugin, args) {
+                // DOM-level second pass — remove empty paragraphs yang masih lolos preprocess
+                // (setelah TinyMCE internal transforms). Preserve paragraphs dengan img/media.
+                const root = args.node;
+                if (!root) return;
+                root.querySelectorAll('p').forEach(p => {
+                    const text = (p.textContent || '').trim();
+                    const hasMedia = p.querySelector('img, video, iframe, .field-placeholder, .ttd-placeholder, .materai-placeholder, .qr-placeholder, .logo-placeholder');
+                    if (!text && !hasMedia) p.remove();
+                });
+                // Also strip Mso classes yang masih ada (defensive)
+                root.querySelectorAll('[class*="Mso"]').forEach(el => {
+                    const cleaned = (el.className || '').replace(/\s*Mso\w+\s*/g, ' ').trim();
+                    if (cleaned) el.className = cleaned; else el.removeAttribute('class');
+                });
+            },
             // 2-row layout — row 1 all standard formatting + utilities, row 2 custom
             // ezdoc inserts. Toolbar akan wrap ke multi-row saat width sempit (sidebar
             // aktif) dan collapse ke 1 row di fullscreen.
