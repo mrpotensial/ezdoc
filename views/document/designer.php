@@ -466,8 +466,9 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                 <input type="hidden" id="templateId" value="<?= $template['id'] ?? 0 ?>">
 
-                <!-- Editor Wrapper (paper background) -->
-                <div class="bg-slate-500 p-5 flex-1 overflow-auto" id="editorWrapper">
+                <!-- Editor Wrapper (paper background) — overflow-hidden supaya cuma
+                     1 scroll (di dalam TinyMCE iframe). Google Docs pattern. -->
+                <div class="bg-slate-500 p-5 flex-1 overflow-hidden" id="editorWrapper">
                     <div class="bg-white mx-auto shadow-[0_4px_20px_rgba(0,0,0,0.3)]" id="editorContainer">
                         <textarea id="editor"><?= h($template['template_html'] ?? '') ?></textarea>
                     </div>
@@ -1504,10 +1505,14 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             const container = document.getElementById('editorContainer');
             if (container) {
                 container.style.width = paperWidth + 'mm';
-                container.style.minHeight = paperHeight + 'mm';
+                // Container height = auto-fit dari TinyMCE widget (viewport-fill).
+                // Paper visualization diberikan oleh iframe BODY minHeight (di bawah).
+                // Kalau kita set minHeight paper size di editorContainer, dia jadi
+                // lebih tinggi dari viewport → editorWrapper scroll = 2 scroll.
+                container.style.minHeight = '';
             }
 
-            // Update TinyMCE body padding and container height
+            // Update TinyMCE body padding — paper dimensions untuk PDF export.
             const editor = tinymce.get('editor');
             if (editor) {
                 const iframe = editor.getContainer().querySelector('iframe');
@@ -1517,11 +1522,11 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     body.style.minHeight = (paperHeight - padTop - padBottom) + 'mm';
                 }
 
-                // Resize editor height based on paper size
-                const newHeight = Math.round(paperHeight * 3.78);
+                // TinyMCE widget height = viewport-fill (getEditorHeight), NOT paper
+                // height. Iframe scrolls internally kalau content > viewport.
                 const editorContainer = editor.getContainer();
                 if (editorContainer) {
-                    editorContainer.style.height = newHeight + 'px';
+                    editorContainer.style.height = getEditorHeight() + 'px';
                 }
             }
         }
@@ -2007,25 +2012,16 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         <?php if ($action !== 'list'): ?>
         // Calculate initial height based on paper size
         function getEditorHeight() {
-            const paperSize = configHeader.paperSize || 'A4';
-            const orientation = configHeader.orientation || 'portrait';
-            let paperHeight;
-
-            if (paperSize === 'Custom') {
-                paperHeight = configHeader.customHeight || 297;
-                const paperWidth = configHeader.customWidth || 210;
-                if (orientation === 'landscape') {
-                    paperHeight = paperWidth; // Swap for landscape
-                }
-            } else {
-                const paper = PAPER_SIZES[paperSize];
-                paperHeight = paper?.height || 297;
-                if (orientation === 'landscape') {
-                    paperHeight = paper?.width || 210; // Swap for landscape
-                }
-            }
-            // Convert mm to pixels (approximate: 1mm = 3.78px at 96dpi)
-            return Math.round(paperHeight * 3.78);
+            // Sizing strategy (Google Docs / Notion pattern):
+            //   TinyMCE fills editorWrapper viewport = window height minus top bar.
+            //   Edit-area iframe scrolls internally (1 scroll only), toolbar sticky.
+            // Consumer boleh override via config atau CSS var (--ezdoc-editor-height).
+            const wrapper = document.getElementById('editorWrapper');
+            const topBar = wrapper?.previousElementSibling; // dark top bar
+            const topH = topBar ? topBar.offsetHeight : 60;
+            // Padding buffer (editorWrapper has p-5 = 20px each side vertically)
+            const wrapperPadding = 40;
+            return Math.max(400, window.innerHeight - topH - wrapperPadding);
         }
 
         tinymce.init({
@@ -2035,6 +2031,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             menubar: false,
             statusbar: false,
             resize: false,
+            // Sticky toolbar — tetap visible saat scroll editor content (Google Docs
+            // pattern). Sticky within scrolling ancestor (editorWrapper).
+            toolbar_sticky: true,
+            toolbar_sticky_offset: 0,
             plugins: 'advlist anchor autolink charmap code fullscreen help hr image insertdatetime lists link nonbreaking pagebreak preview searchreplace table visualblocks visualchars wordcount',
             toolbar: [
                 'undo redo | blocks fontfamily fontsize lineheightbtn | bold italic underline strikethrough subscript superscript | forecolor backcolor removeformat',
