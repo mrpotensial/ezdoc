@@ -2038,19 +2038,42 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             // pattern). Sticky within scrolling ancestor (editorWrapper).
             toolbar_sticky: true,
             toolbar_sticky_offset: 0,
-            plugins: 'advlist anchor autolink charmap code fullscreen help hr image insertdatetime lists link nonbreaking pagebreak preview searchreplace table visualblocks visualchars wordcount',
-            // 2-row layout (industri: Notion/Google Docs — essentials visible,
-            // overflow via floating popup). Rarely-used items (line-height,
-            // strikethrough/sub/super, blockquote/hr/pagebreak, charmap, anchor,
-            // insertdatetime, visualblocks/visualchars) tetap accessible via
-            // toolbar overflow menu.
+            // Plugins — full feature set (skip emoticons/media/mediaembed per user):
+            //   autosave     : recover unsaved content after crash/close
+            //   directionality: LTR/RTL toggle untuk multi-lang templates
+            //   importcss    : import consumer app CSS (brand consistency)
+            //   quickbars    : floating selection toolbar (Notion pattern)
+            plugins: 'advlist anchor autolink autosave charmap code directionality fullscreen help hr image importcss insertdatetime lists link nonbreaking pagebreak preview quickbars searchreplace table visualblocks visualchars wordcount',
+            // Autosave — critical UX (recovers content kalau browser crash/close).
+            // Prefix pakai template ID supaya per-template autosave.
+            autosave_ask_before_unload: true,
+            autosave_interval: '30s',
+            autosave_prefix: 'ezdoc-tpl-{path}{query}-',
+            autosave_restore_when_empty: false,
+            autosave_retention: '30m',
+            // Selection quickbar — floating toolbar saat select text (Medium/Notion).
+            // Only shows on selection, unobtrusive default state.
+            quickbars_selection_toolbar: 'bold italic underline | forecolor backcolor | link | h2 h3 blockquote',
+            quickbars_insert_toolbar: false, // disable insert quickbar (kita ada custom insert buttons)
+            // Image dialog: advanced tab (border, spacing, styles) + caption support
+            image_advtab: true,
+            image_caption: true,
+            // Right-click contextmenu untuk common ops
+            contextmenu: 'link image table',
+            // Non-editable class untuk lock certain content areas
+            noneditable_class: 'mceNonEditable',
+            // Import CSS from consumer app supaya template preview match production styling
+            importcss_append: true,
+            // 2-row layout — row 1 all standard formatting + utilities, row 2 custom
+            // ezdoc inserts. Toolbar akan wrap ke multi-row saat width sempit (sidebar
+            // aktif) dan collapse ke 1 row di fullscreen.
             toolbar: [
-                'undo redo | blocks fontfamily fontsize | bold italic underline | forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist | outdent indent | link table image | removeformat',
-                'insertlogo insertqr insertfield insertttd insertmaterai insertcond inserttable | searchreplace wordcount | code preview fullscreen help'
+                'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist | outdent indent | ltr rtl | link table image | removeformat | searchreplace wordcount | code preview fullscreen help',
+                'insertlogo insertqr insertfield insertttd insertmaterai insertcond inserttable'
             ],
-            // 'floating' mode: overflow items masuk popup "More" (bukan wrap ke baris
-            // baru). Konsisten 2 baris di semua screen widths.
-            toolbar_mode: 'floating',
+            // 'sliding' mode: horizontal slider dengan arrow (per user's reference config).
+            // Better UX daripada 'floating' popup untuk many-button toolbar.
+            toolbar_mode: 'sliding',
             font_size_formats: '8pt 9pt 10pt 11pt 12pt 14pt 16pt 18pt 20pt 24pt 28pt 36pt 48pt',
             font_family_formats: 'Times New Roman=Times New Roman,serif; Arial=arial,helvetica,sans-serif; Calibri=calibri,sans-serif; Courier New=courier new,courier,monospace; Georgia=georgia,serif; Tahoma=tahoma,arial,helvetica,sans-serif; Verdana=verdana,geneva,sans-serif; Helvetica=helvetica,arial,sans-serif',
             insertdatetime_formats: ['%d/%m/%Y', '%d %B %Y', '%H:%M', '%d/%m/%Y %H:%M'],
