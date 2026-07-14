@@ -237,6 +237,22 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         /* Field card details — hide default triangle marker (Safari + Firefox) */
         details.group summary::-webkit-details-marker { display: none; }
         details.group summary::marker { display: none; }
+
+        /* Clean minimalist scrollbar untuk sidebar (Notion/Linear pattern) */
+        .sidebar-scroll {
+            scrollbar-width: thin;                    /* Firefox */
+            scrollbar-color: #d1d5db transparent;    /* Firefox */
+        }
+        .sidebar-scroll::-webkit-scrollbar { width: 8px; }
+        .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+        .sidebar-scroll::-webkit-scrollbar-thumb {
+            background: transparent;
+            border-radius: 4px;
+            border: 2px solid transparent;
+            background-clip: padding-box;
+        }
+        .sidebar-scroll:hover::-webkit-scrollbar-thumb { background: #d1d5db; background-clip: padding-box; }
+        .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: #9ca3af; background-clip: padding-box; }
     </style>
 </head>
 <body>
@@ -482,7 +498,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             </div>
 
             <!-- Sidebar -->
-            <div class="w-full md:w-1/3 lg:w-1/4 bg-white h-screen overflow-y-auto border-l border-gray-200">
+            <div class="w-full md:w-1/3 lg:w-1/4 bg-white h-screen overflow-y-auto border-l border-gray-200 sidebar-scroll">
                 <div class="px-3">
                     <?= \Ezdoc\UI\Slot::render('designer:sidebar-header', ['template' => $template]) ?>
                 </div>
@@ -2085,7 +2101,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             // aktif) dan collapse ke 1 row di fullscreen.
             toolbar: [
                 'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist | outdent indent | ltr rtl | link table image | removeformat | searchreplace wordcount | code preview fullscreen help',
-                'insertlogo insertqr insertfield insertttd insertmaterai insertcond inserttable'
+                // Custom insert buttons — 1 kelompok visual (no `|` di dalam grup)
+                'insertfield insertttd insertmaterai insertqr insertlogo insertcond inserttable'
             ],
             // 'sliding' mode: horizontal slider dengan arrow (per user's reference config).
             // Better UX daripada 'floating' popup untuk many-button toolbar.
@@ -2316,9 +2333,20 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     }
                 });
 
+                // ===== Register custom SVG icons (Bootstrap Icons paths) =====
+                // Digunakan oleh custom insert buttons (Logo/QR/Field/TTD/Materai/Kondisi/Tabel).
+                editor.ui.registry.addIcon('ezdoc-logo', '<svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/><path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/></svg>');
+                editor.ui.registry.addIcon('ezdoc-qr', '<svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h2v2H2V2Zm4 0h1v4H2V5h4V2Zm6 4V4h-1V2h1V1h1v1h1v1h-1v3h-1Zm-3-1V1h1v4H9Zm3 4V7h1v2h-1Zm-3 1V8H8V7h4v2h-1v1h-1V9H9v1Zm-6 4V9h1v1h1v1h1v-1h1v4H4v-4H3v3H2Zm7 0V9h1v1h1v-1h1v4h-1v-2h-1v2H9Zm4-1v1h-1v-1h1Z"/><path d="M0 0h6v6H0V0Zm10 0h6v6h-6V0ZM0 10h6v6H0v-6Zm3-8H1v3h2V2Zm11 0h-2v3h2V2ZM3 12H1v3h2v-3Z"/></svg>');
+                editor.ui.registry.addIcon('ezdoc-field', '<svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/><path d="M4.146 10.146a.5.5 0 0 1 .708 0L6 11.293l1.146-1.147a.5.5 0 0 1 .708.708L6.707 12l1.147 1.146a.5.5 0 0 1-.708.708L6 12.707l-1.146 1.147a.5.5 0 0 1-.708-.708L5.293 12l-1.147-1.146a.5.5 0 0 1 0-.708zm5 0a.5.5 0 0 1 .708 0L11 11.293l1.146-1.147a.5.5 0 0 1 .708.708L11.707 12l1.147 1.146a.5.5 0 0 1-.708.708L11 12.707l-1.146 1.147a.5.5 0 0 1-.708-.708L10.293 12l-1.147-1.146a.5.5 0 0 1 0-.708z"/></svg>');
+                editor.ui.registry.addIcon('ezdoc-ttd', '<svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M13.498.795l.149-.149a1.207 1.207 0 1 1 1.707 1.708l-.149.148a1.5 1.5 0 0 1-.059 2.059L4.854 14.854a.5.5 0 0 1-.233.131l-4 1a.5.5 0 0 1-.606-.606l1-4a.5.5 0 0 1 .131-.232l9.642-9.642a.5.5 0 0 0-.642.056L6.854 4.854a.5.5 0 1 1-.708-.708L9.44.854A1.5 1.5 0 0 1 11.5.796a1.5 1.5 0 0 1 1.998-.001z"/></svg>');
+                editor.ui.registry.addIcon('ezdoc-materai', '<svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M4.5 1.938a.5.5 0 0 1 .858.494L4.905 4H9.5a.5.5 0 0 1 0 1H4.905l.453 1.568a.5.5 0 1 1-.858.494L4 5.28l-.5 1.782a.5.5 0 1 1-.858-.494L3.095 5H1.5a.5.5 0 0 1 0-1h1.595l-.453-1.568a.5.5 0 0 1 .858-.494L3.5 3.72l.5-1.782ZM2 12a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-2Zm2-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H4Z"/><path d="M9.5 3a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0Z"/></svg>');
+                editor.ui.registry.addIcon('ezdoc-cond', '<svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M9.05.435c-.58-.58-1.52-.58-2.1 0L.436 6.95c-.58.58-.58 1.519 0 2.098l6.516 6.516c.58.58 1.519.58 2.098 0l6.516-6.516c.58-.58.58-1.519 0-2.098L9.05.435zM8 4c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995A.905.905 0 0 1 8 4zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>');
+                editor.ui.registry.addIcon('ezdoc-table', '<svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2Zm15 2h-4v3h4V4Zm0 4h-4v3h4V8Zm0 4h-4v3h3a1 1 0 0 0 1-1v-2Zm-5 3v-3H6v3h4Zm-5 0v-3H1v2a1 1 0 0 0 1 1h3Zm-4-4h4V8H1v3Zm0-4h4V4H1v3Zm5 0h4V4H6v3Zm4 1H6v3h4V8Z"/></svg>');
+
                 // Logo insert with positioning options
                 editor.ui.registry.addMenuButton('insertlogo', {
-                    text: '+ Logo',
+                    text: 'Logo',
+                    icon: 'ezdoc-logo',
                     tooltip: 'Insert Logo Placeholder',
                     fetch: function(callback) {
                         callback([
@@ -2358,7 +2386,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                 // QR Code insert with positioning options
                 editor.ui.registry.addMenuButton('insertqr', {
-                    text: '+ QR',
+                    text: 'QR',
+                    icon: 'ezdoc-qr',
                     tooltip: 'Insert QR Code Placeholder',
                     fetch: function(callback) {
                         callback([
@@ -2399,7 +2428,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                 // Field insert with type options
                 editor.ui.registry.addMenuButton('insertfield', {
-                    text: '+ Field',
+                    text: 'Field',
+                    icon: 'ezdoc-field',
                     tooltip: 'Insert Field Input',
                     fetch: function(callback) {
                         callback([
@@ -2447,7 +2477,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                 // TTD insert with positioning options
                 editor.ui.registry.addMenuButton('insertttd', {
-                    text: '+ TTD',
+                    text: 'TTD',
+                    icon: 'ezdoc-ttd',
                     tooltip: 'Insert Tanda Tangan Placeholder',
                     fetch: function(callback) {
                         callback([
@@ -2524,7 +2555,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                 // ===== Materai (stamp duty) =====
                 editor.ui.registry.addMenuButton('insertmaterai', {
-                    text: '+ Materai',
+                    text: 'Materai',
+                    icon: 'ezdoc-materai',
                     tooltip: 'Insert Materai (E-Materai upload / area kosong untuk tempel)',
                     fetch: function(callback) {
                         callback([
@@ -2585,7 +2617,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                 // ===== Conditional Section (#7) =====
                 editor.ui.registry.addButton('insertcond', {
-                    text: '+ Kondisi',
+                    text: 'Kondisi',
+                    icon: 'ezdoc-cond',
                     tooltip: 'Insert Conditional Section (show/hide berdasarkan field value)',
                     onAction: function() {
                         const expr = prompt('Expression (contoh: jenis_kelamin=P, atau umur>=17, atau status_nikah!=lajang):\n\nOperator: = != > < >= <=\nGabungan: AND, OR (mis. jenis_kelamin=P AND umur>=17)', 'jenis_kelamin=P');
@@ -2600,7 +2633,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 });
 
                 editor.ui.registry.addButton('inserttable', {
-                    text: '+ Tabel',
+                    text: 'Tabel',
+                    icon: 'ezdoc-table',
                     tooltip: 'Insert Tabel Label-Value',
                     onAction: function() {
                         const count = prompt('Jumlah baris:', '3');
