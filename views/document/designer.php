@@ -2139,16 +2139,9 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     if (cleaned) el.className = cleaned; else el.removeAttribute('class');
                 });
             },
-            // 2-row layout — row 1 all standard formatting + utilities, row 2 custom
-            // ezdoc inserts. Toolbar akan wrap ke multi-row saat width sempit (sidebar
-            // aktif) dan collapse ke 1 row di fullscreen.
-            toolbar: [
-                'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist | outdent indent | ltr rtl | link table image | removeformat | searchreplace wordcount | code preview fullscreen help',
-                // Custom insert buttons — 1 kelompok visual (no `|` di dalam grup)
-                'insertfield insertttd insertmaterai insertqr insertlogo insertcond inserttable'
-            ],
-            // 'sliding' mode: horizontal slider dengan arrow (per user's reference config).
-            // Better UX daripada 'floating' popup untuk many-button toolbar.
+            // Single-row toolbar — semua tombol standard + custom ezdoc inserts sebaris.
+            // Sliding mode akan tampilkan arrow untuk overflow saat width sempit.
+            toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist | outdent indent | ltr rtl | link table image | removeformat | searchreplace wordcount | code preview fullscreen help | insertfield insertttd insertmaterai insertqr insertlogo insertcond inserttable',
             toolbar_mode: 'sliding',
             font_size_formats: '8pt 9pt 10pt 11pt 12pt 14pt 16pt 18pt 20pt 24pt 28pt 36pt 48pt',
             font_family_formats: 'Times New Roman=Times New Roman,serif; Arial=arial,helvetica,sans-serif; Calibri=calibri,sans-serif; Courier New=courier new,courier,monospace; Georgia=georgia,serif; Tahoma=tahoma,arial,helvetica,sans-serif; Verdana=verdana,geneva,sans-serif; Helvetica=helvetica,arial,sans-serif',
