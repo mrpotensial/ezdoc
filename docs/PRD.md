@@ -747,19 +747,28 @@ Alasan pilih native ports (bukan bridge):
 
 ```
 ezdoc-spec/                          # separate repo — single source of truth
-├── schemas/                         # JSON Schema (draft 2020-12)
-│   ├── template.json                # Template model bentuknya apa
-│   ├── document.json                # Document model
+├── schemas/                         # JSON Schema (draft 2020-12) + YAML mirror
+│   ├── tables.yaml                  # DB schema descriptor (seeded v0.9.9)
+│   ├── enums.yaml                   # enum values (status, signature_level, etc)
+│   ├── template.json                # Template domain model
+│   ├── document.json                # Document domain model
 │   ├── signature.json               # SignRequest / SignResult / Verdict
 │   └── audit-event.json             # AuditLog record
 ├── protocol/                        # binary & wire formats
 │   ├── signature-envelope.md        # PKCS#7 / PAdES bytes format
 │   ├── content-hash.md              # canonical JSON → SHA-256 algorithm
 │   ├── verify-protocol.md           # verify chain step-by-step
-│   └── qr-payload.md                # QR versioned payload format
-├── db-schema/                       # SQL DDL yang identik across langs
-│   └── mysql-8.sql
-└── conformance/                     # test fixtures untuk cross-lang interop
+│   ├── qr-payload.md                # QR versioned payload format
+│   ├── hash-algos.json              # SHA-256/SHA-512 constants (seeded v0.9.9)
+│   ├── signature-levels.json        # L1/L2/L3/A1 (seeded v0.9.9)
+│   └── envelope-types.json          # PAdES/CAdES/XAdES (seeded v0.9.9)
+├── ddl/                             # generated SQL DDL per platform (seeded v0.9.9)
+│   ├── mysql.sql
+│   ├── mariadb.sql
+│   ├── sqlite.sql
+│   ├── postgres.sql
+│   └── sqlserver.sql
+└── conformance/                     # test fixtures untuk cross-lang interop (v1.1)
     ├── test-vectors.json            # input+expected output pairs
     └── signatures/*.pem             # sample cert + signature bytes
 ```
@@ -812,9 +821,10 @@ Views di library WAJIB dumb — cuma HTML + fetch calls ke endpoints. Semua busi
 - Ignore library views total, build sendiri di React/Vue/Rust — YANG PENTING mereka honor endpoint contract + template content spec
 
 Contract sources of truth (framework-agnostic):
+- `ezdoc-spec/schemas/*.{json,yaml}` (seeded v0.9.9, enriched v1.1) — data models (Document, Template, Signature) + DB schema descriptors
+- `ezdoc-spec/ddl/*.sql` (seeded v0.9.9) — generated DDL per platform (mysql/mariadb/sqlite/postgres/sqlserver)
+- `ezdoc-spec/protocol/*.{md,json}` (seeded v0.9.9, enriched v1.1) — template content format, field markers, signature envelope, hash-algo constants, signature levels
 - `ezdoc-spec/openapi.yaml` (v1.1 milestone) — REST API contract
-- `ezdoc-spec/schemas/*.json` (v1.1 milestone) — data models (Document, Template, Signature)
-- `ezdoc-spec/protocol/*.md` (v1.1 milestone) — template content format, field markers, signature envelope
 - `ezdoc-spec/conformance/test-vectors.json` (v1.1 milestone) — cross-language interop tests
 
 Framework adapters (per language):
@@ -961,11 +971,13 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 
 ## 6. Roadmap
 
-**Total timeline (single dev, focused)**: ~31 weeks (~7 months) untuk v1.0 (termasuk v0.9.7 full views + v0.9.8 App orchestrator), tambah ~16 weeks (~4 bulan) untuk v2.0 = ~47 weeks (**~11 bulan**) ke ecosystem cross-language.
+**Total timeline (single dev, focused)**: ~34-35 weeks (~8 months) untuk v1.0 (termasuk v0.9.7 full views + v0.9.8 App orchestrator + v0.9.9 DB abstraction), tambah ~16 weeks (~4 bulan) untuk v2.0 = ~50-51 weeks (**~12 bulan**) ke ecosystem cross-language.
 
 **Note on v0.9.7 (added post-review)**: Milestone ini insertion baru based on user feedback "library tanpa WYSIWYG editor tidak akan di-adopt". Port full designer + generator dari dogfood consumer app ke library views = **~3-4 weeks extra** — critical blocker untuk v1.0 realistic adoption.
 
 **Note on v0.9.8 (added post-review)**: Milestone ini insertion baru based on user feedback "manual wiring bikin path errors dan boilerplate ~200 LOC per consumer install". Industri standar (Filament, Livewire, Nova) ship 1-line `App::run()` mount pattern. `Ezdoc\App` front controller + internal router + zero-config demo = **~2-3 weeks extra** — critical for adoption ergonomics.
+
+**Note on v0.9.9 (added post-review)**: Milestone ini insertion baru based on user feedback "target market RS/pemerintah/awam yg install-and-forget → zero external DB dep; sekaligus bekali cross-language port". Custom in-house DB abstraction (dari knowledge borrow ke Doctrine DBAL, no vendored code) + Blueprint DSL + T2 Grammar (MySQL/MariaDB/SQLite/Postgres/SQLServer) + spec-first bootstrap = **~3.5-4 weeks extra** — critical untuk PHP-upgrade freedom + cross-lang port ergonomics + zero-dep philosophy.
 
 **Fase besar**:
 
@@ -977,10 +989,11 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 | **Anchoring** | v0.9.5 | ~23 weeks | Blockchain anchor (OpenTimestamps + Polygon) |
 | **Full views** | v0.9.7 | ~27 weeks | Migrate designer + generator + list dari consumer app ke library (WYSIWYG editor + PDF gen) |
 | **App orchestrator** | v0.9.8 | ~30 weeks | `Ezdoc\App::run()` 1-line mount + internal router + zero-config demo |
-| **Extraction** | v1.0 | ~31 weeks | Standalone PHP library di Packagist |
-| **Spec** | v1.1 | ~33 weeks | ezdoc-spec repo publik |
-| **Go port** | v1.5 | ~39 weeks | Native Go implementation |
-| **TS port** | v2.0 | ~47 weeks | Native TypeScript + Next.js sample |
+| **DB abstraction** | v0.9.9 | ~34 weeks | Zero-dep DB layer + Blueprint DSL + 5 Grammars (T2) + spec-first artifacts |
+| **Extraction** | v1.0 | ~35 weeks | Standalone PHP library di Packagist |
+| **Spec** | v1.1 | ~37 weeks | ezdoc-spec repo publik (dari v0.9.9 seed) |
+| **Go port** | v1.5 | ~43 weeks | Native Go implementation |
+| **TS port** | v2.0 | ~51 weeks | Native TypeScript + Next.js sample |
 
 **Catatan estimation**:
 - Timeline asumsi **1 dev fokus purnawaktu**. Parallelization (mis. UI dev sambil PSrE integration) bisa potong 30-40%.
@@ -1349,9 +1362,110 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - ❌ Owning the entire response cycle (should return output, not exit)
 - ❌ Silent path resolution "magic" — path decisions must be traceable
 
-### 6.14 Milestone v1.0 — "PHP library extraction (Packagist)"  ⏱ ~1 week
+### 6.14 Milestone v0.9.9 — "DB abstraction + Repository completion + Spec-first bootstrap"  ⏱ ~3.5-4 weeks
 
-**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Depends on v0.9.7 (full views) + v0.9.8 (App orchestrator)** completed.
+**Goal**: Zero raw SQL di `actions/` + `views/`. Semua persistence via Repository. DB driver swap = 1 config change (mysqli / PDO-mysql / PDO-sqlite / PDO-pgsql / PDO-sqlsrv). Schema-first cross-platform DDL emit. Spec artifacts (YAML/JSON) extracted paralel supaya v1.1 tinggal repo split, bukan design ulang.
+
+**Design principle — zero-dep philosophy dgn strategic knowledge borrow**:
+- Target market ezdoc: RS/pemerintah/PHP-awam yg install-and-forget. Composer deps = friction. **Zero external DB library**.
+- Bukan reinvent wheel: study Doctrine DBAL source (MIT-licensed) sebagai reference SQL-dialect knowledge; **reimplement** dalam gaya ezdoc, credit di file header, no vendored code.
+- Own 100% code path → PHP version upgrade freedom + cross-language port ergonomics.
+
+**Scope**:
+- **DB abstraction** (`src/Db/`):
+  - `Connection.php` interface — `prepare`, `execute`, `fetchOne`, `fetchAll`, `transaction`, `schemaManager()`
+  - `Mysqli/MysqliConnection.php` — default zero-dep adapter (backward-compat dengan existing consumer koneksi.php)
+  - `Pdo/PdoConnection.php` — untuk sqlite/pgsql/sqlsrv (PDO extension built-in di PHP)
+- **Schema DSL Blueprint** (`src/Db/Schema/`) — Laravel-familiar naming, framework-neutral semantics:
+  - `Blueprint.php` — DSL: `id()`, `uuid()`, `string()`, `integer()`, `bigint()`, `json()`, `boolean()`, `enum()`, `text()`, `timestamps()`, `softDeletes()`, `foreignId()->references()`, `index()`, `unique()`
+  - `TableDef.php`, `ColumnDef.php`, `IndexDef.php`, `ForeignKeyDef.php`
+  - `Comparator.php` — diff old vs new Blueprint → generate ALTER statements
+- **Grammar per platform** (`src/Db/Grammar/`) — **T2 target** (5 databases):
+  - `Grammar.php` interface — `compileCreateTable`, `compileAlter`, `compileSelect`, `compileInsert`, `compileUpdate`, `compileDelete`, `wrapIdentifier`, `mapType`
+  - `MysqlGrammar.php` — MySQL 5.7+/8.0 dialect (backtick idents, native JSON, AUTO_INCREMENT)
+  - `MariaDbGrammar.php` — MariaDB 10.3+ (JSON via LONGTEXT + CHECK constraint on 10.2-)
+  - `SqliteGrammar.php` — SQLite 3.35+ (TEXT + json_valid CHECK, INTEGER PRIMARY KEY AUTOINCREMENT)
+  - `PostgresGrammar.php` — PostgreSQL 12+ (double-quote idents, native JSONB, GENERATED AS IDENTITY)
+  - `SqlServerGrammar.php` — SQL Server 2019+ (bracket idents, NVARCHAR(MAX) for JSON, IDENTITY(1,1), OFFSET…FETCH NEXT)
+- **QueryBuilder** (`src/Db/QueryBuilder.php`) — chainable fluent API: `select/from/where/andWhere/orWhere/join/leftJoin/groupBy/having/orderBy/limit/offset/union/insert/update/delete/upsert`. Grammar-driven SQL compilation.
+- **Types system** (`src/Db/Types/`) — data-driven mapping tables borrowed dari DBAL Types (JsonType, UuidType, EnumType, DateTimeType, BooleanType, TextType); cross-platform normalization.
+- **Repository completion** (~800 LOC refactor):
+  - Existing: `DocumentRepository`, `TemplateRepository` → refactor pakai `Ezdoc\Db\Connection` (bukan mysqli langsung)
+  - New: `SignatureRepository` (TTD values, currently inline in save_document.php)
+  - New: `AuditRepository` (audit_log queries)
+  - New: `DefaultVarsRepository`
+  - Sweep: 21 files di `actions/` → thin controllers → Service → Repository
+  - Grep goal: `mysqli_query|->query\(` di actions/ + views/ → **zero hits**
+- **Spec-first artifacts** (`ezdoc-spec/`, staging subfolder di ezdoc repo dulu; extract terpisah di v1.1):
+  ```
+  ezdoc-spec/
+    schema/
+      tables.yaml            ← generated from Blueprint DSL via cli/spec-dump.php
+      enums.yaml
+    ddl/
+      mysql.sql              ← Blueprint → MysqlGrammar → DDL
+      mariadb.sql
+      sqlite.sql
+      postgres.sql
+      sqlserver.sql
+    protocol/
+      hash-algos.json        ← SHA-256, SHA-512 constants
+      signature-levels.json  ← L1/L2/L3/A1
+      envelope-types.json    ← PAdES, CAdES, XAdES
+    meta/
+      version.json
+      checksum.txt           ← CI enforce: spec-dump.php --check == this
+    README.md                ← "PHP is source of truth; how to consume in Go/Rust/TS"
+  ```
+- **CLI**: `cli/spec-dump.php` — regenerate all spec files from Blueprint source
+- **CI enforcement**: `spec-dump.php --check` → CI runs → `git diff --exit-code ezdoc-spec/` → fail if code changed but spec not regenerated
+
+**Cross-language port design**:
+- Schema descriptor YAML dirancang first-class — bukan afterthought
+- Go: `yq eval` → codegen struct dari tables.yaml
+- Rust: `serde_yaml` → struct + Diesel/SeaORM binding
+- TypeScript: `js-yaml` → interface + Prisma/Drizzle schema
+- Semua **tidak perlu tahu apapun soal DBAL/PHP-specific** — hanya baca YAML declarative
+
+**PHP version upgrade risk**:
+- Zero external DB lib = zero external upgrade force
+- PHP 7.4 → 8.x transition pakai `symfony/polyfill-*` (sudah ada di composer.json)
+- Type system data-driven (bukan class-per-type inheritance) → tidak kena PHP major class-syntax changes
+
+**Effort breakdown**:
+- Week 1: Connection interface + Mysqli adapter + PDO adapter (4 drivers) + Blueprint DSL foundation
+- Week 2: 5 Grammar implementations (reference DBAL Platforms — port SQL formulas, not files) + Types system
+- Week 3: QueryBuilder + Comparator/diff engine + spec-dump CLI + first codegen run
+- Week 4: Repository sweep (21 actions files → thin controllers) + test matrix (docker-compose per Grammar) + docs
+
+**Migration & backcompat**:
+- `Ezdoc\App::run()` auto-detect existing `$conn` mysqli global → wrap `MysqliConnection` — **zero config change** untuk existing consumers
+- Opt-in PDO: `$config['db']['driver'] = 'pdo', 'dsn' => 'sqlite:...'`
+- `App::demo()` (dari v0.9.8) sekarang bisa run tanpa mysql daemon: default ke PDO-SQLite
+
+**Definition of Done**:
+- [ ] `Ezdoc\Db\Connection` interface + Mysqli + PDO adapters
+- [ ] 5 Grammar implementations lulus test matrix (docker-compose spins up each DB in CI)
+- [ ] Blueprint DSL: existing 5 migrations (`ezdoc_templates`, `ezdoc_documents`, `ezdoc_default_vars`, `ezdoc_audit_log`, `ezdoc_signatures`) rewritten via Blueprint
+- [ ] Migration runner emits per-Grammar DDL (test: same Blueprint → correct DDL untuk 5 platforms)
+- [ ] All Repositories accept `Ezdoc\Db\Connection` (bukan mysqli); grep `mysqli_query|->query\(` di `actions/` + `views/` → 0 hits
+- [ ] New: `SignatureRepository`, `AuditRepository`, `DefaultVarsRepository`
+- [ ] `cli/spec-dump.php` generates `ezdoc-spec/` completely; CI check-diff passes
+- [ ] `App::demo()` runs on SQLite (no mysql daemon required)
+- [ ] Same test suite passes against mysqli, PDO-mysql, PDO-sqlite, PDO-pgsql, PDO-sqlsrv
+- [ ] `docs/DB-ABSTRACTION.md` written — how consumer picks driver, how contributor adds new Grammar
+- [ ] `docs/CROSS-LANGUAGE.md` written — how a Go/Rust/TS port reads spec
+
+**Anti-patterns to avoid**:
+- ❌ Vendoring DBAL files verbatim (license entanglement + fork burden) — reimplement from knowledge
+- ❌ Leaking `Ezdoc\Db\*` implementation types (mysqli/PDO/DBAL) ke Repository — Repository hanya lihat `Connection` interface
+- ❌ Composer require `doctrine/dbal` — kontradiksi zero-dep philosophy
+- ❌ Hand-maintain SQL DDL files terpisah per DB (drift risk) — spec files harus generated
+- ❌ ORM feature creep (relations, lazy loading, entity manager) — Repository + QueryBuilder cukup untuk YAGNI
+
+### 6.15 Milestone v1.0 — "PHP library extraction (Packagist)"  ⏱ ~1 week
+
+**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Depends on v0.9.7 (full views) + v0.9.8 (App orchestrator) + v0.9.9 (DB abstraction)** completed.
 
 - [ ] Move `ezdoc/` folder ke repo baru `mrpotensial/ezdoc`
 - [ ] Setup GitHub Actions CI (phpunit + phpstan level 6 + PHP matrix 7.4-8.3)
@@ -1367,24 +1481,27 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - **`Ezdoc\App::run()` 1-line mount + `Ezdoc\App::demo()` zero-config SQLite mode** (from v0.9.8) — consumer install verification tanpa DB config
 - Fresh consumer test: install → `Ezdoc\App::demo()` → save template → generate doc → sign → verify (semua works out-of-box, tanpa manual wiring)
 
-### 6.15 Milestone v1.1 — "Spec extraction"  ⏱ ~1-2 weeks
+### 6.16 Milestone v1.1 — "Spec extraction (repo split + conformance vectors)"  ⏱ ~1-2 weeks
 
-**Goal**: buat repo `ezdoc-spec/` — the reusable architecture — sebagai persiapan untuk native ports.
+**Goal**: split `ezdoc-spec/` subfolder (seeded di v0.9.9) → standalone repo publik `mrpotensial/ezdoc-spec`; enrich dengan conformance test vectors untuk native ports.
 
-- [ ] Extract spec dari PHP impl → repo baru `mrpotensial/ezdoc-spec`
-- [ ] Write JSON Schemas untuk semua domain models
-- [ ] Write protocol docs (envelope format, hash algo, verify chain)
-- [ ] Write conformance test vectors (`conformance/test-vectors.json`)
-- [ ] PHP impl jadi first "reference implementation" yang lulus conformance test
-- [ ] Extract SQL DDL ke `db-schema/mysql-8.sql` (language-agnostic)
+**Prereq**: v0.9.9 completed — `ezdoc-spec/` sudah exist as subfolder di ezdoc repo dgn full schema/ddl/protocol artifacts.
+
+- [ ] `git subtree split ezdoc-spec/` → new repo `mrpotensial/ezdoc-spec`
+- [ ] Add conformance test vectors: `conformance/test-vectors.json` (canonical inputs → expected outputs untuk hash, signature verify, template render, QR generation)
+- [ ] Enrich protocol docs (envelope format details, hash algo alignment, verify chain state machine) — beyond v0.9.9 seed
+- [ ] PHP impl jadi first "reference implementation" yang lulus conformance test suite di CI
+- [ ] Cross-lang portage guide: `docs/CROSS-LANGUAGE.md` (dari v0.9.9) → move ke ezdoc-spec/README.md dgn examples Go/Rust/TS
 - [ ] Bump versi PHP → `1.1.0`, tag `ezdoc-spec` → `v1.0.0`
+- [ ] Ezdoc PHP repo tetap contain `ezdoc-spec/` sebagai git submodule (atau composer-suggests) supaya spec-dump CLI tetap round-trip check
 
 **Definition of Done**:
-- `ezdoc-spec` repo public, MIT license
+- `ezdoc-spec` repo public, MIT license, tag v1.0.0
 - PHP CI job runs conformance suite → pass
-- Docs: "How to write a new port" guide
+- Repo has: schemas/, ddl/, protocol/, conformance/, docs/
+- Docs: "How to write a new port" guide dgn Go + Rust + TS starter examples
 
-### 6.16 Milestone v1.5 — "Go port"  ⏱ ~4-6 weeks
+### 6.17 Milestone v1.5 — "Go port"  ⏱ ~4-6 weeks
 
 **Goal**: `ezdoc-go` — native Go implementation, container-friendly.
 
@@ -1402,7 +1519,7 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - Conformance test pass (signature dari PHP di-verify oleh Go = same result)
 - Docker image jalan di Kubernetes cluster
 
-### 6.17 Milestone v2.0 — "TypeScript port + full ecosystem"  ⏱ ~6-8 weeks
+### 6.18 Milestone v2.0 — "TypeScript port + full ecosystem"  ⏱ ~6-8 weeks
 
 **Goal**: `@mrpotensial/ezdoc` — TypeScript native untuk Next.js / Node / browser.
 
