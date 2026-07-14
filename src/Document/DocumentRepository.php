@@ -31,10 +31,14 @@ final class DocumentRepository
      * @var string
      */
     private static $SELECT_COLS = 'id, uuid, template_id, template_uuid, template_version, '
-        . 'title, norm, nopen, label, field_values, signature_values, metadata, '
+        . 'title, norm, nopen, label, version, field_values, signature_values, '
         . 'status, is_locked, content_hash, content_hash_at, content_hash_version, '
-        . 'public_slug, public_slug_active, revision, '
+        . 'public_slug, public_slug_active, '
         . 'created_by, updated_by, created_at, updated_at';
+    // NOTE: `metadata` + `revision` columns tidak ada di current migration
+    // (20260706000002_create_ezdoc_documents.php) — jadi jangan SELECT keduanya
+    // atau mysqli_prepare fail → silent empty. Document::fromRow() has default
+    // fallbacks (metadata=[], revision=1) untuk tolerate absence.
 
     public function __construct(mysqli $db)
     {

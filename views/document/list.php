@@ -101,6 +101,11 @@ $statusStyles = [
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
             </svg>
             <p class="mt-3 text-sm text-gray-500"><?= htmlspecialchars($emptyMsg, ENT_QUOTES, 'UTF-8') ?></p>
+            <?php if (!empty($debugMsg)): ?>
+                <p class="mt-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 inline-block font-mono">
+                    <strong>Diagnostic:</strong> <?= htmlspecialchars($debugMsg, ENT_QUOTES, 'UTF-8') ?>
+                </p>
+            <?php endif; ?>
         </div>
     <?php else: ?>
         <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">

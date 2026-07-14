@@ -27,9 +27,9 @@ if ($label === '') $label = '-';
 $doc_id = (int)($_POST['_doc_id'] ?? 0);
 
 // ─── Load template dari ezdoc_templates ───
-// Pakai column baru: name→was nama_template, scope→was doc_scope, content→was template_html,
-// signature_config→was config_ttd. Semua JSON native.
-$stmt = mysqli_prepare($conn, "SELECT uuid, version, content, signature_config, scope, access_config FROM ezdoc_templates WHERE id = ?");
+// Include `name` untuk auto-computed document title (industri: Filament
+// getRecordTitleAttribute pattern — human-readable label untuk list view).
+$stmt = mysqli_prepare($conn, "SELECT uuid, version, name, content, signature_config, scope, access_config FROM ezdoc_templates WHERE id = ?");
 mysqli_stmt_bind_param($stmt, "i", $template_id);
 mysqli_stmt_execute($stmt);
 $tpl = mysqli_stmt_get_result($stmt)->fetch_assoc();
@@ -40,6 +40,7 @@ if (!$tpl) {
 
 $templateUuid = (string)$tpl['uuid'];
 $templateVersion = (int)($tpl['version'] ?? 1);
+$templateName = (string)($tpl['name'] ?? 'Untitled Template');
 
 // ─── RBAC: template-level access check ───
 $accessConfig = ezdoc_parse_access_config($tpl['access_config'] ?? null);
@@ -199,11 +200,26 @@ if ($isEdit && $existingLocked) {
     ezdoc_respond_error('Dokumen ini locked dan tidak bisa diedit. Unlock dulu atau buat versi baru.');
 }
 
+// Auto-compute document title — industry pattern (Filament/Nova record title):
+// "{Template Name} — {norm}/{nopen}" untuk patient scope, "{Template Name} ({label})"
+// untuk general. Consumer masih bisa override dengan POST title kalau ada UI-nya.
+$computedTitle = trim((string) ($_POST['title'] ?? ''));
+if ($computedTitle === '') {
+    if ($tplDocScope === 'patient' && ($norm !== '' || $nopen !== '')) {
+        $computedTitle = $templateName . ' — ' . trim($norm . '/' . $nopen, '/');
+    } elseif ($label !== '' && $label !== '-') {
+        $computedTitle = $templateName . ' (' . $label . ')';
+    } else {
+        $computedTitle = $templateName;
+    }
+    if (mb_strlen($computedTitle) > 255) $computedTitle = mb_substr($computedTitle, 0, 255);
+}
+
 // ─── Save (update / insert) ───
 if ($isEdit) {
     // UPDATE — no need to touch uuid, template_uuid, template_version (immutable per doc)
-    $stmt = mysqli_prepare($conn, "UPDATE ezdoc_documents SET norm=?, nopen=?, label=?, field_values=?, signature_values=?, updated_by=? WHERE id=?");
-    mysqli_stmt_bind_param($stmt, "sssssii", $norm, $nopen, $label, $jsonFields, $jsonTtd, $authorId, $doc_id);
+    $stmt = mysqli_prepare($conn, "UPDATE ezdoc_documents SET title=?, norm=?, nopen=?, label=?, field_values=?, signature_values=?, updated_by=? WHERE id=?");
+    mysqli_stmt_bind_param($stmt, "ssssssii", $computedTitle, $norm, $nopen, $label, $jsonFields, $jsonTtd, $authorId, $doc_id);
 } else {
     // INSERT — generate UUID, populate template snapshot, set default status = 'published'
     $docUuid = ezdoc_uuid_v7();
@@ -212,26 +228,39 @@ if ($isEdit) {
     $stmt = mysqli_prepare($conn, "
         INSERT INTO ezdoc_documents
         (uuid, template_id, template_uuid, template_version,
-         norm, nopen, label, version,
+         title, norm, nopen, label, version,
          field_values, signature_values,
          status, published_at, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
     ");
     mysqli_stmt_bind_param(
         $stmt,
-        "sisisssssssi",
+        "sisissssssssi",
         $docUuid, $template_id, $templateUuid, $templateVersion,
-        $norm, $nopen, $label,
+        $computedTitle, $norm, $nopen, $label,
         $jsonFields, $jsonTtd,
         $status, $publishedAt, $authorId
     );
 }
 
 if (!mysqli_stmt_execute($stmt)) {
-    ezdoc_respond_error('Gagal: ' . mysqli_error($conn));
+    $errDetail = mysqli_stmt_error($stmt) ?: mysqli_error($conn);
+    @error_log(sprintf(
+        '[ezdoc:save] FAILED template_id=%d norm=%s nopen=%s label=%s isEdit=%s err=%s',
+        $template_id, $norm, $nopen, $label, $isEdit ? 'yes' : 'no', $errDetail
+    ));
+    ezdoc_respond_error('Gagal: ' . ($errDetail ?: 'Unknown DB error'), 500);
 }
 
 if (!$isEdit) $doc_id = mysqli_insert_id($conn);
+
+// spec: ezdoc-spec/observability/audit.md — diagnostic log SAVED row
+// untuk debug load-vs-save mismatch (v0.9.9 Repository akan replace ini dengan
+// unit-test-able assertions).
+@error_log(sprintf(
+    '[ezdoc:save] SAVED doc_id=%d template_id=%d template_uuid=%s norm=[%s] nopen=[%s] label=[%s] isEdit=%s',
+    $doc_id, $template_id, $templateUuid, $norm, $nopen, $label, $isEdit ? 'yes' : 'no'
+));
 
 // ─── Post-save: verify slug + data hash ───
 // doc_verify_helpers.php akan diupdate untuk pakai ezdoc_documents di next commit.

@@ -194,21 +194,41 @@ final class Router
     {
         $qParam      = (string) $req->query('q', '');
         $statusParam = (string) $req->query('status', '');
+        $debugMsg    = '';
 
         // Priority 1: runtime.documents kalau consumer inject (test/mock scenarios).
         $documents = $this->config->get('runtime.documents');
         if (!is_array($documents)) {
             $documents = [];
             // Priority 2: kalau db mysqli available, auto-query real docs via Repository.
-            // (SQLite/PDO belum di-support di Repository — pending v0.9.9 DB abstraction.)
             if ($this->db instanceof \mysqli) {
                 try {
-                    $repo = new \Ezdoc\Document\DocumentRepository($this->db);
-                    $documents = $repo->findRecent($statusParam, $qParam, 100);
+                    // Sanity: apakah tabel exists?
+                    $chk = @mysqli_query($this->db, "SHOW TABLES LIKE 'ezdoc_documents'");
+                    $tableExists = ($chk && mysqli_num_rows($chk) > 0);
+                    if (!$tableExists) {
+                        $debugMsg = 'Table `ezdoc_documents` belum ada — jalankan migrations dulu.';
+                    } else {
+                        $repo = new \Ezdoc\Document\DocumentRepository($this->db);
+                        $documents = $repo->findRecent($statusParam, $qParam, 100);
+                        if (empty($documents)) {
+                            // Cek raw count untuk beri feedback
+                            $cntRes = @mysqli_query($this->db, "SELECT COUNT(*) c FROM ezdoc_documents WHERE deleted_at IS NULL");
+                            if ($cntRes) {
+                                $cnt = (int)(mysqli_fetch_assoc($cntRes)['c'] ?? 0);
+                                if ($cnt === 0) {
+                                    $debugMsg = 'Belum ada dokumen di database (0 rows di `ezdoc_documents`).';
+                                } else {
+                                    $debugMsg = "Ada $cnt dokumen di DB tapi query findRecent() return empty — cek Document::fromRow() hydration.";
+                                }
+                            }
+                        }
+                    }
                 } catch (\Throwable $e) {
-                    // Query failed (mis. table not migrated yet) — silent empty
-                    $documents = [];
+                    $debugMsg = 'Query error: ' . $e->getMessage();
                 }
+            } else {
+                $debugMsg = 'DB handle bukan mysqli (SQLite/PDO belum di-support di Repository — pending v0.9.9).';
             }
         }
 
@@ -219,6 +239,7 @@ final class Router
                 'status' => $statusParam,
             ],
             'baseUrl'   => (string) $this->config->get('app.base_path', ''),
+            'debugMsg'  => $debugMsg,  // dev diagnostic — list.php boleh render kalau non-empty
         ], $res);
     }
 
@@ -254,14 +275,37 @@ final class Router
     public function handleView(RequestContext $req, ResponseWriter $res): ?string
     {
         $uuid = (string) $req->query('uuid', '');
-        // No dedicated view.php yet (v0.9.7-b) — fall back to a stub card.
+
+        // Industry-standard: view route resolves doc by uuid, then hands off ke
+        // generate.php (which owns the full render pipeline). Symfony Route + Nova
+        // Resource pattern: route mapping tidak duplicate view logic.
+        if ($uuid !== '' && $this->db instanceof \mysqli) {
+            try {
+                $repo = new \Ezdoc\Document\DocumentRepository($this->db);
+                $doc  = $repo->findByUuid($uuid);
+                if ($doc !== null) {
+                    // Forward vars ke generate.php via $_GET (which generate.php reads).
+                    // spec: ezdoc-spec/routes/view.md#uuid-forward
+                    $_GET['template_id'] = (string) $doc->getTemplateId();
+                    $_GET['doc_id']      = (string) $doc->getId();
+                    // Preserve print/download intent kalau ada
+                    if ($req->query('print') !== null) $_GET['view']     = 'pdf';
+                    if ($req->query('download') !== null) $_GET['download'] = '1';
+                    return $this->handleGenerate($req, $res);
+                }
+            } catch (\Throwable $e) {
+                // fallthrough → stub not-found
+            }
+        }
+
+        // Not found — return 404 dengan explicit message
         $safeUuid = htmlspecialchars($uuid, ENT_QUOTES, 'UTF-8');
-        $html = '<div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">'
-              . '<h2 class="text-lg font-semibold text-gray-900 mb-2">Document View</h2>'
-              . '<p class="text-sm text-gray-600">UUID: <code>' . $safeUuid . '</code></p>'
-              . '<p class="text-xs text-gray-500 mt-2">Rendering ke <code>views/document/view.php</code> masuk milestone v0.9.7-b.</p>'
+        $html = '<div class="rounded-lg border border-red-200 bg-red-50 p-6 shadow-sm">'
+              . '<h2 class="text-lg font-semibold text-red-900 mb-2">Document Not Found</h2>'
+              . '<p class="text-sm text-red-700">UUID: <code>' . $safeUuid . '</code></p>'
+              . '<p class="text-xs text-red-600 mt-2">Dokumen tidak ditemukan di database (mungkin sudah di-delete atau uuid salah).</p>'
               . '</div>';
-        $res->html($this->wrapLayout($html, 'Document'));
+        $res->status(404)->html($this->wrapLayout($html, 'Document Not Found'));
         return $res->emit();
     }
 

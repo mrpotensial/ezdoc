@@ -38,7 +38,7 @@ if (!isset($ctx) || !($ctx instanceof \Ezdoc\Context)) {
     }
     $ctx = \Ezdoc\Context::default();
 }
-
+  
 // Config resolution: consumer OR default empty config
 if (!isset($config) || !($config instanceof \Ezdoc\UI\Config)) {
     $config = new \Ezdoc\UI\Config([]);
@@ -58,14 +58,23 @@ if (is_file(__DIR__ . '/../../actions/_dispatcher.php')) {
 }
 
 // Extracted helpers (v0.6.5) — pure SELECT lookups + template expression evaluators.
-if (is_file(__DIR__ . '/../../lib/doc_meta_helpers.php')) {
-    require_once __DIR__ . '/../../lib/doc_meta_helpers.php';
-}
-if (is_file(__DIR__ . '/../../lib/doc_template_helpers.php')) {
-    require_once __DIR__ . '/../../lib/doc_template_helpers.php';
-}
-if (is_file(__DIR__ . '/../../lib/doc_verify_helpers.php')) {
-    require_once __DIR__ . '/../../lib/doc_verify_helpers.php';
+// Cari di 2 lokasi: library `ezdoc/lib/` (kalau sudah copied) atau consumer app
+// `<consumer>/lib/` (fallback untuk monolith consumer yang masih share helpers).
+// v0.9.9 target: move helpers wholly ke library, deprecate consumer-side fallback.
+$__helperCandidates = [
+    __DIR__ . '/../../lib/',              // ezdoc/lib/
+    __DIR__ . '/../../../lib/',           // consumer/lib/ (one level up from ezdoc/)
+    __DIR__ . '/../../../../lib/',        // deeper consumer layout
+];
+foreach (['doc_meta_helpers.php', 'doc_template_helpers.php', 'doc_verify_helpers.php'] as $__helperFile) {
+    foreach ($__helperCandidates as $__dir) {
+        $__full = $__dir . $__helperFile;
+        if (is_file($__full)) {
+            /** @psalm-suppress UnresolvableInclude */
+            require_once $__full;
+            break;
+        }
+    }
 }
 
 // Local helper — escape output (keeps existing h() call sites working)
@@ -358,6 +367,13 @@ if ($isGeneralDoc) {
 }
 if (!$dokumen && $canLookup) {
     $delClause = $preview_deleted ? '' : ' AND deleted_at IS NULL';
+    // spec: ezdoc-spec/observability/audit.md — diagnostic log LOAD query params
+    // untuk debug mismatch dengan SAVED log (v0.9.9 target: replace dengan
+    // Repository unit tests).
+    @error_log(sprintf(
+        '[ezdoc:load] QUERY template_id=%d norm=[%s] nopen=[%s] label=[%s] version=%d scope=%s',
+        $template_id, $param_norm, $param_nopen, $param_label, $param_version, $isGeneralDoc ? 'general' : 'patient'
+    ));
     if ($isGeneralDoc) {
         // General: lookup by (template_id, label, [version])
         if ($param_version > 0) {
@@ -379,6 +395,10 @@ if (!$dokumen && $canLookup) {
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
     $dokumen = mysqli_fetch_assoc($result);
+    @error_log(sprintf(
+        '[ezdoc:load] RESULT dokumen=%s doc_id=%s',
+        $dokumen ? 'FOUND' : 'null', $dokumen['id'] ?? '-'
+    ));
     if ($dokumen) {
         $isEditMode = true;
         $doc_id = $dokumen['id'];
@@ -3140,12 +3160,17 @@ function renderFieldForPdf($name, $type, $val, $label) {
                             }
                         }));
                     } catch (e) { /* skip */ }
-                    // Build URL with label if non-default
+                    // Build URL with label if non-default. Preserve routing prefix
+                    // (ezdoc_page=generate dll) supaya tidak fallback ke default_page.
                     const savedLabel = data.label || label;
-                    let targetUrl = `?template_id=${templateId}&norm=${encodeURIComponent(norm)}&nopen=${encodeURIComponent(nopen)}`;
+                    const _tParams = _preservedParams();
+                    _tParams.set('template_id', templateId);
+                    _tParams.set('norm', norm);
+                    _tParams.set('nopen', nopen);
                     if (savedLabel && savedLabel !== '-') {
-                        targetUrl += `&label=${encodeURIComponent(savedLabel)}`;
+                        _tParams.set('label', savedLabel);
                     }
+                    let targetUrl = '?' + _tParams.toString();
 
                     // Update hidden verify_url supaya QR yang pakai {verify_url} bisa auto-regenerate
                     if (data.verify_url) {
@@ -3461,13 +3486,29 @@ function renderFieldForPdf($name, $type, $val, $label) {
             setTimeout(() => toast.remove(), 3000);
         }
 
+        // Build URLSearchParams yang preserve routing prefix (mis. ezdoc_page=generate).
+        // Kalau library dipakai standalone (tanpa App orchestrator), current URL tidak
+        // punya ezdoc_page → params tetap kosong = backward compat.
+        function _preservedParams() {
+            const cur = new URLSearchParams(window.location.search);
+            const p = new URLSearchParams();
+            // Preserve routing prefix keys — jangan bawa param dokumen supaya tidak
+            // stale saat pindah context.
+            ['ezdoc_page', 'ezdoc_asset'].forEach(k => {
+                if (cur.has(k)) p.set(k, cur.get(k));
+            });
+            return p;
+        }
+
         function createNew() {
-            window.location.href = '?template_id=' + templateId;
+            const params = _preservedParams();
+            params.set('template_id', templateId);
+            window.location.href = '?' + params.toString();
         }
 
         // Open PDF view in new tab (superadmin only)
         function viewPdfRaw() {
-            const params = new URLSearchParams();
+            const params = _preservedParams();
             params.set('template_id', templateId);
             if (CURRENT_DOC_ID) params.set('doc_id', CURRENT_DOC_ID);
             else {

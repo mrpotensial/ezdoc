@@ -261,9 +261,23 @@ final class Document
         return $this->templateVersion;
     }
 
-    public function getTitle(): ?string
+    /**
+     * Human-readable title. Returns stored title kalau ada; otherwise synthesizes
+     * dari subject/label/id — mirrors Filament getRecordTitleAttribute() pattern.
+     * Never returns null (fallback ke "Document #{id}").
+     */
+    public function getTitle(): string
     {
-        return $this->title;
+        if ($this->title !== null && $this->title !== '') {
+            return $this->title;
+        }
+        // Fallback synthesis order:
+        //   1) "{subject_type}: {subject_id}"  (patient/entity documents)
+        //   2) "Doc #{id}"                     (fallback ultima)
+        if ($this->subjectType !== null && $this->subjectId !== null) {
+            return ucfirst($this->subjectType) . ': ' . $this->subjectId;
+        }
+        return 'Doc #' . $this->id;
     }
 
     public function getReferenceNumber(): ?string
