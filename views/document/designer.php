@@ -240,85 +240,115 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
     <div class="fixed top-5 right-5 z-[9999]" id="toastContainer"></div>
 
     <?php if ($action === 'list'): ?>
-    <div class="max-w-7xl mx-auto px-4 py-6">
+    <section>
         <?= \Ezdoc\UI\Slot::render('designer:list-header-extra', ['templates' => $templates]) ?>
         <?php if ($message): ?>
-        <div x-data="{ open: true }" x-show="open" class="p-4 rounded mb-4 flex items-start justify-between <?= $messageType === 'error' ? 'bg-red-50 border-l-4 border-red-400 text-red-800' : 'bg-green-50 border-l-4 border-green-400 text-green-800' ?>">
-            <div><?= h($message) ?></div>
+        <div x-data="{ open: true }" x-show="open" class="p-4 rounded-md mb-4 flex items-start justify-between <?= $messageType === 'error' ? 'bg-red-50 border-l-4 border-red-400 text-red-800' : 'bg-green-50 border-l-4 border-green-400 text-green-800' ?>">
+            <div class="text-sm"><?= h($message) ?></div>
             <button type="button" class="ml-4 text-current opacity-70 hover:opacity-100" @click="open = false">&times;</button>
         </div>
         <?php endif; ?>
 
-        <div class="bg-white rounded-lg shadow border border-gray-200">
-            <div class="px-4 py-3 border-b border-gray-200 flex justify-between items-center rounded-t-lg bg-primary">
-                <span class="flex items-center"><i class="bi bi-file-earmark-text mr-2"></i><?= h($designerListTitle) ?></span>
-                <div class="flex items-center gap-2">
-                    <?php if ($designerShowBack): ?>
-                    <a href="<?= h($urlBackLink) ?>" class="inline-flex items-center px-2 py-1 rounded text-xs border border-white text-white hover:bg-white/10" title="Kembali"><i class="bi bi-arrow-left mr-1"></i>Back</a>
-                    <?php endif; ?>
-                    <a href="<?= h($urlCreate) ?>" class="inline-flex items-center px-2 py-1 rounded text-xs bg-white text-gray-900 hover:bg-gray-100"><i class="bi bi-plus-lg mr-1"></i>Buat Baru</a>
-                </div>
+        <!-- Header — matches list.php pattern: h1 title + primary action button -->
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-semibold tracking-tight text-gray-900">
+                <?= h($designerListTitle) ?>
+            </h1>
+            <a href="<?= h($urlCreate) ?>"
+               class="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-white shadow-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2"
+               style="background-color: var(--ezdoc-primary);">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"/>
+                </svg>
+                Buat Template
+            </a>
+        </div>
+
+        <?php if (empty($templates)): ?>
+        <div class="rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <p class="mt-3 text-sm text-gray-500">
+                Belum ada template. <a href="<?= h($urlCreate) ?>" class="hover:underline" style="color: var(--ezdoc-primary);">Buat template baru</a>
+            </p>
+        </div>
+        <?php else: ?>
+        <?php
+            // Build category counts for filter dropdown
+            $catCounts = ['__all__' => count($templates), '__none__' => 0];
+            foreach ($templates as $t) {
+                $c = trim($t['category'] ?? '');
+                if ($c === '') { $catCounts['__none__']++; }
+                else { $catCounts[$c] = ($catCounts[$c] ?? 0) + 1; }
+            }
+            $catKeys = array_keys($catCounts);
+        ?>
+
+        <!-- Filter form — matches list.php grid pattern -->
+        <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-4 items-end">
+            <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-gray-700 mb-1">Cari</label>
+                <input type="search" id="tplSearchInput"
+                       class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-sm"
+                       placeholder="Cari nama template..." oninput="filterTemplateList()">
             </div>
-            <div class="p-4">
-                <?php if (empty($templates)): ?>
-                <div class="text-center py-8 text-gray-500">
-                    <i class="bi bi-inbox text-[48px]"></i>
-                    <p class="mt-3">Belum ada template. <a href="<?= h($urlCreate) ?>" class="text-blue-600 hover:underline">Buat template baru</a></p>
-                </div>
-                <?php else: ?>
-                <?php
-                    // Build category counts for filter pills
-                    $catCounts = ['__all__' => count($templates), '__none__' => 0];
-                    foreach ($templates as $t) {
-                        $c = trim($t['category'] ?? '');
-                        if ($c === '') { $catCounts['__none__']++; }
-                        else { $catCounts[$c] = ($catCounts[$c] ?? 0) + 1; }
-                    }
-                    $catKeys = array_keys($catCounts);
-                ?>
-                <div class="flex items-center mb-2 flex-wrap gap-2">
-                    <input type="text" id="tplSearchInput" class="rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs px-2 py-1 max-w-[240px]" placeholder="Cari template..." oninput="filterTemplateList()">
-                    <div id="catPills" class="flex flex-wrap gap-1">
-                        <button type="button" class="cat-pill active inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-600 text-white hover:bg-blue-700" data-cat="__all__" onclick="setCategoryFilter('__all__')">Semua <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-800"><?= $catCounts['__all__'] ?></span></button>
-                        <?php if ($catCounts['__none__'] > 0): ?>
-                        <button type="button" class="cat-pill inline-flex items-center px-2 py-1 rounded text-xs font-medium border border-gray-500 text-gray-700 hover:bg-gray-50" data-cat="__none__" onclick="setCategoryFilter('__none__')">(Tanpa Kategori) <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-800"><?= $catCounts['__none__'] ?></span></button>
-                        <?php endif; ?>
-                        <?php foreach ($catKeys as $ck): if ($ck === '__all__' || $ck === '__none__') continue; ?>
-                        <button type="button" class="cat-pill inline-flex items-center px-2 py-1 rounded text-xs font-medium border border-blue-600 text-blue-600 hover:bg-blue-50" data-cat="<?= h($ck) ?>" onclick="setCategoryFilter('<?= h(addslashes($ck)) ?>')"><?= h($ck) ?> <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-800"><?= $catCounts[$ck] ?></span></button>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-                <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 text-sm" id="tplTable">
-                    <thead class="bg-gray-50"><tr><th class="text-left px-3 py-2">Nama Template</th><th class="text-left px-3 py-2" width="160">Kategori</th><th class="text-left px-3 py-2" width="80">Status</th><th class="text-left px-3 py-2" width="140">Update</th><th class="text-left px-3 py-2" width="240">Aksi</th></tr></thead>
-                    <tbody class="divide-y divide-gray-100">
-                    <?php foreach ($templates as $t): $locked = !empty($t['is_locked']); $cat = trim($t['category'] ?? ''); ?>
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">Kategori</label>
+                <select id="catFilterSelect" onchange="setCategoryFilter(this.value)"
+                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-sm">
+                    <option value="__all__">Semua kategori (<?= $catCounts['__all__'] ?>)</option>
+                    <?php if ($catCounts['__none__'] > 0): ?>
+                    <option value="__none__">(Tanpa kategori) (<?= $catCounts['__none__'] ?>)</option>
+                    <?php endif; ?>
+                    <?php foreach ($catKeys as $ck): if ($ck === '__all__' || $ck === '__none__') continue; ?>
+                    <option value="<?= h($ck) ?>"><?= h($ck) ?> (<?= $catCounts[$ck] ?>)</option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
+            <table class="min-w-full divide-y divide-gray-200 text-sm" id="tplTable">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Nama Template</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Kategori</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Update</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                <?php foreach ($templates as $t): $locked = !empty($t['is_locked']); $cat = trim($t['category'] ?? ''); ?>
                     <tr id="tplRow<?= $t['id'] ?>" class="tpl-row hover:bg-gray-50" data-cat="<?= $cat === '' ? '__none__' : h($cat) ?>" data-name="<?= h(strtolower($t['nama_template'])) ?>">
-                        <td class="px-3 py-2"><?= h($t['nama_template']) ?></td>
-                        <td class="px-3 py-2"><?= $cat === '' ? '<span class="text-gray-500 italic">—</span>' : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800">'.h($cat).'</span>' ?></td>
-                        <td class="px-3 py-2">
-                            <span id="lockBadge<?= $t['id'] ?>" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium <?= $locked ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800' ?>">
+                        <td class="px-4 py-3 font-medium text-gray-900"><?= h($t['nama_template']) ?></td>
+                        <td class="px-4 py-3"><?= $cat === '' ? '<span class="text-gray-400">&mdash;</span>' : '<span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset bg-cyan-50 text-cyan-700 ring-cyan-200">'.h($cat).'</span>' ?></td>
+                        <td class="px-4 py-3">
+                            <span id="lockBadge<?= $t['id'] ?>" class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset <?= $locked ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-gray-100 text-gray-700 ring-gray-300' ?>">
                                 <i class="bi <?= $locked ? 'bi-lock-fill' : 'bi-unlock' ?> mr-1"></i>
                                 <?= $locked ? 'Locked' : 'Open' ?>
                             </span>
                         </td>
-                        <td class="px-3 py-2"><?= date('d M Y H:i', strtotime($t['updated_at'])) ?></td>
-                        <td class="px-3 py-2">
-                            <a href="<?= h(str_replace('{id}', (string)$t['id'], $urlPrint . (strpos($urlPrint,'?') !== false ? '&' : '?') . 'template_id=' . $t['id'])) ?>" class="inline-flex items-center px-2 py-1 rounded text-xs bg-green-600 text-white hover:bg-green-700" title="Cetak"><i class="bi bi-printer"></i></a>
-                            <a href="<?= h(str_replace('{id}', (string)$t['id'], $urlEditPattern)) ?>" class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-600 text-white hover:bg-blue-700" title="Edit"><i class="bi bi-pencil"></i></a>
-                            <button type="button" id="lockBtn<?= $t['id'] ?>" class="inline-flex items-center px-2 py-1 rounded text-xs <?= $locked ? 'bg-yellow-500 text-white hover:bg-yellow-600' : 'border border-yellow-500 text-yellow-600 hover:bg-yellow-50' ?>" onclick="toggleLock(<?= $t['id'] ?>, <?= $locked ? 1 : 0 ?>)" title="<?= $locked ? 'Unlock' : 'Lock' ?>">
-                                <i class="bi <?= $locked ? 'bi-lock-fill' : 'bi-unlock' ?>"></i>
-                            </button>
-                            <button type="button" class="inline-flex items-center px-2 py-1 rounded text-xs border border-cyan-500 text-cyan-600 hover:bg-cyan-50" onclick="copyTemplate(<?= $t['id'] ?>)" title="Duplikat / Copy"><i class="bi bi-files"></i></button>
-                            <button type="button" class="inline-flex items-center px-2 py-1 rounded text-xs border border-red-600 text-red-600 hover:bg-red-50" onclick="confirmDelete(<?= $t['id'] ?>, '<?= h($t['nama_template']) ?>')" title="Hapus"><i class="bi bi-trash"></i></button>
-                            <?= \Ezdoc\UI\Slot::render('designer:list-row-actions-extra', ['template' => $t]) ?>
+                        <td class="px-4 py-3 text-xs text-gray-500"><?= date('d M Y H:i', strtotime($t['updated_at'])) ?></td>
+                        <td class="px-4 py-3 text-right">
+                            <div class="inline-flex items-center gap-1">
+                                <a href="<?= h(str_replace('{id}', (string)$t['id'], $urlPrint . (strpos($urlPrint,'?') !== false ? '&' : '?') . 'template_id=' . $t['id'])) ?>" class="inline-flex items-center rounded-md border border-gray-300 bg-white p-1.5 text-gray-600 hover:bg-gray-50 hover:text-gray-900" title="Cetak"><i class="bi bi-printer"></i></a>
+                                <a href="<?= h(str_replace('{id}', (string)$t['id'], $urlEditPattern)) ?>" class="inline-flex items-center rounded-md border border-gray-300 bg-white p-1.5 text-gray-600 hover:bg-gray-50 hover:text-gray-900" title="Edit"><i class="bi bi-pencil"></i></a>
+                                <button type="button" id="lockBtn<?= $t['id'] ?>" class="inline-flex items-center rounded-md border p-1.5 <?= $locked ? 'border-amber-300 text-amber-700 hover:bg-amber-50' : 'border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-900' ?>" onclick="toggleLock(<?= $t['id'] ?>, <?= $locked ? 1 : 0 ?>)" title="<?= $locked ? 'Unlock' : 'Lock' ?>">
+                                    <i class="bi <?= $locked ? 'bi-lock-fill' : 'bi-unlock' ?>"></i>
+                                </button>
+                                <button type="button" class="inline-flex items-center rounded-md border border-gray-300 bg-white p-1.5 text-gray-600 hover:bg-gray-50 hover:text-gray-900" onclick="copyTemplate(<?= $t['id'] ?>)" title="Duplikat"><i class="bi bi-files"></i></button>
+                                <button type="button" class="inline-flex items-center rounded-md border border-red-300 bg-white p-1.5 text-red-600 hover:bg-red-50" onclick="confirmDelete(<?= $t['id'] ?>, '<?= h($t['nama_template']) ?>')" title="Hapus"><i class="bi bi-trash"></i></button>
+                                <?= \Ezdoc\UI\Slot::render('designer:list-row-actions-extra', ['template' => $t]) ?>
+                            </div>
                         </td>
                     </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-                </div>
-                <div id="tplEmptyMsg" class="text-center py-4 text-gray-500" style="display:none;"><i class="bi bi-funnel"></i> Tidak ada template yang cocok dengan filter.</div>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <div id="tplEmptyMsg" class="mt-3 text-center py-4 text-sm text-gray-500" style="display:none;"><i class="bi bi-funnel mr-1"></i>Tidak ada template yang cocok dengan filter.</div>
                 <script>
                     // Endpoint URLs injected from PHP Config
                     const EZDOC_LIST_URLS = <?= json_encode(['toggle' => $urlToggle, 'copy' => $urlCopy], JSON_UNESCAPED_SLASHES) ?>;
@@ -359,29 +389,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                     // ===== Category filter + search =====
                     let activeCatFilter = '__all__';
-                    // Tailwind class sets (kept as strings so classList.add(...classes) can be used)
-                    const CAT_PILL_ACTIVE   = ['bg-blue-600','text-white','hover:bg-blue-700'];
-                    const CAT_PILL_INACTIVE = ['border','border-blue-600','text-blue-600','hover:bg-blue-50'];
-                    const CAT_PILL_NONE_ACT = ['bg-gray-500','text-white','hover:bg-gray-600'];
-                    const CAT_PILL_NONE_INA = ['border','border-gray-500','text-gray-700','hover:bg-gray-50'];
-                    function _resetPillClasses(b) {
-                        [...CAT_PILL_ACTIVE, ...CAT_PILL_INACTIVE, ...CAT_PILL_NONE_ACT, ...CAT_PILL_NONE_INA]
-                            .forEach(c => b.classList.remove(c));
-                    }
                     function setCategoryFilter(cat) {
-                        activeCatFilter = cat;
-                        document.querySelectorAll('.cat-pill').forEach(b => {
-                            const isActive = b.dataset.cat === cat;
-                            b.classList.toggle('active', isActive);
-                            _resetPillClasses(b);
-                            if (isActive) {
-                                if (b.dataset.cat === '__none__') b.classList.add(...CAT_PILL_NONE_ACT);
-                                else b.classList.add(...CAT_PILL_ACTIVE);
-                            } else {
-                                if (b.dataset.cat === '__none__') b.classList.add(...CAT_PILL_NONE_INA);
-                                else b.classList.add(...CAT_PILL_INACTIVE);
-                            }
-                        });
+                        activeCatFilter = cat || '__all__';
                         filterTemplateList();
                     }
                     function filterTemplateList() {
@@ -403,13 +412,11 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     }
                 </script>
                 <?php endif; ?>
-            </div>
-        </div>
         <form id="deleteForm" method="POST" action="<?= h($urlDelete) ?>" style="display:none;">
             <input type="hidden" name="action" value="delete">
             <input type="hidden" name="delete_id" id="deleteId">
         </form>
-    </div>
+    </section>
 
     <?php else: ?>
     <!-- EDITOR MODE -->
