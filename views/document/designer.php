@@ -427,30 +427,40 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 <!-- Top Bar -->
                 <div class="bg-gray-900 text-white p-2 flex justify-between items-center shrink-0">
                     <div class="flex items-center flex-wrap gap-1.5">
-                        <a href="<?= h($urlEditorBack) ?>" class="inline-flex items-center px-2 py-1 rounded text-xs border border-white text-white hover:bg-white/10" title="Kembali ke daftar template"><i class="bi bi-arrow-left"></i></a>
-                        <input type="text" id="namaTemplate" class="rounded border-gray-300 shadow-sm text-xs px-2 py-1 text-gray-900 w-[220px]" value="<?= h($template['nama_template'] ?? '') ?>" placeholder="Nama Template *">
-                        <input type="text" id="templateCategory" list="categoryList" class="rounded border-gray-300 shadow-sm text-xs px-2 py-1 text-gray-900 w-[160px]" value="<?= h($template['category'] ?? '') ?>" placeholder="Kategori (opsional)" title="Kategori/folder pengelompokan template" maxlength="100">
+                        <a href="<?= h($urlEditorBack) ?>" class="inline-flex items-center rounded-md border border-white/30 bg-white/5 p-1.5 text-white hover:bg-white/10 focus:outline-none focus:ring-1 focus:ring-white/40" title="Kembali ke daftar template">
+                            <i class="bi bi-arrow-left"></i>
+                        </a>
+                        <input type="text" id="namaTemplate" class="rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2.5 py-1.5 text-gray-900 w-[220px]" value="<?= h($template['nama_template'] ?? '') ?>" placeholder="Nama Template *">
+                        <input type="text" id="templateCategory" list="categoryList" class="rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2.5 py-1.5 text-gray-900 w-[160px]" value="<?= h($template['category'] ?? '') ?>" placeholder="Kategori (opsional)" title="Kategori/folder pengelompokan template" maxlength="100">
                         <datalist id="categoryList">
                             <?php foreach ($existingCategories as $cat): ?>
                             <option value="<?= h($cat) ?>"></option>
                             <?php endforeach; ?>
                         </datalist>
-                        <select id="templateDocScope" class="rounded border-gray-300 shadow-sm text-xs px-2 py-1 text-gray-900 w-[180px]" title="Jenis template — Umum untuk surat non-pasien (pesanan, memo, tugas)">
+                        <select id="templateDocScope" class="rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2.5 py-1.5 text-gray-900 w-[180px]" title="Jenis template — Umum untuk surat non-pasien (pesanan, memo, tugas)">
                             <?php $__scope = $template['doc_scope'] ?? 'patient'; ?>
                             <option value="patient" <?= $__scope === 'patient' ? 'selected' : '' ?>>Surat Pasien (butuh NORM)</option>
                             <option value="general" <?= $__scope === 'general' ? 'selected' : '' ?>>Surat Umum (tanpa NORM)</option>
                         </select>
-                        <span class="save-indicator" id="saveIndicator"></span>
+                        <span class="save-indicator ml-1" id="saveIndicator"></span>
                     </div>
-                    <div class="flex items-center">
+                    <div class="flex items-center gap-1">
                         <?php if (!empty($template['is_locked'])): ?>
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 mr-2" title="Template locked: perubahan destruktif akan di-warn"><i class="bi bi-lock-fill mr-1"></i>Locked</span>
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset bg-amber-50 text-amber-700 ring-amber-200 mr-1" title="Template locked: perubahan destruktif akan di-warn"><i class="bi bi-lock-fill mr-1"></i>Locked</span>
                         <?php endif; ?>
                         <?= \Ezdoc\UI\Slot::render('designer:toolbar-extra', ['template' => $template]) ?>
-                        <button type="button" class="inline-flex items-center px-2 py-1 rounded text-xs bg-green-600 text-white hover:bg-green-700" onclick="saveTemplate()"><i class="bi bi-check-lg mr-1"></i>Simpan</button>
-                        <a href="<?= h($urlPrint . (strpos($urlPrint,'?') !== false ? '&' : '?') . 'template_id=' . ($template['id'] ?? 0)) ?>" id="btnPreview" class="inline-flex items-center px-2 py-1 rounded text-xs border border-white text-white hover:bg-white/10 ml-1" target="_blank"><i class="bi bi-printer mr-1"></i>Preview</a>
-                        <button type="button" class="inline-flex items-center px-2 py-1 rounded text-xs border border-white text-white hover:bg-white/10 ml-1" onclick="showParamsSummary()"><i class="bi bi-link-45deg mr-1"></i>URL Params</button>
-                        <button type="button" class="inline-flex items-center px-2 py-1 rounded text-xs border border-white text-white hover:bg-white/10 ml-1" onclick="showFieldInspector()"><i class="bi bi-search mr-1"></i>Inspect Fields</button>
+                        <button type="button" class="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:opacity-90 focus:outline-none focus:ring-1 focus:ring-white/40" style="background-color: var(--ezdoc-primary);" onclick="saveTemplate()">
+                            <i class="bi bi-check-lg"></i>Simpan
+                        </button>
+                        <a href="<?= h($urlPrint . (strpos($urlPrint,'?') !== false ? '&' : '?') . 'template_id=' . ($template['id'] ?? 0)) ?>" id="btnPreview" class="inline-flex items-center gap-1 rounded-md border border-white/30 bg-white/5 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10 focus:outline-none focus:ring-1 focus:ring-white/40" target="_blank">
+                            <i class="bi bi-printer"></i>Preview
+                        </a>
+                        <button type="button" class="inline-flex items-center gap-1 rounded-md border border-white/30 bg-white/5 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10 focus:outline-none focus:ring-1 focus:ring-white/40" onclick="showParamsSummary()">
+                            <i class="bi bi-link-45deg"></i>URL Params
+                        </button>
+                        <button type="button" class="inline-flex items-center gap-1 rounded-md border border-white/30 bg-white/5 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10 focus:outline-none focus:ring-1 focus:ring-white/40" onclick="showFieldInspector()">
+                            <i class="bi bi-search"></i>Inspect Fields
+                        </button>
                     </div>
                 </div>
 
@@ -526,7 +536,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     <div x-show="open" x-collapse>
                         <div class="p-2 pt-0">
                             <div class="relative mb-1">
-                                <input type="text" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1 pr-6" id="fieldSearch" placeholder="🔍 Cari field (nama/label/tipe)..." oninput="filterPanel('fieldList', this.value)">
+                                <input type="search" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="fieldSearch" placeholder="Cari field (nama/label/tipe)..." oninput="filterPanel('fieldList', this.value)">
                                 <button type="button" class="absolute top-1/2 right-1.5 -translate-y-1/2 border-0 bg-transparent text-gray-400 hover:text-red-500 text-base leading-none cursor-pointer px-1" onclick="clearPanelSearch('fieldSearch','fieldList')" title="Clear">×</button>
                             </div>
                             <div id="fieldList"></div>
@@ -568,7 +578,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     <div x-show="open" x-collapse>
                         <div class="p-2 pt-0">
                             <div class="relative mb-1">
-                                <input type="text" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1 pr-6" id="ttdSearch" placeholder="🔍 Cari TTD..." oninput="filterPanel('ttdList', this.value)">
+                                <input type="search" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="ttdSearch" placeholder="Cari TTD..." oninput="filterPanel('ttdList', this.value)">
                                 <button type="button" class="absolute top-1/2 right-1.5 -translate-y-1/2 border-0 bg-transparent text-gray-400 hover:text-red-500 text-base leading-none cursor-pointer px-1" onclick="clearPanelSearch('ttdSearch','ttdList')" title="Clear">×</button>
                             </div>
                             <div id="ttdList"></div>
@@ -591,7 +601,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     <div x-show="open" x-collapse>
                         <div class="p-2 pt-0">
                             <div class="relative mb-1">
-                                <input type="text" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1 pr-6" id="materaiSearch" placeholder="🔍 Cari Materai..." oninput="filterPanel('materaiList', this.value)">
+                                <input type="search" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="materaiSearch" placeholder="Cari Materai..." oninput="filterPanel('materaiList', this.value)">
                                 <button type="button" class="absolute top-1/2 right-1.5 -translate-y-1/2 border-0 bg-transparent text-gray-400 hover:text-red-500 text-base leading-none cursor-pointer px-1" onclick="clearPanelSearch('materaiSearch','materaiList')" title="Clear">×</button>
                             </div>
                             <div id="materaiList"></div>
@@ -2905,7 +2915,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         <input type="text" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${eDefault}" onchange="updateFieldDefault('${eName}', this.value)" placeholder="text, date:d F Y, $author_nama">
                     </div>
                     <details class="mt-1" style="font-size:11px;" data-field-details="${eName}">
-                        <summary style="cursor:pointer;color:#0e7490;">⚙ Validasi (opsional)</summary>
+                        <summary style="cursor:pointer;color:#0e7490;"><i class="bi bi-sliders mr-1"></i>Validasi (opsional)</summary>
                         <div class="p-1 mt-1" style="background:#f0f9ff;border-radius:3px;" data-field-row="${eName}">
                             <div class="flex items-center gap-2 mb-1">
                                 <input class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" type="checkbox" id="req_${eName}" ${field.required ? 'checked' : ''} data-validate-key="required-${eName}" onchange="updateFieldValidation('${eName}', 'required', this.checked ? '1' : '')">
@@ -3599,7 +3609,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         <select class="flex-1 rounded border-gray-300 shadow-sm" onchange="onVerifyFieldKeyChange(${i}, this.value)" style="font-size:11px; padding:2px 20px 2px 4px; height:auto;">
                             <option value="">- Pilih field dari template -</option>
                             ${optionsHtml}
-                            <option value="__custom__" ${!isDetected && f.key ? 'selected' : ''}>✎ Ketik manual${f.key ? ': ' + escapeHtml(f.key) : ''}</option>
+                            <option value="__custom__" ${!isDetected && f.key ? 'selected' : ''}>Ketik manual${f.key ? ': ' + escapeHtml(f.key) : ''}</option>
                         </select>
                         <button type="button" class="inline-flex items-center py-0 px-1 rounded border border-red-600 text-red-600 hover:bg-red-50 flex-shrink-0" onclick="removeVerifyField(${i})" title="Hapus"><i class="bi bi-x"></i></button>
                     </div>
