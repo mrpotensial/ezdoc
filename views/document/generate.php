@@ -3088,6 +3088,12 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 if (el.id && el.id.startsWith('ttd_'))   return; // hidden TTD inputs
                 if (el.id && el.id.startsWith('materai_img_')) return;
                 if (el.id && el.id.startsWith('materai_upload_')) return;
+                // Navigation-only controls (bukan data edit) — skip dirty tracking.
+                // Bugfix: versionSelect dropdown triggers switchVersion() navigation
+                // saja, tidak mutate document data. User yg cuma lihat-lihat ganti
+                // versi jangan sampai kena beforeunload prompt.
+                if (el.id === 'versionSelect') return;
+                if (el.hasAttribute('data-no-dirty')) return; // opt-out attr
                 el.addEventListener('input', markDirty);
                 el.addEventListener('change', markDirty);
             });
@@ -3100,11 +3106,19 @@ function renderFieldForPdf($name, $type, $val, $label) {
         // Trigger dirty mark from external events (TTD canvas save, materai upload, mode switch)
         function triggerDirty() { markDirty(); }
 
-        // Beforeunload warning when dirty
+        // Beforeunload warning — only prompt if dirty AND bukan intentional
+        // internal navigation. Livewire wire:navigate / HTMX hx-boost pattern:
+        // handler check flag `_ezdocSuppressUnload` yg di-set oleh caller
+        // sebelum navigasi terprogram (switchVersion, doCreateNewVersion, dll).
+        //
+        // Native browser prompt tidak bisa di-Tailwind-kan (security restriction);
+        // hanya bisa dipicu atau tidak dipicu.
+        window._ezdocSuppressUnload = false;
         window.addEventListener('beforeunload', function(e) {
+            if (window._ezdocSuppressUnload) return; // intentional nav — silent
             if (isDirty) {
                 e.preventDefault();
-                e.returnValue = ''; // browser default warning message
+                e.returnValue = ''; // required, but text ignored by modern browsers
                 return '';
             }
         });
@@ -3336,7 +3350,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
             let label = (document.getElementById('inputLabel')?.value || '').trim();
             if (label === '') label = '-';
             if (!norm || !nopen) {
-                alert(t('alert.identity_required', {}, 'MR No. and Registration No. are required!'));
+                ezdocAlert(t('alert.identity_required', {}, 'MR No. and Registration No. are required!'), { title: 'Required Fields', variant: 'warning' });
                 return;
             }
 
@@ -3750,6 +3764,8 @@ function renderFieldForPdf($name, $type, $val, $label) {
         function createNew() {
             const params = _preservedParams();
             params.set('template_id', templateId);
+            // Intentional programmatic nav — suppress dirty prompt (Livewire pattern)
+            window._ezdocSuppressUnload = true;
             window.location.href = '?' + params.toString();
         }
 
@@ -3890,12 +3906,15 @@ function renderFieldForPdf($name, $type, $val, $label) {
 
         function switchVersion(version) {
             if (parseInt(version) === CURRENT_VERSION) return;
-            const params = new URLSearchParams();
+            // Preserve ezdoc_page=generate supaya App router tidak fallback ke default_page.
+            const params = _preservedParams();
             params.set('template_id', templateId);
             params.set('norm', CURRENT_NORM);
             params.set('nopen', CURRENT_NOPEN);
             if (CURRENT_LABEL !== '-') params.set('label', CURRENT_LABEL);
             params.set('version', version);
+            // Intentional programmatic nav — suppress dirty prompt (Livewire pattern)
+            window._ezdocSuppressUnload = true;
             window.location.href = '?' + params.toString();
         }
 
@@ -3917,14 +3936,14 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 });
                 if (missingLabels.length > 0) {
                     const warn = t('materai.lock_missing_warning', {list: missingLabels.join('\n  - ')}, 'The following materai have not been uploaded:\n  - {list}\n\nLock this version anyway?');
-                    if (!confirm(warn)) return;
+                    if (!(await ezdocConfirm(warn, { title: t('materai.warning_title', [], 'Warning'), variant: 'warning' }))) return;
                 }
             }
 
             const msg = newLocked
                 ? t('confirm.lock_final', {}, 'Lock this version as FINAL?\n\nOnce locked, this version cannot be edited. Only a superadmin can unlock it. Create a new version to revise.')
                 : t('confirm.unlock_version', {}, 'Unlock this version? (superadmin access)');
-            if (!confirm(msg)) return;
+            if (!(await ezdocConfirm(msg, { title: newLocked ? 'Lock Version' : 'Unlock Version', variant: newLocked ? 'danger' : 'warning' }))) return;
             const fd = new FormData();
             fd.append('_doc_action', 'toggle_doc_lock');
             fd.append('doc_id', CURRENT_DOC_ID);
@@ -3934,34 +3953,42 @@ function renderFieldForPdf($name, $type, $val, $label) {
             if (data.success) {
                 location.reload();
             } else {
-                alert(t('alert.generic_failed', {reason: data.message || 'error'}, 'Failed: {reason}'));
+                ezdocAlert(t('alert.generic_failed', {reason: data.message || 'error'}, 'Failed: {reason}'), { title: 'Error', variant: 'error' });
             }
         }
 
         async function deleteThisVersion() {
             if (!CURRENT_DOC_ID) return;
-            if (!confirm(t('confirm.delete_version', {version: CURRENT_VERSION}, 'Delete version v{version}? This cannot be undone.'))) return;
+            if (!(await ezdocConfirm(
+                t('confirm.delete_version', {version: CURRENT_VERSION}, 'Delete version v{version}? This cannot be undone.'),
+                { title: 'Delete Version', variant: 'danger', confirmText: 'Delete' }
+            ))) return;
             const fd = new FormData();
             fd.append('_doc_action', 'delete_version');
             fd.append('doc_id', CURRENT_DOC_ID);
             const resp = await fetch(_ezdocEndpoint('docAction'), { method: 'POST', body: fd });
             const data = await resp.json();
             if (data.success) {
-                // Reload latest version after delete
-                const params = new URLSearchParams();
+                // Reload latest version after delete — preserve ezdoc_page prefix
+                const params = _preservedParams();
                 params.set('template_id', templateId);
                 params.set('norm', CURRENT_NORM);
                 params.set('nopen', CURRENT_NOPEN);
                 if (CURRENT_LABEL !== '-') params.set('label', CURRENT_LABEL);
-                window.location.href = '?' + params.toString();
+                // Intentional programmatic nav — suppress dirty prompt (Livewire pattern)
+            window._ezdocSuppressUnload = true;
+            window.location.href = '?' + params.toString();
             } else {
-                alert(t('alert.generic_failed', {reason: data.message || 'error'}, 'Failed: {reason}'));
+                ezdocAlert(t('alert.generic_failed', {reason: data.message || 'error'}, 'Failed: {reason}'), { title: 'Error', variant: 'error' });
             }
         }
 
         // Restore soft-deleted slot from preview mode (superadmin only)
         async function restoreDeletedSlot() {
-            if (!confirm(t('confirm.restore_slot', {}, 'Restore this entire document slot? All soft-deleted versions will become active again.'))) return;
+            if (!(await ezdocConfirm(
+                t('confirm.restore_slot', {}, 'Restore this entire document slot? All soft-deleted versions will become active again.'),
+                { title: 'Restore Slot', variant: 'warning', confirmText: 'Restore' }
+            ))) return;
             const fd = new FormData();
             fd.append('_doc_action', 'restore_slot');
             fd.append('template_id', templateId);
@@ -3971,16 +3998,18 @@ function renderFieldForPdf($name, $type, $val, $label) {
             const resp = await fetch(_ezdocEndpoint('docAction'), { method: 'POST', body: fd });
             const data = await resp.json();
             if (data.success) {
-                alert(t('alert.restore_success', {count: data.affected || 0}, 'Restored successfully ({count} version(s))'));
-                // Reload sebagai dokumen aktif (tanpa preview_deleted)
-                const params = new URLSearchParams();
+                ezdocAlert(t('alert.restore_success', {count: data.affected || 0}, 'Restored successfully ({count} version(s))'), { title: 'Restored', variant: 'success' });
+                // Reload sebagai dokumen aktif — preserve ezdoc_page prefix
+                const params = _preservedParams();
                 params.set('template_id', templateId);
                 params.set('norm', CURRENT_NORM);
                 params.set('nopen', CURRENT_NOPEN);
                 if (CURRENT_LABEL !== '-') params.set('label', CURRENT_LABEL);
-                window.location.href = '?' + params.toString();
+                // Intentional programmatic nav — suppress dirty prompt (Livewire pattern)
+            window._ezdocSuppressUnload = true;
+            window.location.href = '?' + params.toString();
             } else {
-                alert(t('alert.generic_failed', {reason: data.message || 'error'}, 'Failed: {reason}'));
+                ezdocAlert(t('alert.generic_failed', {reason: data.message || 'error'}, 'Failed: {reason}'), { title: 'Error', variant: 'error' });
             }
         }
 
@@ -4050,16 +4079,19 @@ function renderFieldForPdf($name, $type, $val, $label) {
             const data = await resp.json();
             if (data.success) {
                 document.getElementById('newVersionModal')?.remove();
-                // Redirect to new version
-                const params = new URLSearchParams();
+                // Redirect to new version — preserve ezdoc_page=generate supaya
+                // App router tidak fallback ke default_page (list).
+                const params = _preservedParams();
                 params.set('template_id', templateId);
                 params.set('norm', CURRENT_NORM);
                 params.set('nopen', CURRENT_NOPEN);
                 if (CURRENT_LABEL !== '-') params.set('label', CURRENT_LABEL);
                 params.set('version', data.version);
-                window.location.href = '?' + params.toString();
+                // Intentional programmatic nav — suppress dirty prompt (Livewire pattern)
+            window._ezdocSuppressUnload = true;
+            window.location.href = '?' + params.toString();
             } else {
-                alert(t('alert.generic_failed', {reason: data.message || 'error'}, 'Failed: {reason}'));
+                ezdocAlert(t('alert.generic_failed', {reason: data.message || 'error'}, 'Failed: {reason}'), { title: 'Error', variant: 'error' });
             }
         }
 
@@ -4095,7 +4127,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
 
         function openSign(id, label) {
             if (!editMode) {
-                alert(t('ttd.locked_no_sign', {}, 'This document is locked. Cannot sign. Create a new version to revise.'));
+                ezdocAlert(t('ttd.locked_no_sign', {}, 'This document is locked. Cannot sign. Create a new version to revise.'), { title: 'Locked', variant: 'warning' });
                 return;
             }
             currentTtdId = id;
@@ -4152,23 +4184,23 @@ function renderFieldForPdf($name, $type, $val, $label) {
         // Clear/delete TTD signature
         // ===== Materai handlers =====
         function handleMateraiUpload(input, materaiId) {
-            if (!editMode) { alert(t('materai.locked_no_upload', {}, 'Document is locked, cannot upload.')); input.value = ''; return; }
+            if (!editMode) { ezdocAlert(t('materai.locked_no_upload', {}, 'Document is locked, cannot upload.'), { title: 'Locked', variant: 'warning' }); input.value = ''; return; }
             const file = input.files && input.files[0];
             if (!file) return;
 
             // Validate type & size (max 2MB)
             if (!/^image\/(png|jpe?g|gif)$/i.test(file.type)) {
-                alert(t('materai.invalid_format', {}, 'Format must be PNG / JPG.')); input.value = ''; return;
+                ezdocAlert(t('materai.invalid_format', {}, 'Format must be PNG / JPG.'), { title: 'Invalid Format', variant: 'error' }); input.value = ''; return;
             }
             if (file.size > 2 * 1024 * 1024) {
-                alert(t('materai.max_size', {}, 'Maximum file size is 2MB.')); input.value = ''; return;
+                ezdocAlert(t('materai.max_size', {}, 'Maximum file size is 2MB.'), { title: 'File Too Large', variant: 'error' }); input.value = ''; return;
             }
 
             const reader = new FileReader();
             reader.onload = function(e) {
                 const dataUrl = e.target.result;
                 if (!/^data:image\/(png|jpe?g|gif);base64,/.test(dataUrl)) {
-                    alert(t('materai.invalid_file', {}, 'Invalid file.')); return;
+                    ezdocAlert(t('materai.invalid_file', {}, 'Invalid file.'), { title: 'Invalid File', variant: 'error' }); return;
                 }
                 const hiddenImg = document.getElementById('materai_img_' + materaiId);
                 if (hiddenImg) hiddenImg.value = dataUrl;
@@ -4193,9 +4225,12 @@ function renderFieldForPdf($name, $type, $val, $label) {
             input.value = ''; // allow same-file re-upload later
         }
 
-        function clearMaterai(materaiId) {
+        async function clearMaterai(materaiId) {
             if (!editMode) return;
-            if (!confirm(t('materai.confirm_delete', {}, 'Delete this e-Materai?'))) return;
+            if (!(await ezdocConfirm(
+                t('materai.confirm_delete', {}, 'Delete this e-Materai?'),
+                { title: 'Delete Materai', variant: 'danger', confirmText: 'Delete' }
+            ))) return;
             const hiddenImg = document.getElementById('materai_img_' + materaiId);
             if (hiddenImg) hiddenImg.value = '';
             const hiddenUpload = document.getElementById('materai_upload_' + materaiId);
@@ -4209,8 +4244,11 @@ function renderFieldForPdf($name, $type, $val, $label) {
             }
         }
 
-        function clearTtd(ttdId) {
-            if (!confirm(t('ttd.confirm_delete', {}, 'Delete this signature?'))) return;
+        async function clearTtd(ttdId) {
+            if (!(await ezdocConfirm(
+                t('ttd.confirm_delete', {}, 'Delete this signature?'),
+                { title: 'Delete Signature', variant: 'danger', confirmText: 'Delete' }
+            ))) return;
 
             const hiddenInput = document.getElementById('ttd_' + ttdId);
             if (hiddenInput) hiddenInput.value = '';
@@ -4570,5 +4608,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
             return originalSubmitForm();
         };
     </script>
+
+    <?php include __DIR__ . '/../_partials/dialog_helper.php'; ?>
 </body>
 </html>
