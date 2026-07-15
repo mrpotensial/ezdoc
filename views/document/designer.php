@@ -1073,7 +1073,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 <input type="hidden" id="tabledbEditNs" value="">
                 <div class="mb-2">
                     <label class="block text-xs font-bold text-gray-700 mb-1"><?= h(t('tabledb.query_name_label', [], 'Query Name (namespace) *')) ?></label>
-                    <input type="text" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1" id="tabledbNs" placeholder="<?= h(t('tabledb.query_name_placeholder', [], 'example: lab, obat, riwayat')) ?>" maxlength="32">
+                    <input type="text" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1" id="tabledbNs" placeholder="<?= h(t('tabledb.query_name_placeholder', [], 'example: lab, medication, history')) ?>" maxlength="32">
                     <small class="text-gray-500 text-xs"><?= h(t('tabledb.query_name_hint', [], 'Letters, numbers, underscore only. The variable will become {{tabledb.<namespace>.column}}')) ?></small>
                 </div>
                 <div class="mb-2">
@@ -1386,8 +1386,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             const ns = (document.getElementById('tabledbNs').value || '').trim() || 'default';
             const status = document.getElementById('tabledbAnalyzeStatus');
             const colsBox = document.getElementById('tabledbColumnsBox');
-            if (!sql) { status.textContent = t('tabledb.sql_empty_status', {}, 'SQL kosong'); status.className = 'small text-danger align-self-center'; return; }
-            status.textContent = t('tabledb.analyzing_status', {}, 'Menganalisa...');
+            if (!sql) { status.textContent = t('tabledb.sql_empty_status', {}, 'SQL is empty'); status.className = 'small text-danger align-self-center'; return; }
+            status.textContent = t('tabledb.analyzing_status', {}, 'Analyzing...');
             status.className = 'small text-muted align-self-center';
             try {
                 const fd = new FormData();
@@ -1401,10 +1401,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     const cols = data.columns.map(c => c.name);
                     renderTabledbColumns(ns, cols);
                     colsBox.style.display = 'block';
-                    status.textContent = '✓ ' + t('tabledb.columns_found_status', {count: cols.length}, '{count} kolom ditemukan');
+                    status.textContent = '✓ ' + t('tabledb.columns_found_status', {count: cols.length}, '{count} columns found');
                     status.className = 'small text-success align-self-center';
                 } else {
-                    status.textContent = '✗ ' + (data.message || t('tabledb.analyze_failed_status', {}, 'Gagal analyze'));
+                    status.textContent = '✗ ' + (data.message || t('tabledb.analyze_failed_status', {}, 'Analysis failed'));
                     status.className = 'small text-danger align-self-center';
                 }
             } catch (e) {
@@ -1420,7 +1420,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 const safeCol = String(c).replace(/[^a-zA-Z0-9_]/g, '');
                 if (!safeCol) return '';
                 const tag = '{{tabledb.' + safeNs + '.' + safeCol + '}}';
-                return `<button type="button" class="inline-flex items-center px-2 py-1 rounded text-xs border border-cyan-500 text-cyan-600 hover:bg-cyan-50" onclick="insertTabledbVar('${tag}')" title="${t('tabledb.insert_column_title', {}, 'Klik untuk insert ke editor')}">${escapeHtml(tag)}</button>`;
+                return `<button type="button" class="inline-flex items-center px-2 py-1 rounded text-xs border border-cyan-500 text-cyan-600 hover:bg-cyan-50" onclick="insertTabledbVar('${tag}')" title="${t('tabledb.insert_column_title', {}, 'Click to insert into editor')}">${escapeHtml(tag)}</button>`;
             }).join('');
         }
 
@@ -1428,17 +1428,17 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             const editor = tinymce.get('editor');
             if (!editor) return;
             editor.execCommand('mceInsertContent', false, tag);
-            showToast(t('toast.variable_inserted', {tag: tag}, 'Variabel disisipkan: {tag}'));
+            showToast(t('toast.variable_inserted', {tag: tag}, 'Variable inserted: {tag}'));
         }
 
         function saveTabledbQuery() {
             let ns = (document.getElementById('tabledbNs').value || '').trim();
             const sql = (document.getElementById('tabledbSql').value || '').trim();
             const editNs = document.getElementById('tabledbEditNs').value;
-            if (!ns) { showToast(t('toast.query_name_required', {}, 'Nama query (namespace) wajib diisi'), 'error'); return; }
+            if (!ns) { showToast(t('toast.query_name_required', {}, 'Query name (namespace) is required'), 'error'); return; }
             ns = ns.replace(/[^a-zA-Z0-9_]/g, '');
-            if (!ns) { showToast(t('toast.namespace_invalid_chars', {}, 'Namespace hanya huruf/angka/underscore'), 'error'); return; }
-            if (!sql) { showToast(t('toast.sql_empty', {}, 'SQL kosong'), 'error'); return; }
+            if (!ns) { showToast(t('toast.namespace_invalid_chars', {}, 'Namespace can only contain letters/numbers/underscore'), 'error'); return; }
+            if (!sql) { showToast(t('toast.sql_empty', {}, 'SQL is empty'), 'error'); return; }
 
             // Get columns currently rendered (if user analyzed)
             const colButtons = document.querySelectorAll('#tabledbColumns button');
@@ -1449,20 +1449,20 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
             // Prevent rename collision (if not editing existing)
             if (!editNs && configHeader.tableDbQueries && configHeader.tableDbQueries[ns]) {
-                if (!confirm(t('confirm.namespace_override', {ns: ns}, 'Namespace "{ns}" sudah ada. Override?'))) return;
+                if (!confirm(t('confirm.namespace_override', {ns: ns}, 'Namespace "{ns}" already exists. Override?'))) return;
             }
 
             configHeader.tableDbQueries[ns] = { sql: sql, columns: columns };
             renderTabledbList();
-            showToast(t('toast.query_saved', {ns: ns}, 'Query "{ns}" disimpan'));
+            showToast(t('toast.query_saved', {ns: ns}, 'Query "{ns}" saved'));
             closeAppModal('tabledb');
         }
 
         function deleteTabledbQuery(ns) {
-            if (!confirm(t('confirm.delete_query', {ns: ns}, 'Hapus query "{ns}"? Variabel di editor yang sudah dipakai akan jadi "—" saat cetak.'))) return;
+            if (!confirm(t('confirm.delete_query', {ns: ns}, 'Delete query "{ns}"? Variables already used in the editor will show as "—" when printed.'))) return;
             if (configHeader.tableDbQueries) delete configHeader.tableDbQueries[ns];
             renderTabledbList();
-            showToast(t('toast.query_deleted', {ns: ns}, 'Query "{ns}" dihapus'));
+            showToast(t('toast.query_deleted', {ns: ns}, 'Query "{ns}" deleted'));
         }
 
         function renderTabledbList() {
@@ -1486,13 +1486,13 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     const tag = '{{tabledb.' + ns + '.' + c + '}}';
                     return `<button type="button" class="inline-flex items-center py-0 px-1 mb-1 rounded border border-cyan-500 text-cyan-600 hover:bg-cyan-50" style="font-size:10px;" onclick="insertTabledbVar('${tag}')" title="${t('tabledb.insert_column_title_named', {tag: escapeHtml(tag)}, 'Insert {tag}')}">${escapeHtml(c)}</button>`;
                 }).join(' ');
-                const moreCount = cols.length > 8 ? ` <small class="text-gray-500">${t('tabledb.more_columns_label', {count: cols.length - 8}, '+{count} lagi')}</small>` : '';
+                const moreCount = cols.length > 8 ? ` <small class="text-gray-500">${t('tabledb.more_columns_label', {count: cols.length - 8}, '+{count} more')}</small>` : '';
                 return `
                 <div class="mb-2 p-2 bg-gray-100 rounded" style="border-left: 3px solid #0e7490;">
                     <div class="flex justify-between items-start mb-1">
                         <div>
                             <strong class="text-xs" style="color:#0e7490;">${escapeHtml(ns)}</strong>
-                            <div class="text-gray-500" style="font-size:10px;">${t('tabledb.column_count_label', {count: cols.length}, '{count} kolom')}</div>
+                            <div class="text-gray-500" style="font-size:10px;">${t('tabledb.column_count_label', {count: cols.length}, '{count} columns')}</div>
                         </div>
                         <div class="inline-flex">
                             <button type="button" class="inline-flex items-center py-0 px-1 rounded-l border border-gray-500 text-gray-700 hover:bg-gray-50" onclick="openTabledbModal('${ns}')" title="${t('actions.edit', {}, 'Edit')}"><i class="bi bi-pencil"></i></button>
@@ -1512,7 +1512,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
         function loadVars() {
             const body = document.getElementById('varListBody');
-            body.innerHTML = `<tr><td colspan="3" class="border border-gray-200 px-2 py-1 text-center text-gray-500">${t('modal.loading', {}, 'Memuat...')}</td></tr>`;
+            body.innerHTML = `<tr><td colspan="3" class="border border-gray-200 px-2 py-1 text-center text-gray-500">${t('modal.loading', {}, 'Loading...')}</td></tr>`;
             const fd = new FormData();
             fd.append('ajax', '1');
             fd.append('action', 'list_vars');
@@ -1521,7 +1521,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 .then(r => r.json())
                 .then(data => {
                     if (!data.success || !data.vars.length) {
-                        body.innerHTML = `<tr><td colspan="3" class="border border-gray-200 px-2 py-1 text-center text-gray-500">${t('modal.no_vars_yet', {}, 'Belum ada variabel')}</td></tr>`;
+                        body.innerHTML = `<tr><td colspan="3" class="border border-gray-200 px-2 py-1 text-center text-gray-500">${t('modal.no_vars_yet', {}, 'No variables yet')}</td></tr>`;
                         return;
                     }
                     body.innerHTML = data.vars.map(v => `
@@ -1552,13 +1552,13 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         document.getElementById('newVarDesc').value = '';
                         loadVars();
                     } else {
-                        alert(data.message || t('alert.generic_failed', {}, 'Gagal'));
+                        alert(data.message || t('alert.generic_failed', {}, 'Failed'));
                     }
                 });
         }
 
         function deleteVar(id) {
-            if (!confirm(t('confirm.delete_variable', {}, 'Hapus variabel ini dari whitelist?'))) return;
+            if (!confirm(t('confirm.delete_variable', {}, 'Delete this variable from the whitelist?'))) return;
             const fd = new FormData();
             fd.append('ajax', '1');
             fd.append('action', 'delete_var');
@@ -1752,7 +1752,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         // spec: ezdoc-spec/openapi.yaml#/paths/~1template~1save
         async function saveTemplate() {
             const indicator = document.getElementById('saveIndicator');
-            indicator.textContent = t('save_status.saving', {}, 'Menyimpan...');
+            indicator.textContent = t('save_status.saving', {}, 'Saving...');
             indicator.className = 'save-indicator saving';
 
             // Sync form values to configHeader before saving
@@ -1793,7 +1793,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             const beforeEvt = new CustomEvent('ezdoc:before-save', { detail: { formData, cancel: false }, cancelable: true });
             window.dispatchEvent(beforeEvt);
             if (beforeEvt.defaultPrevented || (beforeEvt.detail && beforeEvt.detail.cancel)) {
-                indicator.textContent = t('save_status.cancelled', {}, 'Dibatalkan');
+                indicator.textContent = t('save_status.cancelled', {}, 'Cancelled');
                 indicator.className = 'save-indicator';
                 setTimeout(() => { indicator.textContent = ''; }, 2000);
                 return;
@@ -1805,7 +1805,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 const data = await resp.json();
 
                 if (data.success) {
-                    indicator.textContent = t('save_status.saved', {}, 'Tersimpan');
+                    indicator.textContent = t('save_status.saved', {}, 'Saved');
                     indicator.className = 'save-indicator saved';
                     showToast(data.message);
                     if (data.id) {
@@ -1831,14 +1831,14 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     // Consumer-extensible: post-save hook — inform slots/consumer subscribers
                     window.dispatchEvent(new CustomEvent('ezdoc:after-save', { detail: { data } }));
                 } else {
-                    indicator.textContent = t('save_status.failed', {}, 'Gagal');
+                    indicator.textContent = t('save_status.failed', {}, 'Failed');
                     indicator.className = 'save-indicator';
                     showToast(data.message, 'error');
                 }
             } catch (e) {
                 indicator.textContent = t('save_status.error', {}, 'Error');
                 indicator.className = 'save-indicator';
-                showToast(t('toast.save_failed', {message: e.message}, 'Gagal menyimpan: {message}'), 'error');
+                showToast(t('toast.save_failed', {message: e.message}, 'Save failed: {message}'), 'error');
             }
             setTimeout(() => { indicator.textContent = ''; }, 2000);
         }
@@ -1854,10 +1854,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             const params = [];
 
             // Always-present standard params
-            params.push({ key: 'template_id', desc: t('params.template_id_desc', {}, 'ID template (auto dari URL)'), placeholder: templateId });
-            params.push({ key: 'norm', desc: t('params.norm_desc', {}, 'No Rekam Medis'), placeholder: '<norm>' });
-            params.push({ key: 'nopen', desc: t('params.nopen_desc', {}, 'No Pendaftaran'), placeholder: '<nopen>' });
-            params.push({ key: 'label', desc: t('params.label_desc', {}, 'Label dokumen (pembeda jika nopen sama)'), placeholder: '<label>' });
+            params.push({ key: 'template_id', desc: t('params.template_id_desc', {}, 'Template ID (auto from URL)'), placeholder: templateId });
+            params.push({ key: 'norm', desc: t('params.norm_desc', {}, 'Medical Record Number'), placeholder: '<norm>' });
+            params.push({ key: 'nopen', desc: t('params.nopen_desc', {}, 'Registration Number'), placeholder: '<nopen>' });
+            params.push({ key: 'label', desc: t('params.label_desc', {}, 'Document label (distinguishes documents when nopen is the same)'), placeholder: '<label>' });
 
             // Scan {{field}} placeholders from template
             const fieldNames = new Set();
@@ -1887,18 +1887,18 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 const nf = ttd.nama_field || ('nama_' + ttd.id);
                 const lbl = ttd.label || 'TTD';
                 if (!fieldNames.has(nf)) {
-                    params.push({ key: nf, desc: t('params.signer_name_desc', {label: lbl}, 'Nama penandatangan — {label}'), placeholder: '<nama ' + lbl + '>' });
+                    params.push({ key: nf, desc: t('params.signer_name_desc', {label: lbl}, 'Signer name — {label}'), placeholder: '<nama ' + lbl + '>' });
                 }
                 const modes = ttd.ttdModes || 'image';
                 if (modes.includes('qr')) {
-                    params.push({ key: nf + '_qr', desc: t('params.qr_content_desc', {label: lbl}, 'Konten QR — {label}'), placeholder: '<konten QR ' + lbl + '>' });
+                    params.push({ key: nf + '_qr', desc: t('params.qr_content_desc', {label: lbl}, 'QR content — {label}'), placeholder: '<konten QR ' + lbl + '>' });
                 }
             });
 
             // Build URL — use configured print URL
             const base = EZDOC_URLS.print || '';
             if (!base) {
-                alert(t('alert.print_endpoint_missing', {}, 'Print/preview endpoint belum di-configure. Set urls.print di Config untuk enable preview.'));
+                alert(t('alert.print_endpoint_missing', {}, 'Print/preview endpoint not configured yet. Set urls.print in Config to enable preview.'));
                 return;
             }
             const qs = params.map(p => encodeURIComponent(p.key) + '=' + encodeURIComponent(p.placeholder)).join('&');
@@ -1930,10 +1930,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             ta.setSelectionRange(0, 99999);
             try {
                 navigator.clipboard.writeText(ta.value);
-                showToast(t('toast.url_copied', {}, 'URL disalin'));
+                showToast(t('toast.url_copied', {}, 'URL copied'));
             } catch (e) {
                 document.execCommand('copy');
-                showToast(t('toast.url_copied', {}, 'URL disalin'));
+                showToast(t('toast.url_copied', {}, 'URL copied'));
             }
         }
 
@@ -1965,12 +1965,12 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         async function showFieldInspector() {
             const templateId = document.getElementById('templateId')?.value || '0';
             if (templateId === '0') {
-                alert(t('alert.save_template_before_inspect', {}, 'Simpan template dulu sebelum inspect.'));
+                alert(t('alert.save_template_before_inspect', {}, 'Save the template first before inspecting.'));
                 return;
             }
 
             const body = document.getElementById('fieldInspectorBody');
-            body.innerHTML = `<tr><td colspan="4" class="border border-gray-200 px-2 py-1 text-center text-gray-500">${t('modal.loading', {}, 'Memuat...')}</td></tr>`;
+            body.innerHTML = `<tr><td colspan="4" class="border border-gray-200 px-2 py-1 text-center text-gray-500">${t('modal.loading', {}, 'Loading...')}</td></tr>`;
             openAppModal('fieldInspector');
 
             const fd = new FormData();
@@ -1981,7 +1981,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             const resp = await fetch(EZDOC_URLS.fieldUsage || '', { method: 'POST', body: fd });
             const data = await resp.json();
             if (!data.success) {
-                body.innerHTML = '<tr><td colspan="4" class="border border-gray-200 px-2 py-1 text-center text-red-600">' + t('modal.load_failed', {message: data.message || 'error'}, 'Gagal memuat: {message}') + '</td></tr>';
+                body.innerHTML = '<tr><td colspan="4" class="border border-gray-200 px-2 py-1 text-center text-red-600">' + t('modal.load_failed', {message: data.message || 'error'}, 'Failed to load: {message}') + '</td></tr>';
                 return;
             }
 
@@ -1997,9 +1997,9 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 const usedCount = fieldCounts[fn] || 0;
                 let statusBadge = '';
                 if (inTemplate && usedCount > 0) {
-                    statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">${t('modal.status_active', {}, 'Aktif')}</span>`;
+                    statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">${t('modal.status_active', {}, 'Active')}</span>`;
                 } else if (inTemplate && usedCount === 0) {
-                    statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">${t('modal.status_unused', {}, 'Belum dipakai')}</span>`;
+                    statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">${t('modal.status_unused', {}, 'Not used yet')}</span>`;
                 } else {
                     statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">${t('modal.status_orphan', {}, 'Orphan')}</span>`;
                 }
@@ -2007,14 +2007,14 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     <tr>
                         <td class="border border-gray-200 px-2 py-1"><code>${escapeHtml(fn)}</code></td>
                         <td class="border border-gray-200 px-2 py-1">${statusBadge}</td>
-                        <td class="border border-gray-200 px-2 py-1">${t('modal.used_in_docs_count', {used: usedCount, total: totalDocs}, '{used} / {total} dok')}</td>
+                        <td class="border border-gray-200 px-2 py-1">${t('modal.used_in_docs_count', {used: usedCount, total: totalDocs}, '{used} / {total} doc(s)')}</td>
                         <td class="border border-gray-200 px-2 py-1">
                             ${inTemplate ? `<button class="inline-flex items-center py-0 px-1 rounded border border-yellow-500 text-yellow-600 hover:bg-yellow-50" onclick="prefillRename('${escapeHtml(fn)}')" title="${t('modal.rename_button', {}, 'Rename')}"><i class="bi bi-arrow-right"></i></button>` : ''}
                         </td>
                     </tr>
                 `);
             });
-            body.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="4" class="border border-gray-200 px-2 py-1 text-center text-gray-500">${t('modal.no_field_yet', {}, 'Belum ada field')}</td></tr>`;
+            body.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="4" class="border border-gray-200 px-2 py-1 text-center text-gray-500">${t('modal.no_field_yet', {}, 'No fields yet')}</td></tr>`;
         }
 
         function prefillRename(name) {
@@ -2027,9 +2027,9 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             const templateId = document.getElementById('templateId')?.value || '0';
             const oldName = document.getElementById('renameFieldOld').value.trim();
             const newName = document.getElementById('renameFieldNew').value.trim();
-            if (templateId === '0') { alert(t('alert.save_template_first', {}, 'Simpan template dulu')); return; }
-            if (!oldName || !newName || oldName === newName) { alert(t('alert.rename_names_required', {}, 'Nama lama dan nama baru harus diisi berbeda')); return; }
-            if (!confirm(t('confirm.rename_field', {oldName: oldName, newName: newName}, 'Rename field "{oldName}" → "{newName}" di template + migrate data di semua dokumen? Aksi ini tidak bisa di-undo.'))) return;
+            if (templateId === '0') { alert(t('alert.save_template_first', {}, 'Save the template first')); return; }
+            if (!oldName || !newName || oldName === newName) { alert(t('alert.rename_names_required', {}, 'Old name and new name must be different')); return; }
+            if (!confirm(t('confirm.rename_field', {oldName: oldName, newName: newName}, 'Rename field "{oldName}" → "{newName}" in the template + migrate data across all documents? This action cannot be undone.'))) return;
 
             // Update editor content first
             const editor = tinymce.get('editor');
@@ -2063,20 +2063,20 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             const resp = await fetch(EZDOC_URLS.renameField || '', { method: 'POST', body: fd });
             const data = await resp.json();
             if (data.success) {
-                showToast(t('toast.rename_success', {count: data.updated}, 'Rename berhasil. {count} dokumen ter-update.'));
+                showToast(t('toast.rename_success', {count: data.updated}, 'Rename successful. {count} document(s) updated.'));
                 document.getElementById('renameFieldOld').value = '';
                 document.getElementById('renameFieldNew').value = '';
                 showFieldInspector();
             } else {
-                alert(t('alert.migrate_failed', {message: data.message || 'error'}, 'Gagal migrate data: {message}'));
+                alert(t('alert.migrate_failed', {message: data.message || 'error'}, 'Failed to migrate data: {message}'));
             }
         }
 
         // Cleanup orphan data across all documents
         async function runOrphanCleanup() {
             const templateId = document.getElementById('templateId')?.value || '0';
-            if (templateId === '0') { alert(t('alert.save_template_first', {}, 'Simpan template dulu')); return; }
-            if (!confirm(t('confirm.cleanup_orphans', {}, 'Hapus semua key di field_values yang tidak ada di template lagi?'))) return;
+            if (templateId === '0') { alert(t('alert.save_template_first', {}, 'Save the template first')); return; }
+            if (!confirm(t('confirm.cleanup_orphans', {}, 'Delete all field_values keys that no longer exist in the template?'))) return;
 
             const validFields = [...collectTemplateFieldNames()].join(',');
             const fd = new FormData();
@@ -2088,10 +2088,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             const resp = await fetch(EZDOC_URLS.cleanupOrphans || '', { method: 'POST', body: fd });
             const data = await resp.json();
             if (data.success) {
-                showToast(t('toast.cleanup_done', {count: data.updated, keys: data.removedKeys.join(', ') || '-'}, 'Cleanup selesai. {count} dokumen ter-update. Key yang dihapus: {keys}'));
+                showToast(t('toast.cleanup_done', {count: data.updated, keys: data.removedKeys.join(', ') || '-'}, 'Cleanup done. {count} document(s) updated. Keys removed: {keys}'));
                 showFieldInspector();
             } else {
-                alert(t('alert.generic_failed_message', {message: data.message || 'error'}, 'Gagal: {message}'));
+                alert(t('alert.generic_failed_message', {message: data.message || 'error'}, 'Failed: {message}'));
             }
         }
 
@@ -2109,7 +2109,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     const current = collectTemplateFieldNames();
                     const removed = [...initialFields].filter(f => !current.has(f));
                     if (removed.length) {
-                        const ok = confirm(t('confirm.locked_fields_change', {fields: removed.join('\n')}, 'Template ini LOCKED. Field berikut akan hilang/rename:\n\n{fields}\n\nLanjut? (disarankan pakai "Inspect Fields" untuk rename/migrate dulu)'));
+                        const ok = confirm(t('confirm.locked_fields_change', {fields: removed.join('\n')}, 'This template is LOCKED. The following fields will disappear/be renamed:\n\n{fields}\n\nContinue? (recommended: use "Inspect Fields" to rename/migrate first)'));
                         if (!ok) return;
                     }
                 }
@@ -2467,7 +2467,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 });
 
                 function insertLogoPrompt(mode) {
-                    const name = prompt(t('toolbar_insert.logo_name_prompt', {}, 'Logo name (example: logo_rs):'), 'logo_' + Date.now());
+                    const name = prompt(t('toolbar_insert.logo_name_prompt', {}, 'Logo name (example: logo_hospital):'), 'logo_' + Date.now());
                     if (name && name.trim()) {
                         const cleanName = name.trim().replace(/\s+/g, '_').toLowerCase();
                         const width = prompt(t('toolbar_insert.logo_width_prompt', {}, 'Logo width (example: 80px, 100px):'), '80px') || '80px';
@@ -2508,7 +2508,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 });
 
                 function insertQrPrompt(mode) {
-                    const fieldName = prompt(t('toolbar_insert.qr_field_prompt', {}, 'Field name for QR data (example: url_verifikasi, no_dokumen):'), 'qr_data');
+                    const fieldName = prompt(t('toolbar_insert.qr_field_prompt', {}, 'Field name for QR data (example: verify_url, doc_number):'), 'qr_data');
                     if (fieldName && fieldName.trim()) {
                         const cleanName = fieldName.trim().replace(/\s+/g, '_').toLowerCase();
                         const width = prompt(t('toolbar_insert.qr_size_prompt', {}, 'QR size (example: 80px, 100px):'), '80px') || '80px';
@@ -2553,7 +2553,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 });
 
                 function insertFieldPrompt(fieldType) {
-                    const name = prompt(t('toolbar_insert.field_name_prompt', {}, 'Field name (example: nama_pasien):'));
+                    const name = prompt(t('toolbar_insert.field_name_prompt', {}, 'Field name (example: patient_name):'));
                     if (!name || !name.trim()) return;
 
                     const cleanName = name.trim().replace(/\s+/g, '_').toLowerCase();
@@ -2566,7 +2566,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         const inp = prompt(t('toolbar_insert.checkbox_label_prompt', {}, 'Checkbox label (leave empty for no label):'), '');
                         label = inp === null ? '' : inp.trim();
                     } else if (fieldType === 'radio' || fieldType === 'select') {
-                        const opts = prompt(t('toolbar_insert.options_prompt', {}, 'Options (comma-separated):\nExample: Ya,Tidak,Mungkin'), 'Ya,Tidak');
+                        const opts = prompt(t('toolbar_insert.options_prompt', {}, 'Options (comma-separated):\nExample: Yes,No,Maybe'), 'Ya,Tidak');
                         if (!opts) return;
                         options = opts;
                         label = prompt(t('toolbar_insert.label_prompt_optional', {}, 'Label (optional):'), '') || '';
@@ -2599,7 +2599,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 });
 
                 function insertTtdPrompt(mode) {
-                    const label = prompt(t('toolbar_insert.ttd_label_prompt', {}, 'Signature label (example: Dokter Penanggung Jawab):'), t('fallback.signature', {}, 'Signature'));
+                    const label = prompt(t('toolbar_insert.ttd_label_prompt', {}, 'Signature label (example: Attending Physician):'), t('fallback.signature', {}, 'Signature'));
                     if (label && label.trim()) {
                         const ttdId = 'ttd_' + Date.now();
                         const namaField = prompt(t('toolbar_insert.ttd_name_field_prompt', {}, "Field name for the signer's name:"), 'nama_' + ttdId);
@@ -2613,7 +2613,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                         let qrData = '';
                         if (ttdModes.includes('qr')) {
-                            qrData = prompt(t('toolbar_insert.ttd_qr_data_prompt', {}, 'QR data (can use {field_name}):\nExample: Ditandatangani oleh {nama_dokter} pada {tanggal}'), '') || '';
+                            qrData = prompt(t('toolbar_insert.ttd_qr_data_prompt', {}, 'QR data (can use {field_name}):\nExample: Signed by {nama_dokter} on {tanggal}'), '') || '';
                         }
 
                         let classes = 'ttd-placeholder';
@@ -2683,7 +2683,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     const label = (labelInput || '').trim();
 
                     // Mode: upload (e-materai digital) atau kosong (tempel manual setelah print)
-                    const matModeInput = (prompt(t('toolbar_insert.materai_mode_prompt', {}, 'Stamp Duty mode (upload / kosong):'), 'upload') || 'upload').trim().toLowerCase();
+                    const matModeInput = (prompt(t('toolbar_insert.materai_mode_prompt', {}, 'Stamp Duty mode (upload / empty):'), 'upload') || 'upload').trim().toLowerCase();
                     const matMode = (matModeInput === 'kosong') ? 'kosong' : 'upload';
 
                     // Ukuran (default e-materai Peruri ~ 26mm x 36mm; di 96dpi ≈ 98x136px). Pakai 100x140 default.
@@ -2704,7 +2704,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         posAttrs = ` data-pos-mode="${mode}" data-pos-x="350" data-pos-y="500"`;
                     }
 
-                    const visualLabel = (matMode === 'kosong') ? t('materai.mode_empty_paren', {}, '(kosong)') : t('materai.mode_upload_paren', {}, '(upload)');
+                    const visualLabel = (matMode === 'kosong') ? t('materai.mode_empty_paren', {}, '(empty)') : t('materai.mode_upload_paren', {}, '(upload)');
                     const escLabel = label.replace(/"/g, '&quot;');
 
                     const content = `
@@ -2734,7 +2734,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         if (!expr || !expr.trim()) return;
                         const escExpr = expr.trim().replace(/"/g, '&quot;');
                         const placeholder = `<div class="conditional-section" data-cond="${escExpr}" contenteditable="true">
-                            <div style="font-size:10px;color:#0e7490;background:#ecfeff;padding:2px 6px;border-radius:3px;margin-bottom:4px;display:inline-block;">⏱ ${t('cond.display_if_prefix', {}, 'Tampil jika:')} <strong>${escapeHtml(expr.trim())}</strong></div>
+                            <div style="font-size:10px;color:#0e7490;background:#ecfeff;padding:2px 6px;border-radius:3px;margin-bottom:4px;display:inline-block;">⏱ ${t('cond.display_if_prefix', {}, 'Show if:')} <strong>${escapeHtml(expr.trim())}</strong></div>
                             <p>${escapeHtml(t('toolbar_insert.cond_placeholder_text', {}, 'Write the conditional content here... (this paragraph will be hidden if the condition is not met)'))}</p>
                         </div>`;
                         editor.insertContent(placeholder + '<p></p>');
@@ -3139,11 +3139,11 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         <!-- Row 1: Nama (2/3) + Tipe (1/3) -->
                         <div class="grid grid-cols-3 gap-1.5">
                             <div class="col-span-2">
-                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field.name_label', {}, 'Nama')}</label>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field.name_label', {}, 'Name')}</label>
                                 <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 font-mono bg-white" value="${eName}" onchange="updateFieldName('${eName}', this.value)">
                             </div>
                             <div>
-                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field.type_label', {}, 'Tipe')}</label>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field.type_label', {}, 'Type')}</label>
                                 <select class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-1.5 py-1 bg-white" onchange="updateFieldType('${eName}', this.value)">
                                     <option value="text" ${field.type === 'text' ? 'selected' : ''}>${t('field_type.text', {}, 'Text')}</option>
                                     <option value="number" ${field.type === 'number' ? 'selected' : ''}>${t('field_type.number', {}, 'Number')}</option>
@@ -3162,13 +3162,13 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         <!-- Row 3: Conditional (Label / Opsi) -->
                         ${needsLabel ? `
                         <div>
-                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field.label_label', {}, 'Label')} <span class="text-gray-400 font-normal normal-case">${t('field.label_hint', {}, '(teks di sebelah checkbox)')}</span></label>
-                            <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${eLabel}" onchange="updateFieldLabel('${eName}', this.value)" placeholder="${t('field.label_placeholder', {}, '(kosongkan jika tanpa label)')}">
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field.label_label', {}, 'Label')} <span class="text-gray-400 font-normal normal-case">${t('field.label_hint', {}, '(text next to the checkbox)')}</span></label>
+                            <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${eLabel}" onchange="updateFieldLabel('${eName}', this.value)" placeholder="${t('field.label_placeholder', {}, '(leave empty if no label)')}">
                         </div>
                         ` : ''}
                         ${needsOptions ? `
                         <div>
-                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field.options_label', {}, 'Opsi')} <span class="text-gray-400 font-normal normal-case">${t('field.options_hint', {}, '(pisah koma)')}</span></label>
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field.options_label', {}, 'Options')} <span class="text-gray-400 font-normal normal-case">${t('field.options_hint', {}, '(comma-separated)')}</span></label>
                             <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${eOptions}" onchange="updateFieldOptions('${eName}', this.value)" placeholder="${t('field.options_example', {}, 'Yes, No, Maybe')}">
                         </div>
                         ` : ''}
@@ -3178,32 +3178,32 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         <summary class="cursor-pointer text-[11px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100/60 flex items-center gap-1.5 pl-3 pr-2 py-1.5 select-none list-none transition-colors">
                             <i class="bi bi-chevron-right text-[10px] text-gray-400 transition-transform group-open:rotate-90"></i>
                             <i class="bi bi-shield-check text-[10px]"></i>
-                            ${t('field_validation.validation_summary_label', {}, 'Validasi')}
+                            ${t('field_validation.validation_summary_label', {}, 'Validation')}
                         </summary>
                         <div class="pl-3 pr-2 py-1.5 bg-gray-50 border-t border-gray-200/60 space-y-1.5" data-field-row="${eName}">
                             <label class="flex items-center gap-1.5 text-[11px] text-gray-700 cursor-pointer">
                                 <input class="rounded border-gray-400 text-gray-800 focus:ring-1 focus:ring-gray-400 shadow-sm" type="checkbox" id="req_${eName}" ${field.required ? 'checked' : ''} data-validate-key="required-${eName}" onchange="updateFieldValidation('${eName}', 'required', this.checked ? '1' : '')">
-                                ${t('field_validation.required_label', {}, 'Wajib diisi')}
+                                ${t('field_validation.required_label', {}, 'Required')}
                             </label>
                             ${['text', 'number'].includes(field.type) ? `
                             <div class="grid grid-cols-2 gap-1.5">
                                 <div>
                                     <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field_validation.min_label', {}, 'Min')}</label>
-                                    <input type="number" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(field.min || '')}" data-validate-key="min-${eName}" onchange="updateFieldValidation('${eName}', 'min', this.value)" placeholder="${field.type === 'number' ? t('field_validation.min_placeholder_number', {}, 'nilai') : t('field_validation.min_placeholder_text', {}, 'panjang')}">
+                                    <input type="number" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(field.min || '')}" data-validate-key="min-${eName}" onchange="updateFieldValidation('${eName}', 'min', this.value)" placeholder="${field.type === 'number' ? t('field_validation.min_placeholder_number', {}, 'value') : t('field_validation.min_placeholder_text', {}, 'length')}">
                                 </div>
                                 <div>
                                     <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field_validation.max_label', {}, 'Max')}</label>
-                                    <input type="number" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(field.max || '')}" data-validate-key="max-${eName}" onchange="updateFieldValidation('${eName}', 'max', this.value)" placeholder="${field.type === 'number' ? t('field_validation.min_placeholder_number', {}, 'nilai') : t('field_validation.min_placeholder_text', {}, 'panjang')}">
+                                    <input type="number" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(field.max || '')}" data-validate-key="max-${eName}" onchange="updateFieldValidation('${eName}', 'max', this.value)" placeholder="${field.type === 'number' ? t('field_validation.min_placeholder_number', {}, 'value') : t('field_validation.min_placeholder_text', {}, 'length')}">
                                 </div>
                             </div>
                             <div>
                                 <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field_validation.regex_label', {}, 'Regex')}</label>
-                                <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 font-mono bg-white" value="${escapeHtml(field.pattern || '')}" data-validate-key="pattern-${eName}" onchange="updateFieldValidation('${eName}', 'pattern', this.value)" placeholder="${t('field_validation.regex_placeholder', {}, '^[0-9]+$ (opsional)')}">
+                                <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 font-mono bg-white" value="${escapeHtml(field.pattern || '')}" data-validate-key="pattern-${eName}" onchange="updateFieldValidation('${eName}', 'pattern', this.value)" placeholder="${t('field_validation.regex_placeholder', {}, '^[0-9]+$ (optional)')}">
                             </div>
                             ` : ''}
                             <div>
-                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field_validation.error_msg_label', {}, 'Pesan error')}</label>
-                                <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(field.errorMsg || '')}" data-validate-key="errorMsg-${eName}" onchange="updateFieldValidation('${eName}', 'errorMsg', this.value)" placeholder="${t('field_validation.error_msg_placeholder', {}, 'Pesan kalau tidak valid')}">
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field_validation.error_msg_label', {}, 'Error message')}</label>
+                                <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(field.errorMsg || '')}" data-validate-key="errorMsg-${eName}" onchange="updateFieldValidation('${eName}', 'errorMsg', this.value)" placeholder="${t('field_validation.error_msg_placeholder', {}, 'Message when invalid')}">
                             </div>
                         </div>
                     </details>
@@ -3381,7 +3381,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         }
 
         function removeField(name) {
-            if (!confirm(t('confirm.delete_field', {name: name}, 'Hapus field {{{name}}}?'))) return;
+            if (!confirm(t('confirm.delete_field', {name: name}, 'Delete field {{{name}}}?'))) return;
 
             const editor = tinymce.get('editor');
             if (!editor) return;
@@ -3452,7 +3452,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         <button type="button" class="inline-flex items-center py-0 px-1 rounded border border-red-600 text-red-600 hover:bg-red-50" onclick="removeQr('${eName}')"><i class="bi bi-trash"></i></button>
                     </div>
                     <div class="flex mb-1">
-                        <span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">${t('field.name_label', {}, 'Nama')}</span>
+                        <span class="inline-flex items-center px-2 py-1 rounded-l border border-r-0 border-gray-300 bg-gray-50 text-xs">${t('field.name_label', {}, 'Name')}</span>
                         <input type="text" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${eName}" onchange="updateQrName('${eName}', this.value)">
                     </div>
                     <div class="flex mb-1">
@@ -3461,8 +3461,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     </div>
                     <select class="w-full rounded border-gray-300 shadow-sm text-xs mb-1 px-2 py-1" onchange="updateQrMode('${eName}', this.value)">
                         <option value="inline" ${mode === 'inline' ? 'selected' : ''}>${t('mode.inline', {}, 'Inline')}</option>
-                        <option value="front" ${mode === 'front' ? 'selected' : ''}>${t('mode.floating_front', {}, 'Floating Depan')}</option>
-                        <option value="behind" ${mode === 'behind' ? 'selected' : ''}>${t('mode.floating_behind', {}, 'Floating Belakang')}</option>
+                        <option value="front" ${mode === 'front' ? 'selected' : ''}>${t('mode.floating_front', {}, 'Floating Front')}</option>
+                        <option value="behind" ${mode === 'behind' ? 'selected' : ''}>${t('mode.floating_behind', {}, 'Floating Behind')}</option>
                     </select>
                     ${isFloating ? `
                     <div class="grid grid-cols-2 gap-1">
@@ -3475,7 +3475,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                             <input type="number" class="flex-1 rounded-r border border-gray-300 text-xs px-2 py-1" value="${qr.posY}" onchange="updateQrPos('${eName}', 'y', this.value)">
                         </div>
                     </div>
-                    <small class="text-gray-500 text-xs">${t('panel.drag_hint', {item: 'QR'}, 'Drag {item} di editor untuk ubah posisi')}</small>
+                    <small class="text-gray-500 text-xs">${t('panel.drag_hint', {item: 'QR'}, 'Drag {item} in the editor to change its position')}</small>
                     ` : ''}
                 </div>`;
             }).join('');
@@ -3567,7 +3567,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         }
 
         function removeQr(name) {
-            if (!confirm(t('confirm.delete_qr', {name: name}, 'Hapus QR "{name}"?'))) return;
+            if (!confirm(t('confirm.delete_qr', {name: name}, 'Delete QR "{name}"?'))) return;
 
             const editor = tinymce.get('editor');
             if (!editor) return;
@@ -3624,11 +3624,11 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         <div class="flex justify-between items-center mb-1">
                             <span class="text-[10px] font-semibold uppercase tracking-wide text-cyan-700"><i class="bi bi-diamond-half"></i> #${idx + 1}</span>
                             <div class="flex gap-1">
-                                <button type="button" class="inline-flex items-center py-0 px-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 text-[10px]" onclick="gotoCondSection('${eId}')" title="${t('cond.scroll_to_element_title', {}, 'Scroll ke elemen')}"><i class="bi bi-crosshair"></i></button>
+                                <button type="button" class="inline-flex items-center py-0 px-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 text-[10px]" onclick="gotoCondSection('${eId}')" title="${t('cond.scroll_to_element_title', {}, 'Scroll to element')}"><i class="bi bi-crosshair"></i></button>
                                 <button type="button" class="inline-flex items-center py-0 px-1 rounded border border-red-500 text-red-600 hover:bg-red-50 text-[10px]" onclick="removeCondSection('${eId}')" title="${t('actions.delete', {}, 'Delete')}"><i class="bi bi-trash"></i></button>
                             </div>
                         </div>
-                        <label class="block text-[9px] font-semibold uppercase tracking-wide text-gray-400 mb-0.5">${t('cond.expression_label', {}, 'Ekspresi')}</label>
+                        <label class="block text-[9px] font-semibold uppercase tracking-wide text-gray-400 mb-0.5">${t('cond.expression_label', {}, 'Expression')}</label>
                         <input type="text" class="w-full rounded border-gray-300 shadow-sm text-[11px] px-2 py-1 font-mono"
                                value="${eExpr}"
                                onchange="updateCondExpr('${eId}', this.value)"
@@ -3655,7 +3655,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             // Update badge label di dalam section
             const badge = el.querySelector('div[style*="ecfeff"], div[style*="ECFEFF"]');
             if (badge) {
-                badge.innerHTML = '⏱ ' + t('cond.display_if_prefix', {}, 'Tampil jika:') + ' <strong>' + escapeHtml(trimmed) + '</strong>';
+                badge.innerHTML = '⏱ ' + t('cond.display_if_prefix', {}, 'Show if:') + ' <strong>' + escapeHtml(trimmed) + '</strong>';
             }
             const editor = tinymce.get('editor');
             if (editor) editor.setDirty(true);
@@ -3673,7 +3673,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         }
 
         function removeCondSection(id) {
-            if (!confirm(t('cond.confirm_delete', {}, 'Hapus section kondisi ini beserta seluruh konten di dalamnya?'))) return;
+            if (!confirm(t('cond.confirm_delete', {}, 'Delete this conditional section along with all its content?'))) return;
             const el = _condFindEl(id);
             if (!el) return;
             el.parentNode.removeChild(el);
@@ -3924,7 +3924,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 const key = m[1];
                 if (!key || key.startsWith('_') || key.startsWith('tabledb.')) continue;
                 if (found.has(key)) continue;
-                found.set(key, { key, label: labelFromKey(key), source: 'variable', group: t('verify.group_field_variable', {}, 'Field Variabel') });
+                found.set(key, { key, label: labelFromKey(key), source: 'variable', group: t('verify.group_field_variable', {}, 'Field Variable') });
             }
 
             // 3. data-nama-field dari TTD (nama penanda tangan)
@@ -3933,7 +3933,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 const key = m[1];
                 if (!key || key.startsWith('_')) continue;
                 if (found.has(key)) continue;
-                found.set(key, { key, label: labelFromKey(key), source: 'ttd', group: t('verify.group_signer_name', {}, 'Nama Penanda Tangan') });
+                found.set(key, { key, label: labelFromKey(key), source: 'ttd', group: t('verify.group_signer_name', {}, 'Signer Name') });
             }
 
             const result = Array.from(found.values()).sort((a, b) => {
@@ -3982,23 +3982,23 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 return `
                 <div class="mb-2 p-1 bg-gray-100 rounded border border-gray-300" style="font-size:11px;">
                     <div class="flex items-center gap-1 mb-1">
-                        <span style="cursor:default;color:#9ca3af;flex-shrink:0;font-size:9px;" title="${t('verify.order_title', {order: i + 1}, 'Urutan: {order}')}">
+                        <span style="cursor:default;color:#9ca3af;flex-shrink:0;font-size:9px;" title="${t('verify.order_title', {order: i + 1}, 'Order: {order}')}">
                             <i class="bi bi-grip-vertical"></i>${i + 1}
                         </span>
                         <select class="flex-1 rounded border-gray-300 shadow-sm" onchange="onVerifyFieldKeyChange(${i}, this.value)" style="font-size:11px; padding:2px 20px 2px 4px; height:auto;">
-                            <option value="">${t('verify.choose_field_option', {}, '- Pilih field dari template -')}</option>
+                            <option value="">${t('verify.choose_field_option', {}, '- Choose a field from the template -')}</option>
                             ${optionsHtml}
-                            <option value="__custom__" ${!isDetected && f.key ? 'selected' : ''}>${f.key ? t('verify.custom_entry_with_key', {key: escapeHtml(f.key)}, 'Ketik manual: {key}') : t('verify.custom_entry_option', {}, 'Ketik manual')}</option>
+                            <option value="__custom__" ${!isDetected && f.key ? 'selected' : ''}>${f.key ? t('verify.custom_entry_with_key', {key: escapeHtml(f.key)}, 'Type manually: {key}') : t('verify.custom_entry_option', {}, 'Type manually')}</option>
                         </select>
                         <button type="button" class="inline-flex items-center py-0 px-1 rounded border border-red-600 text-red-600 hover:bg-red-50 flex-shrink-0" onclick="removeVerifyField(${i})" title="${t('actions.delete', {}, 'Delete')}"><i class="bi bi-x"></i></button>
                     </div>
                     <div class="flex items-center gap-1">
                         <span style="width:16px;"></span>
-                        <input type="text" class="flex-1 rounded border-gray-300 shadow-sm" value="${escapeHtml(f.label || '')}" oninput="updateVerifyField(${i}, 'label', this.value)" placeholder="${t('verify.label_placeholder', {}, 'Label yg tampil di verifikasi')}" style="font-size:11px; padding:2px 4px;">
-                        ${i > 0 ? `<button type="button" class="inline-flex items-center py-0 px-1 rounded border border-gray-500 text-gray-700 hover:bg-gray-50 flex-shrink-0" onclick="moveVerifyField(${i}, -1)" title="${t('verify.move_up_title', {}, 'Naik')}"><i class="bi bi-arrow-up"></i></button>` : '<span style="width:22px;"></span>'}
-                        ${i < fields.length - 1 ? `<button type="button" class="inline-flex items-center py-0 px-1 rounded border border-gray-500 text-gray-700 hover:bg-gray-50 flex-shrink-0" onclick="moveVerifyField(${i}, 1)" title="${t('verify.move_down_title', {}, 'Turun')}"><i class="bi bi-arrow-down"></i></button>` : '<span style="width:22px;"></span>'}
+                        <input type="text" class="flex-1 rounded border-gray-300 shadow-sm" value="${escapeHtml(f.label || '')}" oninput="updateVerifyField(${i}, 'label', this.value)" placeholder="${t('verify.label_placeholder', {}, 'Label shown in verification')}" style="font-size:11px; padding:2px 4px;">
+                        ${i > 0 ? `<button type="button" class="inline-flex items-center py-0 px-1 rounded border border-gray-500 text-gray-700 hover:bg-gray-50 flex-shrink-0" onclick="moveVerifyField(${i}, -1)" title="${t('verify.move_up_title', {}, 'Move up')}"><i class="bi bi-arrow-up"></i></button>` : '<span style="width:22px;"></span>'}
+                        ${i < fields.length - 1 ? `<button type="button" class="inline-flex items-center py-0 px-1 rounded border border-gray-500 text-gray-700 hover:bg-gray-50 flex-shrink-0" onclick="moveVerifyField(${i}, 1)" title="${t('verify.move_down_title', {}, 'Move down')}"><i class="bi bi-arrow-down"></i></button>` : '<span style="width:22px;"></span>'}
                     </div>
-                    ${!isDetected && f.key ? `<div class="mt-1" style="font-size:10px;color:#f59e0b;"><i class="bi bi-exclamation-triangle"></i> ${t('verify.not_detected_hint', {key: escapeHtml(f.key)}, 'Key "{key}" tidak ter-detect di template. Pastikan field ini ada di field_values dokumen.')}</div>` : ''}
+                    ${!isDetected && f.key ? `<div class="mt-1" style="font-size:10px;color:#f59e0b;"><i class="bi bi-exclamation-triangle"></i> ${t('verify.not_detected_hint', {key: escapeHtml(f.key)}, 'Key "{key}" not detected in the template. Make sure this field exists in the document\'s field_values.')}</div>` : ''}
                 </div>
             `;
             }).join('');
@@ -4007,7 +4007,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         // Build <optgroup> options dari detected fields
         function renderFieldOptions(detected, currentKey, usedKeys) {
             if (detected.length === 0) {
-                return `<option disabled>${t('verify.no_field_in_template', {}, '-- Tidak ada field di template --')}</option>`;
+                return `<option disabled>${t('verify.no_field_in_template', {}, '-- No field in template --')}</option>`;
             }
             const groups = {};
             detected.forEach(d => {
@@ -4020,7 +4020,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 groups[g].forEach(d => {
                     const isUsed = usedKeys.has(d.key.toLowerCase()) && d.key !== currentKey;
                     const isSelected = d.key === currentKey;
-                    html += `<option value="${escapeHtml(d.key)}" ${isSelected ? 'selected' : ''} ${isUsed ? 'disabled' : ''}>${escapeHtml(d.label)}${isUsed ? ' ' + t('verify.already_used_suffix', {}, '(sudah dipakai)') : ''}</option>`;
+                    html += `<option value="${escapeHtml(d.key)}" ${isSelected ? 'selected' : ''} ${isUsed ? 'disabled' : ''}>${escapeHtml(d.label)}${isUsed ? ' ' + t('verify.already_used_suffix', {}, '(already used)') : ''}</option>`;
                 });
                 html += `</optgroup>`;
             }
@@ -4030,21 +4030,21 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         // Preset quick-fill buttons — muncul saat custom_fields masih kosong
         function renderVerifyPresets(detected) {
             if (detected.length === 0) {
-                return `<div class="text-center py-2" style="font-size:11px;color:#9ca3af;"><em>${t('verify.no_field_yet_hint', {}, 'Tambahkan field di template dulu (mis. dengan tombol + Field di editor), baru bisa dikonfigurasi di sini.')}</em></div>`;
+                return `<div class="text-center py-2" style="font-size:11px;color:#9ca3af;"><em>${t('verify.no_field_yet_hint', {}, 'Add a field to the template first (e.g. using the + Field button in the editor) before configuring this here.')}</em></div>`;
             }
-            let html = `<div class="mb-2 mt-1"><small class="text-gray-500 block mb-1 text-xs"><i class="bi bi-lightning-charge"></i> ${t('verify.quick_preset_label', {}, 'Preset cepat (klik untuk auto-tambah):')}</small>`;
+            let html = `<div class="mb-2 mt-1"><small class="text-gray-500 block mb-1 text-xs"><i class="bi bi-lightning-charge"></i> ${t('verify.quick_preset_label', {}, 'Quick presets (click to auto-add):')}</small>`;
             let anyPreset = false;
             for (const key in VERIFY_PRESETS) {
                 const p = VERIFY_PRESETS[key];
                 const matched = p.fields.filter(f => detected.some(d => d.key === f.key));
                 if (matched.length === 0) continue;
                 anyPreset = true;
-                html += `<button type="button" class="inline-flex items-center mr-1 mb-1 rounded border border-blue-600 text-blue-600 hover:bg-blue-50" style="font-size:10.5px;padding:2px 8px;" onclick="applyVerifyPreset('${key}')" title="${t('verify.preset_add_title', {count: matched.length, fields: matched.map(f => f.key).join(', ')}, 'Tambah {count} field: {fields}')}">
+                html += `<button type="button" class="inline-flex items-center mr-1 mb-1 rounded border border-blue-600 text-blue-600 hover:bg-blue-50" style="font-size:10.5px;padding:2px 8px;" onclick="applyVerifyPreset('${key}')" title="${t('verify.preset_add_title', {count: matched.length, fields: matched.map(f => f.key).join(', ')}, 'Add {count} field(s): {fields}')}">
                     <i class="bi ${p.icon}"></i> ${escapeHtml(p.label)} <span class="ml-1 inline-flex items-center px-1 rounded-full bg-blue-100 text-blue-800" style="font-size:9px;">${matched.length}</span>
                 </button>`;
             }
             if (!anyPreset) {
-                html += `<em class="text-gray-500" style="font-size:11px;">${t('verify.no_preset_match', {}, 'Belum ada preset yang cocok dengan field di template.')}</em>`;
+                html += `<em class="text-gray-500" style="font-size:11px;">${t('verify.no_preset_match', {}, 'No preset matches the fields in the template yet.')}</em>`;
             }
             html += '</div>';
             return html;
@@ -4151,7 +4151,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             }
             onAccessConfigChange();
             refreshAccessPreview();
-            showToast('Akses CREATE disalin ke EDIT, LOCK & DELETE');
+            showToast(t('access.copied_to_all_toast', {}, 'CREATE access copied to EDIT, LOCK & DELETE'));
         }
 
         // Clear semua field → allow all untuk create/edit/lock, superadmin-only untuk delete
@@ -4164,7 +4164,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             }
             onAccessConfigChange();
             refreshAccessPreview();
-            showToast('Akses config di-reset');
+            showToast(t('access.reset_toast', {}, 'Access config reset'));
         }
 
         // Preset: isi keempat action dengan 'superadmin' saja
@@ -4177,7 +4177,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             }
             onAccessConfigChange();
             refreshAccessPreview();
-            showToast('Semua action dikunci untuk superadmin saja');
+            showToast(t('access.superadmin_only_toast', {}, 'All actions locked to superadmin only'));
         }
 
         // ─── Real-time preview: cek permission user login sekarang ───
@@ -4232,7 +4232,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         function onVerifyFieldKeyChange(idx, value) {
             if (!verifyConfig.custom_fields[idx]) return;
             if (value === '__custom__') {
-                const customKey = prompt(t('verify.custom_key_prompt', {}, 'Ketik nama key field_values (mis. hasil_pemeriksaan):'), verifyConfig.custom_fields[idx].key || '');
+                const customKey = prompt(t('verify.custom_key_prompt', {}, 'Type the field_values key name (e.g. hasil_pemeriksaan):'), verifyConfig.custom_fields[idx].key || '');
                 if (customKey === null) { renderVerifyConfig(); return; }
                 const cleanKey = customKey.trim();
                 if (cleanKey === '') { renderVerifyConfig(); return; }
@@ -4308,7 +4308,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             // Reset loading state — tampilkan spinner di atas iframe
             if (loadingEl) {
                 loadingEl.style.display = 'flex';
-                loadingEl.innerHTML = '<div class="text-center"><div class="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" role="status"></div><div class="mt-2 text-xs">' + t('verify.rendering_preview', {}, 'Merender preview...') + '</div></div>';
+                loadingEl.innerHTML = '<div class="text-center"><div class="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" role="status"></div><div class="mt-2 text-xs">' + t('verify.rendering_preview', {}, 'Rendering preview...') + '</div></div>';
             }
             iframe.srcdoc = ''; // Clear previous content
 
@@ -4343,7 +4343,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 }, 3000);
             } catch (err) {
                 if (loadingEl) {
-                    loadingEl.innerHTML = '<div class="text-center text-red-600 p-3"><i class="bi bi-exclamation-triangle" style="font-size:24px;"></i><div class="mt-2">' + t('verify.preview_failed', {}, 'Gagal memuat preview:') + '<br><small>' + escapeHtml(err.message || String(err)) + '</small></div></div>';
+                    loadingEl.innerHTML = '<div class="text-center text-red-600 p-3"><i class="bi bi-exclamation-triangle" style="font-size:24px;"></i><div class="mt-2">' + t('verify.preview_failed', {}, 'Failed to load preview:') + '<br><small>' + escapeHtml(err.message || String(err)) + '</small></div></div>';
                 }
             }
         }
@@ -4365,13 +4365,13 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             // Materai posMode accent — inline (rose), floating (amber/slate)
             const mateModeMap = {
                 'inline':  { accent: 'before:bg-rose-400',  headerBg: 'from-rose-50/70 to-white',   badgeCls: 'bg-rose-50 text-rose-700 ring-rose-200',   label: t('mode.inline', {}, 'Inline') },
-                'front':   { accent: 'before:bg-amber-400', headerBg: 'from-amber-50/70 to-white',  badgeCls: 'bg-amber-50 text-amber-700 ring-amber-200', label: t('mode.front', {}, 'Depan') },
-                'behind':  { accent: 'before:bg-slate-400', headerBg: 'from-slate-50/70 to-white',  badgeCls: 'bg-slate-50 text-slate-700 ring-slate-200', label: t('mode.behind', {}, 'Belakang') }
+                'front':   { accent: 'before:bg-amber-400', headerBg: 'from-amber-50/70 to-white',  badgeCls: 'bg-amber-50 text-amber-700 ring-amber-200', label: t('mode.front', {}, 'Front') },
+                'behind':  { accent: 'before:bg-slate-400', headerBg: 'from-slate-50/70 to-white',  badgeCls: 'bg-slate-50 text-slate-700 ring-slate-200', label: t('mode.behind', {}, 'Behind') }
             };
 
             list.innerHTML = configMateraiList.map((m, i) => {
                 const eId = escapeHtml(m.id);
-                const labelDisp = (m.label && m.label.trim()) ? escapeHtml(m.label) : `<span class="italic text-gray-400">${t('field.no_label_placeholder', {}, '(tanpa label)')}</span>`;
+                const labelDisp = (m.label && m.label.trim()) ? escapeHtml(m.label) : `<span class="italic text-gray-400">${t('field.no_label_placeholder', {}, '(no label)')}</span>`;
                 const posMode = m.posMode || 'inline';
                 const isFloating = posMode !== 'inline';
                 const w = parseInt(m.width) || 100;
@@ -4391,22 +4391,22 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     <div class="pl-3 pr-2 py-2 space-y-1.5 bg-gradient-to-b from-white to-gray-50/30">
                         <div>
                             <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field.label_label', {}, 'Label')}</label>
-                            <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(m.label || '')}" oninput="updateMateraiAttr('${eId}', 'label', this.value, ${i})" placeholder="${t('field.label_placeholder', {}, '(kosongkan jika tanpa label)')}">
+                            <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(m.label || '')}" oninput="updateMateraiAttr('${eId}', 'label', this.value, ${i})" placeholder="${t('field.label_placeholder', {}, '(leave empty if no label)')}">
                         </div>
                         <div class="grid grid-cols-2 gap-1.5">
                             <div>
-                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field.type_label', {}, 'Tipe')}</label>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field.type_label', {}, 'Type')}</label>
                                 <select class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-1.5 py-1 bg-white" onchange="updateMateraiAttr('${eId}', 'mode', this.value, ${i})">
                                     <option value="upload" ${m.mode === 'upload' ? 'selected' : ''}>${t('materai.mode_upload', {}, 'Upload')}</option>
-                                    <option value="kosong" ${m.mode === 'kosong' ? 'selected' : ''}>${t('materai.mode_empty', {}, 'Kosong')}</option>
+                                    <option value="kosong" ${m.mode === 'kosong' ? 'selected' : ''}>${t('materai.mode_empty', {}, 'Empty')}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('materai.position_label', {}, 'Posisi')}</label>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('materai.position_label', {}, 'Position')}</label>
                                 <select class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-1.5 py-1 bg-white" onchange="updateMateraiPosMode('${eId}', this.value, ${i})">
                                     <option value="inline" ${posMode === 'inline' ? 'selected' : ''}>${t('mode.inline', {}, 'Inline')}</option>
-                                    <option value="front" ${posMode === 'front' ? 'selected' : ''}>${t('mode.front', {}, 'Depan')}</option>
-                                    <option value="behind" ${posMode === 'behind' ? 'selected' : ''}>${t('mode.behind', {}, 'Belakang')}</option>
+                                    <option value="front" ${posMode === 'front' ? 'selected' : ''}>${t('mode.front', {}, 'Front')}</option>
+                                    <option value="behind" ${posMode === 'behind' ? 'selected' : ''}>${t('mode.behind', {}, 'Behind')}</option>
                                 </select>
                             </div>
                         </div>
@@ -4431,7 +4431,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                                 <input type="number" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${m.posY || 500}" onchange="updateMateraiPos('${eId}', 'y', this.value)">
                             </div>
                         </div>
-                        <p class="text-[10px] text-gray-500 italic">${t('panel.drag_hint', {item: 'materai'}, 'Drag {item} di editor untuk ubah posisi')}</p>
+                        <p class="text-[10px] text-gray-500 italic">${t('panel.drag_hint', {item: 'materai'}, 'Drag {item} in the editor to change its position')}</p>
                         ` : ''}
                     </div>
                 </div>`;
@@ -4537,7 +4537,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
             // Also update the visual content (mode label inside)
             if (attrName === 'mode') {
-                const visual = (value === 'kosong') ? t('materai.mode_empty_paren', {}, '(kosong)') : t('materai.mode_upload_paren', {}, '(upload)');
+                const visual = (value === 'kosong') ? t('materai.mode_empty_paren', {}, '(empty)') : t('materai.mode_upload_paren', {}, '(upload)');
                 const innerRegex = new RegExp(`(<div[^>]*data-materai="${materaiId}"[^>]*>\\s*<div[^>]*>)([\\s\\S]*?)(</div>\\s*</div>)`, 'g');
                 content = content.replace(innerRegex, (mm, open, _inner, close) =>
                     `${open}<strong>MATERAI</strong><br>10000<br>${visual}${close}`
@@ -4578,7 +4578,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
         function deleteMaterai(idx) {
             if (!configMateraiList[idx]) return;
-            if (!confirm(t('confirm.delete_materai', {}, 'Hapus materai placeholder ini?'))) return;
+            if (!confirm(t('confirm.delete_materai', {}, 'Delete this stamp duty placeholder?'))) return;
             const id = configMateraiList[idx].id;
             const editor = tinymce.get('editor');
             if (editor) {
@@ -4609,8 +4609,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             // Mode accent — inline (green — anchored) vs floating (amber — draggable)
             const modeMap = {
                 'inline':  { accent: 'before:bg-emerald-400', headerBg: 'from-emerald-50/70 to-white', badgeCls: 'bg-emerald-50 text-emerald-700 ring-emerald-200', label: t('mode.inline', {}, 'Inline') },
-                'front':   { accent: 'before:bg-amber-400',   headerBg: 'from-amber-50/70 to-white',   badgeCls: 'bg-amber-50 text-amber-700 ring-amber-200',       label: t('mode.front', {}, 'Depan') },
-                'behind':  { accent: 'before:bg-slate-400',   headerBg: 'from-slate-50/70 to-white',   badgeCls: 'bg-slate-50 text-slate-700 ring-slate-200',       label: t('mode.behind', {}, 'Belakang') }
+                'front':   { accent: 'before:bg-amber-400',   headerBg: 'from-amber-50/70 to-white',   badgeCls: 'bg-amber-50 text-amber-700 ring-amber-200',       label: t('mode.front', {}, 'Front') },
+                'behind':  { accent: 'before:bg-slate-400',   headerBg: 'from-slate-50/70 to-white',   badgeCls: 'bg-slate-50 text-slate-700 ring-slate-200',       label: t('mode.behind', {}, 'Behind') }
             };
 
             list.innerHTML = logos.map(logo => {
@@ -4639,8 +4639,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                                 <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('logo.mode_label', {}, 'Mode')}</label>
                                 <select class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-1.5 py-1 bg-white" onchange="updateLogoMode('${eName}', this.value)">
                                     <option value="inline" ${mode === 'inline' ? 'selected' : ''}>${t('mode.inline', {}, 'Inline')}</option>
-                                    <option value="front" ${mode === 'front' ? 'selected' : ''}>${t('mode.floating_front', {}, 'Floating Depan')}</option>
-                                    <option value="behind" ${mode === 'behind' ? 'selected' : ''}>${t('mode.floating_behind', {}, 'Floating Belakang')}</option>
+                                    <option value="front" ${mode === 'front' ? 'selected' : ''}>${t('mode.floating_front', {}, 'Floating Front')}</option>
+                                    <option value="behind" ${mode === 'behind' ? 'selected' : ''}>${t('mode.floating_behind', {}, 'Floating Behind')}</option>
                                 </select>
                             </div>
                             <div>
@@ -4659,10 +4659,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                                 <input type="number" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${logo.posY}" onchange="updateLogoPos('${eName}', 'y', this.value)">
                             </div>
                         </div>
-                        <p class="text-[10px] text-gray-500 italic">${t('panel.drag_hint', {item: 'logo'}, 'Drag {item} di editor untuk ubah posisi')}</p>
+                        <p class="text-[10px] text-gray-500 italic">${t('panel.drag_hint', {item: 'logo'}, 'Drag {item} in the editor to change its position')}</p>
                         ` : ''}
                         <div>
-                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('logo.upload_image_label', {}, 'Upload gambar')}</label>
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('logo.upload_image_label', {}, 'Upload image')}</label>
                             <input type="file" class="w-full text-[11px] file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-100 file:text-gray-700 file:cursor-pointer hover:file:bg-gray-200" accept="image/*" onchange="uploadLogo('${eName}', this)">
                         </div>
                     </div>
@@ -4673,7 +4673,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         function uploadLogo(name, input) {
             const file = input.files[0];
             if (!file) return;
-            if (!file.type.startsWith('image/')) { alert(t('alert.file_must_be_image', {}, 'File harus gambar!')); return; }
+            if (!file.type.startsWith('image/')) { alert(t('alert.file_must_be_image', {}, 'File must be an image!')); return; }
             if (file.size > 500 * 1024) { alert(t('alert.file_max_size', {}, 'Max 500KB!')); return; }
 
             const reader = new FileReader();
@@ -4915,7 +4915,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         }
 
         function deleteTtd(i) {
-            if (confirm(t('confirm.delete_ttd', {}, 'Hapus TTD ini?'))) {
+            if (confirm(t('confirm.delete_ttd', {}, 'Delete this signature?'))) {
                 const ttdId = configTtd[i].id;
                 // Remove from editor
                 const editor = tinymce.get('editor');
@@ -4997,8 +4997,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             // Mode accent — inline (emerald), floating (amber for front, slate for behind)
             const ttdModeMap = {
                 'inline':  { accent: 'before:bg-emerald-400', headerBg: 'from-emerald-50/70 to-white', badgeCls: 'bg-emerald-50 text-emerald-700 ring-emerald-200', label: t('mode.inline', {}, 'Inline') },
-                'front':   { accent: 'before:bg-amber-400',   headerBg: 'from-amber-50/70 to-white',   badgeCls: 'bg-amber-50 text-amber-700 ring-amber-200',       label: t('mode.front', {}, 'Depan') },
-                'behind':  { accent: 'before:bg-slate-400',   headerBg: 'from-slate-50/70 to-white',   badgeCls: 'bg-slate-50 text-slate-700 ring-slate-200',       label: t('mode.behind', {}, 'Belakang') }
+                'front':   { accent: 'before:bg-amber-400',   headerBg: 'from-amber-50/70 to-white',   badgeCls: 'bg-amber-50 text-amber-700 ring-amber-200',       label: t('mode.front', {}, 'Front') },
+                'behind':  { accent: 'before:bg-slate-400',   headerBg: 'from-slate-50/70 to-white',   badgeCls: 'bg-slate-50 text-slate-700 ring-slate-200',       label: t('mode.behind', {}, 'Behind') }
             };
 
             list.innerHTML = configTtd.map((ttd, i) => {
@@ -5028,20 +5028,20 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         <div class="grid grid-cols-2 gap-1.5">
                             <div>
                                 <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field.label_label', {}, 'Label')}</label>
-                                <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(ttd.label || '')}" oninput="updateTtd(${i}, 'label', this.value)" placeholder="${t('ttd.label_placeholder', {}, 'Label TTD')}">
+                                <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(ttd.label || '')}" oninput="updateTtd(${i}, 'label', this.value)" placeholder="${t('ttd.label_placeholder', {}, 'Signature label')}">
                             </div>
                             <div>
-                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('ttd.name_field_label', {}, 'Field nama')}</label>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('ttd.name_field_label', {}, 'Name field')}</label>
                                 <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white font-mono" value="${eNamaField}" oninput="updateTtd(${i}, 'nama_field', this.value)" placeholder="nama_dokter">
                             </div>
                         </div>
                         <!-- Row 2: Mode select -->
                         <div>
-                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('materai.position_label', {}, 'Posisi')}</label>
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('materai.position_label', {}, 'Position')}</label>
                             <select class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-1.5 py-1 bg-white" onchange="updateTtdMode('${eId}', this.value)">
                                 <option value="inline" ${mode === 'inline' ? 'selected' : ''}>${t('mode.inline', {}, 'Inline')}</option>
-                                <option value="front" ${mode === 'front' ? 'selected' : ''}>${t('mode.floating_front', {}, 'Floating Depan')}</option>
-                                <option value="behind" ${mode === 'behind' ? 'selected' : ''}>${t('mode.floating_behind', {}, 'Floating Belakang')}</option>
+                                <option value="front" ${mode === 'front' ? 'selected' : ''}>${t('mode.floating_front', {}, 'Floating Front')}</option>
+                                <option value="behind" ${mode === 'behind' ? 'selected' : ''}>${t('mode.floating_behind', {}, 'Floating Behind')}</option>
                             </select>
                         </div>
                         ${isFloating ? `
@@ -5055,29 +5055,29 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                                 <input type="number" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${ttd.posY || 100}" onchange="updateTtdPos('${eId}', 'y', this.value)">
                             </div>
                         </div>
-                        <p class="text-[10px] text-gray-500 italic">${t('panel.drag_hint', {item: 'TTD'}, 'Drag {item} di editor untuk ubah posisi')}</p>
+                        <p class="text-[10px] text-gray-500 italic">${t('panel.drag_hint', {item: 'TTD'}, 'Drag {item} in the editor to change its position')}</p>
                         ` : ''}
                         <!-- Row 3: TTD Mode (image/qr/both) -->
                         <div>
-                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('ttd.display_label', {}, 'Tampilan')}</label>
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('ttd.display_label', {}, 'Display')}</label>
                             <select class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-1.5 py-1 bg-white" onchange="updateTtdAttr('${eId}', 'ttdModes', this.value, ${i})">
-                                <option value="image" ${ttdModes === 'image' ? 'selected' : ''}>${t('ttd.display_image', {}, 'Gambar')}</option>
+                                <option value="image" ${ttdModes === 'image' ? 'selected' : ''}>${t('ttd.display_image', {}, 'Image')}</option>
                                 <option value="qr" ${ttdModes === 'qr' ? 'selected' : ''}>QR Code</option>
-                                <option value="image,qr" ${ttdModes === 'image,qr' ? 'selected' : ''}>${t('ttd.display_image_qr', {}, 'Gambar + QR')}</option>
+                                <option value="image,qr" ${ttdModes === 'image,qr' ? 'selected' : ''}>${t('ttd.display_image_qr', {}, 'Image + QR')}</option>
                             </select>
                         </div>
                         ${hasQr ? `
                         <div>
-                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('ttd.qr_data_label', {}, 'Data QR')} <span class="text-gray-400 font-normal normal-case">${t('ttd.qr_data_hint', {}, '— pakai {nama_field}')}</span></label>
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('ttd.qr_data_label', {}, 'QR Data')} <span class="text-gray-400 font-normal normal-case">${t('ttd.qr_data_hint', {}, '— use {nama_field}')}</span></label>
                             <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white font-mono" id="ttdQrInput_${i}" value="${escapeHtml(ttd.qrData || '')}" onchange="updateTtdAttr('${eId}', 'qrData', this.value, ${i})" placeholder="{nama_dokter}">
                         </div>
-                        <button type="button" class="w-full inline-flex items-center justify-center gap-1 rounded text-[11px] font-medium py-1 ${verifyActive ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}" onclick="setTtdVerifyUrl('${eId}', ${i})" title="${t('ttd.verify_qr_title', {}, 'QR untuk verifikasi keaslian dokumen')}">
-                            <i class="bi bi-shield-check"></i>${verifyActive ? t('ttd.verify_active', {}, 'Verifikasi aktif') : t('ttd.verify_use', {}, 'Pakai verifikasi dokumen')}
+                        <button type="button" class="w-full inline-flex items-center justify-center gap-1 rounded text-[11px] font-medium py-1 ${verifyActive ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}" onclick="setTtdVerifyUrl('${eId}', ${i})" title="${t('ttd.verify_qr_title', {}, 'QR for document authenticity verification')}">
+                            <i class="bi bi-shield-check"></i>${verifyActive ? t('ttd.verify_active', {}, 'Verification active') : t('ttd.verify_use', {}, 'Use document verification')}
                         </button>
                         ` : ''}
                         <!-- Row: Default nama -->
                         <div>
-                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('ttd.default_name_label', {}, 'Default nama')}</label>
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('ttd.default_name_label', {}, 'Default name')}</label>
                             <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(ttd.defaultNama || '')}" onchange="updateTtdAttr('${eId}', 'defaultNama', this.value, ${i})" placeholder="dr. Hilmi...">
                         </div>
                     </div>
@@ -5086,7 +5086,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         <summary class="cursor-pointer text-[11px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100/60 flex items-center gap-1.5 pl-3 pr-2 py-1.5 select-none list-none transition-colors">
                             <i class="bi bi-chevron-right text-[10px] text-gray-400 transition-transform group-open:rotate-90"></i>
                             <i class="bi bi-lock text-[10px]"></i>
-                            ${t('ttd.access_label', {}, 'Akses')} <span class="text-gray-400 font-normal">${t('ttd.access_empty_hint', {}, '(kosong = semua)')}</span>
+                            ${t('ttd.access_label', {}, 'Access')} <span class="text-gray-400 font-normal">${t('ttd.access_empty_hint', {}, '(empty = all)')}</span>
                         </summary>
                         <div class="pl-3 pr-2 py-1.5 bg-gray-50 border-t border-gray-200/60 space-y-1.5">
                             <div>
@@ -5108,7 +5108,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         }
 
         function confirmDelete(id, name) {
-            if (confirm(t('confirm.delete_template', {name: name}, 'Hapus template "{name}"?'))) {
+            if (confirm(t('confirm.delete_template', {name: name}, 'Delete template "{name}"?'))) {
                 document.getElementById('deleteId').value = id;
                 document.getElementById('deleteForm').submit();
             }

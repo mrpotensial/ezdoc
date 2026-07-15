@@ -2692,7 +2692,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                         <div class="meta-grid">
                             <div>
                                 <label><?= h(t('toolbar.norm', [], 'NORM')) ?> <span class="text-red-400">*</span></label>
-                                <input type="text" name="_norm" id="inputNorm" value="<?= h($param_norm) ?>" placeholder="<?= h(t('placeholder.norm_hint', [], 'No RM')) ?>" required <?= $param_is_locked ? 'readonly' : '' ?>>
+                                <input type="text" name="_norm" id="inputNorm" value="<?= h($param_norm) ?>" placeholder="<?= h(t('placeholder.norm_hint', [], 'MR No.')) ?>" required <?= $param_is_locked ? 'readonly' : '' ?>>
                             </div>
                             <div>
                                 <label><?= h(t('toolbar.nopen', [], 'NOPEN')) ?> <span class="text-red-400">*</span></label>

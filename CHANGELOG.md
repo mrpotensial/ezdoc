@@ -32,6 +32,13 @@ and `views/document/generate.php` into per-locale PHP array catalogs — see
   strings, per-document/template author-entered content (`data-label`,
   `data-options`, category/template names), and the pre-existing
   `Config`-driven copy overrides (`designer.page_title`, `generate.picker_*`).
+- **`lang/en/{common,designer,generate}.php`** — English catalog, generated
+  directly from the `$default` argument already present at every `t()` call
+  site (not hand-translated) — that argument doubles as the English source
+  string per this system's convention. Verified via `php -l` plus a
+  standalone runtime smoke test (key resolution, `{param}` interpolation,
+  per-locale isolation, missing-key/bad-locale fallback) for both `id` and
+  `en`.
 
 ## [0.8.0] - 2026-07-10 — "PAdES envelope + RFC 3161 timestamp + PDF sign/verify wrapper"
 
