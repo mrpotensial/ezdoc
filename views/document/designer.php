@@ -256,8 +256,45 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         .panel-header .collapse-icon { transition: transform 0.2s; }
         .panel-header.is-collapsed .collapse-icon { transform: rotate(-90deg); }
 
+        /* Sticky panel headers — macOS Preferences / Notion / Apple Mail pattern.
+           Header stays visible + clickable saat scroll di dalam section-nya.
+           Multi panels stack naturally (as user scrolls, current header stays at
+           top until next section's header pushes it out).
+
+           Contract:
+           - position:sticky pada .panel-header + solid bg supaya list items yg
+             lewat di baliknya tidak bocor
+           - z-10 di atas card content (card default z:auto)
+           - top:0 relative to nearest scrolling ancestor (.sidebar-scroll)
+           - backdrop-blur untuk hint iOS-native saat card ada di belakang
+           - Subtle border-bottom untuk visual separator when stuck */
+        .panel-header {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: saturate(180%) blur(8px);
+            -webkit-backdrop-filter: saturate(180%) blur(8px);
+            /* Prevent header dari overlap dgn scrollbar */
+            padding-right: max(0.75rem, env(safe-area-inset-right, 0));
+        }
+        /* Kalau expanded (content di bawah header terlihat), tambahkan subtle
+           bottom shadow untuk depth. .is-collapsed = tidak butuh (nothing below). */
+        .panel-header:not(.is-collapsed) {
+            box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.05);
+        }
+
         /* PRESERVE: JS-toggled class for filter (JS adds/removes at runtime) */
         .panel-list-item-hidden { display: none !important; }
+
+        /* Click-to-focus flash — ring pulse + subtle indigo tint, 1.4s ease-out.
+           Industry pattern: VS Code Peek highlight + Figma layer flash. */
+        @keyframes ezdocFlashFocus {
+            0%   { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.55); background-color: rgba(238, 242, 255, 0.75); }
+            60%  { box-shadow: 0 0 0 6px rgba(99, 102, 241, 0); background-color: rgba(238, 242, 255, 0.45); }
+            100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); background-color: transparent; }
+        }
+        .panel-list-item.ezdoc-flash-focus { animation: ezdocFlashFocus 1.4s ease-out; }
 
         /* Field card details — hide default triangle marker (Safari + Firefox) */
         details.group summary::-webkit-details-marker { display: none; }
@@ -1808,6 +1845,9 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     indicator.textContent = t('save_status.saved', {}, 'Saved');
                     indicator.className = 'save-indicator saved';
                     showToast(data.message);
+                    // Reset dirty flag — beforeunload prompt sekarang tidak akan
+                    // muncul sampai user edit lagi.
+                    if (window.ezdocMarkClean) window.ezdocMarkClean();
                     if (data.id) {
                         // Always sync the hidden input to the latest ID (defensive against stale value)
                         const idInput = document.getElementById('templateId');
@@ -2151,7 +2191,11 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             plugins: 'advlist anchor autolink autosave charmap code directionality fullscreen help hr image importcss insertdatetime lists link nonbreaking pagebreak preview quickbars searchreplace table visualblocks visualchars wordcount',
             // Autosave — critical UX (recovers content kalau browser crash/close).
             // Prefix pakai template ID supaya per-template autosave.
-            autosave_ask_before_unload: true,
+            // NOTE: `autosave_ask_before_unload` sengaja OFF — TinyMCE builtin
+            // over-triggers meski nothing changed. Kita implement custom
+            // beforeunload di window scope (lihat setelah tinymce.init) yg
+            // cek editor.isDirty() dulu sebelum block navigation.
+            autosave_ask_before_unload: false,
             autosave_interval: '30s',
             autosave_prefix: 'ezdoc-tpl-{path}{query}-',
             autosave_restore_when_empty: false,
@@ -2773,6 +2817,51 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         scanDynTables();
                     }, 300);
                 });
+
+                // Click-to-focus sidebar card — VS Code Outline / Figma Layers pattern.
+                // Click placeholder di editor → auto expand + scroll ke sub-card matching di panel kanan.
+                // Ringan: single delegated listener, DOM walk max 8 levels, no re-render.
+                editor.on('click', function(e) {
+                    if (!window.ezdocFocusSidebarCard) return;
+                    let el = e.target;
+                    let type = null, id = null, depth = 0;
+                    while (el && el !== editor.getBody() && depth < 8) {
+                        if (el.classList) {
+                            if (el.classList.contains('field-placeholder')) {
+                                // Field name dari data-name attr (preferred) atau parse text {{name}}
+                                id = el.getAttribute('data-name') || '';
+                                if (!id) {
+                                    const m = (el.textContent || '').match(/\{\{([^}]+)\}\}/);
+                                    if (m) id = m[1];
+                                }
+                                if (id) { type = 'field'; break; }
+                            }
+                            if (el.classList.contains('ttd-placeholder')) {
+                                id = el.getAttribute('data-ttd') || '';
+                                if (id) { type = 'ttd'; break; }
+                            }
+                            if (el.classList.contains('materai-placeholder')) {
+                                id = el.getAttribute('data-materai') || '';
+                                if (id) { type = 'materai'; break; }
+                            }
+                            if (el.classList.contains('logo-placeholder')) {
+                                id = el.getAttribute('data-logo') || el.getAttribute('data-id') || '';
+                                if (id) { type = 'logo'; break; }
+                            }
+                            if (el.classList.contains('qr-placeholder')) {
+                                id = el.getAttribute('data-qr') || '';
+                                if (id) { type = 'qr'; break; }
+                            }
+                            if (el.classList.contains('conditional-section')) {
+                                id = el.getAttribute('data-cond-id') || '';
+                                if (id) { type = 'cond'; break; }
+                            }
+                        }
+                        el = el.parentElement;
+                        depth++;
+                    }
+                    if (type && id) window.ezdocFocusSidebarCard(type, id);
+                });
                 editor.on('init', function() {
                     // Wait for iframe to be fully ready
                     setTimeout(function() {
@@ -2982,6 +3071,59 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         });
         <?php endif; ?>
 
+        // ===== BEFOREUNLOAD (conditional — only when dirty) =====
+        // Industry pattern: track dirty state, prompt hanya kalau ada unsaved
+        // changes. Native browser prompt tidak bisa di-style (browser
+        // restriction) tapi konten text sudah "Changes you made may not be
+        // saved" — standard user-recognizable copy.
+        //
+        // Manual flag `window._ezdocDirty` di-set:
+        // - Editor content change → editor.on('dirty', ...) auto-set true
+        // - Manual save flow (saveTemplate) → reset false setelah 200 OK
+        // - Sidebar-only changes (add TTD/materai/logo/QR/kondisi/rename field)
+        //   already call editor.setDirty(true) — captured by dirty listener
+        window._ezdocDirty = false;
+        (function () {
+            function bindDirtyTracking() {
+                const editor = tinymce.get('editor');
+                if (!editor) { setTimeout(bindDirtyTracking, 200); return; }
+                editor.on('dirty', function () { window._ezdocDirty = true; });
+                // Reset saat content di-set programmatically (mis. undo ke initial).
+                editor.on('SetContent', function () {
+                    if (!editor.isDirty()) window._ezdocDirty = false;
+                });
+            }
+            bindDirtyTracking();
+
+            window.addEventListener('beforeunload', function (e) {
+                if (!window._ezdocDirty) return; // clean → allow leave silently
+                // Native prompt — browser show generic message.
+                // Custom returnValue ignored di modern browsers, tapi wajib set
+                // supaya prompt trigger di legacy browser.
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
+            });
+
+            // Public helper: dipanggil saveTemplate() success handler + save flows
+            // buat clear dirty flag.
+            window.ezdocMarkClean = function () {
+                window._ezdocDirty = false;
+                const editor = tinymce.get('editor');
+                if (editor) editor.setDirty(false);
+            };
+        })();
+
+        // ===== TAILWIND DIALOG HELPER =====
+        // ezdocAlert / ezdocConfirm moved to layout.php — shared across all
+        // ezdoc pages. Kalau layout tidak load (edge case: standalone view),
+        // fallback ke native alert/confirm.
+        if (!window.ezdocAlert) {
+            window.ezdocAlert = function (msg) { alert(msg); return Promise.resolve(true); };
+            window.ezdocConfirm = function (msg) { return Promise.resolve(confirm(msg)); };
+        }
+
+
         // ===== FIELD PLACEHOLDERS =====
         // spec: ezdoc-spec/protocol/template-content.md#field-markers
         function scanFieldPlaceholders() {
@@ -3126,7 +3268,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                 const searchText = (eName + ' ' + (field.label || '') + ' ' + field.type).toLowerCase();
                 return `
-                <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${accentCls} before:content-['']" data-search-text="${escapeHtml(searchText)}">
+                <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${accentCls} before:content-['']" data-search-text="${escapeHtml(searchText)}" data-focus-target="field:${eName}">
                     <!-- Card Header — single line inline dengan type color hint -->
                     <div class="flex items-center gap-1.5 pl-3 pr-2 py-1.5 bg-gradient-to-b ${headerBg} border-b border-gray-200">
                         <span class="inline-flex items-center justify-center w-5 h-5 rounded ring-1 ring-inset ${badgeCls} shrink-0"><i class="bi ${tIcon} text-[10px]"></i></span>
@@ -3446,7 +3588,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 const eWidth = escapeHtml(qr.width);
 
                 return `
-                <div class="mb-2 p-2 bg-gray-100 rounded" style="border-left: 3px solid #06b6d4;">
+                <div class="mb-2 p-2 bg-gray-100 rounded panel-list-item" style="border-left: 3px solid #06b6d4;" data-focus-target="qr:${eName}">
                     <div class="flex justify-between items-center mb-1">
                         <strong class="text-xs" style="color:#06b6d4;"><i class="bi bi-qr-code mr-1"></i>${eName}</strong>
                         <button type="button" class="inline-flex items-center py-0 px-1 rounded border border-red-600 text-red-600 hover:bg-red-50" onclick="removeQr('${eName}')"><i class="bi bi-trash"></i></button>
@@ -3619,7 +3761,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 const eExpr = escapeHtml(it.expr);
                 const eId = escapeHtml(it.id);
                 return `
-                <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-cyan-400 before:content-['']">
+                <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-cyan-400 before:content-['']" data-focus-target="cond:${eId}">
                     <div class="pl-2.5 pr-2 py-1.5">
                         <div class="flex justify-between items-center mb-1">
                             <span class="text-[10px] font-semibold uppercase tracking-wide text-cyan-700"><i class="bi bi-diamond-half"></i> #${idx + 1}</span>
@@ -3681,6 +3823,57 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             if (editor) editor.setDirty(true);
             scanCondSections();
         }
+
+        // ===== CLICK-TO-FOCUS SIDEBAR =====
+        // Editor click → auto-scroll ke sub-card di panel kanan. VS Code Outline /
+        // Figma Layers / Filament Forms pattern. Called by editor.on('click') listener.
+        //
+        // type: 'field' | 'ttd' | 'materai' | 'logo' | 'qr' | 'cond'
+        // id:   identifier unique per type (mis. field name, ttd id, cond-id)
+        window.ezdocFocusSidebarCard = function(type, id) {
+            const PANEL_MAP = {
+                field:   'fieldList',
+                ttd:     'ttdList',
+                materai: 'materaiList',
+                logo:    'logoList',
+                qr:      'qrList',
+                cond:    'condList',
+            };
+            const listId = PANEL_MAP[type];
+            if (!listId) return;
+            const listEl = document.getElementById(listId);
+            if (!listEl) return;
+
+            // 1. Expand parent Alpine panel (walk up to find x-data ancestor).
+            //    Alpine.$data(el).open = true triggers reactivity + x-collapse animation.
+            const alpineRoot = listEl.closest('[x-data]');
+            let wasCollapsed = false;
+            if (alpineRoot && window.Alpine) {
+                try {
+                    const data = window.Alpine.$data(alpineRoot);
+                    if (data && 'open' in data) {
+                        wasCollapsed = !data.open;
+                        data.open = true;
+                    }
+                } catch (e) { /* Alpine not initialized yet — skip */ }
+            }
+
+            // 2. Find target card + scroll into view. Delay kalau panel baru expand
+            //    supaya scrollIntoView pakai final layout (bukan mid-transition height).
+            const cardSel = '[data-focus-target="' + type + ':' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]';
+            const doScroll = () => {
+                const card = listEl.querySelector(cardSel);
+                if (!card) return;
+                // Restore visibility kalau filter search sedang aktif
+                card.classList.remove('panel-list-item-hidden');
+                card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                card.classList.remove('ezdoc-flash-focus'); // reset (retrigger)
+                void card.offsetWidth;                       // force reflow
+                card.classList.add('ezdoc-flash-focus');
+                setTimeout(() => card.classList.remove('ezdoc-flash-focus'), 1400);
+            };
+            setTimeout(doScroll, wasCollapsed ? 320 : 30);
+        };
 
         // ===== DYNAMIC TABLES (LEGACY — REMOVED) =====
         // Replaced by new {{tabledb.<ns>.<col>}} variable system.
@@ -4379,7 +4572,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 const mm = mateModeMap[posMode] || mateModeMap['inline'];
                 const searchText = ((m.label || '') + ' ' + (m.mode || '') + ' ' + posMode + ' ' + m.id).toLowerCase();
                 return `
-                <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${mm.accent} before:content-['']" data-search-text="${escapeHtml(searchText)}">
+                <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${mm.accent} before:content-['']" data-search-text="${escapeHtml(searchText)}" data-focus-target="materai:${eId}">
                     <!-- Card Header -->
                     <div class="flex items-center gap-1.5 pl-3 pr-2 py-1.5 bg-gradient-to-b ${mm.headerBg} border-b border-gray-200">
                         <span class="inline-flex items-center justify-center w-5 h-5 rounded ring-1 ring-inset ${mm.badgeCls} shrink-0"><i class="bi bi-stamp text-[10px]"></i></span>
@@ -4623,7 +4816,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 const m = modeMap[mode] || modeMap['inline'];
 
                 return `
-                <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${m.accent} before:content-['']">
+                <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${m.accent} before:content-['']" data-focus-target="logo:${eName}">
                     <!-- Card Header -->
                     <div class="flex items-center gap-1.5 pl-3 pr-2 py-1.5 bg-gradient-to-b ${m.headerBg} border-b border-gray-200">
                         <span class="inline-flex items-center justify-center w-5 h-5 rounded ring-1 ring-inset ${m.badgeCls} shrink-0"><i class="bi bi-image text-[10px]"></i></span>
@@ -5014,7 +5207,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 const verifyActive = (ttd.qrData || '').includes('{verify_url}');
 
                 return `
-                <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${m.accent} before:content-['']" data-search-text="${escapeHtml(searchText)}">
+                <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${m.accent} before:content-['']" data-search-text="${escapeHtml(searchText)}" data-focus-target="ttd:${eId}">
                     <!-- Card Header -->
                     <div class="flex items-center gap-1.5 pl-3 pr-2 py-1.5 bg-gradient-to-b ${m.headerBg} border-b border-gray-200">
                         <span class="inline-flex items-center justify-center w-5 h-5 rounded ring-1 ring-inset ${m.badgeCls} shrink-0"><i class="bi bi-pen text-[10px]"></i></span>
@@ -5145,6 +5338,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             }
         });
     </script>
+
+    <?php include __DIR__ . '/../_partials/dialog_helper.php'; ?>
 <?php if (!$__ezdoc_isFragment): ?>
 </body>
 </html>
