@@ -6,6 +6,193 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+## [0.9.9] - 2026-07-15 — "DB abstraction + Blueprint DSL + spec-first bootstrap + UX polish"
+
+### Added — DB abstraction layer (in-house, zero external dep)
+
+Foundation untuk cross-platform + cross-language ecosystem. Zero external
+library (target market: RS/pemerintah install-and-forget). Knowledge borrow
+dari Doctrine DBAL Platforms + Laravel Query Builder (studied, reimplemented
+from spec).
+
+- **`Ezdoc\Db\Connection`** interface — driver-agnostic contract: `prepare`,
+  `execute`, `fetchOne`, `fetchAll`, `fetchScalar`, `transaction`, `query`,
+  `lastInsertId`, `schemaManager`, `grammar`
+- **`Ezdoc\Db\Mysqli\MysqliConnection`** — default zero-dep adapter, wrap
+  raw mysqli. Auto-detect MySQL vs MariaDB via `server_info`. Backward
+  compat dgn consumer `koneksi.php` pattern (constructor accept both
+  `Connection` OR `mysqli` global)
+- **`Ezdoc\Db\Pdo\PdoConnection`** — universal PDO wrapper (mysql/sqlite/
+  pgsql/sqlsrv). Auto-detect grammar dari `PDO::ATTR_DRIVER_NAME`, enable
+  `PRAGMA foreign_keys` untuk SQLite. Factory `fromDsn($dsn, $user, $pass)`
+- **5 Grammar implementations** (T2 coverage): `MysqlGrammar`,
+  `MariaDbGrammar` (extends MySQL), `SqliteGrammar` (INTEGER PRIMARY KEY
+  AUTOINCREMENT special-case, TEXT+json_valid CHECK), `PostgresGrammar`
+  (JSONB, native UUID, GENERATED ALWAYS AS IDENTITY, TIMESTAMP WITHOUT
+  TIME ZONE), `SqlServerGrammar` (bracket idents, NVARCHAR(MAX)+ISJSON,
+  IDENTITY(1,1), OFFSET…FETCH NEXT). Feature flags per grammar:
+  `supportsNativeJson`, `supportsNativeUuid`, `supportsNativeEnum`,
+  `supportsSavepoints`
+- **`Ezdoc\Db\QueryBuilder`** — chainable fluent SQL builder (SELECT/
+  DISTINCT/FROM/WHERE(and/or)/JOIN(inner/left/right)/ORDER/LIMIT/OFFSET,
+  INSERT single+batch, UPDATE (set/setRaw), DELETE). Grammar-driven
+  per-platform compilation
+- **`Ezdoc\Db\Schema\Blueprint`** — Laravel-familiar schema DSL (framework-
+  neutral semantic). Column types: id/uuid/string/integer/bigint/boolean/
+  json/text/enum/datetime/date/time/decimal/float/binary + foreignId
+  helper + timestamps + softDeletes composites. Modifiers: nullable/
+  default/defaultRaw/unique/index/primary/unsigned/autoIncrement/comment/
+  references+on+cascadeOnDelete. Indexes: primary/unique/index/foreign.
+- **`Ezdoc\Db\Types\*`** — 8 core types (String/Integer/BigInt/Boolean/Json/
+  Uuid/DateTime/Text) + EnumType parametric + TypeRegistry. PHP↔DB value
+  conversion (mis. JSON encode/decode, UUID normalize lowercase)
+- **`Ezdoc\Db\Schema\Comparator`** — MVP diff engine, produces SchemaDiff/
+  TableDiff untuk added/dropped/changed tables + columns + indexes + FKs.
+  ALTER SQL emission deferred v0.9.10
+- **`Ezdoc\Db\Schema\ColumnIntrospector`** — introspect actual columns per
+  table via SHOW COLUMNS (MySQL/MariaDB) / PRAGMA table_info (SQLite) /
+  information_schema (Postgres/SQLServer). Cached per-request. Repository
+  uses intersection dgn desired columns → handle schema drift gracefully
+  (consumer DB dgn older migration missing kolom baru = no crash, no
+  `Unknown column` error)
+- **Typed exception hierarchy** (`Ezdoc\Db\Exception\*`) — DbException +
+  ConnectionException + QueryException (dgn SQLSTATE code) +
+  TransactionException + SchemaException
+
+### Added — Repository sweep (in-house DB layer dogfooded)
+
+- **`Ezdoc\Document\DocumentRepository`** — refactored dari mysqli hard-
+  coupled ke Connection interface (518→340 LOC, -35%). ColumnIntrospector
+  untuk adaptive SELECT. Optimistic locking preserved
+- **`Ezdoc\Template\TemplateRepository`** — refactored (478→325 LOC, -32%).
+  Transaction sugar via Connection::transaction() untuk createNewVersion
+  (exception-safe callback pattern)
+- **`Ezdoc\Signature\SignatureRepository`** — NEW. Envelope CRUD + verify
+  status update. Support L1 HMAC + L2 LocalPKI + L3 PSrE per
+  envelope_format
+- **`Ezdoc\Audit\AuditRepository`** — NEW read-side gateway (write tetap
+  di `Ezdoc\Audit\Logger` append-only). Query patterns: findByActor,
+  findByDocument, findByTemplate, findByEvent, findByRequestId,
+  findDenied, countByActor/Event
+- **`Ezdoc\DefaultVars\DefaultVarsRepository`** — NEW whitelist CRUD
+  (add/find/delete/setEnabled), portable duplicate detection (check-first,
+  bukan INSERT IGNORE MySQL-specific)
+- **Actions sweep** — 21 file di `actions/*.php` refactored dari raw
+  mysqli ke Connection interface. Zero `mysqli_query|->query(` di
+  actions/. Bulk mutations wrapped dalam transaction. MySQL-specific
+  queries (JSON_EXTRACT) tetap raw SQL dgn cross-DB caveat comment
+
+### Added — Spec-first cross-language artifacts
+
+- **`migrations/blueprints/*.php`** — 5 Blueprint files single source of
+  truth: ezdoc_templates, ezdoc_documents, ezdoc_default_vars,
+  ezdoc_audit_log, ezdoc_signatures. BIGINT SIGNED convention untuk FK
+  compatibility dgn existing prod schema
+- **`cli/spec-dump.php`** — regenerate `ezdoc-spec/` artifacts dari
+  Blueprint source. Args: (no args) = regenerate, `--check` = CI gate
+  (exit 1 kalau drift), `--help`
+- **`ezdoc-spec/` folder (generated, checked-in)**:
+  - `schema/tables.{json,yaml}` — cross-lang DB descriptor
+  - `ddl/{mysql,mariadb,sqlite,postgres,sqlserver}.sql` — generated DDL
+  - `meta/{version.json,checksum.txt}` — CI gate metadata
+  - `README.md` — "How to consume in Go/Rust/TS"
+- **CI gate**: `php cli/spec-dump.php --check` → exit 1 kalau spec
+  out-of-date. Enforce contribution flow (edit Blueprint → regen spec →
+  commit both)
+- Minimal YAML emitter inline di CLI (no `symfony/yaml` external dep)
+
+### Added — Documentation
+
+- **`docs/DB-ABSTRACTION.md`** — full guide: Connection interface,
+  adapters, Blueprint DSL, Grammar per platform, Types system,
+  QueryBuilder, Repository pattern, transactions, migration & backward
+  compat, extending (custom Grammar, custom Type, custom exception)
+- **`docs/CROSS-LANGUAGE.md`** — spec-first ecosystem strategy: separate
+  audience sections untuk consumer applications (use native package) vs
+  port implementers (honor spec contract), roadmap Go/TS/Rust ports,
+  conformance testing plan
+
+### Added — UX polish (designer + generate)
+
+- **Modern brand navbar** (Vercel/Linear/Filament pattern) — logo mark
+  (gradient square dgn initial atau custom logo) + app name + optional
+  tagline + optional badge pill. Auto-split legacy `brand.app_name`
+  format "Foo (Bar)" / "Foo · Bar" untuk backward compat
+- **List view template filter** — dropdown pilih template + Airtable-
+  style active-filter breadcrumb pill dgn count + clear button. Preserve
+  `ezdoc_page=list` routing prefix via hidden inputs
+- **Click-to-focus sidebar** (VS Code Outline / Figma Layers / Filament
+  Forms pattern) — click placeholder di editor → auto-expand parent
+  panel + scroll ke matching sub-card + flash animation 1.4s. 6
+  placeholder types wired: field/ttd/materai/logo/qr/cond
+- **Sticky panel headers** (macOS Preferences / Notion / Apple Mail
+  pattern) — `position:sticky` dgn backdrop-blur. Multi-panel natural
+  stacking as user scrolls
+- **Tailwind dialog helper** (`views/_partials/dialog_helper.php`) —
+  ezdocAlert/ezdocConfirm Promise-based, replace native alert/confirm.
+  5 variants (info/success/warning/error/danger) dgn icon + color
+  scheme. WAI-ARIA 1.2 compliance: role/aria-modal/aria-labelledby,
+  autofocus, focus trap (Tab cycle), Escape/Enter/backdrop handling,
+  restore focus on close. Shared partial included dari layout +
+  generate + designer (2 latter render standalone full HTML)
+- **35 native alert/confirm calls migrated** ke ezdocAlert/ezdocConfirm
+  (15 di generate.php + 20 di designer.php) dgn proper variant per
+  context (danger untuk destructive, warning untuk caution, success
+  untuk positive feedback, error untuk failures)
+
+### Fixed
+
+- **Beforeunload dirty-aware** — TinyMCE `autosave_ask_before_unload`
+  over-triggered meski nothing changed. Fix: matikan TinyMCE built-in,
+  custom handler yg cek `editor.isDirty()` via 'dirty' event. Add
+  `_ezdocSuppressUnload` flag (Livewire wire:navigate pattern) untuk
+  intentional programmatic navigation
+- **generate.php versionSelect dirty leak** — bindDirtyTracking binds
+  `change` di ALL `<select>` termasuk versionSelect (navigation-only,
+  bukan data edit). Skip via id check + `data-no-dirty` opt-out attr
+- **Routing prefix preservation** — 5 programmatic redirects di
+  generate.php (createNew/switchVersion/deleteThisVersion/
+  restoreDeletedSlot/doCreateNewVersion) sekarang preserve
+  `ezdoc_page=generate` prefix via `_preservedParams()`
+- **Schema drift graceful fallback** — TemplateRepository/
+  DocumentRepository SELECT_COLS include kolom baru (content_hash,
+  metadata, revision, dsb) yang mungkin missing di consumer DB dgn
+  older migration. ColumnIntrospector intersection prevent
+  `Unknown column` errors
+- **FK type mismatch di Blueprint** — `$t->id()` default UNSIGNED
+  (Laravel-familiar) collide dgn existing ezdoc convention BIGINT
+  SIGNED. Fix: 5 Blueprint files pakai `$t->bigint('id')->autoIncrement()
+  ->primary()` SIGNED explicit
+- **`access_config` type mismatch** — save_document.php pakai
+  TemplateRepository::findById() yg return Template object dgn
+  `getAccessConfig(): array` (already decoded), tapi still call
+  `ezdoc_parse_access_config($array)` yg expect `?string`. Fix: skip
+  parse, use array langsung
+- **`.doc-info` DOM regression** — toolbar-compact refactor hilangkan
+  `<div class="doc-info">` tapi save handler JS masih query. Fix:
+  restore class hook + defensive null-check
+- **`ezdocConfirm is not defined`** — helper cuma di layout.php, tapi
+  generate.php + designer.php render standalone full HTML → skip layout
+  wrap. Fix: extract ke `views/_partials/dialog_helper.php`, include
+  dari 3 tempat
+- **EN lang `\\n\\n` literal** — 9 keys di `lang/en/{designer,generate}
+  .php` pakai single-quote dgn `'\\n\\n'` → literal 4-char backslash-n
+  sequence (bukan real newline). Fix: convert ke double-quote
+  `"\n\n"`. Dialog `whitespace-pre-line` sekarang render sebagai line
+  break proper
+
+### Deferred to v0.9.10
+
+- Full `SchemaManager` implementation (Mysqli + PDO) — sekarang stub
+  throws "not yet implemented"
+- Comparator ALTER SQL emission per Grammar
+- Migration runner switch pakai Blueprint (currently legacy imperative
+  SQL migrations still work + Blueprint feed spec-dump only)
+- Formal PHPUnit test coverage untuk Repositories + ColumnIntrospector
+- Docker-compose test matrix (real DB per Grammar)
+
+## [Unreleased-pre-0.9.9]
+
 ### Added — i18n scaffold (`Ezdoc\UI\Translator`)
 Externalized hardcoded Bahasa Indonesia UI strings in `views/document/designer.php`
 and `views/document/generate.php` into per-locale PHP array catalogs — see
