@@ -10,7 +10,8 @@
  *   @var \Ezdoc\UI\Config                    $config
  *   @var \Ezdoc\UI\Theme                     $theme
  *   @var \Ezdoc\Document\Document[]          $documents
- *   @var array<string,mixed>                 $filters   Current filter state (subject_type, status, q)
+ *   @var \Ezdoc\Template\Template[]          $templates List all templates untuk filter dropdown
+ *   @var array<string,mixed>                 $filters   Current filter state (q, status, template_id)
  *   @var string                              $baseUrl   Base for filter form action (search/status)
  *
  * URL patterns — configure di Config supaya match consumer routing.
@@ -22,7 +23,19 @@
  */
 
 $pageTitle = (string) $config->get('pages.list.title', 'Documents');
-$emptyMsg  = (string) $config->get('pages.list.empty_message', 'Belum ada dokumen. Klik "Buat Dokumen" untuk mulai.');
+$emptyMsg  = (string) $config->get('pages.list.empty_message', 'No documents yet. Click "Create Document" to get started.');
+$createBtn = (string) $config->get('pages.list.create_button', 'Create Document');
+$searchLabel = (string) $config->get('pages.list.search_label', 'Search');
+$searchPlaceholder = (string) $config->get('pages.list.search_placeholder', 'Search title / reference / subject...');
+$templateLabel = (string) $config->get('pages.list.template_label', 'Template');
+$allTemplatesLabel = (string) $config->get('pages.list.all_templates', 'All templates');
+$statusLabel = (string) $config->get('pages.list.status_label', 'Status');
+$allStatusesLabel = (string) $config->get('pages.list.all_statuses', 'All statuses');
+$filterButton = (string) $config->get('pages.list.filter_button', 'Filter');
+$clearFilterTitle = (string) $config->get('pages.list.clear_filter_title', 'Clear filter');
+$filterLabel = (string) $config->get('pages.list.filter_label', 'Filter:');
+$documentsSuffix = (string) $config->get('pages.list.documents_suffix', 'document(s)');
+$printButton = (string) $config->get('pages.list.print_button', 'Print');
 
 $urlView   = (string) $config->get('urls.view_pattern', 'document/view?uuid={uuid}');
 $urlPrint  = (string) $config->get('urls.print_pattern', 'document/print?uuid={uuid}');
@@ -60,23 +73,60 @@ $statusStyles = [
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"/>
             </svg>
-            Buat Dokumen
+            <?= htmlspecialchars($createBtn, ENT_QUOTES, 'UTF-8') ?>
         </a>
     </div>
 
-    <form method="get" class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-4 items-end">
+    <?php
+    // Preserve App orchestrator routing prefix (ezdoc_page=list) di form action
+    // supaya GET submit tidak fallback ke default_page. Semua param non-filter
+    // yg exist di URL sekarang di-forward via hidden inputs.
+    $qk = 'ezdoc_page';
+    $preserveKeys = [$qk, 'ezdoc_asset'];
+    $preserveHidden = [];
+    foreach ($preserveKeys as $k) {
+        if (isset($_GET[$k]) && is_string($_GET[$k])) {
+            $preserveHidden[$k] = $_GET[$k];
+        }
+    }
+    $templates    = $templates ?? [];
+    $selectedTid  = (int) ($filters['template_id'] ?? 0);
+    ?>
+    <form method="get" class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-5 items-end">
+        <?php foreach ($preserveHidden as $k => $v): ?>
+            <input type="hidden" name="<?= htmlspecialchars($k, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>">
+        <?php endforeach; ?>
+
         <div class="sm:col-span-2">
-            <label class="block text-xs font-medium text-gray-700 mb-1">Cari</label>
+            <label class="block text-xs font-medium text-gray-700 mb-1"><?= htmlspecialchars($searchLabel, ENT_QUOTES, 'UTF-8') ?></label>
             <input type="search" name="q"
                    class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-sm"
-                   placeholder="Cari judul / referensi..."
+                   placeholder="<?= htmlspecialchars($searchPlaceholder, ENT_QUOTES, 'UTF-8') ?>"
                    value="<?= htmlspecialchars((string)($filters['q'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
         </div>
+
         <div>
-            <label class="block text-xs font-medium text-gray-700 mb-1">Status</label>
+            <label class="block text-xs font-medium text-gray-700 mb-1"><?= htmlspecialchars($templateLabel, ENT_QUOTES, 'UTF-8') ?></label>
+            <select name="template_id" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-sm">
+                <option value=""><?= htmlspecialchars($allTemplatesLabel, ENT_QUOTES, 'UTF-8') ?></option>
+                <?php foreach ($templates as $tpl):
+                    $tid = $tpl->getId();
+                    $tname = $tpl->getName();
+                    $tcat = $tpl->getCategory();
+                    $labelDisplay = $tname . ($tcat !== '' ? ' — ' . $tcat : '');
+                ?>
+                    <option value="<?= $tid ?>" <?= ($selectedTid === $tid) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($labelDisplay, ENT_QUOTES, 'UTF-8') ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1"><?= htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8') ?></label>
             <select name="status" class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-sm">
-                <option value="">Semua status</option>
-                <?php foreach (['draft','issued','signed','void'] as $st): ?>
+                <option value=""><?= htmlspecialchars($allStatusesLabel, ENT_QUOTES, 'UTF-8') ?></option>
+                <?php foreach (['draft','published','issued','signed','locked','archived','void'] as $st): ?>
                     <option value="<?= $st ?>"
                         <?= (isset($filters['status']) && $filters['status'] === $st) ? 'selected' : '' ?>>
                         <?= ucfirst($st) ?>
@@ -87,13 +137,48 @@ $statusStyles = [
 
         <?= \Ezdoc\UI\Slot::render('document-list:filters-extra') ?>
 
-        <div>
+        <div class="flex gap-2">
             <button type="submit"
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400">
-                Filter
+                    class="flex-1 rounded-md border border-transparent px-3 py-2 text-sm font-medium text-white shadow-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2"
+                    style="background-color: var(--ezdoc-primary);">
+                <?= htmlspecialchars($filterButton, ENT_QUOTES, 'UTF-8') ?>
             </button>
+            <?php
+            // "Clear" tombol — hanya tampil kalau ada filter aktif
+            $hasFilter = ($filters['q'] ?? '') !== '' || ($filters['status'] ?? '') !== '' || (int)($filters['template_id'] ?? 0) > 0;
+            if ($hasFilter):
+                // Build clean URL (only preserve routing prefix)
+                $clearParams = [];
+                foreach ($preserveHidden as $k => $v) $clearParams[$k] = $v;
+                $clearHref = '?' . http_build_query($clearParams);
+            ?>
+                <a href="<?= htmlspecialchars($clearHref, ENT_QUOTES, 'UTF-8') ?>"
+                   class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400"
+                   title="<?= htmlspecialchars($clearFilterTitle, ENT_QUOTES, 'UTF-8') ?>">
+                    &times;
+                </a>
+            <?php endif; ?>
         </div>
     </form>
+
+    <?php if ($selectedTid > 0):
+        // Show breadcrumb pill saat filter active per-template — Airtable/Linear pattern
+        $activeTpl = null;
+        foreach ($templates as $tpl) if ($tpl->getId() === $selectedTid) { $activeTpl = $tpl; break; }
+        if ($activeTpl):
+    ?>
+        <div class="mb-3 flex items-center gap-2 text-xs">
+            <span class="text-gray-500"><?= htmlspecialchars($filterLabel, ENT_QUOTES, 'UTF-8') ?></span>
+            <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-medium ring-1 ring-inset"
+                  style="background:color-mix(in srgb, var(--ezdoc-primary) 10%, white); color: var(--ezdoc-primary); border-color: color-mix(in srgb, var(--ezdoc-primary) 25%, transparent);">
+                <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm4 3a1 1 0 100 2h4a1 1 0 100-2H8zm-1 4a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z"/></svg>
+                <?= htmlspecialchars($activeTpl->getName(), ENT_QUOTES, 'UTF-8') ?>
+            </span>
+            <span class="text-gray-500"><?= count($documents) ?> <?= htmlspecialchars($documentsSuffix, ENT_QUOTES, 'UTF-8') ?></span>
+        </div>
+    <?php endif;
+    endif;
+    ?>
 
     <?php if (empty($documents)): ?>
         <div class="rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center">
@@ -154,7 +239,7 @@ $statusStyles = [
                         <td class="px-4 py-3 text-right">
                             <a class="inline-flex items-center rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
                                href="<?= htmlspecialchars($buildUrl($urlPrint, ['uuid' => $doc->getUuid()]), ENT_QUOTES, 'UTF-8') ?>">
-                                Print
+                                <?= htmlspecialchars($printButton, ENT_QUOTES, 'UTF-8') ?>
                             </a>
                             <?= \Ezdoc\UI\Slot::render('document-list:actions-extra', ['document' => $doc]) ?>
                         </td>
