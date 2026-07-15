@@ -100,6 +100,19 @@ interface Grammar
      */
     public function compileForeignKey(ForeignKeyDef $fk): string;
 
+    /**
+     * Compile LIMIT/OFFSET clause per platform:
+     *   - MySQL/MariaDB/SQLite/Postgres: `LIMIT n OFFSET m`
+     *   - SQL Server: `OFFSET m ROWS FETCH NEXT n ROWS ONLY`
+     *
+     * Params LIMIT/OFFSET inlined as literal integers (bukan `?`) supaya
+     * portable — beberapa driver tidak support LIMIT sebagai prepared param.
+     *
+     * @param int|null $limit  null = no limit
+     * @param int      $offset 0 = no offset
+     */
+    public function compileLimit(?int $limit, int $offset = 0): string;
+
     // Feature flags
     public function supportsNativeJson(): bool;
     public function supportsNativeUuid(): bool;

@@ -11,6 +11,7 @@ use Ezdoc\Db\Exception\SchemaException;
 use Ezdoc\Db\Exception\TransactionException;
 use Ezdoc\Db\Grammar\Grammar;
 use Ezdoc\Db\Grammar\MysqlGrammar;
+use Ezdoc\Db\QueryBuilder;
 use Ezdoc\Db\Schema\SchemaManager;
 use Ezdoc\Db\Statement;
 use mysqli;
@@ -252,6 +253,11 @@ final class MysqliConnection implements Connection
     public function inTransaction(): bool
     {
         return $this->txDepth > 0;
+    }
+
+    public function query(): QueryBuilder
+    {
+        return new QueryBuilder($this);
     }
 
     /**

@@ -157,6 +157,15 @@ interface Connection
     public function inTransaction(): bool;
 
     /**
+     * QueryBuilder factory — chainable fluent SQL builder.
+     *
+     * ```php
+     * $rows = $conn->query()->select('*')->from('t')->where('id = ?', $id)->fetchAll();
+     * ```
+     */
+    public function query(): QueryBuilder;
+
+    /**
      * Underlying raw connection object — escape hatch untuk edge case yang
      * belum ter-abstract.
      *

@@ -325,6 +325,18 @@ class MysqlGrammar implements Grammar
         return "DROP TABLE {$ifClause}" . $this->wrapIdentifier($tableName);
     }
 
+    public function compileLimit(?int $limit, int $offset = 0): string
+    {
+        if ($limit === null && $offset === 0) return '';
+        if ($limit === null) {
+            // MySQL requires LIMIT if OFFSET; use large max
+            return "LIMIT 18446744073709551615 OFFSET $offset";
+        }
+        $sql = "LIMIT $limit";
+        if ($offset > 0) $sql .= " OFFSET $offset";
+        return $sql;
+    }
+
     // ========================================================================
     // Feature flags
     // ========================================================================
