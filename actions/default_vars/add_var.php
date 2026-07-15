@@ -1,16 +1,19 @@
 <?php
 /**
- * POST /page/form_pembuat_surat_v3.php  (body: ajax=1, action=add_var, var_name, description)
+ * POST action=add_var (body: var_name, description)
  *
- * Add new default variable ke `ezdoc_default_vars`.
- * INSERT IGNORE — kalau var_name sudah ada, silent skip.
+ * Add new default variable ke `ezdoc_default_vars`. Duplicate var_name
+ * → silent skip (idempotent).
  *
  * Sanitization: var_name harus alphanumeric + underscore only.
- *
  * Auth: template manager only + audit log.
  *
- * Response:
- *   { success: true|false, message: "..." }
+ * Response: { success: true|false, message: "...", data: { var_name } }
+ *
+ * ## v0.9.9 refactor
+ *
+ * Thin controller — persistence via `Ezdoc\DefaultVars\DefaultVarsRepository`
+ * (auto-wrap raw mysqli). Raw `mysqli_prepare` calls removed.
  */
 
 global $conn;
@@ -30,23 +33,25 @@ if ($varNameClean === '') {
     ezdoc_respond_error('Nama variabel harus alphanumeric atau underscore');
 }
 
-$stmt = mysqli_prepare($conn, "INSERT IGNORE INTO ezdoc_default_vars (var_name, description) VALUES (?, ?)");
-mysqli_stmt_bind_param($stmt, "ss", $varNameClean, $varDesc);
-
-if (!mysqli_stmt_execute($stmt)) {
-    ezdoc_respond_error('Gagal menambahkan variabel: ' . mysqli_error($conn));
+try {
+    $repo = new \Ezdoc\DefaultVars\DefaultVarsRepository($conn);
+    $insertedId = $repo->add($varNameClean, $varDesc !== '' ? $varDesc : null);
+} catch (\Throwable $e) {
+    ezdoc_respond_error('Gagal menambahkan variabel: ' . $e->getMessage());
 }
 
-// Audit
-ezdoc_audit_log('default_var.added', [
-    'target_type' => 'default_var',
-    'target_id' => $varNameClean,
-    'metadata' => [
-        'var_name' => $varNameClean,
-        'description' => $varDesc,
-    ],
-    'message' => "Tambah default var '{$varNameClean}'",
-]);
+// Audit — hanya kalau memang inserted (skip audit kalau duplicate silent)
+if ($insertedId > 0) {
+    ezdoc_audit_log('default_var.added', [
+        'target_type' => 'default_var',
+        'target_id'   => $varNameClean,
+        'metadata'    => [
+            'var_name'    => $varNameClean,
+            'description' => $varDesc,
+        ],
+        'message' => "Tambah default var '{$varNameClean}'",
+    ]);
+}
 
 ezdoc_respond_success([
     'var_name' => $varNameClean,

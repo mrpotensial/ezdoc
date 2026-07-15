@@ -4,12 +4,17 @@
  *   body: template_id, norm, nopen, label
  *
  * Soft-delete SEMUA versi di slot (template_uuid, norm, nopen, label).
- * Guard:
- *   - Superadmin only (kecuali template access_config.delete di-set)
- *   - Refuse kalau ada versi locked (harus unlock dulu manual)
+ * Guard: superadmin (kecuali access_config.delete di-set), refuse kalau ada
+ * versi locked (harus unlock dulu manual).
  *
  * Response: { success, affected: <count> }
+ *
+ * ## v0.9.9 refactor
+ *
+ * Persistence lewat Connection. Template lookup pakai fetchOne.
  */
+
+use Ezdoc\Db\Mysqli\MysqliConnection;
 
 global $conn, $author_id;
 
@@ -22,16 +27,18 @@ if ($tid <= 0 || $n === '' || $np === '') {
     ezdoc_respond_error('Parameter tidak lengkap');
 }
 
-// Resolve template_id → uuid (untuk slot query lintas template version)
-$stmt = mysqli_prepare($conn, "SELECT uuid, access_config FROM ezdoc_templates WHERE id = ? LIMIT 1");
-mysqli_stmt_bind_param($stmt, "i", $tid);
-mysqli_stmt_execute($stmt);
-$tpl = mysqli_stmt_get_result($stmt)->fetch_assoc();
+$db = new MysqliConnection($conn);
+
+// Resolve template_id → uuid + access_config
+$tpl = $db->fetchOne(
+    'SELECT uuid, access_config FROM ezdoc_templates WHERE id = ? LIMIT 1',
+    [$tid]
+);
 if (!$tpl) ezdoc_respond_error('Template tidak ditemukan');
-$templateUuid = (string)$tpl['uuid'];
+$templateUuid = (string) $tpl['uuid'];
 $accessConfig = ezdoc_parse_access_config($tpl['access_config'] ?? null);
 
-// ─── RBAC delete check ───
+// RBAC delete check
 $deleteCfg = $accessConfig['delete'] ?? null;
 $hasExplicitDeleteConfig = is_array($deleteCfg) && (
     !empty($deleteCfg['roles']) || !empty($deleteCfg['users'])
@@ -43,38 +50,42 @@ if (!$hasExplicitDeleteConfig) {
 }
 
 // Refuse kalau ada versi locked
-$stmt = mysqli_prepare($conn, "SELECT COUNT(*) AS c FROM ezdoc_documents WHERE template_uuid=? AND norm=? AND nopen=? AND label=? AND is_locked = 1 AND deleted_at IS NULL");
-mysqli_stmt_bind_param($stmt, "ssss", $templateUuid, $n, $np, $lb);
-mysqli_stmt_execute($stmt);
-$lockedCnt = (int)(mysqli_stmt_get_result($stmt)->fetch_assoc()['c'] ?? 0);
-
+$lockedCnt = (int) $db->fetchScalar(
+    'SELECT COUNT(*) FROM ezdoc_documents
+     WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ?
+       AND is_locked = 1 AND deleted_at IS NULL',
+    [$templateUuid, $n, $np, $lb]
+);
 if ($lockedCnt > 0) {
     ezdoc_respond_error("Slot punya {$lockedCnt} versi locked. Unlock dulu sebelum hapus.");
 }
 
 // Soft delete semua active version di slot
-$author = (string)($author_id ?? 'system');
-$stmt = mysqli_prepare($conn, "UPDATE ezdoc_documents SET deleted_at = NOW(), deleted_by = ? WHERE template_uuid=? AND norm=? AND nopen=? AND label=? AND deleted_at IS NULL");
-mysqli_stmt_bind_param($stmt, "sssss", $author, $templateUuid, $n, $np, $lb);
-$ok = mysqli_stmt_execute($stmt);
-$affected = mysqli_affected_rows($conn);
-
-if ($ok) {
-    ezdoc_audit_log('doc.deleted', [
-        'target_type' => 'document',
-        'target_id' => "slot:tpl{$tid}:{$n}:{$np}:{$lb}",
-        'template_id' => $tid,
-        'metadata' => [
-            'scope' => 'slot',
-            'norm' => $n,
-            'nopen' => $np,
-            'label' => $lb,
-            'affected_versions' => $affected,
-            'template_uuid' => $templateUuid,
-        ],
-        'message' => "Soft delete slot dokumen ({$affected} versi, norm {$n}, label {$lb})",
-    ]);
-    ezdoc_respond_success(['affected' => $affected], "Slot berhasil dihapus ({$affected} versi)");
-} else {
-    ezdoc_respond_error('Gagal hapus slot: ' . mysqli_error($conn));
+$author = (string) ($author_id ?? 'system');
+try {
+    $affected = $db->execute(
+        'UPDATE ezdoc_documents SET deleted_at = NOW(), deleted_by = ?
+         WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ?
+           AND deleted_at IS NULL',
+        [$author, $templateUuid, $n, $np, $lb]
+    );
+} catch (\Throwable $e) {
+    ezdoc_respond_error('Gagal hapus slot: ' . $e->getMessage());
 }
+
+ezdoc_audit_log('doc.deleted', [
+    'target_type' => 'document',
+    'target_id'   => "slot:tpl{$tid}:{$n}:{$np}:{$lb}",
+    'template_id' => $tid,
+    'metadata'    => [
+        'scope'             => 'slot',
+        'norm'              => $n,
+        'nopen'             => $np,
+        'label'             => $lb,
+        'affected_versions' => $affected,
+        'template_uuid'     => $templateUuid,
+    ],
+    'message' => "Soft delete slot dokumen ({$affected} versi, norm {$n}, label {$lb})",
+]);
+
+ezdoc_respond_success(['affected' => $affected], "Slot berhasil dihapus ({$affected} versi)");

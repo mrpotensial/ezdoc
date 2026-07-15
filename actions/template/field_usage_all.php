@@ -1,37 +1,38 @@
 <?php
 /**
- * POST /page/form_pembuat_surat_v3.php  (body: ajax=1, action=field_usage_all, template_id)
+ * POST action=field_usage_all, template_id
  *
- * Bulk field usage: scan semua dokumen template ini, agregat berapa
- * dokumen yang punya value non-empty per field key. Dipakai untuk
- * "orphan cleanup" preview di designer.
- *
- * Read-only.
+ * Bulk field usage: scan semua dokumen template ini, agregat berapa dokumen
+ * yang punya value non-empty per field key. Dipakai untuk "orphan cleanup"
+ * preview di designer.
  *
  * Auth: template manager.
+ * Response: { success, totalDocs, fieldCounts: { <field>: <count>, ... } }
  *
- * Response:
- *   { success: true, totalDocs: <int>, fieldCounts: { <field>: <count>, ... } }
+ * ## v0.9.9 refactor — Connection.fetchAll + PHP-side aggregation
+ *
+ * Kita aggregate di PHP (bukan SQL) supaya portable — beda grammar (MySQL vs
+ * Postgres vs SQLite) punya JSON function syntax berbeda.
  */
+
+use Ezdoc\Db\Mysqli\MysqliConnection;
 
 global $conn;
 
 ezdoc_require_manage_templates('Tidak berhak scan field usage');
 
 $tid = (int) ($_POST['template_id'] ?? 0);
-if ($tid <= 0) {
-    ezdoc_respond_error('ID template tidak valid');
-}
+if ($tid <= 0) ezdoc_respond_error('ID template tidak valid');
 
-$stmt = mysqli_prepare($conn, "SELECT field_values FROM ezdoc_documents WHERE template_id = ?");
-mysqli_stmt_bind_param($stmt, "i", $tid);
-mysqli_stmt_execute($stmt);
-$res = mysqli_stmt_get_result($stmt);
+$db = new MysqliConnection($conn);
+$rows = $db->fetchAll(
+    'SELECT field_values FROM ezdoc_documents WHERE template_id = ?',
+    [$tid]
+);
 
 $fieldCounts = [];
-$totalDocs = 0;
-while ($row = mysqli_fetch_assoc($res)) {
-    $totalDocs++;
+$totalDocs = count($rows);
+foreach ($rows as $row) {
     $fields = json_decode($row['field_values'] ?: '{}', true) ?: [];
     foreach ($fields as $k => $v) {
         if ($v !== '' && $v !== null) {
@@ -41,6 +42,6 @@ while ($row = mysqli_fetch_assoc($res)) {
 }
 
 ezdoc_respond_success([
-    'totalDocs' => $totalDocs,
+    'totalDocs'   => $totalDocs,
     'fieldCounts' => $fieldCounts,
 ]);

@@ -3,13 +3,21 @@
  * POST _doc_action=list_versions
  *   body: template_id, norm, nopen, label
  *
- * List semua versi (active only) di slot dokumen.
+ * List semua versi (active only) di slot dokumen — dari template family
+ * via JOIN template_uuid.
  *
  * Response: { success: true, versions: [{ id, version, is_locked, updated_at }, ...] }
  *
- * Note: response backward-compat pakai key `versions` top-level (bukan `data.versions`).
- * Existing frontend akses `data.versions` di response.
+ * Note: response backward-compat pakai key `versions` top-level (frontend
+ * akses `data.versions`).
+ *
+ * ## v0.9.9 refactor
+ *
+ * JOIN query di raw SQL — QueryBuilder MVP belum handle JOIN table lookup
+ * pattern ini clean, jadi tetap raw SQL via Connection::fetchAll.
  */
+
+use Ezdoc\Db\Mysqli\MysqliConnection;
 
 global $conn;
 
@@ -23,27 +31,24 @@ if ($tid <= 0 || $n === '' || $np === '') {
     ezdoc_respond_raw(['success' => false, 'versions' => []]);
 }
 
-// Query by template_uuid (family) supaya lintas template version tetap ke-detect.
-// Fallback resolve template_id → template_uuid via JOIN.
-$stmt = mysqli_prepare($conn, "
-    SELECT d.id, d.version, d.is_locked, d.updated_at
-    FROM ezdoc_documents d
-    INNER JOIN ezdoc_templates t ON t.uuid = d.template_uuid
-    WHERE t.id = ? AND d.norm = ? AND d.nopen = ? AND d.label = ? AND d.deleted_at IS NULL
-    ORDER BY d.version DESC
-");
-mysqli_stmt_bind_param($stmt, "isss", $tid, $n, $np, $lb);
-mysqli_stmt_execute($stmt);
-$res = mysqli_stmt_get_result($stmt);
+$db = new MysqliConnection($conn);
 
-$versions = [];
-while ($row = mysqli_fetch_assoc($res)) {
-    $versions[] = [
-        'id' => (int)$row['id'],
-        'version' => (int)$row['version'],
-        'is_locked' => (int)$row['is_locked'],
+$rows = $db->fetchAll(
+    'SELECT d.id, d.version, d.is_locked, d.updated_at
+     FROM ezdoc_documents d
+     INNER JOIN ezdoc_templates t ON t.uuid = d.template_uuid
+     WHERE t.id = ? AND d.norm = ? AND d.nopen = ? AND d.label = ? AND d.deleted_at IS NULL
+     ORDER BY d.version DESC',
+    [$tid, $n, $np, $lb]
+);
+
+$versions = array_map(function ($row) {
+    return [
+        'id'         => (int) $row['id'],
+        'version'    => (int) $row['version'],
+        'is_locked'  => (int) $row['is_locked'],
         'updated_at' => $row['updated_at'],
     ];
-}
+}, $rows);
 
 ezdoc_respond_success(['versions' => $versions]);
