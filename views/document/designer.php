@@ -2600,7 +2600,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                 function insertTtdPrompt(mode) {
                     const label = prompt(t('toolbar_insert.ttd_label_prompt', {}, 'Signature label (example: Attending Physician):'), t('fallback.signature', {}, 'Signature'));
-                    if (label && label.trim()) {
+                    if (label && label.trim()) {                 
                         const ttdId = 'ttd_' + Date.now();
                         const namaField = prompt(t('toolbar_insert.ttd_name_field_prompt', {}, "Field name for the signer's name:"), 'nama_' + ttdId);
 

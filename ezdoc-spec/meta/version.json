@@ -1,0 +1,15 @@
+{
+    "ezdoc_version": "0.9.9-dev",
+    "spec_version": "1.0-draft",
+    "generated_by": "cli\/spec-dump.php",
+    "source": "migrations\/blueprints\/",
+    "grammars": [
+        "mysql",
+        "mariadb",
+        "sqlite",
+        "postgres",
+        "sqlserver"
+    ],
+    "table_count": 5,
+    "checksum": "3bbc08d5d414605604fa233016c02ff6c95193079cfa345aaeb118713dc8b5e5"
+}

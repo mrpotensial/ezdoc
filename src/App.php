@@ -163,6 +163,11 @@ final class App
             'app.asset_key'    => 'ezdoc_asset',
             'app.emit'         => true,
             'app.default_page' => 'list',  // No ?ezdoc_page= → auto-render list
+            // Demo/showcase surface (public/index.php) defaults to English —
+            // this is the library's generic try-it-out entry point, distinct
+            // from a real consumer app's own App::run() config (which keeps
+            // Translator's 'id' default unless it explicitly sets app.locale).
+            'app.locale'       => 'en',
             'brand.app_name'   => 'ezdoc Demo',
             'brand.primary_color' => '#0e7490',
         ];

@@ -1,0 +1,868 @@
+ezdoc_audit_log:
+  name: ezdoc_audit_log
+  columns:
+    id:
+      name: id
+      type: bigint
+      auto_increment: true
+      unsigned: true
+      primary: true
+    event_type:
+      name: event_type
+      type: string
+      length: 64
+      comment: e.g. doc.created, template.saved, authz.denied
+    event_uuid:
+      name: event_uuid
+      type: uuid
+      nullable: true
+      comment: UUID v7 untuk correlate cross-system
+    actor_id:
+      name: actor_id
+      type: bigint
+      nullable: true
+      comment: id_pegawai/user (NULL untuk public/system)
+    actor_roles:
+      name: actor_roles
+      type: string
+      length: 255
+      nullable: true
+      comment: Snapshot roles saat event
+    actor_type:
+      name: actor_type
+      type: enum
+      default: user
+      enum_values:
+        - user
+        - system
+        - public
+        - api
+    target_type:
+      name: target_type
+      type: string
+      length: 32
+      nullable: true
+      comment: 'template | document | signature | verification'
+    target_id:
+      name: target_id
+      type: string
+      length: 64
+      nullable: true
+      comment: ID target (bisa non-int untuk slug/uuid)
+    template_id:
+      name: template_id
+      type: bigint
+      nullable: true
+    doc_id:
+      name: doc_id
+      type: bigint
+      nullable: true
+    ip_address:
+      name: ip_address
+      type: string
+      length: 45
+      nullable: true
+      comment: IPv4 or IPv6
+    user_agent:
+      name: user_agent
+      type: text
+      nullable: true
+    request_id:
+      name: request_id
+      type: uuid
+      nullable: true
+      comment: UUID v7 untuk correlate events per HTTP request
+    session_id:
+      name: session_id
+      type: string
+      length: 64
+      nullable: true
+      comment: Session identifier untuk timeline user
+    trace_id:
+      name: trace_id
+      type: uuid
+      nullable: true
+      comment: Distributed tracing (OpenTelemetry compatible)
+    previous_value:
+      name: previous_value
+      type: json
+      nullable: true
+      comment: State sebelum change
+    new_value:
+      name: new_value
+      type: json
+      nullable: true
+      comment: State setelah change
+    metadata:
+      name: metadata
+      type: json
+      nullable: true
+      comment: Context-specific per event type
+    result:
+      name: result
+      type: enum
+      default: success
+      enum_values:
+        - success
+        - denied
+        - error
+        - warning
+    message:
+      name: message
+      type: text
+      nullable: true
+      comment: Human-readable summary
+    occurred_at:
+      name: occurred_at
+      type: datetime
+      default_raw: CURRENT_TIMESTAMP
+      comment: Event timestamp
+  indexes:
+    - 
+      columns:
+        - event_type
+        - occurred_at
+      kind: index
+      name: idx_event_time
+    - 
+      columns:
+        - actor_id
+        - occurred_at
+      kind: index
+      name: idx_actor_time
+    - 
+      columns:
+        - target_type
+        - target_id
+      kind: index
+      name: idx_target
+    - 
+      columns:
+        - template_id
+        - occurred_at
+      kind: index
+      name: idx_template_time
+    - 
+      columns:
+        - doc_id
+        - occurred_at
+      kind: index
+      name: idx_doc_time
+    - 
+      columns:
+        - occurred_at
+      kind: index
+      name: idx_time
+    - 
+      columns:
+        - result
+        - occurred_at
+      kind: index
+      name: idx_result_time
+    - 
+      columns:
+        - request_id
+      kind: index
+      name: idx_request
+    - 
+      columns:
+        - session_id
+      kind: index
+      name: idx_session
+    - 
+      columns:
+        - trace_id
+      kind: index
+      name: idx_trace
+  comment: Audit log untuk compliance + event sourcing (append-only)
+ezdoc_default_vars:
+  name: ezdoc_default_vars
+  columns:
+    id:
+      name: id
+      type: bigint
+      auto_increment: true
+      unsigned: true
+      primary: true
+    var_name:
+      name: var_name
+      type: string
+      length: 100
+      unique: true
+    description:
+      name: description
+      type: string
+      length: 255
+      nullable: true
+    is_enabled:
+      name: is_enabled
+      type: boolean
+      default: true
+      comment: Soft-disable tanpa delete
+    metadata:
+      name: metadata
+      type: json
+      nullable: true
+      comment: Extensibility
+    created_at:
+      name: created_at
+      type: datetime
+      nullable: true
+      default_raw: CURRENT_TIMESTAMP
+    updated_at:
+      name: updated_at
+      type: datetime
+      nullable: true
+      default_raw: CURRENT_TIMESTAMP
+  indexes:
+    - 
+      columns:
+        - is_enabled
+      kind: index
+      name: idx_enabled
+    - 
+      columns:
+        - var_name
+      kind: unique
+  comment: Whitelist default variables untuk template placeholder
+ezdoc_documents:
+  name: ezdoc_documents
+  columns:
+    id:
+      name: id
+      type: bigint
+      auto_increment: true
+      unsigned: true
+      primary: true
+    uuid:
+      name: uuid
+      type: uuid
+      unique: true
+      comment: Stable UUID untuk API/external ref
+    template_id:
+      name: template_id
+      type: bigint
+      comment: FK ke specific template version (immutable)
+    template_uuid:
+      name: template_uuid
+      type: uuid
+      comment: Template family (denormalized untuk query cepat)
+    template_version:
+      name: template_version
+      type: integer
+      unsigned: true
+      default: 1
+    title:
+      name: title
+      type: string
+      length: 255
+      nullable: true
+      comment: Human-readable name (auto-computed)
+    norm:
+      name: norm
+      type: string
+      length: 50
+      nullable: true
+      comment: No Rekam Medis (nullable untuk general scope)
+    nopen:
+      name: nopen
+      type: string
+      length: 50
+      nullable: true
+      comment: No Pendaftaran (nullable untuk general scope)
+    label:
+      name: label
+      type: string
+      length: 100
+      default: -
+      comment: Pembeda dokumen dalam slot
+    version:
+      name: version
+      type: integer
+      unsigned: true
+      default: 1
+    field_values:
+      name: field_values
+      type: json
+      nullable: true
+      comment: User-input field values
+    signature_values:
+      name: signature_values
+      type: json
+      nullable: true
+      comment: Base64 signature images per TTD placeholder
+    metadata:
+      name: metadata
+      type: json
+      nullable: true
+      comment: Custom fields per-tenant tanpa migration
+    status:
+      name: status
+      type: enum
+      default: published
+      enum_values:
+        - draft
+        - published
+        - locked
+        - archived
+    is_locked:
+      name: is_locked
+      type: boolean
+      default: false
+      comment: Duplicate of status=locked untuk fast query
+    content_hash:
+      name: content_hash
+      type: string
+      length: 64
+      nullable: true
+      comment: SHA-256 canonical data
+    content_hash_at:
+      name: content_hash_at
+      type: datetime
+      nullable: true
+    content_hash_version:
+      name: content_hash_version
+      type: integer
+      nullable: true
+      unsigned: true
+    public_slug:
+      name: public_slug
+      type: string
+      length: 32
+      nullable: true
+      comment: Random slug untuk QR verify
+    public_slug_active:
+      name: public_slug_active
+      type: boolean
+      default: true
+      comment: 0 = revoked
+    public_slug_scan_count:
+      name: public_slug_scan_count
+      type: integer
+      unsigned: true
+      default: 0
+    public_slug_last_scan:
+      name: public_slug_last_scan
+      type: datetime
+      nullable: true
+    published_at:
+      name: published_at
+      type: datetime
+      nullable: true
+      comment: Waktu status = published
+    expires_at:
+      name: expires_at
+      type: datetime
+      nullable: true
+      comment: Auto-expire timestamp (optional)
+    revision:
+      name: revision
+      type: integer
+      unsigned: true
+      default: 1
+      comment: Increment on each UPDATE
+    deleted_at:
+      name: deleted_at
+      type: datetime
+      nullable: true
+    deleted_by:
+      name: deleted_by
+      type: string
+      length: 100
+      nullable: true
+    deleted_reason:
+      name: deleted_reason
+      type: text
+      nullable: true
+      comment: Alasan delete untuk audit trail
+    created_by:
+      name: created_by
+      type: bigint
+      nullable: true
+    updated_by:
+      name: updated_by
+      type: bigint
+      nullable: true
+    created_at:
+      name: created_at
+      type: datetime
+      nullable: true
+      default_raw: CURRENT_TIMESTAMP
+    updated_at:
+      name: updated_at
+      type: datetime
+      nullable: true
+      default_raw: CURRENT_TIMESTAMP
+  indexes:
+    - 
+      columns:
+        - template_uuid
+        - norm
+        - nopen
+        - label
+        - version
+      kind: unique
+      name: uk_slot_version
+    - 
+      columns:
+        - public_slug
+      kind: unique
+      name: uk_public_slug
+    - 
+      columns:
+        - uuid
+      kind: index
+      name: idx_uuid
+    - 
+      columns:
+        - template_id
+      kind: index
+      name: idx_template
+    - 
+      columns:
+        - template_uuid
+      kind: index
+      name: idx_template_uuid
+    - 
+      columns:
+        - norm
+        - nopen
+      kind: index
+      name: idx_norm_nopen
+    - 
+      columns:
+        - status
+        - deleted_at
+      kind: index
+      name: idx_status_deleted
+    - 
+      columns:
+        - template_uuid
+        - norm
+        - nopen
+        - label
+        - deleted_at
+      kind: index
+      name: idx_slot
+    - 
+      columns:
+        - deleted_at
+      kind: index
+      name: idx_deleted
+    - 
+      columns:
+        - expires_at
+      kind: index
+      name: idx_expires
+    - 
+      columns:
+        - created_by
+        - created_at
+      kind: index
+      name: idx_created_by
+    - 
+      columns:
+        - updated_at
+      kind: index
+      name: idx_updated
+    - 
+      columns:
+        - uuid
+      kind: unique
+  foreign_keys:
+    - 
+      columns:
+        - template_id
+      foreign_table: ezdoc_templates
+      foreign_columns:
+        - id
+      on_delete: restrict
+      name: fk_ezdoc_documents_template
+  comment: Document instances dari template dengan versioning + integrity + lifecycle
+ezdoc_signatures:
+  name: ezdoc_signatures
+  columns:
+    id:
+      name: id
+      type: bigint
+      auto_increment: true
+      unsigned: true
+      primary: true
+    uuid:
+      name: uuid
+      type: uuid
+      unique: true
+    document_id:
+      name: document_id
+      type: bigint
+      comment: FK to ezdoc_documents.id
+    signature_id_within_doc:
+      name: signature_id_within_doc
+      type: integer
+      unsigned: true
+      default: 0
+      comment: 0..N for multi-signer docs
+    signer_id:
+      name: signer_id
+      type: string
+      length: 128
+      comment: Opaque identity string (domain-agnostic)
+    signer_role:
+      name: signer_role
+      type: string
+      length: 64
+      nullable: true
+      comment: Role at signing time (snapshot)
+    signer_user_id:
+      name: signer_user_id
+      type: bigint
+      nullable: true
+      comment: Consumer user id if available
+    provider:
+      name: provider
+      type: string
+      length: 32
+      comment: 'hmac | local_pki | peruri | ...'
+    level:
+      name: level
+      type: integer
+      unsigned: true
+      comment: '1 | 2 | 3 (assurance level)'
+    envelope_format:
+      name: envelope_format
+      type: string
+      length: 32
+      comment: 'hmac | raw | pkcs7 | pades'
+    envelope:
+      name: envelope
+      type: blob
+      comment: Raw signature bytes
+    content_hash:
+      name: content_hash
+      type: string
+      length: 64
+      comment: SHA-256 hex of signed content
+    content_hash_algo:
+      name: content_hash_algo
+      type: string
+      length: 16
+      default: sha256
+    certificate_pem:
+      name: certificate_pem
+      type: text
+      nullable: true
+      comment: Signer X.509 certificate (PEM)
+    certificate_serial:
+      name: certificate_serial
+      type: string
+      length: 64
+      nullable: true
+      comment: For revocation check
+    certificate_subject:
+      name: certificate_subject
+      type: string
+      length: 255
+      nullable: true
+      comment: Subject CN
+    certificate_issuer:
+      name: certificate_issuer
+      type: string
+      length: 255
+      nullable: true
+      comment: Issuer CN
+    tsa_response:
+      name: tsa_response
+      type: blob
+      nullable: true
+      comment: RFC 3161 timestamp token
+    signed_at:
+      name: signed_at
+      type: datetime
+      comment: Signature timestamp
+    verified_at:
+      name: verified_at
+      type: datetime
+      nullable: true
+      comment: Last verify time
+    verify_status:
+      name: verify_status
+      type: enum
+      default: pending
+      enum_values:
+        - valid
+        - tampered
+        - expired
+        - revoked
+        - untrusted
+        - error
+        - pending
+    verify_reason:
+      name: verify_reason
+      type: string
+      length: 255
+      nullable: true
+    metadata:
+      name: metadata
+      type: json
+      nullable: true
+    created_at:
+      name: created_at
+      type: datetime
+      nullable: true
+      default_raw: CURRENT_TIMESTAMP
+    updated_at:
+      name: updated_at
+      type: datetime
+      nullable: true
+      default_raw: CURRENT_TIMESTAMP
+    deleted_at:
+      name: deleted_at
+      type: datetime
+      nullable: true
+  indexes:
+    - 
+      columns:
+        - document_id
+      kind: index
+      name: idx_document
+    - 
+      columns:
+        - signer_id
+      kind: index
+      name: idx_signer
+    - 
+      columns:
+        - provider
+        - level
+      kind: index
+      name: idx_provider_level
+    - 
+      columns:
+        - signed_at
+      kind: index
+      name: idx_signed_at
+    - 
+      columns:
+        - verify_status
+      kind: index
+      name: idx_verify_status
+    - 
+      columns:
+        - certificate_serial
+      kind: index
+      name: idx_cert_serial
+    - 
+      columns:
+        - uuid
+      kind: unique
+  foreign_keys:
+    - 
+      columns:
+        - document_id
+      foreign_table: ezdoc_documents
+      foreign_columns:
+        - id
+      on_delete: restrict
+      on_update: cascade
+      name: fk_ezdoc_signatures_document
+  comment: Signature envelopes per document — L1 HMAC, L2 LocalPKI, L3 PSrE
+ezdoc_templates:
+  name: ezdoc_templates
+  columns:
+    id:
+      name: id
+      type: bigint
+      auto_increment: true
+      unsigned: true
+      primary: true
+    uuid:
+      name: uuid
+      type: uuid
+      comment: Template family ID (UUID v7, same across versions)
+    slug:
+      name: slug
+      type: string
+      length: 120
+      comment: URL-friendly identifier (per family)
+    version:
+      name: version
+      type: integer
+      unsigned: true
+      default: 1
+      comment: Version dalam family
+    is_current:
+      name: is_current
+      type: boolean
+      default: true
+      comment: 1 = active version untuk family
+    parent_version_id:
+      name: parent_version_id
+      type: bigint
+      nullable: true
+      comment: Chain ke previous version
+    name:
+      name: name
+      type: string
+      length: 255
+    category:
+      name: category
+      type: string
+      length: 100
+      default: 
+      comment: Kategori/folder pengelompokan
+    scope:
+      name: scope
+      type: enum
+      default: patient
+      enum_values:
+        - patient
+        - general
+    content:
+      name: content
+      type: text
+      length: 4294967295
+      nullable: true
+      comment: HTML template dari WYSIWYG editor
+    content_hash:
+      name: content_hash
+      type: string
+      length: 64
+      nullable: true
+      comment: SHA-256 canonical content+configs
+    signature_config:
+      name: signature_config
+      type: json
+      nullable: true
+      comment: Config TTD placeholders
+    layout_config:
+      name: layout_config
+      type: json
+      nullable: true
+      comment: Config logos, page size, padding
+    verify_config:
+      name: verify_config
+      type: json
+      nullable: true
+      comment: Field mana yg tampil di verify page
+    access_config:
+      name: access_config
+      type: json
+      nullable: true
+      comment: RBAC per-template
+    metadata:
+      name: metadata
+      type: json
+      nullable: true
+      comment: Custom fields per-tenant tanpa migration
+    owner_id:
+      name: owner_id
+      type: bigint
+      nullable: true
+      comment: ID pegawai/user creator
+    is_active:
+      name: is_active
+      type: boolean
+      default: true
+      comment: Soft-disable tanpa delete
+    is_locked:
+      name: is_locked
+      type: boolean
+      default: false
+      comment: Prevent destructive field changes
+    revision:
+      name: revision
+      type: integer
+      unsigned: true
+      default: 1
+      comment: Increment on each UPDATE
+    deleted_at:
+      name: deleted_at
+      type: datetime
+      nullable: true
+    deleted_by:
+      name: deleted_by
+      type: string
+      length: 100
+      nullable: true
+    deleted_reason:
+      name: deleted_reason
+      type: text
+      nullable: true
+      comment: Alasan delete untuk audit trail
+    created_by:
+      name: created_by
+      type: bigint
+      nullable: true
+    updated_by:
+      name: updated_by
+      type: bigint
+      nullable: true
+    created_at:
+      name: created_at
+      type: datetime
+      nullable: true
+      default_raw: CURRENT_TIMESTAMP
+    updated_at:
+      name: updated_at
+      type: datetime
+      nullable: true
+      default_raw: CURRENT_TIMESTAMP
+  indexes:
+    - 
+      columns:
+        - uuid
+        - version
+      kind: unique
+      name: uk_uuid_version
+    - 
+      columns:
+        - uuid
+      kind: index
+      name: idx_uuid
+    - 
+      columns:
+        - slug
+      kind: index
+      name: idx_slug
+    - 
+      columns:
+        - is_current
+        - is_active
+        - deleted_at
+      kind: index
+      name: idx_current_active
+    - 
+      columns:
+        - category
+      kind: index
+      name: idx_category
+    - 
+      columns:
+        - scope
+      kind: index
+      name: idx_scope
+    - 
+      columns:
+        - owner_id
+      kind: index
+      name: idx_owner
+    - 
+      columns:
+        - parent_version_id
+      kind: index
+      name: idx_parent
+    - 
+      columns:
+        - updated_at
+      kind: index
+      name: idx_updated
+  foreign_keys:
+    - 
+      columns:
+        - parent_version_id
+      foreign_table: ezdoc_templates
+      foreign_columns:
+        - id
+      on_delete: set null
+      name: fk_ezdoc_templates_parent
+  comment: Template design storage dengan versioning + integrity check
