@@ -448,12 +448,12 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         if (data.success) {
                             location.reload();
                         } else {
-                            alert(t('alert.failed', {message: data.message || 'error'}, 'Failed: {message}'));
+                            ezdocAlert(t('alert.failed', {message: data.message || 'error'}, 'Failed: {message}'), { title: 'Error', variant: 'error' });
                         }
                     }
 
                     async function copyTemplate(id) {
-                        if (!confirm(t('confirm.duplicate_template', {}, 'Duplicate this template?'))) return;
+                        if (!(await ezdocConfirm(t('confirm.duplicate_template', {}, 'Duplicate this template?'), { title: 'Duplicate Template', variant: 'info', confirmText: 'Duplicate' }))) return;
                         const fd = new FormData();
                         fd.append('ajax', '1');
                         fd.append('action', 'copy_template');
@@ -462,10 +462,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         const resp = await fetch(EZDOC_LIST_URLS.copy, { method: 'POST', body: fd });
                         const data = await resp.json();
                         if (data.success) {
-                            alert(t('alert.created', {name: data.nama}, 'Created: {name}'));
+                            ezdocAlert(t('alert.created', {name: data.nama}, 'Created: {name}'), { title: 'Created', variant: 'success' });
                             location.reload();
                         } else {
-                            alert(t('alert.failed', {message: data.message || 'error'}, 'Failed: {message}'));
+                            ezdocAlert(t('alert.failed', {message: data.message || 'error'}, 'Failed: {message}'), { title: 'Error', variant: 'error' });
                         }
                     }
 
@@ -1468,7 +1468,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             showToast(t('toast.variable_inserted', {tag: tag}, 'Variable inserted: {tag}'));
         }
 
-        function saveTabledbQuery() {
+        async function saveTabledbQuery() {
             let ns = (document.getElementById('tabledbNs').value || '').trim();
             const sql = (document.getElementById('tabledbSql').value || '').trim();
             const editNs = document.getElementById('tabledbEditNs').value;
@@ -1486,7 +1486,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
             // Prevent rename collision (if not editing existing)
             if (!editNs && configHeader.tableDbQueries && configHeader.tableDbQueries[ns]) {
-                if (!confirm(t('confirm.namespace_override', {ns: ns}, 'Namespace "{ns}" already exists. Override?'))) return;
+                if (!(await ezdocConfirm(t('confirm.namespace_override', {ns: ns}, 'Namespace "{ns}" already exists. Override?'), { title: 'Namespace Exists', variant: 'warning', confirmText: 'Override' }))) return;
             }
 
             configHeader.tableDbQueries[ns] = { sql: sql, columns: columns };
@@ -1495,8 +1495,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             closeAppModal('tabledb');
         }
 
-        function deleteTabledbQuery(ns) {
-            if (!confirm(t('confirm.delete_query', {ns: ns}, 'Delete query "{ns}"? Variables already used in the editor will show as "—" when printed.'))) return;
+        async function deleteTabledbQuery(ns) {
+            if (!(await ezdocConfirm(t('confirm.delete_query', {ns: ns}, 'Delete query "{ns}"? Variables already used in the editor will show as "—" when printed.'), { title: 'Delete Query', variant: 'danger', confirmText: 'Delete' }))) return;
             if (configHeader.tableDbQueries) delete configHeader.tableDbQueries[ns];
             renderTabledbList();
             showToast(t('toast.query_deleted', {ns: ns}, 'Query "{ns}" deleted'));
@@ -1589,13 +1589,13 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         document.getElementById('newVarDesc').value = '';
                         loadVars();
                     } else {
-                        alert(data.message || t('alert.generic_failed', {}, 'Failed'));
+                        ezdocAlert(data.message || t('alert.generic_failed', {}, 'Failed'), { title: 'Error', variant: 'error' });
                     }
                 });
         }
 
-        function deleteVar(id) {
-            if (!confirm(t('confirm.delete_variable', {}, 'Delete this variable from the whitelist?'))) return;
+        async function deleteVar(id) {
+            if (!(await ezdocConfirm(t('confirm.delete_variable', {}, 'Delete this variable from the whitelist?'), { title: 'Delete Variable', variant: 'danger', confirmText: 'Delete' }))) return;
             const fd = new FormData();
             fd.append('ajax', '1');
             fd.append('action', 'delete_var');
@@ -1938,7 +1938,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             // Build URL — use configured print URL
             const base = EZDOC_URLS.print || '';
             if (!base) {
-                alert(t('alert.print_endpoint_missing', {}, 'Print/preview endpoint not configured yet. Set urls.print in Config to enable preview.'));
+                ezdocAlert(t('alert.print_endpoint_missing', {}, 'Print/preview endpoint not configured yet. Set urls.print in Config to enable preview.'), { title: 'Not Configured', variant: 'warning' });
                 return;
             }
             const qs = params.map(p => encodeURIComponent(p.key) + '=' + encodeURIComponent(p.placeholder)).join('&');
@@ -2005,7 +2005,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         async function showFieldInspector() {
             const templateId = document.getElementById('templateId')?.value || '0';
             if (templateId === '0') {
-                alert(t('alert.save_template_before_inspect', {}, 'Save the template first before inspecting.'));
+                ezdocAlert(t('alert.save_template_before_inspect', {}, 'Save the template first before inspecting.'), { title: 'Save Required', variant: 'warning' });
                 return;
             }
 
@@ -2067,9 +2067,9 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             const templateId = document.getElementById('templateId')?.value || '0';
             const oldName = document.getElementById('renameFieldOld').value.trim();
             const newName = document.getElementById('renameFieldNew').value.trim();
-            if (templateId === '0') { alert(t('alert.save_template_first', {}, 'Save the template first')); return; }
-            if (!oldName || !newName || oldName === newName) { alert(t('alert.rename_names_required', {}, 'Old name and new name must be different')); return; }
-            if (!confirm(t('confirm.rename_field', {oldName: oldName, newName: newName}, 'Rename field "{oldName}" → "{newName}" in the template + migrate data across all documents? This action cannot be undone.'))) return;
+            if (templateId === '0') { ezdocAlert(t('alert.save_template_first', {}, 'Save the template first'), { title: 'Save Required', variant: 'warning' }); return; }
+            if (!oldName || !newName || oldName === newName) { ezdocAlert(t('alert.rename_names_required', {}, 'Old name and new name must be different'), { title: 'Invalid Input', variant: 'warning' }); return; }
+            if (!(await ezdocConfirm(t('confirm.rename_field', {oldName: oldName, newName: newName}, 'Rename field "{oldName}" → "{newName}" in the template + migrate data across all documents? This action cannot be undone.'), { title: 'Rename Field', variant: 'danger', confirmText: 'Rename' }))) return;
 
             // Update editor content first
             const editor = tinymce.get('editor');
@@ -2108,7 +2108,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 document.getElementById('renameFieldNew').value = '';
                 showFieldInspector();
             } else {
-                alert(t('alert.migrate_failed', {message: data.message || 'error'}, 'Failed to migrate data: {message}'));
+                ezdocAlert(t('alert.migrate_failed', {message: data.message || 'error'}, 'Failed to migrate data: {message}'), { title: 'Migration Failed', variant: 'error' });
             }
         }
 
@@ -2116,7 +2116,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         async function runOrphanCleanup() {
             const templateId = document.getElementById('templateId')?.value || '0';
             if (templateId === '0') { alert(t('alert.save_template_first', {}, 'Save the template first')); return; }
-            if (!confirm(t('confirm.cleanup_orphans', {}, 'Delete all field_values keys that no longer exist in the template?'))) return;
+            if (!(await ezdocConfirm(t('confirm.cleanup_orphans', {}, 'Delete all field_values keys that no longer exist in the template?'), { title: 'Cleanup Orphans', variant: 'warning', confirmText: 'Cleanup' }))) return;
 
             const validFields = [...collectTemplateFieldNames()].join(',');
             const fd = new FormData();
@@ -2131,7 +2131,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 showToast(t('toast.cleanup_done', {count: data.updated, keys: data.removedKeys.join(', ') || '-'}, 'Cleanup done. {count} document(s) updated. Keys removed: {keys}'));
                 showFieldInspector();
             } else {
-                alert(t('alert.generic_failed_message', {message: data.message || 'error'}, 'Failed: {message}'));
+                ezdocAlert(t('alert.generic_failed_message', {message: data.message || 'error'}, 'Failed: {message}'), { title: 'Error', variant: 'error' });
             }
         }
 
@@ -2149,7 +2149,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     const current = collectTemplateFieldNames();
                     const removed = [...initialFields].filter(f => !current.has(f));
                     if (removed.length) {
-                        const ok = confirm(t('confirm.locked_fields_change', {fields: removed.join('\n')}, 'This template is LOCKED. The following fields will disappear/be renamed:\n\n{fields}\n\nContinue? (recommended: use "Inspect Fields" to rename/migrate first)'));
+                        const ok = await ezdocConfirm(t('confirm.locked_fields_change', {fields: removed.join('\n')}, 'This template is LOCKED. The following fields will disappear/be renamed:\n\n{fields}\n\nContinue? (recommended: use "Inspect Fields" to rename/migrate first)'), { title: 'Locked Template Warning', variant: 'danger', confirmText: 'Continue Anyway' });
                         if (!ok) return;
                     }
                 }
@@ -3522,8 +3522,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             scanFieldPlaceholders();
         }
 
-        function removeField(name) {
-            if (!confirm(t('confirm.delete_field', {name: name}, 'Delete field {{{name}}}?'))) return;
+        async function removeField(name) {
+            if (!(await ezdocConfirm(t('confirm.delete_field', {name: name}, 'Delete field {{{name}}}?'), { title: 'Delete Field', variant: 'danger', confirmText: 'Delete' }))) return;
 
             const editor = tinymce.get('editor');
             if (!editor) return;
@@ -3708,8 +3708,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             }
         }
 
-        function removeQr(name) {
-            if (!confirm(t('confirm.delete_qr', {name: name}, 'Delete QR "{name}"?'))) return;
+        async function removeQr(name) {
+            if (!(await ezdocConfirm(t('confirm.delete_qr', {name: name}, 'Delete QR "{name}"?'), { title: 'Delete QR', variant: 'danger', confirmText: 'Delete' }))) return;
 
             const editor = tinymce.get('editor');
             if (!editor) return;
@@ -3814,8 +3814,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             setTimeout(() => { el.style.outline = oldOutline; el.style.outlineOffset = ''; }, 900);
         }
 
-        function removeCondSection(id) {
-            if (!confirm(t('cond.confirm_delete', {}, 'Delete this conditional section along with all its content?'))) return;
+        async function removeCondSection(id) {
+            if (!(await ezdocConfirm(t('cond.confirm_delete', {}, 'Delete this conditional section along with all its content?'), { title: 'Delete Conditional Section', variant: 'danger', confirmText: 'Delete' }))) return;
             const el = _condFindEl(id);
             if (!el) return;
             el.parentNode.removeChild(el);
@@ -4769,9 +4769,9 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             }
         }
 
-        function deleteMaterai(idx) {
+        async function deleteMaterai(idx) {
             if (!configMateraiList[idx]) return;
-            if (!confirm(t('confirm.delete_materai', {}, 'Delete this stamp duty placeholder?'))) return;
+            if (!(await ezdocConfirm(t('confirm.delete_materai', {}, 'Delete this stamp duty placeholder?'), { title: 'Delete Materai', variant: 'danger', confirmText: 'Delete' }))) return;
             const id = configMateraiList[idx].id;
             const editor = tinymce.get('editor');
             if (editor) {
@@ -5107,24 +5107,23 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             if (inp) inp.value = newVal;
         }
 
-        function deleteTtd(i) {
-            if (confirm(t('confirm.delete_ttd', {}, 'Delete this signature?'))) {
-                const ttdId = configTtd[i].id;
-                // Remove from editor
-                const editor = tinymce.get('editor');
-                if (editor) {
-                    let content = editor.getContent();
-                    // Match outer div with exactly 3 nested inner divs
-                    // Structure: <div data-ttd><div>label</div><div>line</div><div>dots</div></div>
-                    content = content.replace(
-                        new RegExp(`<div[^>]*data-ttd="${ttdId}"[^>]*>\\s*<div[^>]*>[\\s\\S]*?</div>\\s*<div[^>]*>[\\s\\S]*?</div>\\s*<div[^>]*>[\\s\\S]*?</div>\\s*</div>(&nbsp;)?`, 'g'),
-                        ''
-                    );
-                    editor.setContent(content);
-                }
-                configTtd.splice(i, 1);
-                renderTtd();
+        async function deleteTtd(i) {
+            if (!(await ezdocConfirm(t('confirm.delete_ttd', {}, 'Delete this signature?'), { title: 'Delete Signature', variant: 'danger', confirmText: 'Delete' }))) return;
+            const ttdId = configTtd[i].id;
+            // Remove from editor
+            const editor = tinymce.get('editor');
+            if (editor) {
+                let content = editor.getContent();
+                // Match outer div with exactly 3 nested inner divs
+                // Structure: <div data-ttd><div>label</div><div>line</div><div>dots</div></div>
+                content = content.replace(
+                    new RegExp(`<div[^>]*data-ttd="${ttdId}"[^>]*>\\s*<div[^>]*>[\\s\\S]*?</div>\\s*<div[^>]*>[\\s\\S]*?</div>\\s*<div[^>]*>[\\s\\S]*?</div>\\s*</div>(&nbsp;)?`, 'g'),
+                    ''
+                );
+                editor.setContent(content);
             }
+            configTtd.splice(i, 1);
+            renderTtd();
         }
 
         function updateTtdMode(ttdId, mode) {
@@ -5300,11 +5299,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             if (ts && ts.value) filterPanel('ttdList', ts.value);
         }
 
-        function confirmDelete(id, name) {
-            if (confirm(t('confirm.delete_template', {name: name}, 'Delete template "{name}"?'))) {
-                document.getElementById('deleteId').value = id;
-                document.getElementById('deleteForm').submit();
-            }
+        async function confirmDelete(id, name) {
+            if (!(await ezdocConfirm(t('confirm.delete_template', {name: name}, 'Delete template "{name}"?'), { title: 'Delete Template', variant: 'danger', confirmText: 'Delete' }))) return;
+            document.getElementById('deleteId').value = id;
+            document.getElementById('deleteForm').submit();
         }
 
         // Keyboard shortcut

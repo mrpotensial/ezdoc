@@ -94,7 +94,7 @@ return [
         'locked_no_sign' => 'This document is locked. Cannot sign. Create a new version to revise.',
         'confirm_delete' => 'Delete this signature?',
         'edit_qr_prompt_label' => 'QR content for this signature:',
-        'edit_qr_prompt_default_hint' => '\\n\\nDefault template: {pattern}\\n(Leave empty to use the default template)',
+        'edit_qr_prompt_default_hint' => "\n\nDefault template: {pattern}\n(Leave empty to use the default template)",
         'verify_qr_alt' => 'Verification QR',
         'qr_alt' => 'Signature QR',
     ],
@@ -106,7 +106,7 @@ return [
         'max_size' => 'Maximum file size is 2MB.',
         'invalid_file' => 'Invalid file.',
         'confirm_delete' => 'Delete this e-Materai?',
-        'lock_missing_warning' => 'The following materai have not been uploaded:\\n  - {list}\\n\\nLock this version anyway?',
+        'lock_missing_warning' => "The following materai have not been uploaded:\n  - {list}\n\nLock this version anyway?",
     ],
     'validation' => [
         'required' => 'Required',
@@ -123,7 +123,7 @@ return [
     ],
     'confirm' => [
         'delete_version' => 'Delete version v{version}? This cannot be undone.',
-        'lock_final' => 'Lock this version as FINAL?\\n\\nOnce locked, this version cannot be edited. Only a superadmin can unlock it. Create a new version to revise.',
+        'lock_final' => "Lock this version as FINAL?\n\nOnce locked, this version cannot be edited. Only a superadmin can unlock it. Create a new version to revise.",
         'unlock_version' => 'Unlock this version? (superadmin access)',
         'restore_slot' => 'Restore this entire document slot? All soft-deleted versions will become active again.',
     ],
