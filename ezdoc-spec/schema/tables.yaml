@@ -5,7 +5,6 @@ ezdoc_audit_log:
       name: id
       type: bigint
       auto_increment: true
-      unsigned: true
       primary: true
     event_type:
       name: event_type
@@ -182,7 +181,6 @@ ezdoc_default_vars:
       name: id
       type: bigint
       auto_increment: true
-      unsigned: true
       primary: true
     var_name:
       name: var_name
@@ -232,7 +230,6 @@ ezdoc_documents:
       name: id
       type: bigint
       auto_increment: true
-      unsigned: true
       primary: true
     uuid:
       name: uuid
@@ -486,7 +483,6 @@ ezdoc_signatures:
       name: id
       type: bigint
       auto_increment: true
-      unsigned: true
       primary: true
     uuid:
       name: uuid
@@ -673,7 +669,6 @@ ezdoc_templates:
       name: id
       type: bigint
       auto_increment: true
-      unsigned: true
       primary: true
     uuid:
       name: uuid

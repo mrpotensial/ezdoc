@@ -4,37 +4,54 @@ declare(strict_types=1);
 
 namespace Ezdoc\Template;
 
+use Ezdoc\Db\Connection;
+use Ezdoc\Db\Mysqli\MysqliConnection;
 use Ezdoc\Exceptions\NotFoundException;
 use Ezdoc\UUID;
 use mysqli;
-use mysqli_stmt;
 
 /**
  * Ezdoc\Template\TemplateRepository — persistence gateway untuk ezdoc_templates.
  *
- * Semua query pakai mysqli prepared statement. Konsumsi mysqli langsung
- * (bukan Context) supaya bisa di-inject di service tanpa boot penuh.
+ * ## v0.9.9 refactor — Connection interface
+ *
+ * Sebelumnya hard-coupled `mysqli`. Sekarang accepts `Ezdoc\Db\Connection`
+ * (interface). Constructor tetap backward-compat: kalau consumer lempar
+ * `mysqli` global (koneksi.php pattern), otomatis di-wrap ke MysqliConnection.
  *
  * ## Versioning
  *
- * `save()` = INSERT (kalau id=0) atau UPDATE in-place (kalau id>0, revision bump).
- * `createNewVersion()` = INSERT baris baru dgn uuid diwariskan, version+1,
- *                        is_current=1 (row lama di-set is_current=0),
- *                        parent_version_id = id lama.
+ * - `save()`               = INSERT (kalau id=0) atau UPDATE in-place (revision bump)
+ * - `createNewVersion()`   = INSERT baris baru, uuid diwariskan, version+1,
+ *                            is_current=1 (row lama set is_current=0),
+ *                            parent_version_id = id lama
  *
  * PHP 7.4+ compatible.
  */
 final class TemplateRepository
 {
-    /** @var mysqli */
+    /** @var Connection */
     private $db;
 
-    /** @var string Comma-separated column list untuk SELECT — sinkron dgn schema */
+    /** @var string Comma-separated column list untuk SELECT — sinkron dgn Blueprint */
     private static $selectCols = 'id, uuid, slug, version, is_current, parent_version_id, name, category, scope, content, content_hash, signature_config, layout_config, verify_config, access_config, metadata, owner_id, is_active, is_locked, revision, deleted_at, deleted_by, deleted_reason, created_by, updated_by, created_at, updated_at';
 
-    public function __construct(mysqli $db)
+    /**
+     * @param Connection|mysqli $db Ezdoc\Db\Connection instance (preferred)
+     *   atau raw mysqli (backward-compat, auto-wrap ke MysqliConnection).
+     */
+    public function __construct($db)
     {
-        $this->db = $db;
+        if ($db instanceof Connection) {
+            $this->db = $db;
+        } elseif ($db instanceof mysqli) {
+            $this->db = new MysqliConnection($db);
+        } else {
+            throw new \InvalidArgumentException(
+                'TemplateRepository requires Ezdoc\\Db\\Connection or mysqli, got: '
+                . (is_object($db) ? get_class($db) : gettype($db))
+            );
+        }
     }
 
     // ─── Finders ─────────────────────────────────────────────────────────
@@ -42,13 +59,11 @@ final class TemplateRepository
     public function findById(int $id): ?Template
     {
         if ($id <= 0) return null;
-
-        $sql = 'SELECT ' . self::$selectCols . ' FROM ezdoc_templates WHERE id = ? LIMIT 1';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return null;
-
-        mysqli_stmt_bind_param($stmt, 'i', $id);
-        return $this->fetchOne($stmt);
+        $row = $this->db->fetchOne(
+            'SELECT ' . self::$selectCols . ' FROM ezdoc_templates WHERE id = ? LIMIT 1',
+            [$id]
+        );
+        return $row ? Template::fromRow($row) : null;
     }
 
     /**
@@ -58,31 +73,27 @@ final class TemplateRepository
     public function findByUuid(string $uuid): ?Template
     {
         if ($uuid === '') return null;
-
-        $sql = 'SELECT ' . self::$selectCols . ' FROM ezdoc_templates WHERE uuid = ? ORDER BY version DESC LIMIT 1';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return null;
-
-        mysqli_stmt_bind_param($stmt, 's', $uuid);
-        return $this->fetchOne($stmt);
+        $row = $this->db->fetchOne(
+            'SELECT ' . self::$selectCols
+            . ' FROM ezdoc_templates WHERE uuid = ? ORDER BY version DESC LIMIT 1',
+            [$uuid]
+        );
+        return $row ? Template::fromRow($row) : null;
     }
 
     /**
-     * Current active version untuk family — where is_current=1 AND deleted_at IS NULL.
+     * Current active version untuk family — WHERE is_current=1 AND deleted_at IS NULL.
      */
     public function findCurrentByUuid(string $uuid): ?Template
     {
         if ($uuid === '') return null;
-
-        $sql = 'SELECT ' . self::$selectCols
+        $row = $this->db->fetchOne(
+            'SELECT ' . self::$selectCols
             . ' FROM ezdoc_templates'
-            . ' WHERE uuid = ? AND is_current = 1 AND deleted_at IS NULL'
-            . ' LIMIT 1';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return null;
-
-        mysqli_stmt_bind_param($stmt, 's', $uuid);
-        return $this->fetchOne($stmt);
+            . ' WHERE uuid = ? AND is_current = 1 AND deleted_at IS NULL LIMIT 1',
+            [$uuid]
+        );
+        return $row ? Template::fromRow($row) : null;
     }
 
     /**
@@ -100,25 +111,21 @@ final class TemplateRepository
     // ─── Listers ─────────────────────────────────────────────────────────
 
     /**
-     * List current active templates (is_current=1 AND is_active=1 AND !deleted).
-     *
      * @return array<int, Template>
      */
     public function listCurrent(int $limit = 100, int $offset = 0): array
     {
-        $limit  = $limit > 0 ? $limit : 100;
+        $limit = $limit > 0 ? $limit : 100;
         $offset = $offset >= 0 ? $offset : 0;
 
-        $sql = 'SELECT ' . self::$selectCols
+        $rows = $this->db->fetchAll(
+            'SELECT ' . self::$selectCols
             . ' FROM ezdoc_templates'
             . ' WHERE is_current = 1 AND is_active = 1 AND deleted_at IS NULL'
-            . ' ORDER BY updated_at DESC'
-            . ' LIMIT ? OFFSET ?';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return [];
-
-        mysqli_stmt_bind_param($stmt, 'ii', $limit, $offset);
-        return $this->fetchMany($stmt);
+            . ' ORDER BY updated_at DESC LIMIT ? OFFSET ?',
+            [$limit, $offset]
+        );
+        return array_map([Template::class, 'fromRow'], $rows);
     }
 
     /**
@@ -129,16 +136,14 @@ final class TemplateRepository
         if ($ownerId <= 0) return [];
         $limit = $limit > 0 ? $limit : 100;
 
-        $sql = 'SELECT ' . self::$selectCols
+        $rows = $this->db->fetchAll(
+            'SELECT ' . self::$selectCols
             . ' FROM ezdoc_templates'
             . ' WHERE owner_id = ? AND is_current = 1 AND deleted_at IS NULL'
-            . ' ORDER BY updated_at DESC'
-            . ' LIMIT ?';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return [];
-
-        mysqli_stmt_bind_param($stmt, 'ii', $ownerId, $limit);
-        return $this->fetchMany($stmt);
+            . ' ORDER BY updated_at DESC LIMIT ?',
+            [$ownerId, $limit]
+        );
+        return array_map([Template::class, 'fromRow'], $rows);
     }
 
     /**
@@ -148,23 +153,20 @@ final class TemplateRepository
     {
         $limit = $limit > 0 ? $limit : 100;
 
-        $sql = 'SELECT ' . self::$selectCols
+        $rows = $this->db->fetchAll(
+            'SELECT ' . self::$selectCols
             . ' FROM ezdoc_templates'
             . ' WHERE category = ? AND is_current = 1 AND deleted_at IS NULL'
-            . ' ORDER BY updated_at DESC'
-            . ' LIMIT ?';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return [];
-
-        mysqli_stmt_bind_param($stmt, 'si', $category, $limit);
-        return $this->fetchMany($stmt);
+            . ' ORDER BY updated_at DESC LIMIT ?',
+            [$category, $limit]
+        );
+        return array_map([Template::class, 'fromRow'], $rows);
     }
 
     // ─── Writers ─────────────────────────────────────────────────────────
 
     /**
-     * INSERT (kalau id=0) atau UPDATE (kalau id>0, revision bump).
-     * Return template id.
+     * INSERT (kalau id=0) atau UPDATE (kalau id>0, revision bump). Return template id.
      */
     public function save(Template $template, int $actorId): int
     {
@@ -178,14 +180,13 @@ final class TemplateRepository
     /**
      * Buat versi baru dalam family yang sama:
      *   - Row lama: is_current=0
-     *   - Row baru: INSERT, uuid diwariskan, version+1, is_current=1,
+     *   - Row baru: INSERT dgn uuid diwariskan, version+1, is_current=1,
      *     parent_version_id = row lama.
      *
      * $changedData: override kolom apapun sebelum insert (mis. ['content'=>...]).
      *
-     * Return id baris baru.
-     *
      * @param array<string,mixed> $changedData
+     * @return int id baris baru, atau 0 kalau gagal.
      */
     public function createNewVersion(Template $currentTemplate, array $changedData, int $actorId): int
     {
@@ -209,34 +210,28 @@ final class TemplateRepository
         $base['parent_version_id'] = $currentId;
         $base['revision']          = 1;
 
-        // Slug baru per version (uniqueness guard — schema tidak enforce, tapi
-        // kita tetap generate distinct slug supaya index tidak collide di masa
-        // depan kalau constraint ditambah).
+        // Slug baru per version (uniqueness guard)
         $base['slug'] = $this->generateSlug($currentTemplate->getName(), $currentTemplate->getSlug());
 
         $newTemplate = new Template($base);
 
-        // Turn off is_current di old row DALAM transaksi
-        mysqli_begin_transaction($this->db);
+        // Insert new + flip old is_current dalam transaction
         try {
-            $newId = $this->insert($newTemplate, $actorId);
-
-            $sqlOld = 'UPDATE ezdoc_templates SET is_current = 0 WHERE id = ?';
-            $stmtOld = mysqli_prepare($this->db, $sqlOld);
-            if (!$stmtOld) {
-                mysqli_rollback($this->db);
-                return 0;
-            }
-            mysqli_stmt_bind_param($stmtOld, 'i', $currentId);
-            if (!mysqli_stmt_execute($stmtOld)) {
-                mysqli_rollback($this->db);
-                return 0;
-            }
-
-            mysqli_commit($this->db);
-            return $newId;
+            return $this->db->transaction(function () use ($newTemplate, $actorId, $currentId) {
+                $newId = $this->insert($newTemplate, $actorId);
+                if ($newId <= 0) {
+                    throw new \RuntimeException('insert new version failed');
+                }
+                $affected = $this->db->execute(
+                    'UPDATE ezdoc_templates SET is_current = 0 WHERE id = ?',
+                    [$currentId]
+                );
+                if ($affected < 1) {
+                    throw new \RuntimeException('failed to unset is_current on old version');
+                }
+                return $newId;
+            });
         } catch (\Throwable $e) {
-            mysqli_rollback($this->db);
             return 0;
         }
     }
@@ -248,76 +243,44 @@ final class TemplateRepository
     {
         if ($id <= 0) return false;
 
-        $sql = 'UPDATE ezdoc_templates
+        $affected = $this->db->execute(
+            'UPDATE ezdoc_templates
                 SET deleted_at = CURRENT_TIMESTAMP,
                     deleted_by = ?,
                     deleted_reason = ?,
                     is_current = 0
-                WHERE id = ? AND deleted_at IS NULL';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return false;
-
-        $deletedBy = (string) $actorId;
-        mysqli_stmt_bind_param($stmt, 'ssi', $deletedBy, $reason, $id);
-        if (!mysqli_stmt_execute($stmt)) return false;
-
-        return mysqli_stmt_affected_rows($stmt) > 0;
+                WHERE id = ? AND deleted_at IS NULL',
+            [(string) $actorId, $reason, $id]
+        );
+        return $affected > 0;
     }
 
     /**
      * Touch updated_at tanpa ubah kolom lain — dipakai lock/unlock events supaya
      * cache/list-order akurat.
-     *
-     * Set is_locked-nya sendiri harus lewat query lain — utility ini hanya
-     * tanda "row bergerak". Update updated_at eksplisit (ON UPDATE trigger
-     * schema tidak jalan kalau tidak ada column actual change).
      */
     public function touchUpdatedAt(int $id): bool
     {
         if ($id <= 0) return false;
-
-        $sql = 'UPDATE ezdoc_templates SET updated_at = CURRENT_TIMESTAMP WHERE id = ?';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return false;
-
-        mysqli_stmt_bind_param($stmt, 'i', $id);
-        return mysqli_stmt_execute($stmt);
+        try {
+            $this->db->execute(
+                'UPDATE ezdoc_templates SET updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                [$id]
+            );
+            return true;
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     // ─── Private helpers ─────────────────────────────────────────────────
 
-    /**
-     * INSERT baru: generate uuid v7 (kalau kosong), generate slug, ownership,
-     * timestamps default oleh schema.
-     */
     private function insert(Template $template, int $actorId): int
     {
         $data = $template->toArray();
 
-        $uuid = $data['uuid'] !== '' ? (string) $data['uuid'] : UUID::v7();
-        $slug = $data['slug'] !== '' ? (string) $data['slug'] : $this->generateSlug($data['name'] ?? '', '');
-
-        $version         = isset($data['version']) ? (int) $data['version'] : 1;
-        $isCurrent       = !empty($data['is_current']) ? 1 : 0;
-        $parentVersionId = $data['parent_version_id'] !== null ? (int) $data['parent_version_id'] : null;
-        $name            = (string) ($data['name'] ?? '');
-        $category        = (string) ($data['category'] ?? '');
-        $scope           = ($data['scope'] ?? 'patient') === 'general' ? 'general' : 'patient';
-        $content         = (string) ($data['content'] ?? '');
-        $contentHash     = $data['content_hash'] !== null && $data['content_hash'] !== '' ? (string) $data['content_hash'] : null;
-
-        $signatureConfigStr = $this->encodeJsonCol($data['signature_config'] ?? []);
-        $layoutConfigStr    = $this->encodeJsonCol($data['layout_config'] ?? []);
-        $verifyConfigStr    = $this->encodeJsonCol($data['verify_config'] ?? []);
-        $accessConfigStr    = $this->encodeJsonCol($data['access_config'] ?? []);
-        $metadataStr        = $this->encodeJsonCol($data['metadata'] ?? []);
-
-        $ownerId  = $data['owner_id'] !== null ? (int) $data['owner_id'] : ($actorId > 0 ? $actorId : null);
-        $isActive = !empty($data['is_active']) ? 1 : 0;
-        $isLocked = !empty($data['is_locked']) ? 1 : 0;
-        $revision = isset($data['revision']) ? (int) $data['revision'] : 1;
-        $createdBy = $actorId > 0 ? $actorId : null;
-        $updatedBy = $actorId > 0 ? $actorId : null;
+        $uuid = ($data['uuid'] !== '') ? (string) $data['uuid'] : UUID::v7();
+        $slug = ($data['slug'] !== '') ? (string) $data['slug'] : $this->generateSlug($data['name'] ?? '', '');
 
         $sql = 'INSERT INTO ezdoc_templates
             (uuid, slug, version, is_current, parent_version_id,
@@ -327,86 +290,76 @@ final class TemplateRepository
              created_by, updated_by)
             VALUES (?, ?, ?, ?, ?,  ?, ?, ?, ?, ?,  ?, ?, ?, ?, ?,  ?, ?, ?, ?,  ?, ?)';
 
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return 0;
+        try {
+            $this->db->execute($sql, [
+                $uuid,
+                $slug,
+                isset($data['version']) ? (int) $data['version'] : 1,
+                !empty($data['is_current']) ? 1 : 0,
+                $data['parent_version_id'] !== null ? (int) $data['parent_version_id'] : null,
+                (string) ($data['name'] ?? ''),
+                (string) ($data['category'] ?? ''),
+                (($data['scope'] ?? 'patient') === 'general') ? 'general' : 'patient',
+                (string) ($data['content'] ?? ''),
+                ($data['content_hash'] !== null && $data['content_hash'] !== '') ? (string) $data['content_hash'] : null,
+                $this->encodeJsonCol($data['signature_config'] ?? []),
+                $this->encodeJsonCol($data['layout_config'] ?? []),
+                $this->encodeJsonCol($data['verify_config'] ?? []),
+                $this->encodeJsonCol($data['access_config'] ?? []),
+                $this->encodeJsonCol($data['metadata'] ?? []),
+                $data['owner_id'] !== null ? (int) $data['owner_id'] : ($actorId > 0 ? $actorId : null),
+                !empty($data['is_active']) ? 1 : 0,
+                !empty($data['is_locked']) ? 1 : 0,
+                isset($data['revision']) ? (int) $data['revision'] : 1,
+                $actorId > 0 ? $actorId : null,
+                $actorId > 0 ? $actorId : null,
+            ]);
+        } catch (\Throwable $e) {
+            return 0;
+        }
 
-        // Types: s s i i i  s s s s s  s s s s s  i i i i  i i  (21 params)
-        mysqli_stmt_bind_param(
-            $stmt,
-            'ssiiisssssssssssiiiiii',
-            $uuid, $slug, $version, $isCurrent, $parentVersionId,
-            $name, $category, $scope, $content, $contentHash,
-            $signatureConfigStr, $layoutConfigStr, $verifyConfigStr, $accessConfigStr, $metadataStr,
-            $ownerId, $isActive, $isLocked, $revision,
-            $createdBy, $updatedBy
-        );
-
-        if (!mysqli_stmt_execute($stmt)) return 0;
-
-        return (int) mysqli_insert_id($this->db);
+        return (int) $this->db->lastInsertId();
     }
 
-    /**
-     * UPDATE in-place. Revision bumped by SQL itu sendiri (revision = revision + 1).
-     */
     private function updateInPlace(Template $template, int $actorId): bool
     {
         $data = $template->toArray();
         $id   = (int) $data['id'];
         if ($id <= 0) return false;
 
-        $name        = (string) ($data['name'] ?? '');
-        $category    = (string) ($data['category'] ?? '');
-        $scope       = ($data['scope'] ?? 'patient') === 'general' ? 'general' : 'patient';
-        $content     = (string) ($data['content'] ?? '');
-        $contentHash = $data['content_hash'] !== null && $data['content_hash'] !== '' ? (string) $data['content_hash'] : null;
-
-        $signatureConfigStr = $this->encodeJsonCol($data['signature_config'] ?? []);
-        $layoutConfigStr    = $this->encodeJsonCol($data['layout_config'] ?? []);
-        $verifyConfigStr    = $this->encodeJsonCol($data['verify_config'] ?? []);
-        $accessConfigStr    = $this->encodeJsonCol($data['access_config'] ?? []);
-        $metadataStr        = $this->encodeJsonCol($data['metadata'] ?? []);
-
-        $isActive  = !empty($data['is_active']) ? 1 : 0;
-        $isLocked  = !empty($data['is_locked']) ? 1 : 0;
-        $updatedBy = $actorId > 0 ? $actorId : null;
-
         $sql = 'UPDATE ezdoc_templates SET
-                name = ?,
-                category = ?,
-                scope = ?,
-                content = ?,
-                content_hash = ?,
-                signature_config = ?,
-                layout_config = ?,
-                verify_config = ?,
-                access_config = ?,
-                metadata = ?,
-                is_active = ?,
-                is_locked = ?,
-                updated_by = ?,
+                name = ?, category = ?, scope = ?, content = ?, content_hash = ?,
+                signature_config = ?, layout_config = ?, verify_config = ?, access_config = ?, metadata = ?,
+                is_active = ?, is_locked = ?, updated_by = ?,
                 revision = revision + 1
             WHERE id = ?';
 
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return false;
-
-        // Types: s s s s s  s s s s s  i i i  i  (14 params)
-        mysqli_stmt_bind_param(
-            $stmt,
-            'ssssssssssiiii',
-            $name, $category, $scope, $content, $contentHash,
-            $signatureConfigStr, $layoutConfigStr, $verifyConfigStr, $accessConfigStr, $metadataStr,
-            $isActive, $isLocked, $updatedBy,
-            $id
-        );
-
-        return mysqli_stmt_execute($stmt);
+        try {
+            $this->db->execute($sql, [
+                (string) ($data['name'] ?? ''),
+                (string) ($data['category'] ?? ''),
+                (($data['scope'] ?? 'patient') === 'general') ? 'general' : 'patient',
+                (string) ($data['content'] ?? ''),
+                ($data['content_hash'] !== null && $data['content_hash'] !== '') ? (string) $data['content_hash'] : null,
+                $this->encodeJsonCol($data['signature_config'] ?? []),
+                $this->encodeJsonCol($data['layout_config'] ?? []),
+                $this->encodeJsonCol($data['verify_config'] ?? []),
+                $this->encodeJsonCol($data['access_config'] ?? []),
+                $this->encodeJsonCol($data['metadata'] ?? []),
+                !empty($data['is_active']) ? 1 : 0,
+                !empty($data['is_locked']) ? 1 : 0,
+                $actorId > 0 ? $actorId : null,
+                $id,
+            ]);
+            return true;
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     /**
      * Encode array → JSON string untuk kolom JSON. Empty array → null (biar
-     * kolom JSON tidak menyimpan '[]' / '{}' setiap kali).
+     * kolom tidak menyimpan '[]' / '{}' setiap kali).
      *
      * @param array<string,mixed>|mixed $val
      */
@@ -419,9 +372,7 @@ final class TemplateRepository
 
     /**
      * Generate slug baru — safe untuk kolom VARCHAR(120), suffix random supaya
-     * unik antar-versi maupun antar-family. Fallback prefix "template" kalau
-     * base kosong. $legacy dipertahankan hanya untuk parity dgn save_template.php
-     * behaviour (tidak dipakai selain fallback validation).
+     * unik antar-versi maupun antar-family. Fallback "template" kalau base kosong.
      */
     private function generateSlug(string $name, string $legacy): string
     {
@@ -441,38 +392,5 @@ final class TemplateRepository
         $slug = $base . '_' . $suffix;
         if (strlen($slug) > 120) $slug = substr($slug, 0, 120);
         return $slug;
-    }
-
-    /**
-     * Fetch single row → Template atau null.
-     */
-    private function fetchOne(mysqli_stmt $stmt): ?Template
-    {
-        if (!mysqli_stmt_execute($stmt)) return null;
-        $result = mysqli_stmt_get_result($stmt);
-        if (!$result) return null;
-
-        $row = mysqli_fetch_assoc($result);
-        if (!$row) return null;
-
-        return Template::fromRow($row);
-    }
-
-    /**
-     * Fetch multiple rows → list of Template.
-     *
-     * @return array<int, Template>
-     */
-    private function fetchMany(mysqli_stmt $stmt): array
-    {
-        if (!mysqli_stmt_execute($stmt)) return [];
-        $result = mysqli_stmt_get_result($stmt);
-        if (!$result) return [];
-
-        $out = [];
-        while (($row = mysqli_fetch_assoc($result)) !== null) {
-            $out[] = Template::fromRow($row);
-        }
-        return $out;
     }
 }

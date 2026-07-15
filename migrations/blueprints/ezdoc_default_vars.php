@@ -12,7 +12,8 @@ declare(strict_types=1);
 use Ezdoc\Db\Schema\Blueprint;
 
 return Blueprint::create('ezdoc_default_vars', function (Blueprint $t) {
-    $t->id();
+    // BIGINT SIGNED — konsisten dgn ezdoc convention (semua tabel BIGINT signed)
+    $t->bigint('id')->autoIncrement()->primary();
     $t->string('var_name', 100)->unique();
     $t->string('description', 255)->nullable();
     $t->boolean('is_enabled')->default(true)->comment('Soft-disable tanpa delete');

@@ -4,7 +4,7 @@
 
 -- Table: ezdoc_audit_log
 CREATE TABLE `ezdoc_audit_log` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
   `event_type` VARCHAR(64) NOT NULL COMMENT 'e.g. doc.created, template.saved, authz.denied',
   `event_uuid` CHAR(36) NULL COMMENT 'UUID v7 untuk correlate cross-system',
   `actor_id` BIGINT NULL COMMENT 'id_pegawai/user (NULL untuk public/system)',
@@ -40,7 +40,7 @@ CREATE TABLE `ezdoc_audit_log` (
 
 -- Table: ezdoc_default_vars
 CREATE TABLE `ezdoc_default_vars` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
   `var_name` VARCHAR(100) NOT NULL,
   `description` VARCHAR(255) NULL,
   `is_enabled` TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Soft-disable tanpa delete',
@@ -54,7 +54,7 @@ CREATE TABLE `ezdoc_default_vars` (
 
 -- Table: ezdoc_documents
 CREATE TABLE `ezdoc_documents` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
   `uuid` CHAR(36) NOT NULL COMMENT 'Stable UUID untuk API/external ref',
   `template_id` BIGINT NOT NULL COMMENT 'FK ke specific template version (immutable)',
   `template_uuid` CHAR(36) NOT NULL COMMENT 'Template family (denormalized untuk query cepat)',
@@ -105,7 +105,7 @@ CREATE TABLE `ezdoc_documents` (
 
 -- Table: ezdoc_signatures
 CREATE TABLE `ezdoc_signatures` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
   `uuid` CHAR(36) NOT NULL,
   `document_id` BIGINT NOT NULL COMMENT 'FK to ezdoc_documents.id',
   `signature_id_within_doc` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0..N for multi-signer docs',
@@ -144,7 +144,7 @@ CREATE TABLE `ezdoc_signatures` (
 
 -- Table: ezdoc_templates
 CREATE TABLE `ezdoc_templates` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
   `uuid` CHAR(36) NOT NULL COMMENT 'Template family ID (UUID v7, same across versions)',
   `slug` VARCHAR(120) NOT NULL COMMENT 'URL-friendly identifier (per family)',
   `version` INT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'Version dalam family',

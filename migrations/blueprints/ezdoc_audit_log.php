@@ -16,7 +16,8 @@ declare(strict_types=1);
 use Ezdoc\Db\Schema\Blueprint;
 
 return Blueprint::create('ezdoc_audit_log', function (Blueprint $t) {
-    $t->id();
+    // BIGINT SIGNED — konsisten dgn ezdoc convention
+    $t->bigint('id')->autoIncrement()->primary();
 
     // Event identification
     $t->string('event_type', 64)->comment('e.g. doc.created, template.saved, authz.denied');

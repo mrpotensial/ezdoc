@@ -12,12 +12,15 @@ declare(strict_types=1);
 use Ezdoc\Db\Schema\Blueprint;
 
 return Blueprint::create('ezdoc_documents', function (Blueprint $t) {
-    $t->id();
+    // BIGINT SIGNED — konsisten dgn ezdoc_templates.id (SIGNED). FK
+    // compatibility MySQL: matching sign/unsigned wajib.
+    $t->bigint('id')->autoIncrement()->primary();
 
     // Identifier (UUID v7 time-ordered)
     $t->uuid('uuid')->unique()->comment('Stable UUID untuk API/external ref');
 
-    // Template reference (snapshot at creation time)
+    // Template reference (snapshot at creation time). BIGINT SIGNED untuk
+    // match ezdoc_templates.id (foreignId() shortcut default UNSIGNED, skip).
     $t->bigint('template_id')->comment('FK ke specific template version (immutable)');
     $t->uuid('template_uuid')->comment('Template family (denormalized untuk query cepat)');
     $t->integer('template_version')->unsigned()->default(1);

@@ -4,29 +4,41 @@ declare(strict_types=1);
 
 namespace Ezdoc\Document;
 
+use Ezdoc\Db\Connection;
+use Ezdoc\Db\Mysqli\MysqliConnection;
 use Ezdoc\Exceptions\NotFoundException;
 use Ezdoc\Exceptions\ValidationException;
 use Ezdoc\UUID;
 use mysqli;
 
 /**
- * Ezdoc\Document\DocumentRepository — mysqli-backed persistence for documents.
+ * Ezdoc\Document\DocumentRepository — driver-agnostic persistence for documents.
  *
- * All queries use mysqli_prepare + bind_param. Optimistic locking on UPDATE
- * via WHERE revision = expectedRevision (throws ValidationException on mismatch).
- * Content hash is SHA-256 of canonical JSON of field_values (keys sorted).
+ * ## v0.9.9 refactor — Connection interface
+ *
+ * Sebelumnya hard-coupled `mysqli`. Sekarang accepts `Ezdoc\Db\Connection`
+ * (interface) — semua query goes lewat `fetchOne`/`fetchAll`/`execute`.
+ * Constructor tetap backward-compat: kalau consumer lempar `mysqli` global
+ * (koneksi.php pattern), otomatis di-wrap ke `MysqliConnection`.
+ *
+ * ## Behavior
+ *
+ * All queries use prepared statements via Connection. Optimistic locking on
+ * UPDATE via WHERE revision = expectedRevision (throws ValidationException
+ * on mismatch). Content hash is SHA-256 of canonical JSON of field_values
+ * (keys sorted recursively).
  *
  * PHP 7.4+ compatible.
  */
 final class DocumentRepository
 {
-    /** @var mysqli */
+    /** @var Connection */
     private $db;
 
     /**
-     * SELECT column list — kept in sync with schema in 2026_01_01_000002 migration.
-     * Includes legacy hospital columns (norm, nopen, label) so Document::fromRow()
-     * can back-fill field_values when those legacy columns are populated.
+     * SELECT column list — kept in sync with schema in migrations/blueprints/
+     * ezdoc_documents.php. Includes legacy hospital columns (norm, nopen, label)
+     * so Document::fromRow() can back-fill field_values.
      *
      * @var string
      */
@@ -35,48 +47,61 @@ final class DocumentRepository
         . 'status, is_locked, content_hash, content_hash_at, content_hash_version, '
         . 'public_slug, public_slug_active, '
         . 'created_by, updated_by, created_at, updated_at';
-    // NOTE: `metadata` + `revision` columns tidak ada di current migration
-    // (20260706000002_create_ezdoc_documents.php) — jadi jangan SELECT keduanya
-    // atau mysqli_prepare fail → silent empty. Document::fromRow() has default
-    // fallbacks (metadata=[], revision=1) untuk tolerate absence.
+    // NOTE: `metadata` + `revision` columns tidak ada di legacy migrations —
+    // Document::fromRow() has fallbacks (metadata=[], revision=1) untuk tolerate.
+    // v0.9.10+ Blueprint sudah declare — kalau consumer fresh install pakai
+    // Blueprint, kolom ada. Tambah ke SELECT list once legacy consumer sunset.
 
-    public function __construct(mysqli $db)
+    /**
+     * @param Connection|mysqli $db Ezdoc\Db\Connection instance (preferred) atau
+     *   raw mysqli (backward-compat, auto-wrap ke MysqliConnection).
+     */
+    public function __construct($db)
     {
-        $this->db = $db;
+        if ($db instanceof Connection) {
+            $this->db = $db;
+        } elseif ($db instanceof mysqli) {
+            $this->db = new MysqliConnection($db);
+        } else {
+            throw new \InvalidArgumentException(
+                'DocumentRepository requires Ezdoc\\Db\\Connection or mysqli, got: '
+                . (is_object($db) ? get_class($db) : gettype($db))
+            );
+        }
     }
 
     public function findById(int $id): ?Document
     {
         if ($id <= 0) return null;
-        $sql = 'SELECT ' . self::$SELECT_COLS
-            . ' FROM ezdoc_documents WHERE id = ? AND deleted_at IS NULL LIMIT 1';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return null;
-        mysqli_stmt_bind_param($stmt, 'i', $id);
-        return $this->fetchSingle($stmt);
+        $row = $this->db->fetchOne(
+            'SELECT ' . self::$SELECT_COLS
+            . ' FROM ezdoc_documents WHERE id = ? AND deleted_at IS NULL LIMIT 1',
+            [$id]
+        );
+        return $row ? Document::fromRow($row) : null;
     }
 
     public function findByUuid(string $uuid): ?Document
     {
         if ($uuid === '') return null;
-        $sql = 'SELECT ' . self::$SELECT_COLS
-            . ' FROM ezdoc_documents WHERE uuid = ? AND deleted_at IS NULL LIMIT 1';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return null;
-        mysqli_stmt_bind_param($stmt, 's', $uuid);
-        return $this->fetchSingle($stmt);
+        $row = $this->db->fetchOne(
+            'SELECT ' . self::$SELECT_COLS
+            . ' FROM ezdoc_documents WHERE uuid = ? AND deleted_at IS NULL LIMIT 1',
+            [$uuid]
+        );
+        return $row ? Document::fromRow($row) : null;
     }
 
     public function findByPublicSlug(string $slug): ?Document
     {
         if ($slug === '') return null;
-        $sql = 'SELECT ' . self::$SELECT_COLS
+        $row = $this->db->fetchOne(
+            'SELECT ' . self::$SELECT_COLS
             . ' FROM ezdoc_documents WHERE public_slug = ? AND public_slug_active = 1'
-            . ' AND deleted_at IS NULL LIMIT 1';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return null;
-        mysqli_stmt_bind_param($stmt, 's', $slug);
-        return $this->fetchSingle($stmt);
+            . ' AND deleted_at IS NULL LIMIT 1',
+            [$slug]
+        );
+        return $row ? Document::fromRow($row) : null;
     }
 
     /**
@@ -85,17 +110,16 @@ final class DocumentRepository
     public function listByTemplate(int $templateId, int $limit = 100, int $offset = 0): array
     {
         if ($templateId <= 0) return [];
-        if ($limit < 1) $limit = 1;
-        if ($limit > 1000) $limit = 1000;
-        if ($offset < 0) $offset = 0;
+        $limit = max(1, min($limit, 1000));
+        $offset = max(0, $offset);
 
-        $sql = 'SELECT ' . self::$SELECT_COLS
+        $rows = $this->db->fetchAll(
+            'SELECT ' . self::$SELECT_COLS
             . ' FROM ezdoc_documents WHERE template_id = ? AND deleted_at IS NULL'
-            . ' ORDER BY id DESC LIMIT ? OFFSET ?';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return [];
-        mysqli_stmt_bind_param($stmt, 'iii', $templateId, $limit, $offset);
-        return $this->fetchMany($stmt);
+            . ' ORDER BY id DESC LIMIT ? OFFSET ?',
+            [$templateId, $limit, $offset]
+        );
+        return array_map([Document::class, 'fromRow'], $rows);
     }
 
     /**
@@ -104,16 +128,15 @@ final class DocumentRepository
     public function listByStatus(string $status, int $limit = 100): array
     {
         if ($status === '') return [];
-        if ($limit < 1) $limit = 1;
-        if ($limit > 1000) $limit = 1000;
+        $limit = max(1, min($limit, 1000));
 
-        $sql = 'SELECT ' . self::$SELECT_COLS
+        $rows = $this->db->fetchAll(
+            'SELECT ' . self::$SELECT_COLS
             . ' FROM ezdoc_documents WHERE status = ? AND deleted_at IS NULL'
-            . ' ORDER BY id DESC LIMIT ?';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return [];
-        mysqli_stmt_bind_param($stmt, 'si', $status, $limit);
-        return $this->fetchMany($stmt);
+            . ' ORDER BY id DESC LIMIT ?',
+            [$status, $limit]
+        );
+        return array_map([Document::class, 'fromRow'], $rows);
     }
 
     /**
@@ -124,41 +147,35 @@ final class DocumentRepository
      */
     public function findRecent(string $statusFilter = '', string $searchQ = '', int $limit = 100): array
     {
-        if ($limit < 1)  $limit = 1;
-        if ($limit > 1000) $limit = 1000;
+        $limit = max(1, min($limit, 1000));
 
         $where  = ['deleted_at IS NULL'];
         $params = [];
-        $types  = '';
 
         if ($statusFilter !== '' && in_array($statusFilter, ['draft', 'published', 'locked', 'archived'], true)) {
             $where[]  = 'status = ?';
-            $types   .= 's';
             $params[] = $statusFilter;
         }
         if ($searchQ !== '') {
             $where[]  = '(title LIKE ? OR norm LIKE ? OR nopen LIKE ?)';
             $needle   = '%' . $searchQ . '%';
-            $types   .= 'sss';
             $params[] = $needle;
             $params[] = $needle;
             $params[] = $needle;
         }
-
-        $sql = 'SELECT ' . self::$SELECT_COLS
-            . ' FROM ezdoc_documents WHERE ' . implode(' AND ', $where)
-            . ' ORDER BY id DESC LIMIT ?';
-        $types   .= 'i';
         $params[] = $limit;
 
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return [];
-        mysqli_stmt_bind_param($stmt, $types, ...$params);
-        return $this->fetchMany($stmt);
+        $rows = $this->db->fetchAll(
+            'SELECT ' . self::$SELECT_COLS
+            . ' FROM ezdoc_documents WHERE ' . implode(' AND ', $where)
+            . ' ORDER BY id DESC LIMIT ?',
+            $params
+        );
+        return array_map([Document::class, 'fromRow'], $rows);
     }
 
     /**
-     * INSERT if $req->documentId is null; UPDATE otherwise.
+     * INSERT if `$req->documentId` is null; UPDATE otherwise.
      *
      * @throws NotFoundException   when updating a nonexistent id
      * @throws ValidationException on revision mismatch (optimistic lock fail)
@@ -182,25 +199,17 @@ final class DocumentRepository
     }
 
     /**
-     * Load template row for INSERT — needs template_uuid + template.version to
-     * denormalize into the document. Repository-local read so callers don't
-     * have to plumb this through the request.
+     * Load template row for INSERT — needs template_uuid + version to denormalize
+     * into the document.
      *
      * @return array{template_uuid:string, template_version:int}|null
      */
     private function loadTemplateSnapshot(int $templateId): ?array
     {
-        $sql = 'SELECT uuid, version FROM ezdoc_templates WHERE id = ? LIMIT 1';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return null;
-        mysqli_stmt_bind_param($stmt, 'i', $templateId);
-        if (!mysqli_stmt_execute($stmt)) {
-            mysqli_stmt_close($stmt);
-            return null;
-        }
-        $result = mysqli_stmt_get_result($stmt);
-        $row = $result ? mysqli_fetch_assoc($result) : null;
-        mysqli_stmt_close($stmt);
+        $row = $this->db->fetchOne(
+            'SELECT uuid, version FROM ezdoc_templates WHERE id = ? LIMIT 1',
+            [$templateId]
+        );
         if (!$row) return null;
         return [
             'template_uuid' => (string) $row['uuid'],
@@ -222,38 +231,15 @@ final class DocumentRepository
         }
 
         $uuid = UUID::v7();
-        $templateId = $req->getTemplateId();
-        $templateUuid = $snap['template_uuid'];
-        $templateVersion = $snap['template_version'];
-        $title = $req->getTitle();
         $status = $req->getStatus();
-        $isLocked = ($status === 'locked') ? 1 : 0;
         $publishedAt = ($status === 'published' || $status === 'locked')
             ? date('Y-m-d H:i:s')
             : null;
 
-        // Map generic subject_type/subject_id → legacy norm/nopen columns when
-        // subject_type is 'patient' (backward-compat during v0.6.5 migration).
-        // Also honor explicit field_values['norm']/['nopen'] as legacy fallback.
-        $norm = null;
-        $nopen = null;
-        $fieldValues = $req->getFieldValues();
-        if ($req->getSubjectType() === 'patient' && $req->getSubjectId() !== null) {
-            $norm = $req->getSubjectId();
-        } elseif (isset($fieldValues['norm']) && is_scalar($fieldValues['norm'])) {
-            $norm = (string) $fieldValues['norm'];
-        }
-        if (isset($fieldValues['nopen']) && is_scalar($fieldValues['nopen'])) {
-            $nopen = (string) $fieldValues['nopen'];
-        }
-
-        $label = '-';
-        if (isset($fieldValues['label']) && is_scalar($fieldValues['label']) && (string) $fieldValues['label'] !== '') {
-            $label = substr((string) $fieldValues['label'], 0, 100);
-        }
+        [$norm, $nopen, $label] = $this->extractLegacyIdentity($req);
 
         $now = date('Y-m-d H:i:s');
-        $contentHashVersion = 1;
+        $actorForInsert = $actorId > 0 ? $actorId : null;
 
         $sql = 'INSERT INTO ezdoc_documents '
             . '(uuid, template_id, template_uuid, template_version, title, norm, nopen, label, '
@@ -261,22 +247,13 @@ final class DocumentRepository
             . 'content_hash, content_hash_at, content_hash_version, '
             . 'published_at, revision, created_by, updated_by, created_at, updated_at) '
             . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) {
-            throw new \RuntimeException('Failed to prepare INSERT: ' . mysqli_error($this->db));
-        }
 
-        $actorIdForInsert = $actorId > 0 ? $actorId : null;
-
-        // Types (21 params): s i s i  s s s s  s s s s  i s s i  s i i s s
-        mysqli_stmt_bind_param(
-            $stmt,
-            'sisissssssssissisiiss',
+        $this->db->execute($sql, [
             $uuid,
-            $templateId,
-            $templateUuid,
-            $templateVersion,
-            $title,
+            $req->getTemplateId(),
+            $snap['template_uuid'],
+            $snap['template_version'],
+            $req->getTitle(),
             $norm,
             $nopen,
             $label,
@@ -284,26 +261,18 @@ final class DocumentRepository
             $signatureValuesJson,
             $metadataJson,
             $status,
-            $isLocked,
+            ($status === 'locked') ? 1 : 0,
             $contentHash,
             $now,
-            $contentHashVersion,
+            1, // content_hash_version
             $publishedAt,
-            $actorIdForInsert,
-            $actorIdForInsert,
+            $actorForInsert,
+            $actorForInsert,
             $now,
-            $now
-        );
+            $now,
+        ]);
 
-        if (!mysqli_stmt_execute($stmt)) {
-            $err = mysqli_stmt_error($stmt);
-            mysqli_stmt_close($stmt);
-            throw new \RuntimeException('Failed to INSERT document: ' . $err);
-        }
-
-        $newId = (int) mysqli_insert_id($this->db);
-        mysqli_stmt_close($stmt);
-
+        $newId = (int) $this->db->lastInsertId();
         return new SaveDocumentResult($newId, $uuid, 1, true, $contentHash);
     }
 
@@ -317,7 +286,6 @@ final class DocumentRepository
     ): SaveDocumentResult {
         $docId = (int) $req->getDocumentId();
 
-        // Load existing row for revision + uuid + owner
         $existing = $this->findById($docId);
         if ($existing === null) {
             throw NotFoundException::forResource('document', $docId);
@@ -334,29 +302,10 @@ final class DocumentRepository
 
         $newRevision = $currentRevision + 1;
         $status = $req->getStatus();
-        $isLocked = ($status === 'locked') ? 1 : 0;
-        $title = $req->getTitle();
         $now = date('Y-m-d H:i:s');
-        $contentHashVersion = 1;
-        $actorIdForUpdate = $actorId > 0 ? $actorId : null;
+        $actorForUpdate = $actorId > 0 ? $actorId : null;
 
-        // Map generic subject → legacy norm/nopen for backward compat.
-        $fieldValues = $req->getFieldValues();
-        $norm = null;
-        $nopen = null;
-        if ($req->getSubjectType() === 'patient' && $req->getSubjectId() !== null) {
-            $norm = $req->getSubjectId();
-        } elseif (isset($fieldValues['norm']) && is_scalar($fieldValues['norm'])) {
-            $norm = (string) $fieldValues['norm'];
-        }
-        if (isset($fieldValues['nopen']) && is_scalar($fieldValues['nopen'])) {
-            $nopen = (string) $fieldValues['nopen'];
-        }
-
-        $label = '-';
-        if (isset($fieldValues['label']) && is_scalar($fieldValues['label']) && (string) $fieldValues['label'] !== '') {
-            $label = substr((string) $fieldValues['label'], 0, 100);
-        }
+        [$norm, $nopen, $label] = $this->extractLegacyIdentity($req);
 
         $sql = 'UPDATE ezdoc_documents SET '
             . 'title = ?, norm = ?, nopen = ?, label = ?, '
@@ -365,16 +314,9 @@ final class DocumentRepository
             . 'content_hash = ?, content_hash_at = ?, content_hash_version = ?, '
             . 'revision = ?, updated_by = ?, updated_at = ? '
             . 'WHERE id = ? AND revision = ? AND deleted_at IS NULL';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) {
-            throw new \RuntimeException('Failed to prepare UPDATE: ' . mysqli_error($this->db));
-        }
 
-        // Types (17 params): s s s s  s s s s  i s s i  i i s i i
-        mysqli_stmt_bind_param(
-            $stmt,
-            'ssssssssissiiisii',
-            $title,
+        $affected = $this->db->execute($sql, [
+            $req->getTitle(),
             $norm,
             $nopen,
             $label,
@@ -382,28 +324,18 @@ final class DocumentRepository
             $signatureValuesJson,
             $metadataJson,
             $status,
-            $isLocked,
+            ($status === 'locked') ? 1 : 0,
             $contentHash,
             $now,
-            $contentHashVersion,
+            1, // content_hash_version
             $newRevision,
-            $actorIdForUpdate,
+            $actorForUpdate,
             $now,
             $docId,
-            $currentRevision
-        );
-
-        if (!mysqli_stmt_execute($stmt)) {
-            $err = mysqli_stmt_error($stmt);
-            mysqli_stmt_close($stmt);
-            throw new \RuntimeException('Failed to UPDATE document: ' . $err);
-        }
-
-        $affected = mysqli_stmt_affected_rows($stmt);
-        mysqli_stmt_close($stmt);
+            $currentRevision,
+        ]);
 
         if ($affected < 1) {
-            // Row exists but revision changed between load & write → concurrent update.
             throw ValidationException::forField(
                 'expected_revision',
                 'concurrent update detected (revision changed between load and write)'
@@ -423,56 +355,45 @@ final class DocumentRepository
         $now = date('Y-m-d H:i:s');
         $actorStr = $actorId > 0 ? (string) $actorId : null;
 
-        $sql = 'UPDATE ezdoc_documents SET deleted_at = ?, deleted_by = ?, deleted_reason = ? '
-            . 'WHERE id = ? AND deleted_at IS NULL';
-        $stmt = mysqli_prepare($this->db, $sql);
-        if (!$stmt) return false;
-        mysqli_stmt_bind_param($stmt, 'sssi', $now, $actorStr, $reason, $id);
-        $ok = mysqli_stmt_execute($stmt);
-        $affected = mysqli_stmt_affected_rows($stmt);
-        mysqli_stmt_close($stmt);
-        return $ok && $affected > 0;
+        $affected = $this->db->execute(
+            'UPDATE ezdoc_documents SET deleted_at = ?, deleted_by = ?, deleted_reason = ? '
+            . 'WHERE id = ? AND deleted_at IS NULL',
+            [$now, $actorStr, $reason, $id]
+        );
+        return $affected > 0;
     }
 
     /**
-     * @param \mysqli_stmt $stmt
+     * Extract norm/nopen/label dari SaveDocumentRequest untuk denormalize ke
+     * legacy columns. Support subject_type=patient shortcut + field_values fallback.
+     *
+     * @return array{0:?string, 1:?string, 2:string}  [norm, nopen, label]
      */
-    private function fetchSingle($stmt): ?Document
+    private function extractLegacyIdentity(SaveDocumentRequest $req): array
     {
-        if (!mysqli_stmt_execute($stmt)) {
-            mysqli_stmt_close($stmt);
-            return null;
+        $fieldValues = $req->getFieldValues();
+        $norm = null;
+        $nopen = null;
+
+        if ($req->getSubjectType() === 'patient' && $req->getSubjectId() !== null) {
+            $norm = $req->getSubjectId();
+        } elseif (isset($fieldValues['norm']) && is_scalar($fieldValues['norm'])) {
+            $norm = (string) $fieldValues['norm'];
         }
-        $result = mysqli_stmt_get_result($stmt);
-        $row = $result ? mysqli_fetch_assoc($result) : null;
-        mysqli_stmt_close($stmt);
-        return $row ? Document::fromRow($row) : null;
+        if (isset($fieldValues['nopen']) && is_scalar($fieldValues['nopen'])) {
+            $nopen = (string) $fieldValues['nopen'];
+        }
+
+        $label = '-';
+        if (isset($fieldValues['label']) && is_scalar($fieldValues['label']) && (string) $fieldValues['label'] !== '') {
+            $label = substr((string) $fieldValues['label'], 0, 100);
+        }
+
+        return [$norm, $nopen, $label];
     }
 
     /**
-     * @param \mysqli_stmt $stmt
-     * @return array<int,Document>
-     */
-    private function fetchMany($stmt): array
-    {
-        if (!mysqli_stmt_execute($stmt)) {
-            mysqli_stmt_close($stmt);
-            return [];
-        }
-        $result = mysqli_stmt_get_result($stmt);
-        $out = [];
-        if ($result) {
-            while (($row = mysqli_fetch_assoc($result)) !== null) {
-                $out[] = Document::fromRow($row);
-            }
-        }
-        mysqli_stmt_close($stmt);
-        return $out;
-    }
-
-    /**
-     * SHA-256 hex of canonical JSON of $fieldValues. Keys are sorted recursively
-     * so semantically equal maps hash the same regardless of insertion order.
+     * SHA-256 hex of canonical JSON of $fieldValues. Keys sorted recursively.
      *
      * @param array<string,mixed> $fieldValues
      */
@@ -491,7 +412,6 @@ final class DocumentRepository
     private static function canonicalize($value)
     {
         if (!is_array($value)) return $value;
-        // Detect list vs map. Lists preserve order, maps sort by key.
         $isList = array_keys($value) === range(0, count($value) - 1);
         if ($isList) {
             $out = [];

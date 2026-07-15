@@ -26,7 +26,10 @@ declare(strict_types=1);
 use Ezdoc\Db\Schema\Blueprint;
 
 return Blueprint::create('ezdoc_templates', function (Blueprint $t) {
-    $t->id();
+    // BIGINT SIGNED (bukan UNSIGNED) — konsisten dgn existing prod schema.
+    // Blueprint::id() shortcut default unsigned (Laravel-familiar); disini
+    // explicit signed supaya FK ke id (juga BIGINT) tetap compatible.
+    $t->bigint('id')->autoIncrement()->primary();
 
     // Identifiers
     $t->uuid('uuid')->comment('Template family ID (UUID v7, same across versions)');

@@ -18,7 +18,8 @@ declare(strict_types=1);
 use Ezdoc\Db\Schema\Blueprint;
 
 return Blueprint::create('ezdoc_signatures', function (Blueprint $t) {
-    $t->id();
+    // BIGINT SIGNED — sinkron dgn ezdoc_documents.id (SIGNED). FK compat.
+    $t->bigint('id')->autoIncrement()->primary();
     $t->uuid('uuid')->unique();
 
     $t->bigint('document_id')->comment('FK to ezdoc_documents.id');

@@ -6,7 +6,6 @@
                 "name": "id",
                 "type": "bigint",
                 "auto_increment": true,
-                "unsigned": true,
                 "primary": true
             },
             "event_type": {
@@ -229,7 +228,6 @@
                 "name": "id",
                 "type": "bigint",
                 "auto_increment": true,
-                "unsigned": true,
                 "primary": true
             },
             "var_name": {
@@ -293,7 +291,6 @@
                 "name": "id",
                 "type": "bigint",
                 "auto_increment": true,
-                "unsigned": true,
                 "primary": true
             },
             "uuid": {
@@ -613,7 +610,6 @@
                 "name": "id",
                 "type": "bigint",
                 "auto_increment": true,
-                "unsigned": true,
                 "primary": true
             },
             "uuid": {
@@ -848,7 +844,6 @@
                 "name": "id",
                 "type": "bigint",
                 "auto_increment": true,
-                "unsigned": true,
                 "primary": true
             },
             "uuid": {
