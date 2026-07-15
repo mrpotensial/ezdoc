@@ -2647,14 +2647,14 @@ function renderFieldForPdf($name, $type, $val, $label) {
                         <div class="text-[9px] text-gray-400 leading-tight">
                             <?= h($paperSize) ?> <?= $paperDim['width'] ?>×<?= $paperDim['height'] ?>
                             <?php if ($isEditMode): ?>
-                                · <span class="<?= $param_is_deleted ? 'text-red-400' : ($param_is_locked ? 'text-amber-400' : 'text-emerald-400') ?>">
+                                · <span class="doc-info <?= $param_is_deleted ? 'text-red-400' : ($param_is_locked ? 'text-amber-400' : 'text-emerald-400') ?>">
                                     #<?= $doc_id ?> v<?= $param_version ?>
                                     <?php if ($param_is_deleted): ?><i class="bi bi-trash-fill"></i>
                                     <?php elseif ($param_is_locked): ?><i class="bi bi-lock-fill"></i>
                                     <?php endif; ?>
                                 </span>
                             <?php else: ?>
-                                · <span class="text-amber-400"><?= t('toolbar.new', [], 'New') ?></span>
+                                · <span class="doc-info new text-amber-400"><?= t('toolbar.new', [], 'New') ?></span>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -3429,9 +3429,15 @@ function renderFieldForPdf($name, $type, $val, $label) {
                         setTimeout(() => { window.location.href = targetUrl; }, 500);
                     } else {
                         // Existing doc: update UI + URL (history.replaceState so reload uses correct label)
-                        document.getElementById('docIdInput').value = data.doc_id;
-                        document.querySelector('.doc-info').textContent = t('toolbar.doc_info_id_edit', {id: data.doc_id}, 'ID: {id} (Edit)');
-                        document.querySelector('.doc-info').classList.remove('new');
+                        const docIdInput = document.getElementById('docIdInput');
+                        if (docIdInput) docIdInput.value = data.doc_id;
+                        // Defensive: .doc-info bisa null di layout yg beda (mis. deleted-mode
+                        // header). Skip DOM update kalau tidak ada — data sudah masuk DB.
+                        const docInfoEl = document.querySelector('.doc-info');
+                        if (docInfoEl) {
+                            docInfoEl.textContent = t('toolbar.doc_info_id_edit', {id: data.doc_id}, 'ID: {id} (Edit)');
+                            docInfoEl.classList.remove('new');
+                        }
                         btn.textContent = t('toolbar.update', {}, 'Update');
                         btn.disabled = false;
                         try { history.replaceState(null, '', targetUrl); } catch (e) {}

@@ -52,7 +52,11 @@ $configTtdRaw    = $tpl->getSignatureConfig();
 $tplDocScope     = $tpl->getScope();
 
 // ─── RBAC: template-level access check ───
-$accessConfig = ezdoc_parse_access_config($tpl->getAccessConfig());
+// Template::getAccessConfig() sudah return decoded array (bukan raw string),
+// jadi TIDAK perlu ezdoc_parse_access_config() (yg expect string).
+// null-safe: empty array = allow-all (v2 behavior, sama dgn parse hasil null).
+$rawAccess = $tpl->getAccessConfig();
+$accessConfig = $rawAccess === [] ? null : $rawAccess;
 $rbacAction = ($doc_id > 0) ? 'edit' : 'create';
 
 @error_log(sprintf(
