@@ -348,42 +348,62 @@ Key columns across tables:
 
 ---
 
-## Cross-Language Portage
+## Multi-Language Ecosystem (Strategy)
 
-The `ezdoc-spec/` folder adalah **source-of-truth artifact** untuk native ports
-di Go, Rust, TypeScript, dsb. Semua consumer bahasa cukup baca YAML/JSON tanpa
-perlu tahu apapun soal PHP.
+ezdoc is designed as **spec-first ecosystem** — beberapa **native packages
+terpisah** per bahasa, semua honor kontrak yang sama supaya interop:
 
-### Regenerate spec
+```
+                    ezdoc-spec/          ◄─── contract (source of truth)
+                       │
+       ┌───────────────┼───────────────┬────────────────┐
+       ▼               ▼               ▼                ▼
+  ezdoc (PHP)       ezdoc-go       ezdoc-ts        ezdoc-rs
+  ─ Packagist       ─ Go modules   ─ npm           ─ crates.io
+  ─ v1.0 target     ─ v1.5 planned ─ v2.0 planned  ─ stretch
+  (current)         (roadmap)      (roadmap)       (roadmap)
+```
+
+### Untuk consumer aplikasi
+
+Pakai package bahasa native — **jangan generate struct sendiri dari spec**.
+
+| Bahasa consumer | Package | Cara install |
+|---|---|---|
+| PHP | `mrpotensial/ezdoc` | `composer require mrpotensial/ezdoc` |
+| Go *(planned v1.5)* | `github.com/mrpotensial/ezdoc-go` | `go get github.com/mrpotensial/ezdoc-go` |
+| TypeScript *(planned v2.0)* | `@mrpotensial/ezdoc` | `npm i @mrpotensial/ezdoc` |
+| Rust *(stretch)* | `mrpotensial-ezdoc` | `cargo add mrpotensial-ezdoc` |
+
+**Saat ini hanya PHP** yang tersedia. Native ports lain masih di roadmap
+(lihat [docs/PRD.md](docs/PRD.md) section 6). Kalau butuh Go/TS/Rust hari ini,
+pilihan: pakai PHP ezdoc sebagai HTTP service + call dari bahasa lain, atau
+sponsor/bantu native port.
+
+### Untuk port implementer (kontributor)
+
+Kalau kau mau bantu bikin `ezdoc-go` / `ezdoc-rs` / `ezdoc-ts`, `ezdoc-spec/`
+adalah **kontrak** yang wajib di-honor supaya interop:
+
+- `schema/tables.{json,yaml}` — DB schema descriptor (single source of truth)
+- `ddl/{mysql,mariadb,sqlite,postgres,sqlserver}.sql` — reference DDL
+- `meta/{version.json,checksum.txt}` — versioning + CI gate
+- (v1.1 planned) `conformance/test-vectors.json` — cross-lang interop tests
+- (v1.1 planned) `protocol/*.md` — signature envelope format, hash algo, verify chain
+
+Port harus lulus conformance suite → hasilnya bit-exact identical output antar
+port (signature bytes, content hash, canonical JSON). PHP impl jadi first
+reference implementation.
+
+### Regenerate spec (development)
 
 ```bash
 php cli/spec-dump.php           # regenerate ezdoc-spec/
-php cli/spec-dump.php --check   # CI gate — fail kalau spec drift
+php cli/spec-dump.php --check   # CI gate — fail kalau spec drift dari source
 ```
 
-### Consume dari native port
-
-**Go** — via `yq eval`:
-```go
-// Parse tables.yaml → generate struct
-type Document struct {
-    ID              int64  `db:"id"`
-    UUID            string `db:"uuid"`
-    TemplateID      int64  `db:"template_id"`
-    // ... generated dari schema
-}
-```
-
-**Rust** — via `serde_yaml`:
-```rust
-let schema: TablesSchema = serde_yaml::from_str(include_str!("../ezdoc-spec/schema/tables.yaml"))?;
-```
-
-**TypeScript** — via `js-yaml`:
-```ts
-import yaml from 'js-yaml';
-const schema = yaml.load(fs.readFileSync('ezdoc-spec/schema/tables.yaml', 'utf8'));
-```
+`ezdoc-spec/` di-generate dari `migrations/blueprints/*.php` (single source of
+truth di PHP layer). Setiap schema change → regen + commit both.
 
 ---
 
