@@ -6,6 +6,33 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### Added — i18n scaffold (`Ezdoc\UI\Translator`)
+Externalized hardcoded Bahasa Indonesia UI strings in `views/document/designer.php`
+and `views/document/generate.php` into per-locale PHP array catalogs — see
+[docs/I18N.md](docs/I18N.md).
+
+- **`Ezdoc\UI\Translator`** (`src/UI/Translator.php`) — composes `Ezdoc\UI\Config`
+  internally (same pattern as `Theme`). `t(key, params, default)` never throws;
+  falls back to `default`/key on a missing or malformed catalog. `{param}`
+  interpolation via `strtr()` (deliberately not `{{param}}`, which collides with
+  ezdoc's own document-template mustache syntax).
+- **`lang/id/{common,designer,generate}.php`** — Indonesian string catalogs.
+  Only `id` populated for now; structure supports adding `lang/en/*` later
+  without view-code changes.
+- Both view files wire `$translator` through their existing bootstrap-fallback
+  block (mirrors the `$ctx`/`$config` dual-path resolution already there), with
+  explicit `$GLOBALS['translator']` promotion — required because
+  `Router::renderView()` includes views from method scope (same scope-isolation
+  class of bug fixed for `$dbFields`/`$dbTtd` previously). A local
+  `function_exists`-guarded `t()` helper sits next to each view's existing `h()`.
+  JS side gets a matching `EZDOC_I18N` dictionary + `t()` walker, injected via
+  each file's existing URL-bag mechanism (`data-ezdoc-urls` attribute for
+  designer.php, inline `window.EZDOC_URLS` const for generate.php).
+- Out of scope for this pass (see docs/I18N.md): AJAX action-endpoint response
+  strings, per-document/template author-entered content (`data-label`,
+  `data-options`, category/template names), and the pre-existing
+  `Config`-driven copy overrides (`designer.page_title`, `generate.picker_*`).
+
 ## [0.8.0] - 2026-07-10 — "PAdES envelope + RFC 3161 timestamp + PDF sign/verify wrapper"
 
 ### Added — Timestamp layer (5 files, ~1240 LOC, `src/Signature/Timestamp/`)

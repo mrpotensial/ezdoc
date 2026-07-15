@@ -44,6 +44,18 @@ if (!isset($config) || !($config instanceof \Ezdoc\UI\Config)) {
     $config = new \Ezdoc\UI\Config([]);
 }
 
+// Translator resolution: consumer OR default (Indonesian) locale.
+// $GLOBALS promotion is REQUIRED (not just convenience) — same scope-isolation
+// trap already fixed for $dbFields/$dbTtd in commit 1c4a12a: this view can be
+// include()'d from Ezdoc\Http\Router::renderView(), a METHOD, in which case
+// top-level vars here live in method-local scope, not global. The global t()
+// helper below reads $GLOBALS directly so it works from inside function-scoped
+// renderers (renderContent(), renderFieldForPdf(), etc.) too. See docs/I18N.md.
+if (!isset($translator) || !($translator instanceof \Ezdoc\UI\Translator)) {
+    $translator = \Ezdoc\UI\Translator::forView('generate', (string) $config->get('app.locale', 'id'));
+}
+$GLOBALS['translator'] = $translator;
+
 // Consumer-app globals → abstracted via Context DI
 $conn              = $ctx->db;
 $author_id         = $ctx->roleProvider->currentUserId();
@@ -81,6 +93,19 @@ foreach (['doc_meta_helpers.php', 'doc_template_helpers.php', 'doc_verify_helper
 if (!function_exists('h')) {
     function h($s): string {
         return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+// Local helper — translate a dot-notation i18n key (see lang/id/*.php).
+// $default preserves the original Indonesian copy so a missing/mistyped key
+// still displays correct text instead of a raw key or blank string.
+if (!function_exists('t')) {
+    function t(string $key, array $params = [], ?string $default = null): string {
+        $translator = $GLOBALS['translator'] ?? null;
+        if (!($translator instanceof \Ezdoc\UI\Translator)) {
+            return $default !== null ? $default : $key;
+        }
+        return $translator->t($key, $params, $default);
     }
 }
 
@@ -284,7 +309,7 @@ if ($hasTtdPlaceholders) {
 
         $configTtd[] = [
             'id' => $ttdId,
-            'label' => $lm[1] ?? 'Tanda Tangan',
+            'label' => $lm[1] ?? t('fallback.signature', [], 'Signature'),
             'nama_field' => $nm[1] ?? 'nama_' . $ttdId,
             'ttd_modes' => $mm[1] ?? 'image',
             'qr_data' => html_entity_decode($qm[1] ?? '')
@@ -703,7 +728,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['_save'])) {
 
         if (mysqli_stmt_execute($stmt)) {
             $saveSuccess = true;
-            $saveMessage = 'Dokumen berhasil disimpan';
+            $saveMessage = t('save.success', [], 'Document saved successfully');
             if (!$isEditMode) { $doc_id = mysqli_insert_id($conn); $isEditMode = true; }
             $dbFields = $fieldData;
             $dbTtd = $ttdData;
@@ -716,7 +741,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['_save'])) {
             // Level 3: compute + store data hash (best-effort)
             @doc_verify_compute_and_store_hash($conn, (int)$doc_id);
         } else {
-            $saveMessage = 'Gagal menyimpan: ' . mysqli_error($conn);
+            $saveMessage = t('save.failed', ['error' => mysqli_error($conn)], 'Failed to save: {error}');
         }
     }
 }
@@ -772,7 +797,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         // Parse all needed attributes from the opening tag
         preg_match('/class="([^"]*)"/', $tag, $cm); $classes = $cm[1] ?? '';
         preg_match('/data-ttd="([^"]+)"/', $tag, $tm); $ttdId = $tm[1] ?? '';
-        preg_match('/data-label="([^"]+)"/', $tag, $lm); $label = $lm[1] ?? 'Tanda Tangan';
+        preg_match('/data-label="([^"]+)"/', $tag, $lm); $label = $lm[1] ?? t('fallback.signature', [], 'Signature');
         preg_match('/data-nama-field="([^"]+)"/', $tag, $nm); $namaField = $nm[1] ?? 'nama_' . $ttdId;
         preg_match('/data-pos-x="([^"]+)"/', $tag, $xm); $posX = $xm[1] ?? '50';
         preg_match('/data-pos-y="([^"]+)"/', $tag, $ym); $posY = $ym[1] ?? '100';
@@ -830,16 +855,16 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         $modeToggle = '';
         if ($hasBoth) {
             $modeToggle = '<div class="ttd-mode-toggle">
-                <button type="button" class="ttd-mode-btn ' . ($activeMode === 'image' ? 'active' : '') . '" onclick="switchTtdMode(\'' . h($ttdId) . '\', \'image\')">Gambar</button>
-                <button type="button" class="ttd-mode-btn ' . ($activeMode === 'qr' ? 'active' : '') . '" onclick="switchTtdMode(\'' . h($ttdId) . '\', \'qr\')">QR</button>
+                <button type="button" class="ttd-mode-btn ' . ($activeMode === 'image' ? 'active' : '') . '" onclick="switchTtdMode(\'' . h($ttdId) . '\', \'image\')">' . h(t('ttd.mode_image', [], 'Image')) . '</button>
+                <button type="button" class="ttd-mode-btn ' . ($activeMode === 'qr' ? 'active' : '') . '" onclick="switchTtdMode(\'' . h($ttdId) . '\', \'qr\')">' . h(t('ttd.mode_qr', [], 'QR')) . '</button>
             </div>';
         }
 
         // Image area — kalau user tidak allowed sign, disable interaksi + tampil badge lock
         if ($canSignThisTtd) {
             $actionsHtml = '<div class="ttd-actions">
-                <button type="button" class="btn-edit" onclick="openSign(\'' . h($ttdId) . '\', \'' . h($label) . '\')">&#9998; Edit</button>
-                <button type="button" class="btn-delete" onclick="clearTtd(\'' . h($ttdId) . '\')">&#10005; Hapus</button>
+                <button type="button" class="btn-edit" onclick="openSign(\'' . h($ttdId) . '\', \'' . h($label) . '\')">&#9998; ' . h(t('actions.edit', [], 'Edit')) . '</button>
+                <button type="button" class="btn-delete" onclick="clearTtd(\'' . h($ttdId) . '\')">&#10005; ' . h(t('actions.delete', [], 'Delete')) . '</button>
             </div>';
             $imgContent = $ttdImg
                 ? '<img src="' . h($ttdImg) . '" class="ttd-signature" alt="TTD">' . $actionsHtml
@@ -847,10 +872,10 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         } else {
             // Not allowed — read-only display, no edit button, no clickable canvas
             $rolesHint = $allowedRolesRaw !== '' ? ' (' . h($allowedRolesRaw) . ')' : '';
-            $lockBadge = '<div class="ttd-locked-badge" style="position:absolute;top:2px;right:2px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:600;z-index:5;pointer-events:none;" title="Anda tidak berhak sign' . h($rolesHint) . '"><i class="fa fa-lock"></i></div>';
+            $lockBadge = '<div class="ttd-locked-badge" style="position:absolute;top:2px;right:2px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:600;z-index:5;pointer-events:none;" title="' . h(t('title.no_sign_permission', ['roles' => $rolesHint], 'Not authorized to sign{roles}')) . '"><i class="fa fa-lock"></i></div>';
             $imgContent = $ttdImg
                 ? '<img src="' . h($ttdImg) . '" class="ttd-signature" alt="TTD">' . $lockBadge
-                : '<div class="ttd-canvas-placeholder ttd-locked" style="cursor:not-allowed;background:#f3f4f6;position:relative;" title="Anda tidak berhak sign sebagai ' . h($label) . h($rolesHint) . '">' . $lockBadge . '</div>';
+                : '<div class="ttd-canvas-placeholder ttd-locked" style="cursor:not-allowed;background:#f3f4f6;position:relative;" title="' . h(t('title.no_sign_permission_as', ['label' => $label, 'roles' => $rolesHint], 'Not authorized to sign as {label}{roles}')) . '">' . $lockBadge . '</div>';
         }
         $imgDisplay = ($activeMode === 'image' || !$hasQr) ? '' : 'display:none;';
         $imgArea = '<div class="ttd-area-image" id="ttd_area_image_' . h($ttdId) . '" style="' . $imgDisplay . '">' . $imgContent . '</div>';
@@ -890,7 +915,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             $qrArea = '<div class="ttd-area-qr" id="ttd_area_qr_' . h($ttdId) . '" style="' . $qrDisplay . '">
                 <div class="ttd-qr-preview" id="ttd_qr_preview_' . h($ttdId) . '"></div>
                 <input type="hidden" class="ttd-qr-content-input" name="' . h($qrContentKey) . '" id="ttd_qr_content_' . h($ttdId) . '" value="' . h($qrContent) . '">
-                <button type="button" class="btn-edit-qr-content" onclick="editQrContent(\'' . h($ttdId) . '\', \'' . h($patternForJs) . '\')" title="Edit isi QR" style="display:block;margin:4px auto 0;font-size:10px;padding:2px 8px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;">&#9998; Edit QR</button>
+                <button type="button" class="btn-edit-qr-content" onclick="editQrContent(\'' . h($ttdId) . '\', \'' . h($patternForJs) . '\')" title="' . h(t('title.edit_qr_content', [], 'Edit QR content')) . '" style="display:block;margin:4px auto 0;font-size:10px;padding:2px 8px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;">&#9998; ' . h(t('ttd.edit_qr_button', [], 'Edit QR')) . '</button>
             </div>';
         }
 
@@ -916,10 +941,10 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         $verifyQrArea = '<div class="ttd-area-verify-qr" id="ttd_area_verify_qr_' . h($ttdId) . '" style="' . $verifyQrDisplay . 'text-align:center;">'
             . '<div class="ttd-verify-qr-preview" id="ttd_verify_qr_preview_' . h($ttdId) . '" data-verify-url="' . h($verifyUrlForTtd) . '">'
             . ($verifyUrlForTtd === ''
-                ? '<small style="color:#f59e0b;font-size:10px;">Simpan dokumen dulu</small>'
-                : '<small style="color:#888;font-size:10px;">Loading QR...</small>')
+                ? '<small style="color:#f59e0b;font-size:10px;">' . h(t('ttd.save_first', [], 'Save document first')) . '</small>'
+                : '<small style="color:#888;font-size:10px;">' . h(t('ttd.loading_qr', [], 'Loading QR...')) . '</small>')
             . '</div>'
-            . '<div style="font-size:9px;color:#666;margin-top:2px;">Scan untuk verifikasi</div>'
+            . '<div style="font-size:9px;color:#666;margin-top:2px;">' . h(t('ttd.scan_to_verify', [], 'Scan to verify')) . '</div>'
             . '</div>';
 
         return '<div class="' . $ttdClass . '" style="' . $style . '">
@@ -986,25 +1011,25 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         $imgInner = '';
         if ($matMode === 'kosong') {
             // Always show the empty area (for manual stamping)
-            $imgInner = '<div class="materai-empty-box" style="' . $sizeStyle . '" title="Area materai (tempel manual)"></div>';
+            $imgInner = '<div class="materai-empty-box" style="' . $sizeStyle . '" title="' . h(t('title.materai_manual_area', [], 'Materai area (manual stamp)')) . '"></div>';
         } else {
             // Upload mode
             if ($matImg) {
                 $imgInner = '<img src="' . h($matImg) . '" class="materai-image" alt="Materai" style="max-width:' . $matW . 'px;max-height:' . $matH . 'px;">';
                 if (!$param_is_locked) {
                     $imgInner .= '<div class="materai-actions">
-                        <label for="' . $fileInputId . '" class="btn-edit" style="cursor:pointer;">&#9998; Ganti</label>
-                        <button type="button" class="btn-delete" onclick="clearMaterai(\'' . h($materaiId) . '\')">&#10005; Hapus</button>
+                        <label for="' . $fileInputId . '" class="btn-edit" style="cursor:pointer;">&#9998; ' . h(t('materai.replace', [], 'Replace')) . '</label>
+                        <button type="button" class="btn-delete" onclick="clearMaterai(\'' . h($materaiId) . '\')">&#10005; ' . h(t('actions.delete', [], 'Delete')) . '</button>
                     </div>';
                 }
             } else {
                 if (!$param_is_locked) {
                     // Use <label for=""> so click reliably opens hidden file input
                     $imgInner = '<label for="' . $fileInputId . '" class="materai-upload-box" style="' . $sizeStyle . 'cursor:pointer;">
-                        <strong>UPLOAD<br>e-MATERAI</strong>
+                        <strong>' . t('materai.upload_prompt', [], 'UPLOAD<br>e-MATERAI') . '</strong>
                     </label>';
                 } else {
-                    $imgInner = '<div class="materai-empty-box" style="' . $sizeStyle . '" title="Belum di-upload"></div>';
+                    $imgInner = '<div class="materai-empty-box" style="' . $sizeStyle . '" title="' . h(t('title.materai_not_uploaded', [], 'Not uploaded yet')) . '"></div>';
                 }
             }
         }
@@ -1016,7 +1041,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         $serialInput = '';
         if ($matMode === 'upload' && !$param_is_locked) {
             $fileInput = '<input type="file" id="' . $fileInputId . '" accept="image/png,image/jpeg" style="position:absolute;left:-9999px;opacity:0;width:0;height:0;" onchange="handleMateraiUpload(this, \'' . h($materaiId) . '\')">';
-            $serialInput = '<input type="text" class="materai-serial-input" name="' . h($serialKey) . '" id="materai_serial_' . h($materaiId) . '" value="' . $matSerial . '" placeholder="No. Seri (opsional)" maxlength="30">';
+            $serialInput = '<input type="text" class="materai-serial-input" name="' . h($serialKey) . '" id="materai_serial_' . h($materaiId) . '" value="' . $matSerial . '" placeholder="' . h(t('placeholder.materai_serial', [], 'Serial No. (optional)')) . '" maxlength="30">';
         } elseif ($matMode === 'upload' && $param_is_locked) {
             // Locked: still expose serial as readonly hidden so it persists in form data
             $serialInput = '<input type="hidden" name="' . h($serialKey) . '" value="' . $matSerial . '">';
@@ -1072,18 +1097,18 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         if ($qrDataRaw) {
             $qrSrc = generateQrForDompdf($qrDataRaw, 200, 5);
             // Kalau sudah ada value → tampil QR. Klik → modal untuk edit
-            $qrImgHtml = '<img src="' . $qrSrc . '" class="qr-img" style="width:100%;height:auto;cursor:pointer;" alt="QR" id="qrimg_' . h($fieldName) . '" onclick="openQrFieldModal(\'' . h($fieldName) . '\')" title="Klik untuk edit isi QR">';
+            $qrImgHtml = '<img src="' . $qrSrc . '" class="qr-img" style="width:100%;height:auto;cursor:pointer;" alt="QR" id="qrimg_' . h($fieldName) . '" onclick="openQrFieldModal(\'' . h($fieldName) . '\')" title="' . h(t('title.click_edit_qr', [], 'Click to edit QR content')) . '">';
         } else {
             // Kosong → placeholder clickable. Klik → modal muncul dengan default verify_url
-            $qrImgHtml = '<div class="qr-canvas-placeholder" onclick="openQrFieldModal(\'' . h($fieldName) . '\')" style="cursor:pointer;" title="Klik untuk generate QR (default: URL verifikasi)"></div>';
+            $qrImgHtml = '<div class="qr-canvas-placeholder" onclick="openQrFieldModal(\'' . h($fieldName) . '\')" style="cursor:pointer;" title="' . h(t('title.click_generate_qr', [], 'Click to generate QR (default: verification URL)')) . '"></div>';
         }
 
         // Klik container QR → buka modal (onclick di parent, jadi bekerja bahkan setelah updateQrPreview replace innerHTML)
         return '<div class="' . $qrClass . '" style="' . $style . '" data-qr-field="' . h($fieldName) . '">
-            <div class="qr-preview" id="qrpreview_' . h($fieldName) . '" onclick="openQrFieldModal(\'' . h($fieldName) . '\')" style="cursor:pointer;" title="Klik untuk isi/edit QR">' . $qrImgHtml . '</div>
+            <div class="qr-preview" id="qrpreview_' . h($fieldName) . '" onclick="openQrFieldModal(\'' . h($fieldName) . '\')" style="cursor:pointer;" title="' . h(t('title.click_fill_edit_qr', [], 'Click to fill/edit QR')) . '">' . $qrImgHtml . '</div>
             <div class="qr-input" style="display:none;">
                 <input type="text" class="qr-field" id="qrinput_' . h($fieldName) . '" name="' . h($fieldName) . '"
-                    value="' . h($qrDataRaw) . '" placeholder="Data QR..." onchange="updateQrPreview(\'' . h($fieldName) . '\')">
+                    value="' . h($qrDataRaw) . '" placeholder="' . h(t('placeholder.qr_data', [], 'QR data...')) . '" onchange="updateQrPreview(\'' . h($fieldName) . '\')">
             </div>
         </div>';
     }, $html);
@@ -1187,7 +1212,7 @@ function renderFieldInput($name, $type, $val, $options, $label, $validation = []
     if (isset($validation['max']) && $validation['max'] !== '') $vAttrs .= ' data-v-max="' . h($validation['max']) . '"';
     if (!empty($validation['pattern'])) $vAttrs .= ' data-v-pattern="' . h($validation['pattern']) . '"';
     if (!empty($validation['errorMsg'])) $vAttrs .= ' data-v-error-msg="' . h($validation['errorMsg']) . '"';
-    $reqMark = !empty($validation['required']) ? '<span class="field-required-mark" title="Wajib diisi">*</span>' : '';
+    $reqMark = !empty($validation['required']) ? '<span class="field-required-mark" title="' . h(t('validation.required', [], 'Required')) . '">*</span>' : '';
 
     switch ($type) {
         case 'number':
@@ -1217,7 +1242,7 @@ function renderFieldInput($name, $type, $val, $options, $label, $validation = []
         case 'select':
             $opts = array_map('trim', explode(',', $options));
             $html = '<select class="field-select" name="' . $hName . '" data-field="' . $hName . '">';
-            $html .= '<option value="">-- Pilih --</option>';
+            $html .= '<option value="">' . h(t('field.select_placeholder', [], '-- Select --')) . '</option>';
             foreach ($opts as $opt) {
                 $hOpt = h($opt);
                 $selected = ($val === $opt) ? ' selected' : '';
@@ -1396,7 +1421,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         $pdfHtml .= '<div class="ttd-wrap">';
         foreach ($configTtd as $ttd) {
             $ttdId = $ttd['id'];
-            $label = h($ttd['label'] ?? 'Tanda Tangan');
+            $label = h($ttd['label'] ?? t('fallback.signature', [], 'Signature'));
             $namaField = $ttd['nama_field'] ?? 'nama_' . $ttdId;
             $namaValue = h($pdfFields[$namaField] ?? '');
             $ttdImg = $ttdValues[$ttdId] ?? '';
@@ -1493,7 +1518,7 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
         $tag = $m[1];
         preg_match('/class="([^"]*)"/', $tag, $cm); $classes = $cm[1] ?? '';
         preg_match('/data-ttd="([^"]+)"/', $tag, $tm); $ttdId = $tm[1] ?? '';
-        preg_match('/data-label="([^"]+)"/', $tag, $lm); $label = $lm[1] ?? 'Tanda Tangan';
+        preg_match('/data-label="([^"]+)"/', $tag, $lm); $label = $lm[1] ?? t('fallback.signature', [], 'Signature');
         preg_match('/data-nama-field="([^"]+)"/', $tag, $nm); $namaField = $nm[1] ?? 'nama_' . $ttdId;
         preg_match('/data-pos-x="([^"]+)"/', $tag, $xm); $posX = $xm[1] ?? '50';
         preg_match('/data-pos-y="([^"]+)"/', $tag, $ym); $posY = $ym[1] ?? '100';
@@ -1551,8 +1576,8 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
             if ($verifyUrlPdf !== '') {
                 try {
                     $qrSrc = generateQrForDompdf($verifyUrlPdf, 250, 6);
-                    $contentHtml = '<img src="' . $qrSrc . '" style="width:100px;height:100px;max-width:none;max-height:none;" alt="QR Verifikasi">'
-                        . '<div style="font-size:9px;color:#666;margin-top:2px;">Scan untuk verifikasi</div>';
+                    $contentHtml = '<img src="' . $qrSrc . '" style="width:100px;height:100px;max-width:none;max-height:none;" alt="' . h(t('ttd.verify_qr_alt', [], 'Verification QR')) . '">'
+                        . '<div style="font-size:9px;color:#666;margin-top:2px;">' . h(t('ttd.scan_to_verify', [], 'Scan to verify')) . '</div>';
                 } catch (Exception $e) {
                     $contentHtml = '<div style="height:100px;"></div>';
                 }
@@ -2588,7 +2613,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
             <div class="ttd-wrap">
                 <?php foreach ($configTtd as $ttd): ?>
                 <div class="ttd-item">
-                    <div class="ttd-label"><?= h($ttd['label'] ?? 'Tanda Tangan') ?></div>
+                    <div class="ttd-label"><?= h($ttd['label'] ?? t('fallback.signature', [], 'Signature')) ?></div>
                     <div class="ttd-img" id="preview_<?= h($ttd['id']) ?>">
                         <?php if (!empty($ttdValues[$ttd['id']])): ?>
                         <img src="<?= h($ttdValues[$ttd['id']]) ?>" alt="TTD">
@@ -2613,7 +2638,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
 
         <!-- TOOLBAR V1 Style -->
         <div class="toolbar" id="toolbarPanel">
-            <button type="button" class="toolbar-toggle" id="toolbarToggleBtn" onclick="toggleToolbar()" title="Tampilkan/Sembunyikan Toolbar">&#9776;</button>
+            <button type="button" class="toolbar-toggle" id="toolbarToggleBtn" onclick="toggleToolbar()" title="<?= h(t('title.toggle_toolbar', [], 'Show/Hide Toolbar')) ?>">&#9776;</button>
             <div class="toolbar-body">
                 <!-- ═══ HEADER (compact 1-line stack) ═══ -->
                 <div class="flex items-center justify-between gap-1 mb-1">
@@ -2629,18 +2654,18 @@ function renderFieldForPdf($name, $type, $val, $label) {
                                     <?php endif; ?>
                                 </span>
                             <?php else: ?>
-                                · <span class="text-amber-400">Baru</span>
+                                · <span class="text-amber-400"><?= t('toolbar.new', [], 'New') ?></span>
                             <?php endif; ?>
                         </div>
                     </div>
                     <?php if ($isEditMode): ?>
-                    <button class="!bg-gray-700 !text-gray-300 hover:!bg-gray-600 !rounded-full !w-[18px] !h-[18px] !p-0 !m-0 !text-[10px] !leading-none flex-shrink-0" type="button" onclick="showDocInfo()" title="Detail dokumen">i</button>
+                    <button class="!bg-gray-700 !text-gray-300 hover:!bg-gray-600 !rounded-full !w-[18px] !h-[18px] !p-0 !m-0 !text-[10px] !leading-none flex-shrink-0" type="button" onclick="showDocInfo()" title="<?= t('toolbar.document_details', [], 'Document details') ?>">i</button>
                     <?php endif; ?>
                 </div>
                 <?php if ($param_is_deleted): ?>
                 <div class="bg-red-900 text-white p-1.5 rounded-md mb-1.5 text-[10px] text-center border border-dashed border-red-300">
-                    <i class="bi bi-trash-fill"></i> <strong>TERHAPUS</strong> · <?= h(date('d/m/Y', strtotime($param_deleted_at))) ?>
-                    <div class="text-[9px] text-[#fecaca]">Oleh: <?= h($param_deleted_by ?: '-') ?></div>
+                    <i class="bi bi-trash-fill"></i> <strong><?= t('toolbar.deleted', [], 'DELETED') ?></strong> · <?= h(date('d/m/Y', strtotime($param_deleted_at))) ?>
+                    <div class="text-[9px] text-[#fecaca]"><?= t('toolbar.deleted_by', ['name' => h($param_deleted_by ?: '-')], 'By: {name}') ?></div>
                 </div>
                 <?php endif; ?>
                 <div class="border-t border-gray-700 mb-2"></div>
@@ -2657,40 +2682,40 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 <div class="meta-section">
                     <?php if ($isGeneralDoc): ?>
                         <div class="bg-indigo-950 text-indigo-300 py-1 px-1.5 rounded text-[10px] mb-1.5 leading-tight">
-                            <i class="bi bi-info-circle"></i> Surat Umum
+                            <i class="bi bi-info-circle"></i> <?= h(t('toolbar.general_letter', [], 'General Letter')) ?>
                         </div>
                         <input type="hidden" name="_norm" id="inputNorm" value="">
                         <input type="hidden" name="_nopen" id="inputNopen" value="">
-                        <label>Label <span class="text-red-400">*</span></label>
-                        <input type="text" name="_label" id="inputLabel" value="<?= h($param_label) ?>" placeholder="- (default)" <?= $param_is_locked ? 'readonly' : '' ?>>
+                        <label><?= h(t('toolbar.label', [], 'Label')) ?> <span class="text-red-400">*</span></label>
+                        <input type="text" name="_label" id="inputLabel" value="<?= h($param_label) ?>" placeholder="<?= h(t('placeholder.default_dash', [], '- (default)')) ?>" <?= $param_is_locked ? 'readonly' : '' ?>>
                     <?php else: ?>
                         <div class="meta-grid">
                             <div>
-                                <label>NORM <span class="text-red-400">*</span></label>
-                                <input type="text" name="_norm" id="inputNorm" value="<?= h($param_norm) ?>" placeholder="No RM" required <?= $param_is_locked ? 'readonly' : '' ?>>
+                                <label><?= h(t('toolbar.norm', [], 'NORM')) ?> <span class="text-red-400">*</span></label>
+                                <input type="text" name="_norm" id="inputNorm" value="<?= h($param_norm) ?>" placeholder="<?= h(t('placeholder.norm_hint', [], 'No RM')) ?>" required <?= $param_is_locked ? 'readonly' : '' ?>>
                             </div>
                             <div>
-                                <label>NOPEN <span class="text-red-400">*</span></label>
-                                <input type="text" name="_nopen" id="inputNopen" value="<?= h($param_nopen) ?>" placeholder="Pendaftaran" required <?= $param_is_locked ? 'readonly' : '' ?>>
+                                <label><?= h(t('toolbar.nopen', [], 'NOPEN')) ?> <span class="text-red-400">*</span></label>
+                                <input type="text" name="_nopen" id="inputNopen" value="<?= h($param_nopen) ?>" placeholder="<?= h(t('placeholder.nopen_hint', [], 'Registration')) ?>" required <?= $param_is_locked ? 'readonly' : '' ?>>
                             </div>
                         </div>
-                        <label>Label <span class="text-gray-500 normal-case">(opsional)</span></label>
-                        <input type="text" name="_label" id="inputLabel" value="<?= h($param_label) ?>" placeholder="- (default)" <?= $param_is_locked ? 'readonly' : '' ?>>
+                        <label><?= h(t('toolbar.label', [], 'Label')) ?> <span class="text-gray-500 normal-case">(<?= h(t('toolbar.optional', [], 'optional')) ?>)</span></label>
+                        <input type="text" name="_label" id="inputLabel" value="<?= h($param_label) ?>" placeholder="<?= h(t('placeholder.default_dash', [], '- (default)')) ?>" <?= $param_is_locked ? 'readonly' : '' ?>>
                     <?php endif; ?>
                     <?php if ($isEditMode): ?>
-                    <label>Versi</label>
+                    <label><?= h(t('toolbar.version_label', [], 'Version')) ?></label>
                     <select id="versionSelect" onchange="switchVersion(this.value)">
-                        <option value="<?= $param_version ?>">v<?= $param_version ?> (current)</option>
+                        <option value="<?= $param_version ?>">v<?= $param_version ?> <?= h(t('toolbar.version_current_suffix', [], '(current)')) ?></option>
                     </select>
                     <?php endif; ?>
                 </div>
 
                 <!-- ═══ PRIMARY ROW: Update (2/3) + Print (1/3 icon) ═══ -->
                 <div class="grid grid-cols-3 gap-1 mt-1">
-                    <button type="button" class="btn-success col-span-2 !m-0 !py-1.5 !text-[12px]" onclick="submitForm()" <?= $param_is_locked ? 'disabled title="Locked - tidak bisa update"' : '' ?>>
-                        <?= $isEditMode ? ($param_is_locked ? '🔒 Locked' : 'Update') : 'Simpan Baru' ?>
+                    <button type="button" class="btn-success col-span-2 !m-0 !py-1.5 !text-[12px]" onclick="submitForm()" <?= $param_is_locked ? 'disabled title="' . h(t('title.locked_cannot_update', [], 'Locked - cannot update')) . '"' : '' ?>>
+                        <?= $isEditMode ? ($param_is_locked ? '🔒 ' . h(t('toolbar.locked', [], 'Locked')) : h(t('toolbar.update', [], 'Update'))) : h(t('toolbar.save_new', [], 'Save New')) ?>
                     </button>
-                    <button type="button" class="!m-0 !py-1.5 !px-1 !text-[11px]" onclick="window.print()" title="Print (Ctrl+P)"><i class="bi bi-printer"></i> Print</button>
+                    <button type="button" class="!m-0 !py-1.5 !px-1 !text-[11px]" onclick="window.print()" title="<?= h(t('title.print_shortcut', [], 'Print (Ctrl+P)')) ?>"><i class="bi bi-printer"></i> <?= h(t('toolbar.print', [], 'Print')) ?></button>
                 </div>
 
                 <?php // Slot: toolbar-extra-actions — consumer buttons (Export Excel, WhatsApp, Email PDF, e-Sign, Copy Link) ?>
@@ -2701,14 +2726,14 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 ]) ?>
 
                 <?php if ($isEditMode && $param_is_deleted && $isSuperadmin): ?>
-                    <button class="bg-green-600 mt-2" type="button" onclick="restoreDeletedSlot()" title="Pulihkan slot ini">
-                        <i class="bi bi-arrow-counterclockwise"></i> Restore Slot
+                    <button class="bg-green-600 mt-2" type="button" onclick="restoreDeletedSlot()" title="<?= h(t('title.restore_slot', [], 'Restore this slot')) ?>">
+                        <i class="bi bi-arrow-counterclockwise"></i> <?= h(t('toolbar.restore_slot', [], 'Restore Slot')) ?>
                     </button>
                     <?php if ($urlTrashList !== ''):
                         $__trashHref = str_replace('{template_id}', (string)$template_id, $urlTrashList);
                     ?>
                     <a href="<?= h($__trashHref) ?>" style="background:#374151;color:#fff;padding:6px 10px;border-radius:4px;text-decoration:none;display:inline-block;text-align:center;font-size:13px;margin-top:4px;">
-                        <i class="bi bi-arrow-left"></i> Trash List
+                        <i class="bi bi-arrow-left"></i> <?= h(t('toolbar.trash_list', [], 'Trash List')) ?>
                     </a>
                     <?php endif; ?>
                 <?php else: ?>
@@ -2720,29 +2745,29 @@ function renderFieldForPdf($name, $type, $val, $label) {
                         <div class="border-t border-gray-700 pt-1.5">
                             <button type="button" @click="open = (open === 'more' ? '' : 'more')"
                                     class="!bg-transparent !text-gray-400 hover:!text-gray-100 !py-0.5 !px-1 !text-[10px] !m-0 flex items-center gap-1 w-full uppercase tracking-wider">
-                                <i class="bi bi-chevron-right text-[9px]" :class="open === 'more' && 'rotate-90'" style="transition:transform .15s"></i>Lainnya
+                                <i class="bi bi-chevron-right text-[9px]" :class="open === 'more' && 'rotate-90'" style="transition:transform .15s"></i><?= h(t('toolbar.more', [], 'More')) ?>
                             </button>
                             <div x-show="open === 'more'" x-collapse>
                                 <div class="icon-grid mt-1.5">
                                     <button type="button" id="btnToggleVerifyQr"
                                             onclick="toggleVerifyQrMode()"
-                                            title="Ganti TTD gambar dengan QR verifikasi"
+                                            title="<?= h(t('title.toggle_verify_qr', [], 'Replace signature image with verification QR')) ?>"
                                             class="wide"
                                             style="background:<?= $__showVerifyQrInit ? '#0d9488' : '#475569' ?>;color:#fff;">
                                         <i class="bi bi-qr-code"></i>
-                                        <span>QR: <span id="btnToggleVerifyQrLabel"><?= $__showVerifyQrInit ? 'ON' : 'OFF' ?></span></span>
+                                        <span>QR: <span id="btnToggleVerifyQrLabel"><?= $__showVerifyQrInit ? h(t('toolbar.qr_status_on', [], 'ON')) : h(t('toolbar.qr_status_off', [], 'OFF')) ?></span></span>
                                     </button>
                                     <?php if ($isEditMode): ?>
                                         <?php if (!$param_is_locked): ?>
-                                            <button class="bg-gray-500" type="button" id="btnDocLock" onclick="toggleDocLock()" title="Kunci versi ini (final)"><i class="bi bi-lock"></i>Lock Final</button>
+                                            <button class="bg-gray-500" type="button" id="btnDocLock" onclick="toggleDocLock()" title="<?= h(t('title.lock_final', [], 'Lock this version (final)')) ?>"><i class="bi bi-lock"></i><?= h(t('toolbar.lock_final', [], 'Lock Final')) ?></button>
                                         <?php elseif ($isSuperadmin): ?>
-                                            <button class="bg-amber-500" type="button" id="btnDocLock" onclick="toggleDocLock()" title="Unlock versi ini (superadmin)"><i class="bi bi-unlock"></i>Unlock</button>
+                                            <button class="bg-amber-500" type="button" id="btnDocLock" onclick="toggleDocLock()" title="<?= h(t('title.unlock_version', [], 'Unlock this version (superadmin)')) ?>"><i class="bi bi-unlock"></i><?= h(t('toolbar.unlock', [], 'Unlock')) ?></button>
                                         <?php else: ?>
-                                            <button class="bg-gray-600 opacity-60 cursor-not-allowed" type="button" disabled title="Locked — unlock hanya oleh superadmin"><i class="bi bi-lock-fill"></i>Locked</button>
+                                            <button class="bg-gray-600 opacity-60 cursor-not-allowed" type="button" disabled title="<?= h(t('title.locked_superadmin_only', [], 'Locked — only superadmin can unlock')) ?>"><i class="bi bi-lock-fill"></i><?= h(t('toolbar.locked', [], 'Locked')) ?></button>
                                         <?php endif; ?>
-                                        <button class="bg-violet-500" type="button" onclick="showNewVersionModal()" title="Buat versi baru"><i class="bi bi-plus-circle"></i>Versi Baru</button>
+                                        <button class="bg-violet-500" type="button" onclick="showNewVersionModal()" title="<?= h(t('title.new_version', [], 'Create new version')) ?>"><i class="bi bi-plus-circle"></i><?= h(t('toolbar.new_version', [], 'New Version')) ?></button>
                                     <?php endif; ?>
-                                    <button class="!bg-slate-600 wide" type="button" onclick="showShortcutsHelp()" title="Keyboard shortcuts (Ctrl+/)"><i class="bi bi-keyboard"></i>Shortcuts</button>
+                                    <button class="!bg-slate-600 wide" type="button" onclick="showShortcutsHelp()" title="<?= h(t('title.shortcuts', [], 'Keyboard shortcuts (Ctrl+/)')) ?>"><i class="bi bi-keyboard"></i><?= h(t('toolbar.shortcuts', [], 'Shortcuts')) ?></button>
                                 </div>
                             </div>
                         </div>
@@ -2752,13 +2777,13 @@ function renderFieldForPdf($name, $type, $val, $label) {
                         <div class="border-t border-gray-700 mt-1 pt-1.5">
                             <button type="button" @click="open = (open === 'admin' ? '' : 'admin')"
                                     class="!bg-transparent !text-amber-400 hover:!text-amber-200 !py-0.5 !px-1 !text-[10px] !m-0 flex items-center gap-1 w-full uppercase tracking-wider">
-                                <i class="bi bi-chevron-right text-[9px]" :class="open === 'admin' && 'rotate-90'" style="transition:transform .15s"></i><i class="bi bi-shield-lock text-[9px]"></i>Admin
+                                <i class="bi bi-chevron-right text-[9px]" :class="open === 'admin' && 'rotate-90'" style="transition:transform .15s"></i><i class="bi bi-shield-lock text-[9px]"></i><?= h(t('toolbar.admin', [], 'Admin')) ?>
                             </button>
                             <div x-show="open === 'admin'" x-collapse>
                                 <div class="icon-grid mt-1.5">
-                                    <button class="!bg-emerald-700 hover:!bg-emerald-600<?= $isEditMode ? '' : ' wide' ?>" type="button" onclick="viewPdfRaw()" title="Lihat hasil PDF mentah"><i class="bi bi-file-earmark-pdf"></i>PDF Raw</button>
+                                    <button class="!bg-emerald-700 hover:!bg-emerald-600<?= $isEditMode ? '' : ' wide' ?>" type="button" onclick="viewPdfRaw()" title="<?= h(t('title.view_pdf_raw', [], 'View raw PDF output')) ?>"><i class="bi bi-file-earmark-pdf"></i><?= h(t('toolbar.pdf_raw', [], 'PDF Raw')) ?></button>
                                     <?php if ($isEditMode): ?>
-                                        <button type="button" onclick="deleteThisVersion()" class="!bg-red-700 hover:!bg-red-600" <?= $param_is_locked ? 'disabled title="Locked - unlock dulu"' : 'title="Hapus versi ini"' ?>><i class="bi bi-trash"></i>Hapus</button>
+                                        <button type="button" onclick="deleteThisVersion()" class="!bg-red-700 hover:!bg-red-600" <?= $param_is_locked ? 'disabled title="' . h(t('title.delete_version_locked', [], 'Locked - unlock first')) . '"' : 'title="' . h(t('title.delete_version', [], 'Delete this version')) . '"' ?>><i class="bi bi-trash"></i><?= h(t('actions.delete', [], 'Delete')) ?></button>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -2774,17 +2799,17 @@ function renderFieldForPdf($name, $type, $val, $label) {
     <!-- Sign Modal - Fullscreen -->
     <div class="modal" id="signModal">
         <div class="modal-box">
-            <div class="modal-header" id="signTitle">Tanda Tangan</div>
+            <div class="modal-header" id="signTitle"><?= h(t('fallback.signature', [], 'Signature')) ?></div>
             <div class="modal-body">
                 <div class="w-full">
                     <canvas id="signCanvas" width="850" height="400"></canvas>
-                    <div class="sign-hint">Gambar tanda tangan di area di atas menggunakan mouse atau sentuhan layar</div>
+                    <div class="sign-hint"><?= h(t('modal.sign.hint', [], 'Draw your signature in the area above using your mouse or touchscreen')) ?></div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="bg-red-500 text-white" type="button" onclick="clearSign()">Hapus</button>
-                <button class="bg-green-500 text-white" type="button" onclick="saveSign()">Simpan</button>
-                <button class="bg-gray-500 text-white" type="button" onclick="closeSign()">Tutup</button>
+                <button class="bg-red-500 text-white" type="button" onclick="clearSign()"><?= h(t('actions.delete', [], 'Delete')) ?></button>
+                <button class="bg-green-500 text-white" type="button" onclick="saveSign()"><?= h(t('actions.save', [], 'Save')) ?></button>
+                <button class="bg-gray-500 text-white" type="button" onclick="closeSign()"><?= h(t('actions.close', [], 'Close')) ?></button>
             </div>
         </div>
     </div>
@@ -2793,33 +2818,33 @@ function renderFieldForPdf($name, $type, $val, $label) {
     <div class="modal hidden" id="qrFieldModal">
         <div class="modal-box max-w-[520px]">
             <div class="modal-header" style="background:linear-gradient(90deg,#3b82f6 0%,#6366f1 100%);color:#fff;">
-                <i class="bi bi-qr-code"></i> Isi QR Code
+                <i class="bi bi-qr-code"></i> <?= h(t('modal.qr_field.header_title', [], 'Fill QR Code')) ?>
             </div>
             <div class="modal-body p-5 block">
                 <p class="text-[13px] text-gray-700" style="margin:0 0 12px;">
-                    Pilih isi QR untuk field <strong id="qrFieldModalName">-</strong>:
+                    <?= h(t('modal.qr_field.choose_prompt', [], 'Choose QR content for field')) ?> <strong id="qrFieldModalName">-</strong>:
                 </p>
                 <div class="mb-3">
                     <label class="text-xs font-semibold text-gray-700 block mb-1">
                         <input class="mr-1.5" type="radio" name="qrFieldSource" value="verify" id="qrFieldSourceVerify" checked>
-                        Pakai URL Verifikasi Dokumen (Recommended)
+                        <?= h(t('modal.qr_field.use_verify_url', [], 'Use Document Verification URL (Recommended)')) ?>
                     </label>
                     <div class="p-2 bg-green-50 rounded text-[11px] text-green-800 ml-5 break-all" id="qrFieldVerifyBox" style="font-family:monospace;">-</div>
                     <div class="hidden ml-5 mt-1.5 text-amber-700 text-[11px]" id="qrFieldVerifyWarn">
-                        <i class="bi bi-exclamation-triangle"></i> Simpan dokumen dulu untuk generate URL verifikasi.
+                        <i class="bi bi-exclamation-triangle"></i> <?= h(t('modal.qr_field.save_first_warning', [], 'Save the document first to generate the verification URL.')) ?>
                     </div>
                 </div>
                 <div>
                     <label class="text-xs font-semibold text-gray-700 block mb-1">
                         <input class="mr-1.5" type="radio" name="qrFieldSource" value="custom" id="qrFieldSourceCustom">
-                        Isi manual (custom)
+                        <?= h(t('modal.qr_field.use_custom', [], 'Manual entry (custom)')) ?>
                     </label>
-                    <input class="w-[calc(100%_-_20px)] ml-5 p-1.5 text-xs border border-gray-300 rounded" type="text" id="qrFieldCustomInput" placeholder="Tulis isi QR di sini...">
+                    <input class="w-[calc(100%_-_20px)] ml-5 p-1.5 text-xs border border-gray-300 rounded" type="text" id="qrFieldCustomInput" placeholder="<?= h(t('modal.qr_field.custom_placeholder', [], 'Type QR content here...')) ?>">
                 </div>
             </div>
             <div class="modal-footer text-right">
-                <button class="bg-gray-500 text-white" type="button" onclick="closeQrFieldModal()">Batal</button>
-                <button class="bg-blue-500 text-white" type="button" id="btnQrFieldConfirm" onclick="confirmQrField()">OK, Isi QR</button>
+                <button class="bg-gray-500 text-white" type="button" onclick="closeQrFieldModal()"><?= h(t('actions.cancel', [], 'Cancel')) ?></button>
+                <button class="bg-blue-500 text-white" type="button" id="btnQrFieldConfirm" onclick="confirmQrField()"><?= h(t('modal.qr_field.confirm_button', [], 'OK, Fill QR')) ?></button>
             </div>
         </div>
     </div>
@@ -2828,27 +2853,27 @@ function renderFieldForPdf($name, $type, $val, $label) {
     <div class="modal hidden" id="verifyQrConfirmModal">
         <div class="modal-box max-w-[520px]">
             <div class="modal-header" style="background:linear-gradient(90deg,#0d9488 0%,#14b8a6 100%);color:#fff;">
-                <i class="bi bi-qr-code"></i> Aktifkan Mode QR Verifikasi
+                <i class="bi bi-qr-code"></i> <?= h(t('modal.verify_qr.header_title', [], 'Activate Verification QR Mode')) ?>
             </div>
             <div class="modal-body p-5">
                 <div id="verifyQrModalMain">
-                    <p style="margin:0 0 12px;">Semua <strong>TTD gambar</strong> di dokumen ini akan diganti dengan <strong>QR Verifikasi</strong>.</p>
-                    <p class="text-xs text-gray-500" style="margin:0 0 12px;">Berguna untuk share PDF/print — penerima scan QR → diarahkan ke halaman verifikasi resmi untuk cek keaslian dokumen.</p>
-                    <label class="text-xs text-gray-700 font-semibold">URL Verifikasi:</label>
+                    <p style="margin:0 0 12px;"><?= t('modal.verify_qr.main_desc_1', [], 'All <strong>signature images</strong> in this document will be replaced with a <strong>Verification QR</strong>.') ?></p>
+                    <p class="text-xs text-gray-500" style="margin:0 0 12px;"><?= h(t('modal.verify_qr.main_desc_2', [], 'Useful for sharing PDF/print — recipients scan the QR → directed to the official verification page to check document authenticity.')) ?></p>
+                    <label class="text-xs text-gray-700 font-semibold"><?= h(t('modal.verify_qr.url_label', [], 'Verification URL:')) ?></label>
                     <input class="w-full text-[11px] p-1.5 bg-gray-100 border border-gray-300 rounded mt-1" type="text" readonly id="verifyQrModalUrl" value="">
                     <div class="hidden text-amber-700 text-xs mt-2.5 p-2 bg-amber-100 rounded" id="verifyQrModalWarn">
                         <i class="bi bi-exclamation-triangle-fill"></i>
-                        <span id="verifyQrModalWarnMsg">Dokumen belum di-save. Klik "Simpan & Aktifkan" untuk simpan dulu baru aktifkan.</span>
+                        <span id="verifyQrModalWarnMsg"><?= h(t('modal.verify_qr.warn_not_saved', [], 'Document not saved yet. Click "Save & Activate" to save first, then activate.')) ?></span>
                     </div>
                 </div>
                 <div class="hidden text-center p-6" id="verifyQrModalSaving">
                     <div class="tw-spinner inline-block w-[2rem] h-[2rem] rounded-full" role="status" style="border:0.25em solid #cbd5e1;border-right-color:#3b82f6;animation:tw-spin 0.75s linear infinite;"></div>
-                    <div class="mt-2.5 text-[13px] text-gray-500">Menyimpan dokumen...</div>
+                    <div class="mt-2.5 text-[13px] text-gray-500"><?= h(t('modal.verify_qr.saving_text', [], 'Saving document...')) ?></div>
                 </div>
             </div>
             <div class="modal-footer text-right">
-                <button class="bg-gray-500 text-white" type="button" onclick="closeVerifyQrModal()">Batal</button>
-                <button class="bg-teal-600 text-white" type="button" id="btnVerifyQrConfirm" onclick="confirmVerifyQrMode()">OK, Aktifkan</button>
+                <button class="bg-gray-500 text-white" type="button" onclick="closeVerifyQrModal()"><?= h(t('actions.cancel', [], 'Cancel')) ?></button>
+                <button class="bg-teal-600 text-white" type="button" id="btnVerifyQrConfirm" onclick="confirmVerifyQrMode()"><?= h(t('modal.verify_qr.confirm_activate', [], 'OK, Activate')) ?></button>
             </div>
         </div>
     </div>
@@ -2870,6 +2895,26 @@ function renderFieldForPdf($name, $type, $val, $label) {
     <script>
         // spec: ezdoc-spec/js/url_bag.md — endpoint URLs injected server-side, JS reads from EZDOC_URLS
         window.EZDOC_URLS = <?= json_encode($ezdocUrls, JSON_UNESCAPED_SLASHES) ?>;
+
+        // i18n dictionary — mirrors EZDOC_URLS above. spec: docs/I18N.md
+        window.EZDOC_I18N = <?= json_encode($translator->all(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+
+        // Translate a dot-notation key against EZDOC_I18N, with {param} interpolation.
+        // Mirrors Ezdoc\UI\Config's own dot-path traversal (PHP side) so both stay in sync.
+        window.t = function(key, params) {
+            params = params || {};
+            var ref = window.EZDOC_I18N || {};
+            var segs = key.split('.');
+            for (var i = 0; i < segs.length; i++) {
+                if (ref && typeof ref === 'object' && segs[i] in ref) { ref = ref[segs[i]]; }
+                else { console.warn('[ezdoc:i18n] missing key', key); return key; }
+            }
+            if (typeof ref !== 'string') { console.warn('[ezdoc:i18n] non-string value', key); return key; }
+            return ref.replace(/\{(\w+)\}/g, function(m, name) {
+                return Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : m;
+            });
+        };
+        var t = window.t;
 
         // Resolve an endpoint URL by bag key. Falls back to same-page (window.location.href) for POST
         // routes (save, docAction) and to '?action=<key>' for generate_qr — preserves legacy behavior
@@ -3122,14 +3167,14 @@ function renderFieldForPdf($name, $type, $val, $label) {
             if (data === '{verify_url}' || data === '{verify}') {
                 const vu = document.getElementById('verifyUrlInput')?.value || '';
                 if (!vu) {
-                    preview.innerHTML = '<div class="p-2.5 text-amber-500 text-[10px]">Simpan dokumen dulu untuk generate verify URL</div>';
+                    preview.innerHTML = '<div class="p-2.5 text-amber-500 text-[10px]">' + t('ttd.save_first_for_verify_url', {}, 'Save document first to generate the verify URL') + '</div>';
                     return;
                 }
                 data = vu;
             }
 
             // Show loading
-            preview.innerHTML = '<div class="p-5 text-indigo-500 text-[11px]">Generating...</div>';
+            preview.innerHTML = '<div class="p-5 text-indigo-500 text-[11px]">' + t('ttd.generating', {}, 'Generating...') + '</div>';
 
             try {
                 const resp = await fetch(_ezdocQrUrl(data));
@@ -3242,29 +3287,29 @@ function renderFieldForPdf($name, $type, $val, $label) {
 
                 let err = '';
                 if (required && val === '') {
-                    err = customMsg || 'Wajib diisi';
+                    err = customMsg || t('validation.required', {}, 'Required');
                 } else if (val !== '') {
                     // Number type vs text length
                     const ctrlNum = wrap.querySelector('.field-number, input[type="number"]');
                     const isNumber = !!ctrlNum;
                     if (min !== null && min !== '' && min !== undefined) {
                         if (isNumber) {
-                            if (parseFloat(val) < parseFloat(min)) err = customMsg || ('Minimal nilai ' + min);
+                            if (parseFloat(val) < parseFloat(min)) err = customMsg || t('validation.min_value', {min: min}, 'Minimum value {min}');
                         } else {
-                            if (val.length < parseInt(min)) err = customMsg || ('Minimal ' + min + ' karakter');
+                            if (val.length < parseInt(min)) err = customMsg || t('validation.min_length', {min: min}, 'Minimum {min} characters');
                         }
                     }
                     if (!err && max !== null && max !== '' && max !== undefined) {
                         if (isNumber) {
-                            if (parseFloat(val) > parseFloat(max)) err = customMsg || ('Maksimal nilai ' + max);
+                            if (parseFloat(val) > parseFloat(max)) err = customMsg || t('validation.max_value', {max: max}, 'Maximum value {max}');
                         } else {
-                            if (val.length > parseInt(max)) err = customMsg || ('Maksimal ' + max + ' karakter');
+                            if (val.length > parseInt(max)) err = customMsg || t('validation.max_length', {max: max}, 'Maximum {max} characters');
                         }
                     }
                     if (!err && pattern) {
                         try {
                             const re = new RegExp(pattern);
-                            if (!re.test(val)) err = customMsg || 'Format tidak sesuai';
+                            if (!re.test(val)) err = customMsg || t('validation.pattern_mismatch', {}, 'Invalid format');
                         } catch (e) { /* invalid regex — skip */ }
                     }
                 }
@@ -3291,19 +3336,19 @@ function renderFieldForPdf($name, $type, $val, $label) {
             let label = (document.getElementById('inputLabel')?.value || '').trim();
             if (label === '') label = '-';
             if (!norm || !nopen) {
-                alert('No RM dan No Pendaftaran wajib diisi!');
+                alert(t('alert.identity_required', {}, 'MR No. and Registration No. are required!'));
                 return;
             }
 
             // Validate fields with data-v-* rules (#6)
             if (!validateAllFields()) {
-                showToast('Ada field yang belum valid. Periksa highlight merah.', 'error');
+                showToast(t('toast.invalid_fields', {}, 'Some fields are invalid. Check the red highlights.'), 'error');
                 return;
             }
 
             const btn = document.querySelector('.btn-success');
             const origText = btn.textContent;
-            btn.textContent = 'Menyimpan...';
+            btn.textContent = t('toolbar.saving', {}, 'Saving...');
             btn.disabled = true;
 
             const formData = new FormData(document.getElementById('mainForm'));
@@ -3385,9 +3430,9 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     } else {
                         // Existing doc: update UI + URL (history.replaceState so reload uses correct label)
                         document.getElementById('docIdInput').value = data.doc_id;
-                        document.querySelector('.doc-info').textContent = 'ID: ' + data.doc_id + ' (Edit)';
+                        document.querySelector('.doc-info').textContent = t('toolbar.doc_info_id_edit', {id: data.doc_id}, 'ID: {id} (Edit)');
                         document.querySelector('.doc-info').classList.remove('new');
-                        btn.textContent = 'Update';
+                        btn.textContent = t('toolbar.update', {}, 'Update');
                         btn.disabled = false;
                         try { history.replaceState(null, '', targetUrl); } catch (e) {}
                     }
@@ -3397,7 +3442,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     btn.disabled = false;
                 }
             } catch (e) {
-                showToast('Gagal menyimpan: ' + e.message, 'error');
+                showToast(t('toast.save_failed', {error: e.message}, 'Failed to save: {error}'), 'error');
                 btn.textContent = origText;
                 btn.disabled = false;
             }
@@ -3443,20 +3488,20 @@ function renderFieldForPdf($name, $type, $val, $label) {
             if (vu) {
                 urlDisplay.value = vu;
                 warnBox.style.display = 'none';
-                confirmBtn.textContent = 'OK, Aktifkan';
+                confirmBtn.textContent = t('modal.verify_qr.confirm_activate', {}, 'OK, Activate');
                 confirmBtn.disabled = false;
                 confirmBtn.dataset.needSave = '0';
             } else {
-                urlDisplay.value = '(akan digenerate setelah dokumen di-save)';
+                urlDisplay.value = t('modal.verify_qr.pending_url', {}, '(will be generated after the document is saved)');
                 warnBox.style.display = '';
-                confirmBtn.textContent = 'Simpan & Aktifkan';
+                confirmBtn.textContent = t('modal.verify_qr.save_and_activate', {}, 'Save & Activate');
                 confirmBtn.dataset.needSave = '1';
                 const norm = (document.getElementById('inputNorm')?.value || '').trim();
                 const nopen = (document.getElementById('inputNopen')?.value || '').trim();
                 const isGeneral = <?= (isset($isGeneralDoc) && $isGeneralDoc) ? 'true' : 'false' ?>;
                 if (!isGeneral && (!norm || !nopen)) {
                     document.getElementById('verifyQrModalWarnMsg').textContent =
-                        'NORM & Nopen wajib diisi dulu. Tutup modal ini → isi di sidebar kanan → klik toggle lagi.';
+                        t('modal.verify_qr.identity_required_warning', {}, 'NORM & Nopen must be filled in first. Close this modal → fill them in the right sidebar → click toggle again.');
                     confirmBtn.disabled = true;
                 } else {
                     confirmBtn.disabled = false;
@@ -3496,21 +3541,21 @@ function renderFieldForPdf($name, $type, $val, $label) {
             if (!preview) return;
             const verifyUrl = document.getElementById('verifyUrlInput')?.value || '';
             if (!verifyUrl) {
-                preview.innerHTML = '<small class="text-amber-500 text-[10px]">Simpan dokumen dulu</small>';
+                preview.innerHTML = '<small class="text-amber-500 text-[10px]">' + t('ttd.save_first', {}, 'Save document first') + '</small>';
                 return;
             }
-            preview.innerHTML = '<small class="text-gray-400 text-[10px]">Loading QR...</small>';
+            preview.innerHTML = '<small class="text-gray-400 text-[10px]">' + t('ttd.loading_qr', {}, 'Loading QR...') + '</small>';
             fetch(_ezdocQrUrl(verifyUrl))
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
-                        preview.innerHTML = `<img src="${data.qr}" class="w-[100px] h-[100px] max-w-[none] max-h-[none] object-contain block my-0 mx-auto" alt="QR Verifikasi" title="${verifyUrl.replace(/"/g, '&quot;')}">`;
+                        preview.innerHTML = `<img src="${data.qr}" class="w-[100px] h-[100px] max-w-[none] max-h-[none] object-contain block my-0 mx-auto" alt="${t('ttd.verify_qr_alt', {}, 'Verification QR')}" title="${verifyUrl.replace(/"/g, '&quot;')}">`;
                     } else {
-                        preview.innerHTML = `<small class="text-red-700 text-[10px]">QR gagal: ${data.message || 'error'}</small>`;
+                        preview.innerHTML = `<small class="text-red-700 text-[10px]">${t('ttd.qr_failed', {error: data.message || 'error'}, 'QR failed: {error}')}</small>`;
                     }
                 })
                 .catch(err => {
-                    preview.innerHTML = `<small class="text-red-700 text-[10px]">QR gagal: ${err.message}</small>`;
+                    preview.innerHTML = `<small class="text-red-700 text-[10px]">${t('ttd.qr_failed', {error: err.message}, 'QR failed: {error}')}</small>`;
                 });
         }
 
@@ -3541,7 +3586,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
             const isGeneral = <?= (isset($isGeneralDoc) && $isGeneralDoc) ? 'true' : 'false' ?>;
             if (!isGeneral && (!norm || !nopen)) {
                 closeVerifyQrModal();
-                showToast('NORM & Nopen wajib diisi dulu untuk save', 'error');
+                showToast(t('toast.identity_required_for_save', {}, 'NORM & Nopen must be filled in before saving'), 'error');
                 return;
             }
             try {
@@ -3550,7 +3595,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 const data = await resp.json();
                 if (!data.success) {
                     closeVerifyQrModal();
-                    showToast('Gagal simpan: ' + (data.message || 'error'), 'error');
+                    showToast(t('toast.save_failed', {error: data.message || 'error'}, 'Failed to save: {error}'), 'error');
                     return;
                 }
                 // Build URL untuk reload — pastikan doc_id + _show_verify_qr masuk
@@ -3569,7 +3614,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 window.location.href = url.toString();
             } catch (e) {
                 closeVerifyQrModal();
-                showToast('Gagal simpan: ' + e.message, 'error');
+                showToast(t('toast.save_failed', {error: e.message}, 'Failed to save: {error}'), 'error');
             }
         }
 
@@ -3605,7 +3650,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 if (radioVerify) radioVerify.disabled = false;
                 if (confirmBtn) confirmBtn.disabled = false;
             } else {
-                if (verifyBox) verifyBox.textContent = '(dokumen belum di-save)';
+                if (verifyBox) verifyBox.textContent = t('modal.qr_field.not_saved_placeholder', {}, '(document not saved yet)');
                 if (verifyWarn) verifyWarn.style.display = '';
                 if (radioVerify) radioVerify.disabled = true;
                 // Force pilih custom mode kalau verify URL belum ada
@@ -3650,14 +3695,14 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 // server-side render auto-resolve ke URL current. Jangan simpan URL resolved
                 // (yang bisa jadi stale kalau config berubah).
                 if (!(document.getElementById('verifyUrlInput')?.value || '')) {
-                    showToast('URL Verifikasi belum tersedia. Simpan dokumen dulu.', 'error');
+                    showToast(t('toast.verify_url_not_ready', {}, 'Verification URL not available yet. Save the document first.'), 'error');
                     return;
                 }
                 newValue = '{verify_url}';
             } else {
                 newValue = (customInput?.value || '').trim();
                 if (!newValue) {
-                    showToast('Isi QR tidak boleh kosong', 'error');
+                    showToast(t('toast.qr_content_required', {}, 'QR content cannot be empty'), 'error');
                     return;
                 }
             }
@@ -3668,7 +3713,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 if (typeof updateQrPreview === 'function') updateQrPreview(fieldName);
             }
             closeQrFieldModal();
-            showToast('QR terisi. Klik Simpan untuk persist.', 'success');
+            showToast(t('toast.qr_filled', {}, 'QR filled in. Click Save to persist.'), 'success');
         }
 
         function showToast(message, type) {
@@ -3739,7 +3784,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
             const materaiWraps = document.querySelectorAll('.materai-wrap');
             if (materaiWraps.length > 0) {
                 materaiRows = '<tr><td colspan="2" class="py-2.5 px-0"><hr class="m-0 border-0" style="border-top:1px solid #e5e7eb;"></td></tr>' +
-                    '<tr><td colspan="2" class="py-1.5 px-0 text-orange-700 font-bold"><i class="bi bi-stamp"></i> Materai</td></tr>';
+                    `<tr><td colspan="2" class="py-1.5 px-0 text-orange-700 font-bold"><i class="bi bi-stamp"></i> ${t('modal.doc_info.materai_heading', {}, 'Materai')}</td></tr>`;
                 materaiWraps.forEach(wrap => {
                     const mid = wrap.getAttribute('data-materai-id') || '';
                     const mode = wrap.getAttribute('data-materai-mode') || 'upload';
@@ -3750,18 +3795,18 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     const uploadAt = (document.getElementById('materai_upload_' + mid) || {}).value || '';
                     let statusBadge;
                     if (mode === 'kosong') {
-                        statusBadge = '<span class="text-gray-500 text-[11px]">Tempel manual</span>';
+                        statusBadge = `<span class="text-gray-500 text-[11px]">${t('modal.doc_info.materai_manual_status', {}, 'Manual stamp')}</span>`;
                     } else {
                         statusBadge = imgVal
-                            ? '<span class="text-green-600 text-[11px]">✓ Terisi</span>'
-                            : '<span class="text-red-600 text-[11px]">⚠ Belum upload</span>';
+                            ? `<span class="text-green-600 text-[11px]">✓ ${t('modal.doc_info.materai_filled_status', {}, 'Filled')}</span>`
+                            : `<span class="text-red-600 text-[11px]">⚠ ${t('modal.doc_info.materai_missing_status', {}, 'Not uploaded')}</span>`;
                     }
                     materaiRows += `<tr>
                         <td class="py-1 px-0 text-gray-500 text-xs">${escapeHtmlSimple(lbl)}</td>
                         <td class="py-1 px-0 text-xs">
                             ${statusBadge}
-                            ${serialVal ? `<div class="text-[10px] text-gray-500">No. Seri: ${escapeHtmlSimple(serialVal)}</div>` : ''}
-                            ${uploadAt ? `<div class="text-[10px] text-gray-400">Upload: ${fmtDate(uploadAt)}</div>` : ''}
+                            ${serialVal ? `<div class="text-[10px] text-gray-500">${t('modal.doc_info.materai_serial_label', {serial: escapeHtmlSimple(serialVal)}, 'Serial No.: {serial}')}</div>` : ''}
+                            ${uploadAt ? `<div class="text-[10px] text-gray-400">${t('modal.doc_info.materai_upload_label', {date: fmtDate(uploadAt)}, 'Uploaded: {date}')}</div>` : ''}
                         </td>
                     </tr>`;
                 });
@@ -3775,23 +3820,23 @@ function renderFieldForPdf($name, $type, $val, $label) {
             modal.innerHTML = `
                 <div class="bg-white rounded-[10px] w-[90%] max-w-[420px] p-5">
                     <div class="flex justify-between items-center mb-4">
-                        <h5 class="m-0"><i class="bi bi-info-circle"></i> Detail Dokumen</h5>
+                        <h5 class="m-0"><i class="bi bi-info-circle"></i> ${t('modal.doc_info.title', {}, 'Document Details')}</h5>
                         <button onclick="document.getElementById('docInfoModal').remove()" class="border-0 bg-transparent text-xl cursor-pointer text-gray-500">&times;</button>
                     </div>
                     <table class="w-full text-[13px]" style="border-collapse:collapse;">
-                        <tr><td class="py-1.5 px-0 text-gray-500 w-[40%]">Document ID</td><td class="py-1.5 px-0"><code>${meta.id}</code></td></tr>
-                        <tr><td class="py-1.5 px-0 text-gray-500">Versi</td><td class="py-1.5 px-0">v${CURRENT_VERSION} ${<?= $param_is_locked ? 'true' : 'false' ?> ? '🔒 Locked' : '(Editable)'}</td></tr>
-                        <tr><td class="py-1.5 px-0 text-gray-500">No RM</td><td class="py-1.5 px-0">${escapeHtmlSimple(CURRENT_NORM || '-')}</td></tr>
-                        <tr><td class="py-1.5 px-0 text-gray-500">No Pendaftaran</td><td class="py-1.5 px-0">${escapeHtmlSimple(CURRENT_NOPEN || '-')}</td></tr>
-                        <tr><td class="py-1.5 px-0 text-gray-500">Label</td><td class="py-1.5 px-0">${escapeHtmlSimple(CURRENT_LABEL || '-')}</td></tr>
+                        <tr><td class="py-1.5 px-0 text-gray-500 w-[40%]">${t('modal.doc_info.document_id_label', {}, 'Document ID')}</td><td class="py-1.5 px-0"><code>${meta.id}</code></td></tr>
+                        <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.version_row_label', {}, 'Version')}</td><td class="py-1.5 px-0">v${CURRENT_VERSION} ${<?= $param_is_locked ? 'true' : 'false' ?> ? '🔒 ' + t('toolbar.locked', {}, 'Locked') : t('modal.doc_info.editable_suffix', {}, '(Editable)')}</td></tr>
+                        <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.norm_row_label', {}, 'MR No.')}</td><td class="py-1.5 px-0">${escapeHtmlSimple(CURRENT_NORM || '-')}</td></tr>
+                        <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.nopen_row_label', {}, 'Registration No.')}</td><td class="py-1.5 px-0">${escapeHtmlSimple(CURRENT_NOPEN || '-')}</td></tr>
+                        <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.label_row_label', {}, 'Label')}</td><td class="py-1.5 px-0">${escapeHtmlSimple(CURRENT_LABEL || '-')}</td></tr>
                         <tr><td colspan="2" class="py-2.5 px-0"><hr class="m-0 border-0" style="border-top:1px solid #e5e7eb;"></td></tr>
-                        <tr><td class="py-1.5 px-0 text-gray-500">Dibuat oleh</td><td class="py-1.5 px-0">${escapeHtmlSimple(createdBy)}</td></tr>
-                        <tr><td class="py-1.5 px-0 text-gray-500">Dibuat pada</td><td class="py-1.5 px-0">${fmtDate(meta.created_at)}</td></tr>
-                        <tr><td class="py-1.5 px-0 text-gray-500">Terakhir diupdate</td><td class="py-1.5 px-0">${fmtDate(meta.updated_at)}</td></tr>
+                        <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.created_by_label', {}, 'Created by')}</td><td class="py-1.5 px-0">${escapeHtmlSimple(createdBy)}</td></tr>
+                        <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.created_at_label', {}, 'Created at')}</td><td class="py-1.5 px-0">${fmtDate(meta.created_at)}</td></tr>
+                        <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.updated_at_label', {}, 'Last updated')}</td><td class="py-1.5 px-0">${fmtDate(meta.updated_at)}</td></tr>
                         ${materaiRows}
                     </table>
                     <div class="text-right mt-4">
-                        <button onclick="document.getElementById('docInfoModal').remove()" class="py-1.5 px-4 border-0 bg-blue-500 text-white rounded-md cursor-pointer">Tutup</button>
+                        <button onclick="document.getElementById('docInfoModal').remove()" class="py-1.5 px-4 border-0 bg-blue-500 text-white rounded-md cursor-pointer">${t('actions.close', {}, 'Close')}</button>
                     </div>
                 </div>
             `;
@@ -3830,7 +3875,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 const opt = document.createElement('option');
                 opt.value = v.version;
                 const lockIcon = v.is_locked ? ' 🔒' : '';
-                const currMark = v.version === CURRENT_VERSION ? ' (current)' : '';
+                const currMark = v.version === CURRENT_VERSION ? ' ' + t('toolbar.version_current_suffix', {}, '(current)') : '';
                 opt.textContent = `v${v.version}${lockIcon}${currMark}`;
                 if (v.version === CURRENT_VERSION) opt.selected = true;
                 sel.appendChild(opt);
@@ -3865,14 +3910,14 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     }
                 });
                 if (missingLabels.length > 0) {
-                    const warn = 'Materai berikut belum di-upload:\n  - ' + missingLabels.join('\n  - ') + '\n\nTetap lock versi ini?';
+                    const warn = t('materai.lock_missing_warning', {list: missingLabels.join('\n  - ')}, 'The following materai have not been uploaded:\n  - {list}\n\nLock this version anyway?');
                     if (!confirm(warn)) return;
                 }
             }
 
             const msg = newLocked
-                ? 'Lock versi ini sebagai FINAL?\n\nSetelah locked, versi ini tidak bisa diedit. Hanya superadmin yang bisa unlock. Untuk revisi, buat versi baru.'
-                : 'Unlock versi ini? (akses superadmin)';
+                ? t('confirm.lock_final', {}, 'Lock this version as FINAL?\n\nOnce locked, this version cannot be edited. Only a superadmin can unlock it. Create a new version to revise.')
+                : t('confirm.unlock_version', {}, 'Unlock this version? (superadmin access)');
             if (!confirm(msg)) return;
             const fd = new FormData();
             fd.append('_doc_action', 'toggle_doc_lock');
@@ -3883,13 +3928,13 @@ function renderFieldForPdf($name, $type, $val, $label) {
             if (data.success) {
                 location.reload();
             } else {
-                alert('Gagal: ' + (data.message || 'error'));
+                alert(t('alert.generic_failed', {reason: data.message || 'error'}, 'Failed: {reason}'));
             }
         }
 
         async function deleteThisVersion() {
             if (!CURRENT_DOC_ID) return;
-            if (!confirm(`Hapus versi v${CURRENT_VERSION}? Aksi ini tidak bisa di-undo.`)) return;
+            if (!confirm(t('confirm.delete_version', {version: CURRENT_VERSION}, 'Delete version v{version}? This cannot be undone.'))) return;
             const fd = new FormData();
             fd.append('_doc_action', 'delete_version');
             fd.append('doc_id', CURRENT_DOC_ID);
@@ -3904,13 +3949,13 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 if (CURRENT_LABEL !== '-') params.set('label', CURRENT_LABEL);
                 window.location.href = '?' + params.toString();
             } else {
-                alert('Gagal: ' + (data.message || 'error'));
+                alert(t('alert.generic_failed', {reason: data.message || 'error'}, 'Failed: {reason}'));
             }
         }
 
         // Restore soft-deleted slot from preview mode (superadmin only)
         async function restoreDeletedSlot() {
-            if (!confirm('Pulihkan seluruh slot dokumen ini? Semua versi yang ter-soft-delete akan kembali aktif.')) return;
+            if (!confirm(t('confirm.restore_slot', {}, 'Restore this entire document slot? All soft-deleted versions will become active again.'))) return;
             const fd = new FormData();
             fd.append('_doc_action', 'restore_slot');
             fd.append('template_id', templateId);
@@ -3920,7 +3965,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
             const resp = await fetch(_ezdocEndpoint('docAction'), { method: 'POST', body: fd });
             const data = await resp.json();
             if (data.success) {
-                alert('Berhasil di-restore (' + (data.affected || 0) + ' versi)');
+                alert(t('alert.restore_success', {count: data.affected || 0}, 'Restored successfully ({count} version(s))'));
                 // Reload sebagai dokumen aktif (tanpa preview_deleted)
                 const params = new URLSearchParams();
                 params.set('template_id', templateId);
@@ -3929,7 +3974,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 if (CURRENT_LABEL !== '-') params.set('label', CURRENT_LABEL);
                 window.location.href = '?' + params.toString();
             } else {
-                alert('Gagal: ' + (data.message || 'error'));
+                alert(t('alert.generic_failed', {reason: data.message || 'error'}, 'Failed: {reason}'));
             }
         }
 
@@ -3960,24 +4005,24 @@ function renderFieldForPdf($name, $type, $val, $label) {
 
             modal.innerHTML = `
                 <div class="bg-white rounded-[10px] w-[90%] max-w-[400px] p-5" style="font-family:sans-serif;">
-                    <h5 class="mt-0 mr-0 mb-3 ml-0">Buat Versi Baru</h5>
-                    <p class="text-gray-500 text-[13px] mb-3">Pilih sumber data untuk versi baru:</p>
+                    <h5 class="mt-0 mr-0 mb-3 ml-0">${t('modal.new_version.title', {}, 'Create New Version')}</h5>
+                    <p class="text-gray-500 text-[13px] mb-3">${t('modal.new_version.description', {}, 'Choose the data source for the new version:')}</p>
 
                     <label class="block mb-2 cursor-pointer">
                         <input type="radio" name="newVerSource" value="blank" checked>
-                        Kosong (start dari awal)
+                        ${t('modal.new_version.source_blank', {}, 'Blank (start from scratch)')}
                     </label>
                     <label class="block mb-2 cursor-pointer">
                         <input type="radio" name="newVerSource" value="copy">
-                        Copy dari versi:
+                        ${t('modal.new_version.source_copy', {}, 'Copy from version:')}
                         <select id="copyVerSelect" class="ml-1.5 py-0.5 px-1.5">
                             ${optsHtml}
                         </select>
                     </label>
 
                     <div class="flex gap-2 mt-4 justify-end">
-                        <button onclick="document.getElementById('newVersionModal').remove()" class="py-1.5 px-4 border border-gray-300 bg-white rounded-md cursor-pointer">Batal</button>
-                        <button onclick="doCreateNewVersion()" class="py-1.5 px-4 border-0 bg-violet-500 text-white rounded-md cursor-pointer">Buat Versi Baru</button>
+                        <button onclick="document.getElementById('newVersionModal').remove()" class="py-1.5 px-4 border border-gray-300 bg-white rounded-md cursor-pointer">${t('actions.cancel', {}, 'Cancel')}</button>
+                        <button onclick="doCreateNewVersion()" class="py-1.5 px-4 border-0 bg-violet-500 text-white rounded-md cursor-pointer">${t('modal.new_version.title', {}, 'Create New Version')}</button>
                     </div>
                 </div>
             `;
@@ -4008,7 +4053,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 params.set('version', data.version);
                 window.location.href = '?' + params.toString();
             } else {
-                alert('Gagal: ' + (data.message || 'error'));
+                alert(t('alert.generic_failed', {reason: data.message || 'error'}, 'Failed: {reason}'));
             }
         }
 
@@ -4022,8 +4067,8 @@ function renderFieldForPdf($name, $type, $val, $label) {
             const tb = document.getElementById('toolbarPanel');
             const btn = document.getElementById('toolbarToggleBtn');
             const isCollapsed = tb.classList.toggle('collapsed');
-            btn.innerHTML = isCollapsed ? '&#9776;' : '&minus; Sembunyikan';
-            btn.title = isCollapsed ? 'Tampilkan Toolbar' : 'Sembunyikan Toolbar';
+            btn.innerHTML = isCollapsed ? '&#9776;' : '&minus; ' + t('toolbar.hide_label', {}, 'Hide');
+            btn.title = isCollapsed ? t('title.show_toolbar', {}, 'Show Toolbar') : t('title.hide_toolbar', {}, 'Hide Toolbar');
             try { localStorage.setItem('surat_toolbar_collapsed', isCollapsed ? '1' : '0'); } catch (e) {}
         }
 
@@ -4036,19 +4081,19 @@ function renderFieldForPdf($name, $type, $val, $label) {
             const btn = document.getElementById('toolbarToggleBtn');
             if (shouldCollapse) {
                 if (tb) tb.classList.add('collapsed');
-                if (btn) { btn.innerHTML = '&#9776;'; btn.title = 'Tampilkan Toolbar'; }
+                if (btn) { btn.innerHTML = '&#9776;'; btn.title = t('title.show_toolbar', {}, 'Show Toolbar'); }
             } else {
-                if (btn) { btn.innerHTML = '&minus; Sembunyikan'; btn.title = 'Sembunyikan Toolbar'; }
+                if (btn) { btn.innerHTML = '&minus; ' + t('toolbar.hide_label', {}, 'Hide'); btn.title = t('title.hide_toolbar', {}, 'Hide Toolbar'); }
             }
         })();
 
         function openSign(id, label) {
             if (!editMode) {
-                alert('Dokumen ini locked. Tidak bisa tanda tangan. Untuk revisi, buat versi baru.');
+                alert(t('ttd.locked_no_sign', {}, 'This document is locked. Cannot sign. Create a new version to revise.'));
                 return;
             }
             currentTtdId = id;
-            document.getElementById('signTitle').textContent = label || 'Tanda Tangan';
+            document.getElementById('signTitle').textContent = label || t('fallback.signature', {}, 'Signature');
             modal.classList.add('show');
             clearSign();
             const existing = document.getElementById('ttd_' + id)?.value;
@@ -4073,8 +4118,8 @@ function renderFieldForPdf($name, $type, $val, $label) {
         // Generate action buttons HTML
         function getActionsHtml(ttdId, label) {
             return `<div class="ttd-actions">
-                <button type="button" class="btn-edit" onclick="openSign('${ttdId}', '${label}')">&#9998; Edit</button>
-                <button type="button" class="btn-delete" onclick="clearTtd('${ttdId}')">&#10005; Hapus</button>
+                <button type="button" class="btn-edit" onclick="openSign('${ttdId}', '${label}')">&#9998; ${t('actions.edit', {}, 'Edit')}</button>
+                <button type="button" class="btn-delete" onclick="clearTtd('${ttdId}')">&#10005; ${t('actions.delete', {}, 'Delete')}</button>
             </div>`;
         }
 
@@ -4087,7 +4132,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 const preview = document.getElementById('preview_' + currentTtdId);
                 if (preview) {
                     const labelEl = preview.parentElement.querySelector('.ttd-label');
-                    const label = labelEl ? labelEl.textContent : 'Tanda Tangan';
+                    const label = labelEl ? labelEl.textContent : t('fallback.signature', {}, 'Signature');
                     // Check if using new area structure
                     const imgArea = preview.querySelector('.ttd-area-image');
                     const target = imgArea || preview;
@@ -4101,23 +4146,23 @@ function renderFieldForPdf($name, $type, $val, $label) {
         // Clear/delete TTD signature
         // ===== Materai handlers =====
         function handleMateraiUpload(input, materaiId) {
-            if (!editMode) { alert('Dokumen locked, tidak bisa upload.'); input.value = ''; return; }
+            if (!editMode) { alert(t('materai.locked_no_upload', {}, 'Document is locked, cannot upload.')); input.value = ''; return; }
             const file = input.files && input.files[0];
             if (!file) return;
 
             // Validate type & size (max 2MB)
             if (!/^image\/(png|jpe?g|gif)$/i.test(file.type)) {
-                alert('Format harus PNG / JPG.'); input.value = ''; return;
+                alert(t('materai.invalid_format', {}, 'Format must be PNG / JPG.')); input.value = ''; return;
             }
             if (file.size > 2 * 1024 * 1024) {
-                alert('Ukuran file maksimal 2MB.'); input.value = ''; return;
+                alert(t('materai.max_size', {}, 'Maximum file size is 2MB.')); input.value = ''; return;
             }
 
             const reader = new FileReader();
             reader.onload = function(e) {
                 const dataUrl = e.target.result;
                 if (!/^data:image\/(png|jpe?g|gif);base64,/.test(dataUrl)) {
-                    alert('File tidak valid.'); return;
+                    alert(t('materai.invalid_file', {}, 'Invalid file.')); return;
                 }
                 const hiddenImg = document.getElementById('materai_img_' + materaiId);
                 if (hiddenImg) hiddenImg.value = dataUrl;
@@ -4132,8 +4177,8 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 if (preview) {
                     preview.innerHTML = `<img src="${dataUrl}" class="materai-image" alt="Materai">
                         <div class="materai-actions">
-                            <button type="button" class="btn-edit" onclick="document.getElementById('materai_file_${materaiId}').click()">&#9998; Ganti</button>
-                            <button type="button" class="btn-delete" onclick="clearMaterai('${materaiId}')">&#10005; Hapus</button>
+                            <button type="button" class="btn-edit" onclick="document.getElementById('materai_file_${materaiId}').click()">&#9998; ${t('materai.replace', {}, 'Replace')}</button>
+                            <button type="button" class="btn-delete" onclick="clearMaterai('${materaiId}')">&#10005; ${t('actions.delete', {}, 'Delete')}</button>
                         </div>`;
                 }
                 if (typeof triggerDirty === 'function') triggerDirty();
@@ -4144,7 +4189,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
 
         function clearMaterai(materaiId) {
             if (!editMode) return;
-            if (!confirm('Hapus e-Materai ini?')) return;
+            if (!confirm(t('materai.confirm_delete', {}, 'Delete this e-Materai?'))) return;
             const hiddenImg = document.getElementById('materai_img_' + materaiId);
             if (hiddenImg) hiddenImg.value = '';
             const hiddenUpload = document.getElementById('materai_upload_' + materaiId);
@@ -4153,13 +4198,13 @@ function renderFieldForPdf($name, $type, $val, $label) {
             const preview = document.getElementById('materai_preview_' + materaiId);
             if (preview) {
                 preview.innerHTML = `<div class="materai-upload-box" onclick="document.getElementById('materai_file_${materaiId}').click()">
-                    <strong>UPLOAD<br>e-MATERAI</strong>
+                    <strong>${t('materai.upload_prompt', {}, 'UPLOAD<br>e-MATERAI')}</strong>
                 </div>`;
             }
         }
 
         function clearTtd(ttdId) {
-            if (!confirm('Hapus tanda tangan ini?')) return;
+            if (!confirm(t('ttd.confirm_delete', {}, 'Delete this signature?'))) return;
 
             const hiddenInput = document.getElementById('ttd_' + ttdId);
             if (hiddenInput) hiddenInput.value = '';
@@ -4169,11 +4214,11 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 const imgArea = preview.querySelector('.ttd-area-image');
                 if (imgArea) {
                     const labelEl = preview.parentElement.querySelector('.ttd-label');
-                    const label = labelEl ? labelEl.textContent : 'Tanda Tangan';
+                    const label = labelEl ? labelEl.textContent : t('fallback.signature', {}, 'Signature');
                     imgArea.innerHTML = `<div class="ttd-canvas-placeholder" onclick="openSign('${ttdId}', '${label}')"></div>`;
                 } else {
                     const labelEl = preview.parentElement.querySelector('.ttd-label');
-                    const label = labelEl ? labelEl.textContent : 'Tanda Tangan';
+                    const label = labelEl ? labelEl.textContent : t('fallback.signature', {}, 'Signature');
                     preview.innerHTML = `<div class="ttd-canvas-placeholder" onclick="openSign('${ttdId}', '${label}')"></div>`;
                 }
             }
@@ -4199,7 +4244,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
             const container = imgArea?.closest('.ttd-item-inline, .ttd-item-floating');
             if (container) {
                 container.querySelectorAll('.ttd-mode-btn').forEach(btn => {
-                    btn.classList.toggle('active', btn.textContent.trim() === (mode === 'image' ? 'Gambar' : 'QR'));
+                    btn.classList.toggle('active', btn.textContent.trim() === (mode === 'image' ? t('ttd.mode_image', {}, 'Image') : t('ttd.mode_qr', {}, 'QR')));
                 });
             }
         }
@@ -4216,7 +4261,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
             if (!qrData) {
                 const qrDataTpl = document.getElementById('ttd_qr_data_' + ttdId)?.value || '';
                 if (!qrDataTpl) {
-                    preview.innerHTML = '<small class="text-gray-400 text-[10px]">Isi konten QR atau atur pattern di template</small>';
+                    preview.innerHTML = '<small class="text-gray-400 text-[10px]">' + t('ttd.fill_or_set_pattern', {}, 'Fill in QR content or set a pattern in the template') + '</small>';
                     return;
                 }
                 qrData = qrDataTpl.replace(/\{([^}]+)\}/g, (_, fieldName) => {
@@ -4229,23 +4274,23 @@ function renderFieldForPdf($name, $type, $val, $label) {
             }
 
             if (!qrData) {
-                preview.innerHTML = '<small class="text-gray-400 text-[10px]">Isi field terlebih dulu</small>';
+                preview.innerHTML = '<small class="text-gray-400 text-[10px]">' + t('ttd.fill_field_first', {}, 'Fill in the field first') + '</small>';
                 return;
             }
 
-            preview.innerHTML = '<small class="text-gray-400 text-[10px]">Generating...</small>';
+            preview.innerHTML = '<small class="text-gray-400 text-[10px]">' + t('ttd.generating', {}, 'Generating...') + '</small>';
 
             fetch(_ezdocQrUrl(qrData))
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
-                        preview.innerHTML = `<img src="${data.qr}" class="w-[100px] h-[100px] max-w-[none] max-h-[none] object-contain block" alt="QR TTD" title="${qrData.replace(/"/g, '&quot;')}">`;
+                        preview.innerHTML = `<img src="${data.qr}" class="w-[100px] h-[100px] max-w-[none] max-h-[none] object-contain block" alt="${t('ttd.qr_alt', {}, 'Signature QR')}" title="${qrData.replace(/"/g, '&quot;')}">`;
                     } else {
-                        preview.innerHTML = `<small class="text-red-700 text-[10px]">QR gagal: ${data.message || 'error'}</small>`;
+                        preview.innerHTML = `<small class="text-red-700 text-[10px]">${t('ttd.qr_failed', {error: data.message || 'error'}, 'QR failed: {error}')}</small>`;
                     }
                 })
                 .catch(err => {
-                    preview.innerHTML = `<small class="text-red-700 text-[10px]">QR gagal: ${err.message}</small>`;
+                    preview.innerHTML = `<small class="text-red-700 text-[10px]">${t('ttd.qr_failed', {error: err.message}, 'QR failed: {error}')}</small>`;
                 });
         }
 
@@ -4254,8 +4299,8 @@ function renderFieldForPdf($name, $type, $val, $label) {
             const input = document.getElementById('ttd_qr_content_' + ttdId);
             if (!input) return;
             const current = input.value || '';
-            const patternHint = resolvedPattern ? '\n\nTemplate default: ' + resolvedPattern + '\n(Kosongkan untuk pakai template default)' : '';
-            const newVal = prompt('Isi konten QR untuk TTD ini:' + patternHint, current);
+            const patternHint = resolvedPattern ? t('ttd.edit_qr_prompt_default_hint', {pattern: resolvedPattern}, '\n\nDefault template: {pattern}\n(Leave empty to use the default template)') : '';
+            const newVal = prompt(t('ttd.edit_qr_prompt_label', {}, 'QR content for this signature:') + patternHint, current);
             if (newVal === null) return; // user batal
             input.value = newVal.trim();
             markDirty && markDirty();
@@ -4342,19 +4387,19 @@ function renderFieldForPdf($name, $type, $val, $label) {
             modal.innerHTML = `
                 <div class="bg-white rounded-[10px] w-[90%] max-w-[480px] p-5">
                     <div class="flex justify-between items-center mb-3.5">
-                        <h5 class="m-0"><i class="bi bi-keyboard"></i> Keyboard Shortcuts</h5>
+                        <h5 class="m-0"><i class="bi bi-keyboard"></i> ${t('modal.shortcuts.title', {}, 'Keyboard Shortcuts')}</h5>
                         <button onclick="document.getElementById('shortcutsHelpModal').remove()" class="border-0 bg-transparent text-xl cursor-pointer text-gray-500">&times;</button>
                     </div>
                     <table class="w-full text-[13px]" style="border-collapse:collapse;">
-                        <tr><td class="py-[5px] px-0 text-gray-500 w-[40%]"><kbd>Ctrl</kbd> + <kbd>S</kbd></td><td class="py-[5px] px-0">Simpan dokumen</td></tr>
-                        <tr><td class="py-[5px] px-0 text-gray-500"><kbd>Ctrl</kbd> + <kbd>P</kbd></td><td class="py-[5px] px-0">Print (browser)</td></tr>
-                        ${IS_SUPERADMIN_JS ? '<tr><td class="py-[5px] px-0 text-gray-500"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></td><td class="py-[5px] px-0">Lihat PDF (admin)</td></tr>' : ''}
-                        <tr><td class="py-[5px] px-0 text-gray-500"><kbd>Ctrl</kbd> + <kbd>L</kbd></td><td class="py-[5px] px-0">Fokus ke input Label</td></tr>
-                        <tr><td class="py-[5px] px-0 text-gray-500"><kbd>Esc</kbd></td><td class="py-[5px] px-0">Tutup modal aktif / canvas TTD</td></tr>
-                        <tr><td class="py-[5px] px-0 text-gray-500"><kbd>Ctrl</kbd> + <kbd>/</kbd></td><td class="py-[5px] px-0">Tampilkan help ini</td></tr>
+                        <tr><td class="py-[5px] px-0 text-gray-500 w-[40%]"><kbd>Ctrl</kbd> + <kbd>S</kbd></td><td class="py-[5px] px-0">${t('modal.shortcuts.save_doc', {}, 'Save document')}</td></tr>
+                        <tr><td class="py-[5px] px-0 text-gray-500"><kbd>Ctrl</kbd> + <kbd>P</kbd></td><td class="py-[5px] px-0">${t('modal.shortcuts.print_browser', {}, 'Print (browser)')}</td></tr>
+                        ${IS_SUPERADMIN_JS ? `<tr><td class="py-[5px] px-0 text-gray-500"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></td><td class="py-[5px] px-0">${t('modal.shortcuts.view_pdf_admin', {}, 'View PDF (admin)')}</td></tr>` : ''}
+                        <tr><td class="py-[5px] px-0 text-gray-500"><kbd>Ctrl</kbd> + <kbd>L</kbd></td><td class="py-[5px] px-0">${t('modal.shortcuts.focus_label', {}, 'Focus the Label input')}</td></tr>
+                        <tr><td class="py-[5px] px-0 text-gray-500"><kbd>Esc</kbd></td><td class="py-[5px] px-0">${t('modal.shortcuts.close_modal', {}, 'Close active modal / signature canvas')}</td></tr>
+                        <tr><td class="py-[5px] px-0 text-gray-500"><kbd>Ctrl</kbd> + <kbd>/</kbd></td><td class="py-[5px] px-0">${t('modal.shortcuts.show_help', {}, 'Show this help')}</td></tr>
                     </table>
                     <div class="text-right mt-4">
-                        <button onclick="document.getElementById('shortcutsHelpModal').remove()" class="py-1.5 px-4 border-0 bg-blue-500 text-white rounded-md cursor-pointer">Tutup</button>
+                        <button onclick="document.getElementById('shortcutsHelpModal').remove()" class="py-1.5 px-4 border-0 bg-blue-500 text-white rounded-md cursor-pointer">${t('actions.close', {}, 'Close')}</button>
                     </div>
                 </div>
             `;
