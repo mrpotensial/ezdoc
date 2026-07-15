@@ -88,14 +88,54 @@ $pageTitle = isset($title) && $title !== ''
 <body class="min-h-full bg-gray-50 text-gray-900 antialiased" style="font-family: var(--ezdoc-font);">
     <header class="bg-white border-b border-gray-200">
         <div class="max-w-7xl mx-auto flex items-stretch px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center gap-3 py-4 pr-6">
+            <?php
+            // Brand rendering — Vercel/Linear/Filament-inspired: logo mark + product name
+            // + optional tagline pill. Auto-split "Foo (Bar)" or "Foo · Bar" untuk
+            // backward-compat kalau consumer lama pack semua di brand.app_name.
+            $appName = (string) $config->get('brand.app_name', 'Ezdoc');
+            $tagline = (string) $config->get('brand.tagline', '');
+            $badge   = (string) $config->get('brand.badge', '');
+            if ($tagline === '') {
+                if (preg_match('/^(.+?)\s*\((.+)\)\s*$/', $appName, $m)) {
+                    $appName = trim($m[1]);
+                    $tagline = trim($m[2]);
+                } elseif (preg_match('/^(.+?)\s+[·—–]\s+(.+)$/u', $appName, $m)) {
+                    $appName = trim($m[1]);
+                    $tagline = trim($m[2]);
+                }
+            }
+            // Fallback logo mark — colored square dgn initial huruf pertama (Vercel-style).
+            $logoInitial = mb_strtoupper(mb_substr($appName, 0, 1));
+            ?>
+            <a href="<?= htmlspecialchars((string) $config->get('app.base_path', ''), ENT_QUOTES, 'UTF-8') ?>"
+               class="flex items-center gap-2.5 py-4 pr-6 group focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300 rounded-md"
+               style="focus-ring-color: var(--ezdoc-primary);">
                 <?php if ($logo = $theme->getLogoUrl()): ?>
-                    <img src="<?= htmlspecialchars($logo, ENT_QUOTES, 'UTF-8') ?>" alt="" class="h-7 w-auto">
+                    <img src="<?= htmlspecialchars($logo, ENT_QUOTES, 'UTF-8') ?>" alt="" class="h-8 w-8 rounded-lg object-cover shadow-sm ring-1 ring-gray-200">
+                <?php else: ?>
+                    <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg text-white text-[13px] font-bold shadow-sm ring-1 ring-black/5 select-none"
+                          style="background: linear-gradient(135deg, var(--ezdoc-primary) 0%, color-mix(in srgb, var(--ezdoc-primary) 60%, black 25%) 100%);"
+                          aria-hidden="true">
+                        <?= htmlspecialchars($logoInitial, ENT_QUOTES, 'UTF-8') ?>
+                    </span>
                 <?php endif; ?>
-                <span class="text-base font-semibold tracking-tight text-gray-900">
-                    <?= htmlspecialchars((string) $config->get('brand.app_name', 'Ezdoc'), ENT_QUOTES, 'UTF-8') ?>
-                </span>
-            </div>
+                <div class="flex flex-col leading-tight min-w-0">
+                    <span class="text-[15px] font-semibold tracking-tight text-gray-900 group-hover:text-gray-700 transition-colors truncate">
+                        <?= htmlspecialchars($appName, ENT_QUOTES, 'UTF-8') ?>
+                    </span>
+                    <?php if ($tagline !== ''): ?>
+                        <span class="text-[10px] text-gray-500 font-medium tracking-wide mt-px truncate max-w-[28ch]">
+                            <?= htmlspecialchars($tagline, ENT_QUOTES, 'UTF-8') ?>
+                        </span>
+                    <?php endif; ?>
+                </div>
+                <?php if ($badge !== ''): ?>
+                    <span class="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ring-1 ring-inset"
+                          style="background:color-mix(in srgb, var(--ezdoc-primary) 12%, white); color: var(--ezdoc-primary); border-color: color-mix(in srgb, var(--ezdoc-primary) 30%, transparent);">
+                        <?= htmlspecialchars($badge, ENT_QUOTES, 'UTF-8') ?>
+                    </span>
+                <?php endif; ?>
+            </a>
 
             <?php
             // Primary nav — industri pattern minimalist (Notion / Linear / Adminer):
@@ -167,5 +207,8 @@ $pageTitle = isset($title) && $title !== ''
     <?php foreach ($theme->getCustomJsPaths() as $jsPath): ?>
     <script src="<?= htmlspecialchars($jsPath, ENT_QUOTES, 'UTF-8') ?>"></script>
     <?php endforeach; ?>
+
+    <?php include __DIR__ . '/_partials/dialog_helper.php'; ?>
+
 </body>
 </html>

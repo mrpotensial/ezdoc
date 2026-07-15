@@ -192,9 +192,11 @@ final class Router
 
     public function handleList(RequestContext $req, ResponseWriter $res): ?string
     {
-        $qParam      = (string) $req->query('q', '');
-        $statusParam = (string) $req->query('status', '');
-        $debugMsg    = '';
+        $qParam          = (string) $req->query('q', '');
+        $statusParam     = (string) $req->query('status', '');
+        $templateIdParam = (int) $req->query('template_id', 0);
+        $debugMsg        = '';
+        $templates       = [];  // untuk dropdown filter
 
         // Priority 1: runtime.documents kalau consumer inject (test/mock scenarios).
         $documents = $this->config->get('runtime.documents');
@@ -210,18 +212,40 @@ final class Router
                         $debugMsg = 'Table `ezdoc_documents` belum ada — jalankan migrations dulu.';
                     } else {
                         $repo = new \Ezdoc\Document\DocumentRepository($this->db);
-                        $documents = $repo->findRecent($statusParam, $qParam, 100);
+                        // Kalau template_id di-filter: query listByTemplate (repo-level).
+                        // Q + status masih di-post-filter PHP-side (findRecent tidak accept
+                        // template_id parameter — extend Repository di v0.9.10 kalau butuh).
+                        if ($templateIdParam > 0) {
+                            $all = $repo->listByTemplate($templateIdParam, 500);
+                            $documents = array_values(array_filter($all, function ($d) use ($qParam, $statusParam) {
+                                if ($statusParam !== '' && $d->getStatus() !== $statusParam) return false;
+                                if ($qParam !== '') {
+                                    $needle = mb_strtolower($qParam);
+                                    $hay = mb_strtolower(($d->getTitle() ?? '') . ' ' . ($d->getReferenceNumber() ?? '') . ' ' . ($d->getSubjectId() ?? ''));
+                                    if (mb_strpos($hay, $needle) === false) return false;
+                                }
+                                return true;
+                            }));
+                        } else {
+                            $documents = $repo->findRecent($statusParam, $qParam, 100);
+                        }
                         if (empty($documents)) {
-                            // Cek raw count untuk beri feedback
                             $cntRes = @mysqli_query($this->db, "SELECT COUNT(*) c FROM ezdoc_documents WHERE deleted_at IS NULL");
                             if ($cntRes) {
                                 $cnt = (int)(mysqli_fetch_assoc($cntRes)['c'] ?? 0);
                                 if ($cnt === 0) {
                                     $debugMsg = 'Belum ada dokumen di database (0 rows di `ezdoc_documents`).';
-                                } else {
-                                    $debugMsg = "Ada $cnt dokumen di DB tapi query findRecent() return empty — cek Document::fromRow() hydration.";
                                 }
                             }
+                        }
+
+                        // Load templates untuk dropdown filter — semua active template
+                        // (bukan hanya yg punya document, supaya user tahu template kosong juga).
+                        try {
+                            $tplRepo = new \Ezdoc\Template\TemplateRepository($this->db);
+                            $templates = $tplRepo->listCurrent(500);
+                        } catch (\Throwable $e) {
+                            $templates = []; // silent — filter dropdown just won't show
                         }
                     }
                 } catch (\Throwable $e) {
@@ -234,12 +258,14 @@ final class Router
 
         return $this->renderView(__DIR__ . '/../../views/document/list.php', [
             'documents' => $documents,
+            'templates' => $templates,
             'filters'   => [
-                'q'      => $qParam,
-                'status' => $statusParam,
+                'q'           => $qParam,
+                'status'      => $statusParam,
+                'template_id' => $templateIdParam,
             ],
             'baseUrl'   => (string) $this->config->get('app.base_path', ''),
-            'debugMsg'  => $debugMsg,  // dev diagnostic — list.php boleh render kalau non-empty
+            'debugMsg'  => $debugMsg,
         ], $res);
     }
 
