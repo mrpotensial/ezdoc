@@ -6,6 +6,7 @@ namespace Ezdoc\Document;
 
 use Ezdoc\Db\Connection;
 use Ezdoc\Db\Mysqli\MysqliConnection;
+use Ezdoc\Db\Schema\ColumnIntrospector;
 use Ezdoc\Exceptions\NotFoundException;
 use Ezdoc\Exceptions\ValidationException;
 use Ezdoc\UUID;
@@ -35,22 +36,26 @@ final class DocumentRepository
     /** @var Connection */
     private $db;
 
+    /** @var ColumnIntrospector Lazy schema introspection untuk adaptive SELECT */
+    private $introspector;
+
     /**
-     * SELECT column list — kept in sync with schema in migrations/blueprints/
-     * ezdoc_documents.php. Includes legacy hospital columns (norm, nopen, label)
-     * so Document::fromRow() can back-fill field_values.
+     * Desired SELECT columns (Blueprint-canonical). Actual SELECT list =
+     * intersection dgn columns yg exist di consumer DB (via ColumnIntrospector).
+     * Handle schema drift kalau consumer DB pakai older migration subset.
      *
-     * @var string
+     * @var list<string>
      */
-    private static $SELECT_COLS = 'id, uuid, template_id, template_uuid, template_version, '
-        . 'title, norm, nopen, label, version, field_values, signature_values, '
-        . 'status, is_locked, content_hash, content_hash_at, content_hash_version, '
-        . 'public_slug, public_slug_active, '
-        . 'created_by, updated_by, created_at, updated_at';
-    // NOTE: `metadata` + `revision` columns tidak ada di legacy migrations —
-    // Document::fromRow() has fallbacks (metadata=[], revision=1) untuk tolerate.
-    // v0.9.10+ Blueprint sudah declare — kalau consumer fresh install pakai
-    // Blueprint, kolom ada. Tambah ke SELECT list once legacy consumer sunset.
+    private static $desiredCols = [
+        'id', 'uuid', 'template_id', 'template_uuid', 'template_version',
+        'title', 'norm', 'nopen', 'label', 'version',
+        'field_values', 'signature_values', 'metadata',
+        'status', 'is_locked',
+        'content_hash', 'content_hash_at', 'content_hash_version',
+        'public_slug', 'public_slug_active',
+        'revision',
+        'created_by', 'updated_by', 'created_at', 'updated_at',
+    ];
 
     /**
      * @param Connection|mysqli $db Ezdoc\Db\Connection instance (preferred) atau
@@ -68,13 +73,24 @@ final class DocumentRepository
                 . (is_object($db) ? get_class($db) : gettype($db))
             );
         }
+        $this->introspector = new ColumnIntrospector($this->db);
+    }
+
+    /**
+     * Build SELECT column clause adaptif — intersection of $desiredCols dgn
+     * columns yg actually exist di consumer DB. Cached via ColumnIntrospector.
+     */
+    private function selectCols(): string
+    {
+        $existing = $this->introspector->intersect('ezdoc_documents', self::$desiredCols);
+        return implode(', ', $existing);
     }
 
     public function findById(int $id): ?Document
     {
         if ($id <= 0) return null;
         $row = $this->db->fetchOne(
-            'SELECT ' . self::$SELECT_COLS
+            'SELECT ' . $this->selectCols()
             . ' FROM ezdoc_documents WHERE id = ? AND deleted_at IS NULL LIMIT 1',
             [$id]
         );
@@ -85,7 +101,7 @@ final class DocumentRepository
     {
         if ($uuid === '') return null;
         $row = $this->db->fetchOne(
-            'SELECT ' . self::$SELECT_COLS
+            'SELECT ' . $this->selectCols()
             . ' FROM ezdoc_documents WHERE uuid = ? AND deleted_at IS NULL LIMIT 1',
             [$uuid]
         );
@@ -96,7 +112,7 @@ final class DocumentRepository
     {
         if ($slug === '') return null;
         $row = $this->db->fetchOne(
-            'SELECT ' . self::$SELECT_COLS
+            'SELECT ' . $this->selectCols()
             . ' FROM ezdoc_documents WHERE public_slug = ? AND public_slug_active = 1'
             . ' AND deleted_at IS NULL LIMIT 1',
             [$slug]
@@ -114,7 +130,7 @@ final class DocumentRepository
         $offset = max(0, $offset);
 
         $rows = $this->db->fetchAll(
-            'SELECT ' . self::$SELECT_COLS
+            'SELECT ' . $this->selectCols()
             . ' FROM ezdoc_documents WHERE template_id = ? AND deleted_at IS NULL'
             . ' ORDER BY id DESC LIMIT ? OFFSET ?',
             [$templateId, $limit, $offset]
@@ -131,7 +147,7 @@ final class DocumentRepository
         $limit = max(1, min($limit, 1000));
 
         $rows = $this->db->fetchAll(
-            'SELECT ' . self::$SELECT_COLS
+            'SELECT ' . $this->selectCols()
             . ' FROM ezdoc_documents WHERE status = ? AND deleted_at IS NULL'
             . ' ORDER BY id DESC LIMIT ?',
             [$status, $limit]
@@ -166,7 +182,7 @@ final class DocumentRepository
         $params[] = $limit;
 
         $rows = $this->db->fetchAll(
-            'SELECT ' . self::$SELECT_COLS
+            'SELECT ' . $this->selectCols()
             . ' FROM ezdoc_documents WHERE ' . implode(' AND ', $where)
             . ' ORDER BY id DESC LIMIT ?',
             $params

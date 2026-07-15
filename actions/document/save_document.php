@@ -1,21 +1,32 @@
 <?php
 /**
- * POST /page/form_pembuat_surat_cetak_v3.php  (body: _ajax=1, template_id, _norm, _nopen, _label, _doc_id, dan field-field data)
+ * POST _ajax=1 template_id, _norm, _nopen, _label, _doc_id, <field data>
  *
- * Save/update dokumen ke `ezdoc_documents`. Kalau doc sudah ada di slot
- * (template_uuid, norm, nopen, label), update latest version. Kalau belum, insert baru
- * dengan version=1.
+ * Save/update dokumen ke ezdoc_documents. Kalau doc sudah ada di slot
+ * (template_uuid, norm, nopen, label), update latest version. Kalau belum,
+ * insert baru dgn version=1.
  *
  * Level 2/3 verify: setelah save sukses, auto-generate slug + compute data hash.
  *
- * Auth: any authenticated user (koneksi.php gate) + RBAC per-template.
+ * Auth: authenticated user + RBAC per-template (create/edit) + per-TTD sign.
  *
- * Response (backward-compat dengan existing frontend):
- *   {
- *     success: true, message: "...", doc_id, isEdit, label,
- *     verify_url, data_hash, data_hash_at
- *   }
+ * Response (backward-compat dgn existing frontend):
+ *   { success, message, doc_id, isEdit, label, verify_url, data_hash, data_hash_at, debug }
+ *
+ * ## v0.9.9 refactor
+ *
+ * Persistence via `Ezdoc\Db\Connection` (via MysqliConnection auto-wrap).
+ * Template lookup via `TemplateRepository`. Per-doc lookup via
+ * `DocumentRepository::findById`. Slot latest-version lookup masih raw SQL
+ * (query pattern belum ideal untuk Repository API).
+ *
+ * Business logic (template parsing, field collection, TTD RBAC enforcement)
+ * tetap disini — di W4.1 belum di-extract ke Service (defer v0.9.10 kalau
+ * ada refactor pattern jelas).
  */
+
+use Ezdoc\Db\Mysqli\MysqliConnection;
+use Ezdoc\Template\TemplateRepository;
 
 global $conn, $author_id;
 
@@ -26,46 +37,40 @@ $label = trim($_POST['_label'] ?? '-');
 if ($label === '') $label = '-';
 $doc_id = (int)($_POST['_doc_id'] ?? 0);
 
-// ─── Load template dari ezdoc_templates ───
-// Include `name` untuk auto-computed document title (industri: Filament
-// getRecordTitleAttribute pattern — human-readable label untuk list view).
-$stmt = mysqli_prepare($conn, "SELECT uuid, version, name, content, signature_config, scope, access_config FROM ezdoc_templates WHERE id = ?");
-mysqli_stmt_bind_param($stmt, "i", $template_id);
-mysqli_stmt_execute($stmt);
-$tpl = mysqli_stmt_get_result($stmt)->fetch_assoc();
+$db = new MysqliConnection($conn);
+$tplRepo = new TemplateRepository($db);
 
-if (!$tpl) {
-    ezdoc_respond_error('Template tidak ditemukan');
-}
+// ─── Load template (include name utk auto-computed doc title) ───
+$tpl = $tplRepo->findById($template_id);
+if (!$tpl) ezdoc_respond_error('Template tidak ditemukan');
 
-$templateUuid = (string)$tpl['uuid'];
-$templateVersion = (int)($tpl['version'] ?? 1);
-$templateName = (string)($tpl['name'] ?? 'Untitled Template');
+$templateUuid    = $tpl->getUuid();
+$templateVersion = $tpl->getVersion();
+$templateName    = $tpl->getName() ?: 'Untitled Template';
+$templateHtml    = $tpl->getContent() ?: '';
+$configTtdRaw    = $tpl->getSignatureConfig();
+$tplDocScope     = $tpl->getScope();
 
 // ─── RBAC: template-level access check ───
-$accessConfig = ezdoc_parse_access_config($tpl['access_config'] ?? null);
+$accessConfig = ezdoc_parse_access_config($tpl->getAccessConfig());
 $rbacAction = ($doc_id > 0) ? 'edit' : 'create';
 
 @error_log(sprintf(
     '[ezdoc:save] user=%d roles=%s template=%d action=%s access_config=%s',
     ezdoc_current_user_id(),
     implode(',', ezdoc_current_user_roles()),
-    (int)$template_id,
+    (int) $template_id,
     $rbacAction,
     $accessConfig ? json_encode($accessConfig) : 'null'
 ));
 
 ezdoc_require_on_template($accessConfig, $rbacAction, "Tidak berhak {$rbacAction} dokumen dari template ini");
 
-$tplDocScope = $tpl['scope'] ?? 'patient';
 if ($tplDocScope === 'patient' && ($norm === '' || $nopen === '')) {
     ezdoc_respond_error('No RM dan No Pendaftaran wajib diisi');
 }
 
-$templateHtml = $tpl['content'] ?: '';
-$configTtdRaw = json_decode($tpl['signature_config'] ?: '[]', true) ?: [];
-
-// ─── Build configTtd (support both placeholder & legacy format) ───
+// ─── Build configTtd (support placeholder + legacy format) ───
 $hasTtdPlaceholders = strpos($templateHtml, 'ttd-placeholder') !== false;
 $configTtd = [];
 if ($hasTtdPlaceholders) {
@@ -80,14 +85,14 @@ if ($hasTtdPlaceholders) {
         preg_match('/data-allowed-roles="([^"]*)"/', $attrs, $arm);
         preg_match('/data-allowed-users="([^"]*)"/', $attrs, $aum);
         $configTtd[] = [
-            'id' => $ttdId,
-            'label' => $lm[1] ?? 'Tanda Tangan',
+            'id'         => $ttdId,
+            'label'      => $lm[1] ?? 'Tanda Tangan',
             'nama_field' => $nm[1] ?? 'nama_' . $ttdId,
-            'rbac' => ezdoc_parse_ttd_config($arm[1] ?? '', $aum[1] ?? ''),
+            'rbac'       => ezdoc_parse_ttd_config($arm[1] ?? '', $aum[1] ?? ''),
         ];
     }
 } else {
-    $configTtd = array_map(fn($t) => $t + ['rbac' => ['roles' => [], 'users' => []]], $configTtdRaw);
+    $configTtd = array_map(function ($t) { return $t + ['rbac' => ['roles' => [], 'users' => []]]; }, $configTtdRaw);
 }
 
 // ─── Collect all fields from template ───
@@ -108,21 +113,19 @@ foreach ($allFields as $fn => $v) {
     $fieldData[$fn] = $_POST[$fn] ?? '';
 }
 
-// Diagnostic bag — di-return di response JSON supaya user cek di F12 Console
-// (tanpa akses server error log). Non-sensitive metadata only.
+// Diagnostic bag (F12 Console visibility)
 $__ezdocSaveDebug = [
-    'allFields_keys'      => array_keys($allFields),
-    'POST_keys'           => array_keys($_POST ?? []),
-    'collected_nonempty'  => array_keys(array_filter($fieldData, fn($v) => $v !== '')),
-    'field_values_count'  => count(array_filter($fieldData, fn($v) => $v !== '')),
+    'allFields_keys'     => array_keys($allFields),
+    'POST_keys'          => array_keys($_POST ?? []),
+    'collected_nonempty' => array_keys(array_filter($fieldData, function ($v) { return $v !== ''; })),
+    'field_values_count' => count(array_filter($fieldData, function ($v) { return $v !== ''; })),
 ];
 
 // ─── TTD custom fields (mode + per-doc QR content) ───
 foreach ($configTtd as $ttd) {
     $tid = $ttd['id'];
-    $nf = $ttd['nama_field'] ?? ('nama_' . $tid);
-    $keys = ['_ttd_mode_' . $tid, $nf . '_qr'];
-    foreach ($keys as $k) {
+    $nf  = $ttd['nama_field'] ?? ('nama_' . $tid);
+    foreach (['_ttd_mode_' . $tid, $nf . '_qr'] as $k) {
         if (isset($_POST[$k])) $fieldData[$k] = $_POST[$k];
     }
 }
@@ -136,26 +139,26 @@ foreach ($validMateraiIds as $mid) {
     $uploadKey = '_materai_' . $mid . '_uploaded_at';
 
     if (isset($_POST[$imgKey])) {
-        $val = (string)$_POST[$imgKey];
+        $val = (string) $_POST[$imgKey];
         $fieldData[$imgKey] = ($val !== '' && preg_match('#^data:image/(png|jpe?g|gif);base64,#', $val)) ? $val : '';
     }
     if (isset($_POST[$serialKey])) {
-        $serial = trim((string)$_POST[$serialKey]);
+        $serial = trim((string) $_POST[$serialKey]);
         if (mb_strlen($serial) > 30) $serial = mb_substr($serial, 0, 30);
         $fieldData[$serialKey] = $serial;
     }
     if (isset($_POST[$uploadKey])) {
-        $ua = trim((string)$_POST[$uploadKey]);
+        $ua = trim((string) $_POST[$uploadKey]);
         $fieldData[$uploadKey] = ($ua !== '' && preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $ua)) ? $ua : '';
     }
 }
 
-// ─── TTD signatures — dengan per-TTD RBAC enforcement ───
+// ─── TTD signatures dgn per-TTD RBAC enforcement ───
 $ttdData = [];
 $accessMode = ezdoc_access_mode($accessConfig);
 foreach ($configTtd as $ttd) {
     $tid = $ttd['id'];
-    $tv = $_POST[$tid] ?? '';
+    $tv  = $_POST[$tid] ?? '';
     if (!$tv || !preg_match('#^data:image/(png|jpe?g|gif);base64,#', $tv)) continue;
 
     $ttdRbac = $ttd['rbac'] ?? ['roles' => [], 'users' => []];
@@ -163,7 +166,7 @@ foreach ($configTtd as $ttd) {
         if ($accessMode === 'strict') {
             $ttdLabel = $ttd['label'] ?? $tid;
             ezdoc_respond_error("Tidak berhak menandatangani sebagai \"{$ttdLabel}\"", 403, [
-                'ttd_id' => $tid,
+                'ttd_id'         => $tid,
                 'required_roles' => $ttdRbac['roles'] ?? [],
             ]);
         } else {
@@ -181,37 +184,36 @@ foreach ($configTtd as $ttd) {
 }
 
 $jsonFields = json_encode($fieldData, JSON_UNESCAPED_UNICODE);
-$jsonTtd = json_encode($ttdData, JSON_UNESCAPED_UNICODE);
-$authorId = (int)($author_id ?? 0);
+$jsonTtd    = json_encode($ttdData, JSON_UNESCAPED_UNICODE);
+$authorId   = (int) ($author_id ?? 0);
 
 // ─── Check exists & lock status ───
 $isEdit = false;
 $existingLocked = 0;
 if ($doc_id > 0) {
-    $stmt = mysqli_prepare($conn, "SELECT id, is_locked FROM ezdoc_documents WHERE id = ? AND deleted_at IS NULL");
-    mysqli_stmt_bind_param($stmt, "i", $doc_id);
-    mysqli_stmt_execute($stmt);
-    $r = mysqli_stmt_get_result($stmt)->fetch_assoc();
-    if ($r) { $isEdit = true; $existingLocked = (int)$r['is_locked']; }
+    $r = $db->fetchOne(
+        'SELECT id, is_locked FROM ezdoc_documents WHERE id = ? AND deleted_at IS NULL',
+        [$doc_id]
+    );
+    if ($r) { $isEdit = true; $existingLocked = (int) $r['is_locked']; }
 }
 
 if (!$isEdit) {
-    // Find latest version in slot (search by template_uuid supaya lintas template version)
-    $stmt = mysqli_prepare($conn, "SELECT id, is_locked FROM ezdoc_documents WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ? AND deleted_at IS NULL ORDER BY version DESC LIMIT 1");
-    mysqli_stmt_bind_param($stmt, "ssss", $templateUuid, $norm, $nopen, $label);
-    mysqli_stmt_execute($stmt);
-    $row = mysqli_stmt_get_result($stmt)->fetch_assoc();
-    if ($row) { $doc_id = (int)$row['id']; $isEdit = true; $existingLocked = (int)$row['is_locked']; }
+    // Find latest version in slot — search by template_uuid untuk lintas template version
+    $row = $db->fetchOne(
+        'SELECT id, is_locked FROM ezdoc_documents
+         WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ? AND deleted_at IS NULL
+         ORDER BY version DESC LIMIT 1',
+        [$templateUuid, $norm, $nopen, $label]
+    );
+    if ($row) { $doc_id = (int) $row['id']; $isEdit = true; $existingLocked = (int) $row['is_locked']; }
 }
 
-// Reject kalau locked
 if ($isEdit && $existingLocked) {
     ezdoc_respond_error('Dokumen ini locked dan tidak bisa diedit. Unlock dulu atau buat versi baru.');
 }
 
-// Auto-compute document title — industry pattern (Filament/Nova record title):
-// "{Template Name} — {norm}/{nopen}" untuk patient scope, "{Template Name} ({label})"
-// untuk general. Consumer masih bisa override dengan POST title kalau ada UI-nya.
+// Auto-compute document title (Filament/Nova pattern)
 $computedTitle = trim((string) ($_POST['title'] ?? ''));
 if ($computedTitle === '') {
     if ($tplDocScope === 'patient' && ($norm !== '' || $nopen !== '')) {
@@ -224,79 +226,72 @@ if ($computedTitle === '') {
     if (mb_strlen($computedTitle) > 255) $computedTitle = mb_substr($computedTitle, 0, 255);
 }
 
-// ─── Save (update / insert) ───
-if ($isEdit) {
-    // UPDATE — no need to touch uuid, template_uuid, template_version (immutable per doc)
-    $stmt = mysqli_prepare($conn, "UPDATE ezdoc_documents SET title=?, norm=?, nopen=?, label=?, field_values=?, signature_values=?, updated_by=? WHERE id=?");
-    mysqli_stmt_bind_param($stmt, "ssssssii", $computedTitle, $norm, $nopen, $label, $jsonFields, $jsonTtd, $authorId, $doc_id);
-} else {
-    // INSERT — generate UUID, populate template snapshot, set default status = 'published'
-    $docUuid = ezdoc_uuid_v7();
-    $status = 'published';
-    $publishedAt = date('Y-m-d H:i:s');
-    $stmt = mysqli_prepare($conn, "
-        INSERT INTO ezdoc_documents
-        (uuid, template_id, template_uuid, template_version,
-         title, norm, nopen, label, version,
-         field_values, signature_values,
-         status, published_at, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
-    ");
-    mysqli_stmt_bind_param(
-        $stmt,
-        "sisissssssssi",
-        $docUuid, $template_id, $templateUuid, $templateVersion,
-        $computedTitle, $norm, $nopen, $label,
-        $jsonFields, $jsonTtd,
-        $status, $publishedAt, $authorId
-    );
-}
-
-if (!mysqli_stmt_execute($stmt)) {
-    $errDetail = mysqli_stmt_error($stmt) ?: mysqli_error($conn);
+// ─── Save (update / insert) via Connection ───
+try {
+    if ($isEdit) {
+        // UPDATE — uuid, template_uuid, template_version immutable per doc
+        $db->execute(
+            'UPDATE ezdoc_documents SET title = ?, norm = ?, nopen = ?, label = ?,
+                field_values = ?, signature_values = ?, updated_by = ?
+             WHERE id = ?',
+            [$computedTitle, $norm, $nopen, $label, $jsonFields, $jsonTtd, $authorId, $doc_id]
+        );
+    } else {
+        $docUuid = ezdoc_uuid_v7();
+        $publishedAt = date('Y-m-d H:i:s');
+        $db->execute(
+            'INSERT INTO ezdoc_documents
+             (uuid, template_id, template_uuid, template_version,
+              title, norm, nopen, label, version,
+              field_values, signature_values,
+              status, published_at, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)',
+            [
+                $docUuid, $template_id, $templateUuid, $templateVersion,
+                $computedTitle, $norm, $nopen, $label,
+                $jsonFields, $jsonTtd,
+                'published', $publishedAt, $authorId,
+            ]
+        );
+        $doc_id = (int) $db->lastInsertId();
+    }
+} catch (\Throwable $e) {
     @error_log(sprintf(
         '[ezdoc:save] FAILED template_id=%d norm=%s nopen=%s label=%s isEdit=%s err=%s',
-        $template_id, $norm, $nopen, $label, $isEdit ? 'yes' : 'no', $errDetail
+        $template_id, $norm, $nopen, $label, $isEdit ? 'yes' : 'no', $e->getMessage()
     ));
-    ezdoc_respond_error('Gagal: ' . ($errDetail ?: 'Unknown DB error'), 500);
+    ezdoc_respond_error('Gagal: ' . $e->getMessage(), 500);
 }
 
-if (!$isEdit) $doc_id = mysqli_insert_id($conn);
-
-// spec: ezdoc-spec/observability/audit.md — diagnostic log SAVED row
-// untuk debug load-vs-save mismatch (v0.9.9 Repository akan replace ini dengan
-// unit-test-able assertions).
 @error_log(sprintf(
     '[ezdoc:save] SAVED doc_id=%d template_id=%d template_uuid=%s norm=[%s] nopen=[%s] label=[%s] isEdit=%s',
     $doc_id, $template_id, $templateUuid, $norm, $nopen, $label, $isEdit ? 'yes' : 'no'
 ));
 
 // ─── Post-save: verify slug + data hash ───
-// doc_verify_helpers.php akan diupdate untuk pakai ezdoc_documents di next commit.
 $verifyUrl = '';
 if (function_exists('doc_verify_ensure_slug') && function_exists('doc_verify_build_url')) {
-    $verifySlug = doc_verify_ensure_slug($conn, (int)$doc_id);
+    $verifySlug = doc_verify_ensure_slug($conn, (int) $doc_id);
     if ($verifySlug) $verifyUrl = doc_verify_build_url($verifySlug);
 }
 
 $hashInfo = null;
 if (function_exists('doc_verify_compute_and_store_hash')) {
-    $hashInfo = doc_verify_compute_and_store_hash($conn, (int)$doc_id);
+    $hashInfo = doc_verify_compute_and_store_hash($conn, (int) $doc_id);
 }
 
-// Audit log
 ezdoc_audit_log($isEdit ? 'doc.updated' : 'doc.created', [
     'target_type' => 'document',
-    'target_id' => (string)$doc_id,
-    'template_id' => (int)$template_id,
-    'doc_id' => (int)$doc_id,
-    'metadata' => [
-        'norm' => $norm,
-        'nopen' => $nopen,
-        'label' => $label,
-        'ttd_count' => count($ttdData),
-        'data_hash' => $hashInfo['hash'] ?? null,
-        'template_uuid' => $templateUuid,
+    'target_id'   => (string) $doc_id,
+    'template_id' => (int) $template_id,
+    'doc_id'      => (int) $doc_id,
+    'metadata'    => [
+        'norm'             => $norm,
+        'nopen'            => $nopen,
+        'label'            => $label,
+        'ttd_count'        => count($ttdData),
+        'data_hash'        => $hashInfo['hash'] ?? null,
+        'template_uuid'    => $templateUuid,
         'template_version' => $templateVersion,
     ],
     'message' => $isEdit
@@ -305,13 +300,11 @@ ezdoc_audit_log($isEdit ? 'doc.updated' : 'doc.created', [
 ]);
 
 ezdoc_respond_success([
-    'doc_id' => $doc_id,
-    'isEdit' => $isEdit,
-    'label' => $label,
-    'verify_url' => $verifyUrl,
-    'data_hash' => $hashInfo['hash'] ?? null,
+    'doc_id'       => $doc_id,
+    'isEdit'       => $isEdit,
+    'label'        => $label,
+    'verify_url'   => $verifyUrl,
+    'data_hash'    => $hashInfo['hash'] ?? null,
     'data_hash_at' => $hashInfo['hash_at'] ?? null,
-    // Client-side debug — cek di F12 Console tanpa akses server error log.
-    // Response ini di-log ke window.EZDOC_DEBUG.saves[] oleh saveDocument() di generate.php.
-    'debug' => $__ezdocSaveDebug,
+    'debug'        => $__ezdocSaveDebug,
 ], 'Dokumen berhasil disimpan');

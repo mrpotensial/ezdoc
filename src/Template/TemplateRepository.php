@@ -6,6 +6,7 @@ namespace Ezdoc\Template;
 
 use Ezdoc\Db\Connection;
 use Ezdoc\Db\Mysqli\MysqliConnection;
+use Ezdoc\Db\Schema\ColumnIntrospector;
 use Ezdoc\Exceptions\NotFoundException;
 use Ezdoc\UUID;
 use mysqli;
@@ -33,8 +34,27 @@ final class TemplateRepository
     /** @var Connection */
     private $db;
 
-    /** @var string Comma-separated column list untuk SELECT — sinkron dgn Blueprint */
-    private static $selectCols = 'id, uuid, slug, version, is_current, parent_version_id, name, category, scope, content, content_hash, signature_config, layout_config, verify_config, access_config, metadata, owner_id, is_active, is_locked, revision, deleted_at, deleted_by, deleted_reason, created_by, updated_by, created_at, updated_at';
+    /** @var ColumnIntrospector Lazy schema introspection (avoid "Unknown column" on drift) */
+    private $introspector;
+
+    /**
+     * Desired columns (Blueprint-canonical). Repository build actual SELECT
+     * dari intersection dgn ColumnIntrospector::columns() — handle schema
+     * drift (consumer DB might have subset kalau belum di-migrate ke
+     * Blueprint schema).
+     *
+     * Doctrine DBAL pattern: schema introspection → adaptive SELECT.
+     *
+     * @var list<string>
+     */
+    private static $desiredCols = [
+        'id', 'uuid', 'slug', 'version', 'is_current', 'parent_version_id',
+        'name', 'category', 'scope', 'content', 'content_hash',
+        'signature_config', 'layout_config', 'verify_config', 'access_config',
+        'metadata', 'owner_id', 'is_active', 'is_locked', 'revision',
+        'deleted_at', 'deleted_by', 'deleted_reason',
+        'created_by', 'updated_by', 'created_at', 'updated_at',
+    ];
 
     /**
      * @param Connection|mysqli $db Ezdoc\Db\Connection instance (preferred)
@@ -52,6 +72,19 @@ final class TemplateRepository
                 . (is_object($db) ? get_class($db) : gettype($db))
             );
         }
+        $this->introspector = new ColumnIntrospector($this->db);
+    }
+
+    /**
+     * Build SELECT column clause adaptif — intersection of desiredCols dgn
+     * actual columns di consumer DB (handle schema drift).
+     *
+     * Cached per-request via ColumnIntrospector.
+     */
+    private function selectCols(): string
+    {
+        $existing = $this->introspector->intersect('ezdoc_templates', self::$desiredCols);
+        return implode(', ', $existing);
     }
 
     // ─── Finders ─────────────────────────────────────────────────────────
@@ -60,7 +93,7 @@ final class TemplateRepository
     {
         if ($id <= 0) return null;
         $row = $this->db->fetchOne(
-            'SELECT ' . self::$selectCols . ' FROM ezdoc_templates WHERE id = ? LIMIT 1',
+            'SELECT ' . $this->selectCols() . ' FROM ezdoc_templates WHERE id = ? LIMIT 1',
             [$id]
         );
         return $row ? Template::fromRow($row) : null;
@@ -74,7 +107,7 @@ final class TemplateRepository
     {
         if ($uuid === '') return null;
         $row = $this->db->fetchOne(
-            'SELECT ' . self::$selectCols
+            'SELECT ' . $this->selectCols()
             . ' FROM ezdoc_templates WHERE uuid = ? ORDER BY version DESC LIMIT 1',
             [$uuid]
         );
@@ -88,7 +121,7 @@ final class TemplateRepository
     {
         if ($uuid === '') return null;
         $row = $this->db->fetchOne(
-            'SELECT ' . self::$selectCols
+            'SELECT ' . $this->selectCols()
             . ' FROM ezdoc_templates'
             . ' WHERE uuid = ? AND is_current = 1 AND deleted_at IS NULL LIMIT 1',
             [$uuid]
@@ -119,7 +152,7 @@ final class TemplateRepository
         $offset = $offset >= 0 ? $offset : 0;
 
         $rows = $this->db->fetchAll(
-            'SELECT ' . self::$selectCols
+            'SELECT ' . $this->selectCols()
             . ' FROM ezdoc_templates'
             . ' WHERE is_current = 1 AND is_active = 1 AND deleted_at IS NULL'
             . ' ORDER BY updated_at DESC LIMIT ? OFFSET ?',
@@ -137,7 +170,7 @@ final class TemplateRepository
         $limit = $limit > 0 ? $limit : 100;
 
         $rows = $this->db->fetchAll(
-            'SELECT ' . self::$selectCols
+            'SELECT ' . $this->selectCols()
             . ' FROM ezdoc_templates'
             . ' WHERE owner_id = ? AND is_current = 1 AND deleted_at IS NULL'
             . ' ORDER BY updated_at DESC LIMIT ?',
@@ -154,7 +187,7 @@ final class TemplateRepository
         $limit = $limit > 0 ? $limit : 100;
 
         $rows = $this->db->fetchAll(
-            'SELECT ' . self::$selectCols
+            'SELECT ' . $this->selectCols()
             . ' FROM ezdoc_templates'
             . ' WHERE category = ? AND is_current = 1 AND deleted_at IS NULL'
             . ' ORDER BY updated_at DESC LIMIT ?',
