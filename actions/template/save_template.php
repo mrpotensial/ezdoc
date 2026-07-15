@@ -65,7 +65,7 @@ $template_id = (int) ($_POST['template_id'] ?? 0);
 $ownerId = (int) ($author_id ?? 0) ?: null;
 
 if (empty($name)) {
-    ezdoc_respond_error('Nama template wajib diisi');
+    ezdoc_respond_error(t('response.template_name_required', [], 'Template name is required'));
 }
 
 $db = new MysqliConnection($conn);
@@ -112,7 +112,7 @@ try {
         $newId = (int) $db->lastInsertId();
     }
 } catch (\Throwable $e) {
-    ezdoc_respond_error('Gagal menyimpan: ' . $e->getMessage(), 500);
+    ezdoc_respond_error(t('response.save_template_failed', ['error' => $e->getMessage()], 'Failed to save: {error}'), 500);
 }
 
 $isUpdate = ($template_id > 0);
@@ -131,6 +131,6 @@ ezdoc_audit_log($isUpdate ? 'template.updated' : 'template.created', [
 
 ezdoc_respond_raw([
     'success' => true,
-    'message' => 'Template berhasil disimpan',
+    'message' => t('response.template_saved', [], 'Template saved successfully'),
     'id'      => $newId,
 ]);

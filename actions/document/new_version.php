@@ -26,7 +26,7 @@ $lb  = trim($_POST['label'] ?? '-');
 $sourceVersion = isset($_POST['source_version']) ? (int) $_POST['source_version'] : 0;
 
 if ($tid <= 0 || $n === '' || $np === '') {
-    ezdoc_respond_error('Parameter tidak lengkap');
+    ezdoc_respond_error(t('response.incomplete_parameters', [], 'Incomplete parameters'));
 }
 
 $db = new MysqliConnection($conn);
@@ -36,7 +36,7 @@ $tpl = $db->fetchOne(
     'SELECT uuid, version FROM ezdoc_templates WHERE id = ? LIMIT 1',
     [$tid]
 );
-if (!$tpl) ezdoc_respond_error('Template tidak ditemukan');
+if (!$tpl) ezdoc_respond_error(t('response.template_not_found', [], 'Template not found'));
 $templateUuid    = (string) $tpl['uuid'];
 $templateVersion = (int) $tpl['version'];
 
@@ -109,4 +109,4 @@ ezdoc_audit_log('doc.version_created', [
 ezdoc_respond_success([
     'doc_id'  => $newDocId,
     'version' => $nextVersion,
-], "Versi baru v{$nextVersion} berhasil dibuat");
+], t('response.version_created', ['version' => $nextVersion], 'New version v{version} created successfully'));

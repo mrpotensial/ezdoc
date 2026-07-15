@@ -28,10 +28,14 @@ and `views/document/generate.php` into per-locale PHP array catalogs — see
   JS side gets a matching `EZDOC_I18N` dictionary + `t()` walker, injected via
   each file's existing URL-bag mechanism (`data-ezdoc-urls` attribute for
   designer.php, inline `window.EZDOC_URLS` const for generate.php).
-- Out of scope for this pass (see docs/I18N.md): AJAX action-endpoint response
-  strings, per-document/template author-entered content (`data-label`,
-  `data-options`, category/template names), and the pre-existing
-  `Config`-driven copy overrides (`designer.page_title`, `generate.picker_*`).
+- Out of scope for this pass (see docs/I18N.md): per-document/template
+  author-entered content (`data-label`, `data-options`, category/template
+  names), the pre-existing `Config`-driven copy overrides
+  (`designer.page_title`, `generate.picker_*`), and internal status/mode
+  discriminator values baked into persisted template/config data (e.g. a
+  literal `'kosong'` materai-mode value, or the `data-nama-field` attribute
+  name) — renaming those needs a backward-compatible migration, not a `t()`
+  swap.
 - **`lang/en/{common,designer,generate}.php`** — English catalog, generated
   directly from the `$default` argument already present at every `t()` call
   site (not hand-translated) — that argument doubles as the English source
@@ -39,6 +43,28 @@ and `views/document/generate.php` into per-locale PHP array catalogs — see
   standalone runtime smoke test (key resolution, `{param}` interpolation,
   per-locale isolation, missing-key/bad-locale fallback) for both `id` and
   `en`.
+- **`views/document/list.php`** — the library's generic starter list view
+  (shown at `/ezdoc/public/?ezdoc_page=list`) had its own ~8 hardcoded
+  Indonesian strings, never covered by the above. Extended its existing
+  `$config->get('pages.list.*', 'default')` pattern (Level-1 config-only
+  customization per docs/UI-CUSTOMIZATION.md) rather than pulling in the
+  Translator system, since this file is a small starter template, not a
+  heavily-customized view like designer.php/generate.php.
+- **AJAX action-endpoint responses** (`actions/**/*.php`, 21 files, ~59
+  `ezdoc_respond_success()`/`ezdoc_respond_error()` call sites) — now
+  covered too. These keys live under a new reserved `response.*` section in
+  `lang/id/common.php`/`lang/en/common.php` rather than a per-view catalog,
+  because an action file can run under whichever Translator instance the
+  including view already built; `common.php` is merged by every
+  `Translator::forView()` call regardless of `$view`, so `response.*`
+  resolves correctly no matter which instance is active. `actions/_dispatcher.php`
+  gained the same defensive `$translator`/`t()` bootstrap already used in
+  the two views, for the legacy standalone-entry-point case.
+- **`Ezdoc\App::demo()`** (used by `public/index.php`'s zero-config
+  fallback — the library's own generic showcase, not a real consumer app's
+  `App::run()` config) now defaults `app.locale` to `'en'`, since it's the
+  general try-it-out surface, not the SIMpel-specific Indonesian production
+  deployment.
 
 ## [0.8.0] - 2026-07-10 — "PAdES envelope + RFC 3161 timestamp + PDF sign/verify wrapper"
 

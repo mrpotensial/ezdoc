@@ -48,6 +48,32 @@ if (!function_exists('ezdoc_respond_success')) {
     require_once __DIR__ . '/../bootstrap.php';
 }
 
+// i18n — guarantee $translator + global t() exist regardless of entry path.
+// This dispatcher can be require_once'd from an already-bootstrapped
+// designer.php/generate.php (which already set $translator/$GLOBALS['translator']
+// for their OWN view — e.g. 'generate'), OR entered standalone via a legacy
+// consumer-side action page that never touched the Translator at all.
+// Endpoint response strings below live under the RESERVED `response.*`
+// section of lang/{locale}/common.php (not a per-view catalog), so they
+// resolve correctly via t() no matter which view's Translator is currently
+// active — see docs/I18N.md.
+if (!isset($config) || !($config instanceof \Ezdoc\UI\Config)) {
+    $config = new \Ezdoc\UI\Config([]);
+}
+if (!isset($translator) || !($translator instanceof \Ezdoc\UI\Translator)) {
+    $translator = \Ezdoc\UI\Translator::forView('actions', (string) $config->get('app.locale', 'id'));
+}
+$GLOBALS['translator'] = $translator;
+if (!function_exists('t')) {
+    function t(string $key, array $params = [], ?string $default = null): string {
+        $translator = $GLOBALS['translator'] ?? null;
+        if (!($translator instanceof \Ezdoc\UI\Translator)) {
+            return $default !== null ? $default : $key;
+        }
+        return $translator->t($key, $params, $default);
+    }
+}
+
 // ─── GET /?action=generate_qr ───
 if (isset($_GET['action']) && $_GET['action'] === 'generate_qr') {
     require __DIR__ . '/document/generate_qr.php';

@@ -26,18 +26,18 @@ global $conn;
 ezdoc_require_manage_templates('Tidak berhak menganalisa query template');
 
 $query = trim($_POST['query'] ?? '');
-if ($query === '') ezdoc_respond_error('Query kosong');
+if ($query === '') ezdoc_respond_error(t('response.query_empty', [], 'Query is empty'));
 
 // Block non-SELECT statements — first-token check
 $normalized = preg_replace('/\s+/', ' ', strtoupper(ltrim($query)));
 $blocked = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'CREATE', 'REPLACE', 'GRANT', 'REVOKE'];
 foreach ($blocked as $kw) {
     if (strpos($normalized, $kw) === 0) {
-        ezdoc_respond_error("Hanya query SELECT yang diizinkan (terdeteksi: {$kw})");
+        ezdoc_respond_error(t('response.only_select_allowed', ['keyword' => $kw], 'Only SELECT queries are allowed (detected: {keyword})'));
     }
 }
 if (strpos($normalized, 'SELECT') !== 0 && strpos($normalized, 'WITH') !== 0) {
-    ezdoc_respond_error('Query harus diawali SELECT atau WITH');
+    ezdoc_respond_error(t('response.query_must_start_select', [], 'Query must start with SELECT or WITH'));
 }
 
 // Replace {param} placeholders with empty string so syntax is valid at LIMIT-0 probe
@@ -50,7 +50,7 @@ $db = new MysqliConnection($conn);
 $mysqli = $db->raw();
 $result = @mysqli_query($mysqli, $safeQuery);
 if (!$result) {
-    ezdoc_respond_error('Query error: ' . mysqli_error($mysqli));
+    ezdoc_respond_error(t('response.query_error', ['error' => mysqli_error($mysqli)], 'Query error: {error}'));
 }
 
 $columns = [];

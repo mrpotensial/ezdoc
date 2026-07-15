@@ -26,7 +26,7 @@ $np  = trim($_POST['nopen'] ?? '');
 $lb  = trim($_POST['label'] ?? '-');
 
 if ($tid <= 0 || $n === '' || $np === '') {
-    ezdoc_respond_error('Parameter tidak lengkap');
+    ezdoc_respond_error(t('response.incomplete_parameters', [], 'Incomplete parameters'));
 }
 
 $db = new MysqliConnection($conn);
@@ -34,7 +34,7 @@ $tplRepo = new TemplateRepository($db);
 
 // Resolve template_id → uuid (untuk slot query lintas template version)
 $tpl = $tplRepo->findById($tid);
-if ($tpl === null) ezdoc_respond_error('Template tidak ditemukan');
+if ($tpl === null) ezdoc_respond_error(t('response.template_not_found', [], 'Template not found'));
 $templateUuid = $tpl->getUuid();
 
 try {
@@ -45,7 +45,7 @@ try {
         [$templateUuid, $n, $np, $lb]
     );
 } catch (\Throwable $e) {
-    ezdoc_respond_error('Gagal restore: ' . $e->getMessage());
+    ezdoc_respond_error(t('response.restore_failed', ['error' => $e->getMessage()], 'Failed to restore: {error}'));
 }
 
 ezdoc_audit_log('doc.restored', [
@@ -62,4 +62,4 @@ ezdoc_audit_log('doc.restored', [
     'message' => "Restore slot dokumen ({$affected} versi, norm {$n}, label {$lb})",
 ]);
 
-ezdoc_respond_success(['affected' => $affected], "Slot berhasil di-restore ({$affected} versi)");
+ezdoc_respond_success(['affected' => $affected], t('response.slot_restored', ['count' => $affected], 'Slot restored successfully ({count} version(s))'));

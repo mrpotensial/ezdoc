@@ -24,20 +24,20 @@ $varName = trim($_POST['var_name'] ?? '');
 $varDesc = trim($_POST['description'] ?? '');
 
 if ($varName === '') {
-    ezdoc_respond_error('Nama variabel wajib diisi');
+    ezdoc_respond_error(t('response.var_name_required', [], 'Variable name is required'));
 }
 
 // Sanitize: alphanumeric + underscore only
 $varNameClean = preg_replace('/[^a-zA-Z0-9_]/', '', $varName);
 if ($varNameClean === '') {
-    ezdoc_respond_error('Nama variabel harus alphanumeric atau underscore');
+    ezdoc_respond_error(t('response.var_name_invalid_chars', [], 'Variable name must be alphanumeric or underscore'));
 }
 
 try {
     $repo = new \Ezdoc\DefaultVars\DefaultVarsRepository($conn);
     $insertedId = $repo->add($varNameClean, $varDesc !== '' ? $varDesc : null);
 } catch (\Throwable $e) {
-    ezdoc_respond_error('Gagal menambahkan variabel: ' . $e->getMessage());
+    ezdoc_respond_error(t('response.add_var_failed', ['error' => $e->getMessage()], 'Failed to add variable: {error}'));
 }
 
 // Audit — hanya kalau memang inserted (skip audit kalau duplicate silent)
@@ -55,4 +55,4 @@ if ($insertedId > 0) {
 
 ezdoc_respond_success([
     'var_name' => $varNameClean,
-], 'Variabel ditambahkan');
+], t('response.var_added', [], 'Variable added'));

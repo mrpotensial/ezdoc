@@ -18,14 +18,14 @@ ezdoc_require_manage_templates('Tidak berhak lock/unlock template');
 
 $tid    = (int)($_POST['template_id'] ?? 0);
 $locked = (int)($_POST['locked'] ?? 0);
-if ($tid <= 0) ezdoc_respond_error('ID tidak valid');
+if ($tid <= 0) ezdoc_respond_error(t('response.invalid_id', [], 'Invalid ID'));
 
 $db = new MysqliConnection($conn);
 
 try {
     $db->execute('UPDATE ezdoc_templates SET is_locked = ? WHERE id = ?', [$locked, $tid]);
 } catch (\Throwable $e) {
-    ezdoc_respond_error('Gagal update: ' . $e->getMessage());
+    ezdoc_respond_error(t('response.update_failed', ['error' => $e->getMessage()], 'Failed to update: {error}'));
 }
 
 ezdoc_audit_log($locked ? 'template.locked' : 'template.unlocked', [

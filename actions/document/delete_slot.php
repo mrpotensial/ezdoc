@@ -24,7 +24,7 @@ $np  = trim($_POST['nopen'] ?? '');
 $lb  = trim($_POST['label'] ?? '-');
 
 if ($tid <= 0 || $n === '' || $np === '') {
-    ezdoc_respond_error('Parameter tidak lengkap');
+    ezdoc_respond_error(t('response.incomplete_parameters', [], 'Incomplete parameters'));
 }
 
 $db = new MysqliConnection($conn);
@@ -34,7 +34,7 @@ $tpl = $db->fetchOne(
     'SELECT uuid, access_config FROM ezdoc_templates WHERE id = ? LIMIT 1',
     [$tid]
 );
-if (!$tpl) ezdoc_respond_error('Template tidak ditemukan');
+if (!$tpl) ezdoc_respond_error(t('response.template_not_found', [], 'Template not found'));
 $templateUuid = (string) $tpl['uuid'];
 $accessConfig = ezdoc_parse_access_config($tpl['access_config'] ?? null);
 
@@ -57,7 +57,7 @@ $lockedCnt = (int) $db->fetchScalar(
     [$templateUuid, $n, $np, $lb]
 );
 if ($lockedCnt > 0) {
-    ezdoc_respond_error("Slot punya {$lockedCnt} versi locked. Unlock dulu sebelum hapus.");
+    ezdoc_respond_error(t('response.slot_has_locked_versions', ['count' => $lockedCnt], 'Slot has {count} locked version(s). Unlock them first before deleting.'));
 }
 
 // Soft delete semua active version di slot
@@ -70,7 +70,7 @@ try {
         [$author, $templateUuid, $n, $np, $lb]
     );
 } catch (\Throwable $e) {
-    ezdoc_respond_error('Gagal hapus slot: ' . $e->getMessage());
+    ezdoc_respond_error(t('response.delete_slot_failed', ['error' => $e->getMessage()], 'Failed to delete slot: {error}'));
 }
 
 ezdoc_audit_log('doc.deleted', [
@@ -88,4 +88,4 @@ ezdoc_audit_log('doc.deleted', [
     'message' => "Soft delete slot dokumen ({$affected} versi, norm {$n}, label {$lb})",
 ]);
 
-ezdoc_respond_success(['affected' => $affected], "Slot berhasil dihapus ({$affected} versi)");
+ezdoc_respond_success(['affected' => $affected], t('response.slot_deleted', ['count' => $affected], 'Slot deleted successfully ({count} version(s))'));

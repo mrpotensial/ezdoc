@@ -13,16 +13,16 @@
 
 $data = trim((string)($_GET['data'] ?? ''));
 if ($data === '') {
-    ezdoc_respond_error('Data QR kosong');
+    ezdoc_respond_error(t('response.qr_data_empty', [], 'QR data is empty'));
 }
 
 if (!function_exists('generateQrForDompdf')) {
-    ezdoc_respond_error('QR generator tidak tersedia (generateQrForDompdf missing)', 500);
+    ezdoc_respond_error(t('response.qr_generator_unavailable', [], 'QR generator unavailable (generateQrForDompdf missing)'), 500);
 }
 
 try {
     $qrSrc = generateQrForDompdf($data, 200, 5);
     ezdoc_respond_success(['qr' => $qrSrc]);
 } catch (Exception $e) {
-    ezdoc_respond_error('Gagal generate QR: ' . $e->getMessage(), 500);
+    ezdoc_respond_error(t('response.qr_generate_failed', ['error' => $e->getMessage()], 'Failed to generate QR: {error}'), 500);
 }

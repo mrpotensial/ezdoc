@@ -18,7 +18,7 @@ ezdoc_require_manage_templates('Tidak berhak menghapus default variable');
 
 $varId = (int)($_POST['var_id'] ?? 0);
 if ($varId <= 0) {
-    ezdoc_respond_error('ID tidak valid');
+    ezdoc_respond_error(t('response.invalid_id', [], 'Invalid ID'));
 }
 
 $repo = new \Ezdoc\DefaultVars\DefaultVarsRepository($conn);
@@ -30,7 +30,7 @@ $varName = $existing['var_name'] ?? null;
 try {
     $repo->delete($varId);
 } catch (\Throwable $e) {
-    ezdoc_respond_error('Gagal menghapus variabel: ' . $e->getMessage());
+    ezdoc_respond_error(t('response.delete_var_failed', ['error' => $e->getMessage()], 'Failed to delete variable: {error}'));
 }
 
 if ($varName) {
@@ -42,4 +42,4 @@ if ($varName) {
     ]);
 }
 
-ezdoc_respond_success([], 'Variabel dihapus');
+ezdoc_respond_success([], t('response.var_deleted', [], 'Variable deleted'));

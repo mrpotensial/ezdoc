@@ -25,11 +25,11 @@ $oldName = trim($_POST['old_name'] ?? '');
 $newName = trim($_POST['new_name'] ?? '');
 
 if ($tid <= 0 || $oldName === '' || $newName === '' || $oldName === $newName) {
-    ezdoc_respond_error('Parameter tidak valid');
+    ezdoc_respond_error(t('response.invalid_parameters', [], 'Invalid parameters'));
 }
 
 if (!preg_match('/^[a-zA-Z0-9_\-]+$/', $newName)) {
-    ezdoc_respond_error('Nama baru harus alphanumeric, underscore, atau hyphen');
+    ezdoc_respond_error(t('response.new_name_invalid_chars', [], 'New name must be alphanumeric, underscore, or hyphen'));
 }
 
 $db = new MysqliConnection($conn);
@@ -66,7 +66,7 @@ try {
         }
     });
 } catch (\Throwable $e) {
-    ezdoc_respond_error('Rename gagal (rollback): ' . $e->getMessage());
+    ezdoc_respond_error(t('response.rename_failed', ['error' => $e->getMessage()], 'Rename failed (rolled back): {error}'));
 }
 
 ezdoc_audit_log('template.field_renamed', [
@@ -82,9 +82,14 @@ ezdoc_audit_log('template.field_renamed', [
     'message' => "Rename field '{$oldName}' → '{$newName}' di template #{$tid} ({$updated} docs updated)",
 ]);
 
-$msg = "{$updated} dokumen di-update";
 if ($skipped > 0) {
-    $msg .= " ({$skipped} skip karena '{$newName}' sudah ada value)";
+    $msg = t('response.field_renamed_with_skips', [
+        'updated'  => $updated,
+        'skipped'  => $skipped,
+        'new_name' => $newName,
+    ], "{updated} document(s) updated ({skipped} skipped because '{new_name}' already has a value)");
+} else {
+    $msg = t('response.field_renamed', ['updated' => $updated], '{updated} document(s) updated');
 }
 
 ezdoc_respond_success(['updated' => $updated, 'skipped' => $skipped], $msg);

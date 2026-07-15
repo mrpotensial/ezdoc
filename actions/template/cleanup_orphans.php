@@ -25,7 +25,7 @@ ezdoc_require_manage_templates('Tidak berhak cleanup field orphans');
 $tid = (int) ($_POST['template_id'] ?? 0);
 $validFieldsCsv = trim($_POST['valid_fields'] ?? '');
 
-if ($tid <= 0) ezdoc_respond_error('ID template tidak valid');
+if ($tid <= 0) ezdoc_respond_error(t('response.invalid_template_id', [], 'Invalid template ID'));
 
 $validFields = array_filter(array_map('trim', explode(',', $validFieldsCsv)));
 $validSet = array_flip($validFields);
@@ -61,7 +61,7 @@ try {
         }
     });
 } catch (\Throwable $e) {
-    ezdoc_respond_error('Cleanup gagal (rollback): ' . $e->getMessage());
+    ezdoc_respond_error(t('response.cleanup_failed', ['error' => $e->getMessage()], 'Cleanup failed (rolled back): {error}'));
 }
 
 $removedList = array_keys($removedKeys);
@@ -81,4 +81,7 @@ ezdoc_audit_log('template.orphans_cleaned', [
 ezdoc_respond_success([
     'updated'     => $updated,
     'removedKeys' => $removedList,
-], "{$updated} dokumen dibersihkan, " . count($removedList) . " field orphan dihapus");
+], t('response.orphans_cleaned', [
+    'updated' => $updated,
+    'removed' => count($removedList),
+], '{updated} document(s) cleaned, {removed} orphan field(s) removed'));

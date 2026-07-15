@@ -21,7 +21,7 @@ use Ezdoc\Db\Mysqli\MysqliConnection;
 global $conn, $author_id;
 
 $did = (int)($_POST['doc_id'] ?? 0);
-if ($did <= 0) ezdoc_respond_error('Doc ID invalid');
+if ($did <= 0) ezdoc_respond_error(t('response.invalid_doc_id', [], 'Invalid document ID'));
 
 $db = new MysqliConnection($conn);
 
@@ -33,7 +33,7 @@ $doc = $db->fetchOne(
      WHERE d.id = ? AND d.deleted_at IS NULL',
     [$did]
 );
-if (!$doc) ezdoc_respond_error('Dokumen tidak ditemukan');
+if (!$doc) ezdoc_respond_error(t('response.document_not_found', [], 'Document not found'));
 
 // RBAC delete check — beda dgn create/edit/lock: kalau kosong, default superadmin only.
 $accessConfig = ezdoc_parse_access_config($doc['access_config'] ?? null);
@@ -48,7 +48,7 @@ if (!$hasExplicitDeleteConfig) {
 }
 
 if ((int) $doc['is_locked'] === 1) {
-    ezdoc_respond_error('Versi locked tidak bisa dihapus. Unlock dulu.');
+    ezdoc_respond_error(t('response.version_locked_cannot_delete', [], 'Locked version cannot be deleted. Unlock it first.'));
 }
 
 // Cek apakah ini versi terakhir di slot (search by template_uuid untuk lintas versi template)
@@ -58,7 +58,7 @@ $cnt = (int) $db->fetchScalar(
     [$doc['template_uuid'], $doc['norm'], $doc['nopen'], $doc['label']]
 );
 if ($cnt <= 1) {
-    ezdoc_respond_error('Ini versi terakhir di slot. Pakai "Hapus Slot" untuk hapus seluruh slot.');
+    ezdoc_respond_error(t('response.last_version_in_slot', [], 'This is the last version in the slot. Use "Delete Slot" to remove the entire slot.'));
 }
 
 // Soft delete
@@ -69,7 +69,7 @@ try {
         [$author, $did]
     );
 } catch (\Throwable $e) {
-    ezdoc_respond_error('Gagal hapus: ' . $e->getMessage());
+    ezdoc_respond_error(t('response.delete_failed', ['error' => $e->getMessage()], 'Failed to delete: {error}'));
 }
 
 ezdoc_audit_log('doc.deleted', [
@@ -86,4 +86,4 @@ ezdoc_audit_log('doc.deleted', [
     'message' => "Soft delete versi dokumen (norm {$doc['norm']}, label {$doc['label']})",
 ]);
 
-ezdoc_respond_success([], 'Versi berhasil dihapus (soft delete)');
+ezdoc_respond_success([], t('response.version_deleted', [], 'Version deleted successfully (soft delete)'));

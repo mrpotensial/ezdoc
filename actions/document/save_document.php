@@ -42,7 +42,7 @@ $tplRepo = new TemplateRepository($db);
 
 // ─── Load template (include name utk auto-computed doc title) ───
 $tpl = $tplRepo->findById($template_id);
-if (!$tpl) ezdoc_respond_error('Template tidak ditemukan');
+if (!$tpl) ezdoc_respond_error(t('response.template_not_found', [], 'Template not found'));
 
 $templateUuid    = $tpl->getUuid();
 $templateVersion = $tpl->getVersion();
@@ -71,7 +71,7 @@ $rbacAction = ($doc_id > 0) ? 'edit' : 'create';
 ezdoc_require_on_template($accessConfig, $rbacAction, "Tidak berhak {$rbacAction} dokumen dari template ini");
 
 if ($tplDocScope === 'patient' && ($norm === '' || $nopen === '')) {
-    ezdoc_respond_error('No RM dan No Pendaftaran wajib diisi');
+    ezdoc_respond_error(t('response.patient_identity_required', [], 'Medical record number and registration number are required'));
 }
 
 // ─── Build configTtd (support placeholder + legacy format) ───
@@ -169,7 +169,7 @@ foreach ($configTtd as $ttd) {
     if (!ezdoc_can_sign_ttd($ttdRbac)) {
         if ($accessMode === 'strict') {
             $ttdLabel = $ttd['label'] ?? $tid;
-            ezdoc_respond_error("Tidak berhak menandatangani sebagai \"{$ttdLabel}\"", 403, [
+            ezdoc_respond_error(t('response.ttd_sign_forbidden', ['label' => $ttdLabel], 'Not authorized to sign as "{label}"'), 403, [
                 'ttd_id'         => $tid,
                 'required_roles' => $ttdRbac['roles'] ?? [],
             ]);
@@ -214,7 +214,7 @@ if (!$isEdit) {
 }
 
 if ($isEdit && $existingLocked) {
-    ezdoc_respond_error('Dokumen ini locked dan tidak bisa diedit. Unlock dulu atau buat versi baru.');
+    ezdoc_respond_error(t('response.document_locked_cannot_edit', [], 'This document is locked and cannot be edited. Unlock it first or create a new version.'));
 }
 
 // Auto-compute document title (Filament/Nova pattern)
@@ -264,7 +264,7 @@ try {
         '[ezdoc:save] FAILED template_id=%d norm=%s nopen=%s label=%s isEdit=%s err=%s',
         $template_id, $norm, $nopen, $label, $isEdit ? 'yes' : 'no', $e->getMessage()
     ));
-    ezdoc_respond_error('Gagal: ' . $e->getMessage(), 500);
+    ezdoc_respond_error(t('response.save_failed', ['error' => $e->getMessage()], 'Failed: {error}'), 500);
 }
 
 @error_log(sprintf(
@@ -311,4 +311,4 @@ ezdoc_respond_success([
     'data_hash'    => $hashInfo['hash'] ?? null,
     'data_hash_at' => $hashInfo['hash_at'] ?? null,
     'debug'        => $__ezdocSaveDebug,
-], 'Dokumen berhasil disimpan');
+], t('response.document_saved', [], 'Document saved successfully'));

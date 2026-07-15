@@ -25,7 +25,7 @@ $tid       = (int) ($_POST['template_id'] ?? 0);
 $fieldName = trim($_POST['field_name'] ?? '');
 
 if ($tid <= 0 || $fieldName === '') {
-    ezdoc_respond_error('Parameter tidak lengkap');
+    ezdoc_respond_error(t('response.incomplete_parameters', [], 'Incomplete parameters'));
 }
 
 $db = new MysqliConnection($conn);

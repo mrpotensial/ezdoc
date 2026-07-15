@@ -22,7 +22,7 @@ global $conn;
 
 $did    = (int)($_POST['doc_id'] ?? 0);
 $locked = (int)($_POST['locked'] ?? 0);
-if ($did <= 0) ezdoc_respond_error('Doc ID invalid');
+if ($did <= 0) ezdoc_respond_error(t('response.invalid_doc_id', [], 'Invalid document ID'));
 
 // Unlock guard — hanya superadmin. Untuk revisi, user biasa buat versi baru.
 if ($locked === 0) {
@@ -52,7 +52,7 @@ try {
         [$locked, $newStatus, $did]
     );
 } catch (\Throwable $e) {
-    ezdoc_respond_error('Gagal update lock: ' . $e->getMessage());
+    ezdoc_respond_error(t('response.update_lock_failed', ['error' => $e->getMessage()], 'Failed to update lock: {error}'));
 }
 
 ezdoc_audit_log($locked ? 'doc.locked' : 'doc.unlocked', [
@@ -62,4 +62,8 @@ ezdoc_audit_log($locked ? 'doc.locked' : 'doc.unlocked', [
     'message'     => 'Dokumen ' . ($locked ? 'dilock' : 'diunlock'),
 ]);
 
-ezdoc_respond_success(['locked' => $locked], 'Dokumen ' . ($locked ? 'dilock' : 'diunlock'));
+$lockMessage = $locked
+    ? t('response.document_locked', [], 'Document locked')
+    : t('response.document_unlocked', [], 'Document unlocked');
+
+ezdoc_respond_success(['locked' => $locked], $lockMessage);

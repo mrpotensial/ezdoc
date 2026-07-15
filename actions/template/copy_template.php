@@ -22,7 +22,7 @@ global $conn, $author_id;
 ezdoc_require_manage_templates('Tidak berhak duplikat template');
 
 $tid = (int)($_POST['template_id'] ?? 0);
-if ($tid <= 0) ezdoc_respond_error('ID tidak valid');
+if ($tid <= 0) ezdoc_respond_error(t('response.invalid_id', [], 'Invalid ID'));
 
 $db = new MysqliConnection($conn);
 
@@ -32,7 +32,7 @@ $row = $db->fetchOne(
      FROM ezdoc_templates WHERE id = ?',
     [$tid]
 );
-if (!$row) ezdoc_respond_error('Template tidak ditemukan');
+if (!$row) ezdoc_respond_error(t('response.template_not_found', [], 'Template not found'));
 
 $newName = $row['name'] . ' (Copy)';
 $newUuid = ezdoc_uuid_v7();
