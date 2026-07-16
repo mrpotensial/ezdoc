@@ -2045,8 +2045,12 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             resize: false,
             // Sticky toolbar — tetap visible saat scroll editor content (Google Docs
             // pattern). Sticky within scrolling ancestor (editorWrapper).
-            toolbar_sticky: true,
-            toolbar_sticky_offset: 0,
+            // Sticky toolbar DISABLED — sebelumnya `toolbar_sticky: true` + `offset: 0`
+            // bikin toolbar jump ke top viewport setelah insert floating/custom
+            // element (DOM change triggers layout recalc → sticky reposition ke Y=0
+            // → menutupi header custom (nama template, tombol simpan, dll)).
+            // Non-sticky = toolbar stays with editor container, no overlap risk.
+            toolbar_sticky: false,
             // Plugins — full feature set (skip emoticons/media/mediaembed per user):
             //   autosave     : recover unsaved content after crash/close
             //   directionality: LTR/RTL toggle untuk multi-lang templates
@@ -2512,8 +2516,22 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                             posAttrs = ` data-pos-mode="${mode}" data-pos-x="20" data-pos-y="20"`;
                         }
 
-                        editor.insertContent(`<span class="${classes}" data-logo="${cleanName}" data-width="${width}"${posAttrs}${style} contenteditable="false">[Logo: ${cleanName}]</span>&nbsp;`);
+                        // Widget-wrapper pattern (CKEditor 5 non-editable atomic
+                        // block precedent) untuk floating variants: wrap span dalam
+                        // <p class="floating-only" contenteditable="false"> supaya:
+                        // - .floating-only CSS collapse ke 0 height (no empty line)
+                        // - contenteditable="false" wrapper = cursor can't accidentally
+                        //   enter, protect dari accidental deletion via typing
+                        // - explicit wrapper skip TinyMCE auto-paragraph creation
+                        //   yg might not get .floating-only class in time.
+                        const logoSpan = `<span class="${classes}" data-logo="${cleanName}" data-width="${width}"${posAttrs}${style} contenteditable="false">[Logo: ${cleanName}]</span>`;
+                        if (mode === 'inline') {
+                            editor.insertContent(logoSpan + '&nbsp;');
+                        } else {
+                            editor.insertContent(`<p class="floating-only" contenteditable="false">${logoSpan}</p>`);
+                        }
                         setTimeout(scanLogos, 100);
+                        if (mode !== 'inline') applyFloatingOnlyClasses();
 
                         // Initialize drag for floating logos
                         if (mode !== 'inline') {
@@ -2552,7 +2570,15 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                             posAttrs = ` data-pos-mode="${mode}" data-pos-x="20" data-pos-y="20"`;
                         }
 
-                        editor.insertContent(`<span class="${classes}" data-qr="${cleanName}" data-width="${width}"${posAttrs}${style} contenteditable="false">[QR: ${cleanName}]</span>&nbsp;`);
+                        // Widget-wrapper pattern (see logo insert). Floating variant
+                        // wrapped in <p.floating-only contenteditable=false>.
+                        const qrSpan = `<span class="${classes}" data-qr="${cleanName}" data-width="${width}"${posAttrs}${style} contenteditable="false">[QR: ${cleanName}]</span>`;
+                        if (mode === 'inline') {
+                            editor.insertContent(qrSpan + '&nbsp;');
+                        } else {
+                            editor.insertContent(`<p class="floating-only" contenteditable="false">${qrSpan}</p>`);
+                        }
+                        if (mode !== 'inline') applyFloatingOnlyClasses();
 
                         // Initialize drag for floating QR
                         if (mode !== 'inline') {
@@ -2686,7 +2712,13 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                                 <div style="font-size:11pt;margin-top:3px;">(${previewNama})</div>
                             </div>
                         `;
-                        editor.insertContent(content + '&nbsp;');
+                        // Widget-wrapper pattern (see logo insert).
+                        if (mode === 'inline') {
+                            editor.insertContent(content + '&nbsp;');
+                        } else {
+                            editor.insertContent(`<p class="floating-only" contenteditable="false">${content}</p>`);
+                        }
+                        if (mode !== 'inline') applyFloatingOnlyClasses();
 
                         setTimeout(() => {
                             scanTtdPlaceholders();
@@ -2749,7 +2781,13 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                             </div>
                         </div>
                     `;
-                    editor.insertContent(content + '&nbsp;');
+                    // Widget-wrapper pattern (see logo insert).
+                    if (mode === 'inline') {
+                        editor.insertContent(content + '&nbsp;');
+                    } else {
+                        editor.insertContent(`<p class="floating-only" contenteditable="false">${content}</p>`);
+                    }
+                    if (mode !== 'inline') applyFloatingOnlyClasses();
 
                     setTimeout(() => {
                         scanMateraiPlaceholders();
@@ -2792,6 +2830,57 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     }
                 });
 
+                // Auto-classify paragraphs yang cuma berisi floating elements
+                // (position: absolute). Adds `.floating-only` class supaya CSS
+                // collapse ke 0 height (via ContentCss rule `p.floating-only {
+                // min-height: 0; margin: 0; line-height: 0 }`).
+                //
+                // Root fix untuk masalah: TinyMCE insertContent floating span
+                // di-wrap dalam <p>. <p> tanpa `.floating-only` class render dgn
+                // full line-height → empty line visible → judul dokumen shifted
+                // down. Delete <p> hapus floating span inside.
+                //
+                // Mirror server-side detection di generate.php's renderContent()
+                // regex-based `.floating-only` marking. Client-side version bikin
+                // preview editor match rendered output.
+                //
+                // Undo-safe: undoManager.ignore() supaya classification tidak
+                // trigger dirty state saat initial load (existing template).
+                function applyFloatingOnlyClasses() {
+                    const doc = editor.getDoc();
+                    if (!doc) return;
+                    const floatingSel = '.logo-placeholder.floating, .ttd-placeholder.floating, .qr-placeholder.floating, .materai-placeholder.floating';
+
+                    editor.undoManager.ignore(() => {
+                        doc.querySelectorAll('p').forEach(p => {
+                            const hasFloating = p.querySelector(floatingSel);
+                            if (!hasFloating) {
+                                p.classList.remove('floating-only');
+                                return;
+                            }
+                            // Extract non-floating text content:
+                            // - Remove floating elements
+                            // - Remove <br> (TinyMCE inserts bogus <br> untuk cursor placement)
+                            const clone = p.cloneNode(true);
+                            clone.querySelectorAll(floatingSel).forEach(el => el.remove());
+                            clone.querySelectorAll('br').forEach(br => br.remove());
+                            const remainingText = (clone.textContent || '').replace(/ |\s/g, '').trim();
+
+                            if (remainingText === '') {
+                                // Widget wrapper pattern — .floating-only class +
+                                // contenteditable="false" untuk cursor protection.
+                                // CKEditor 5 non-editable atomic block precedent.
+                                p.classList.add('floating-only');
+                                p.setAttribute('contenteditable', 'false');
+                            } else {
+                                p.classList.remove('floating-only');
+                                p.removeAttribute('contenteditable');
+                            }
+                        });
+                    });
+                }
+                window.ezdocApplyFloatingOnlyClasses = applyFloatingOnlyClasses;
+
                 // Debounced scan: single timer prevents queueing dozens of
                 // setTimeout callbacks during rapid typing (was 4× per keystroke).
                 let _scanTimer = null;
@@ -2806,6 +2895,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         scanQrPlaceholders();
                         scanCondSections();
                         scanDynTables();
+                        applyFloatingOnlyClasses();
                     }, 300);
                 });
 
@@ -2868,6 +2958,11 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         updateAllLogosInEditor(); // Show actual logos
                         initLogoDrag();
                         initTtdDrag();
+                        // Existing floating elements dari saved template harus dapat
+                        // .floating-only class supaya wrapper <p> collapse. Kalau tidak,
+                        // template lama yg punya floating logo/TTD akan show extra
+                        // empty line di top ketika di-load ke editor.
+                        applyFloatingOnlyClasses();
 
                         // Force proper height after init
                         const height = getEditorHeight();
@@ -3053,6 +3148,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     try {
                         restoreFloatingPositions();
                         setupDragDelegation();
+                        // Auto-classify floating-only paragraphs after content loads
+                        // (existing floating elements from saved template need `.floating-only`
+                        // class supaya wrapper <p> collapse ke 0 height).
+                        applyFloatingOnlyClasses();
                         // updateAllLogosInEditor tetap async supaya lookup logo dari sidebar
                         // tidak blocking (misal lookup image src by name)
                         setTimeout(updateAllLogosInEditor, 50);

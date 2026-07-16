@@ -75,11 +75,17 @@ final class ContentCss
 
 /* Paragraph containing ONLY floating/absolute elements collapses to zero
    height — floating logo/TTD/QR anchored ke wrapper p tidak boleh push
-   text flow (visual position = fixed top/left, tidak boleh add height). */
+   text flow (visual position = fixed top/left, tidak boleh add height).
+   !important untuk override TinyMCE's default paragraph rendering yg
+   sometimes wins specificity war di iframe editor context. */
 .content p.floating-only {
-    min-height: 0;
-    margin: 0;
-    line-height: 0;
+    min-height: 0 !important;
+    margin: 0 !important;
+    line-height: 0 !important;
+    padding: 0 !important;
+    font-size: 0 !important;
+    height: 0 !important;
+    overflow: visible !important;
 }
 
 /* Print widow/orphan protection disabled — designer's page break visualization

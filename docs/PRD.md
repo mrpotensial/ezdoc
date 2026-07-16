@@ -992,10 +992,11 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 | **DB abstraction** | v0.9.9 | ~34 weeks | Zero-dep DB layer + Blueprint DSL + 5 Grammars (T2) + spec-first artifacts |
 | **Standalone hardening** | v0.9.10 | ~35 weeks | Consumer-app dep extraction: PdfRenderer, DateFormatter, Db/Auth call sites |
 | **View separation** | v0.9.11 | ~36 weeks | Split designer + generate ke per-action files (MVC convention), page break preview di generate |
-| **Extraction** | v1.0 | ~37 weeks | Standalone PHP library di Packagist |
-| **Spec** | v1.1 | ~39 weeks | ezdoc-spec repo publik (dari v0.9.9 seed) |
-| **Go port** | v1.5 | ~45 weeks | Native Go implementation |
-| **TS port** | v2.0 | ~53 weeks | Native TypeScript + Next.js sample |
+| **Floating sidecar** | v0.9.12 | ~38 weeks | Floating elements ke JSON metadata sidecar (Google Docs/Word pattern), eliminate in-DOM markers |
+| **Extraction** | v1.0 | ~39 weeks | Standalone PHP library di Packagist |
+| **Spec** | v1.1 | ~41 weeks | ezdoc-spec repo publik (dari v0.9.9 seed) |
+| **Go port** | v1.5 | ~47 weeks | Native Go implementation |
+| **TS port** | v2.0 | ~55 weeks | Native TypeScript + Next.js sample |
 
 **Catatan estimation**:
 - Timeline asumsi **1 dev fokus purnawaktu**. Parallelization (mis. UI dev sambil PSrE integration) bisa potong 30-40%.
@@ -1563,7 +1564,93 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - Introducing new component framework (staying compatible with v0.9.9 slot system)
 - Router refactor to direct sub-view routing (breaking change — deferred to v1.0 prep)
 
-### 6.17 Milestone v1.0 — "PHP library extraction (Packagist)"  ⏱ ~1 week
+### 6.17 Milestone v0.9.12 — "Sidecar metadata for floating elements"  ⏱ ~1-2 weeks
+
+**Goal**: refactor floating element storage dari in-DOM markers → sidecar metadata pattern (industry-standard). Floating elements (logo/TTD/QR/materai floating variants) dikeluarkan dari HTML content editor, disimpan sebagai JSON metadata terpisah, auto-merged saat render, auto-extracted saat edit.
+
+**Motivation**: Current in-DOM approach (span/div dgn position:absolute inside editor content) menyebabkan:
+- Empty line bugs (wrapper `<p>` visible even dgn `.floating-only` classification)
+- Accidental deletion saat user delete empty line (floating element inside p ikut ke-hapus)
+- Editor style interference (padding, margin, line-height wrapper conflicts dgn content flow)
+- Complex classification logic that's error-prone
+
+Sidecar pattern eliminates all these issues by decoupling floating elements dari text flow entirely.
+
+**Precedent (industry-standard proven)**:
+- **Google Docs** — Text + Drawings di XML nodes terpisah (`<a:drawing>` XML for shapes, `<w:t>` for text runs)
+- **MS Word** — Floating shapes/images di `<w:drawing>` element, terpisah dari text runs
+- **Figma / Sketch / Adobe InDesign** — Layer model, setiap object standalone
+- **CKEditor 5 Widgets** — atomic non-editable widget units dgn `data-*` position attrs
+- **Slate.js `void` nodes** — non-editable JSON structures separate from text
+- **Prosemirror** — nodeviews for atomic embedded content
+
+**Schema change** (backward-compat migration):
+
+Add `floating_elements JSON NULL` column to `ezdoc_templates`:
+```json
+{
+  "html": "<p>Text content...</p>",
+  "floating_elements": [
+    {
+      "id": "logo_hospital",
+      "type": "logo",
+      "position_x": 400,
+      "position_y": 100,
+      "z_index": "front",
+      "data": { "width": "80px" }
+    },
+    {
+      "id": "ttd_dokter",
+      "type": "ttd",
+      "position_x": 500,
+      "position_y": 800,
+      "z_index": "front",
+      "data": { "label": "Doctor", "nama_field": "nama_dokter" }
+    }
+  ]
+}
+```
+
+**Deliverables**:
+
+- **Schema migration**:
+  - [ ] Add `floating_elements JSON NULL` column ke `ezdoc_templates` + `ezdoc_documents` tables
+  - [ ] Migration untuk existing templates: extract floating markers dari HTML → serialize to JSON → strip from HTML
+  - [ ] Rollback strategy documented
+
+- **Designer refactor**:
+  - [ ] Extract floating elements from HTML on template load → populate JS state
+  - [ ] Remove floating markers dari TinyMCE editor content (only inline elements stay in editor)
+  - [ ] Show floating elements in dedicated "Floating Elements" sidebar panel dgn drag-to-reposition
+  - [ ] Overlay layer di atas editor iframe untuk visual position editing (transparent layer, click-through to editor for text edit)
+  - [ ] Serialize floating state on save → JSON metadata
+
+- **Generate refactor**:
+  - [ ] Load HTML + floating_elements JSON
+  - [ ] Render floating elements as absolute-positioned elements OUTSIDE `.content` wrapper
+  - [ ] Position preserved: (position_x, position_y) mm from `.page` origin
+  - [ ] Inline elements (non-floating) tetap di HTML content (mereka semantically fit text flow)
+
+- **Backward-compat**:
+  - [ ] Detect old-format templates (floating markers still in HTML)
+  - [ ] Auto-migrate on first load
+  - [ ] Preserve position data selama migration
+
+**Definition of Done**:
+- Editor content only contains inline elements + text (no floating markers)
+- Floating elements auto-included on save via JSON serialization
+- Floating elements auto-extracted on edit
+- Zero empty line bugs from floating inserts
+- Zero accidental deletion when clearing empty lines
+- All existing templates work (backward-compat migration successful)
+- Generate output visually identical to before refactor
+- Designer UX improved dgn dedicated floating panel
+
+**Non-goals**:
+- Migrating INLINE elements (logo/TTD/QR inline variants) — mereka semantically fit text flow, stay in editor
+- Changing floating element PDF export (still same rendered output)
+
+### 6.18 Milestone v1.0 — "PHP library extraction (Packagist)"  ⏱ ~1 week
 
 **Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Depends on v0.9.7 (full views) + v0.9.8 (App orchestrator) + v0.9.9 (DB abstraction) + v0.9.10 (standalone hardening — no consumer-app runtime deps) + v0.9.11 (view separation + generate polish)** completed.
 
@@ -1581,7 +1668,7 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - **`Ezdoc\App::run()` 1-line mount + `Ezdoc\App::demo()` zero-config SQLite mode** (from v0.9.8) — consumer install verification tanpa DB config
 - Fresh consumer test: install → `Ezdoc\App::demo()` → save template → generate doc → sign → verify (semua works out-of-box, tanpa manual wiring)
 
-### 6.18 Milestone v1.1 — "Spec extraction (repo split + conformance vectors)"  ⏱ ~1-2 weeks
+### 6.19 Milestone v1.1 — "Spec extraction (repo split + conformance vectors)"  ⏱ ~1-2 weeks
 
 **Goal**: split `ezdoc-spec/` subfolder (seeded di v0.9.9) → standalone repo publik `mrpotensial/ezdoc-spec`; enrich dengan conformance test vectors untuk native ports.
 
@@ -1601,7 +1688,7 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - Repo has: schemas/, ddl/, protocol/, conformance/, docs/
 - Docs: "How to write a new port" guide dgn Go + Rust + TS starter examples
 
-### 6.19 Milestone v1.5 — "Go port"  ⏱ ~4-6 weeks
+### 6.20 Milestone v1.5 — "Go port"  ⏱ ~4-6 weeks
 
 **Goal**: `ezdoc-go` — native Go implementation, container-friendly.
 
@@ -1619,7 +1706,7 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - Conformance test pass (signature dari PHP di-verify oleh Go = same result)
 - Docker image jalan di Kubernetes cluster
 
-### 6.20 Milestone v2.0 — "TypeScript port + full ecosystem"  ⏱ ~6-8 weeks
+### 6.21 Milestone v2.0 — "TypeScript port + full ecosystem"  ⏱ ~6-8 weeks
 
 **Goal**: `@mrpotensial/ezdoc` — TypeScript native untuk Next.js / Node / browser.
 
