@@ -7,6 +7,7 @@ namespace Ezdoc;
 use Ezdoc\Auth\HasRoleProvider;
 use Ezdoc\Auth\RoleProvider;
 use Ezdoc\Exceptions\EzdocException;
+use Ezdoc\Rendering\PdfRenderer;
 use mysqli;
 
 /**
@@ -48,10 +49,20 @@ final class Context
     /** @var RoleProvider */
     public $roleProvider;
 
-    public function __construct(mysqli $db, RoleProvider $roleProvider)
+    /**
+     * PDF rendering backend. Null → auto-instantiate DompdfRenderer di runtime
+     * kalau dompdf composer package tersedia. Consumer inject via withPdf()
+     * untuk custom backend (mPDF, wkhtmltopdf, Weasyprint).
+     *
+     * @var PdfRenderer|null
+     */
+    public $pdf;
+
+    public function __construct(mysqli $db, RoleProvider $roleProvider, ?PdfRenderer $pdf = null)
     {
         $this->db = $db;
         $this->roleProvider = $roleProvider;
+        $this->pdf = $pdf;
     }
 
     /**
@@ -104,12 +115,18 @@ final class Context
     /** Immutable copy dengan db diubah. */
     public function withDb(mysqli $db): self
     {
-        return new self($db, $this->roleProvider);
+        return new self($db, $this->roleProvider, $this->pdf);
     }
 
     /** Immutable copy dengan roleProvider diubah. */
     public function withRoleProvider(RoleProvider $rp): self
     {
-        return new self($this->db, $rp);
+        return new self($this->db, $rp, $this->pdf);
+    }
+
+    /** Immutable copy dengan PDF renderer diubah. */
+    public function withPdf(?PdfRenderer $pdf): self
+    {
+        return new self($this->db, $this->roleProvider, $pdf);
     }
 }

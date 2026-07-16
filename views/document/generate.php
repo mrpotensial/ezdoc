@@ -1281,27 +1281,103 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
             size: ' . $paperDim['width'] . 'mm ' . $paperDim['height'] . 'mm;
             margin: 0;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        /* Global box-sizing only. Selective reset (body, .page margin/padding
+           handled below). Blanket "* { margin: 0; padding: 0 }" reset removed —
+           previously stripped ol/ul/li/p margins that we want per screen behavior. */
+        * { box-sizing: border-box; }
+        /* Font-family: "Times" first (native PDF core font, dompdf renders exact
+           Times metrics). "Times New Roman" (browser name) + serif fallbacks.
+           Sebelumnya "Times New Roman" first → dompdf tidak resolve → fallback
+           DejaVu Sans (SANS-SERIF) → sangat beda visual dari screen. */
         body {
-            font-family: "Times New Roman", "DejaVu Sans", serif;
+            font-family: "Times", "Times New Roman", serif;
             font-size: 12pt;
+            line-height: 1.6;
             margin: 0;
             padding: 0;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
+        /* Heading defaults — dompdf tidak apply browser default h1-h6 sizes/margins.
+           Explicit sesuai browser standard (h1 2em, h2 1.5em, dst.) supaya render
+           sesuai designer/screen. */
+        h1, h2, h3, h4, h5, h6 { line-height: 1.25; page-break-after: avoid; }
+        h1 { font-size: 2em; font-weight: bold; margin: 0.67em 0; }
+        h2 { font-size: 1.5em; font-weight: bold; margin: 0.75em 0; }
+        h3 { font-size: 1.17em; font-weight: bold; margin: 0.83em 0; }
+        h4 { font-size: 1em; font-weight: bold; margin: 1.12em 0; }
+        h5 { font-size: 0.83em; font-weight: bold; margin: 1.5em 0; }
+        h6 { font-size: 0.75em; font-weight: bold; margin: 1.67em 0; }
+        strong, b { font-weight: bold; }
+        em, i { font-style: italic; }
+        /* Inheritance safeguard — semua content dari .content, .page, body
+           inherit line-height 1.6 kecuali override eksplisit (heading). */
+        .page, .content { line-height: inherit; }
+        /* .page structure identical dgn screen generate .page: full paper
+           size (paperW × paperH) dgn padding = paper margin. Sebelumnya PDF
+           pakai margin-based structure (width reduced + margin as padding)te
+           yg bikin absolute-positioned floating elements shift padT mm
+           downward vs screen. Padding-based structure sync coord origin. */
         .page {
-            width: ' . ($paperDim['width'] - $padLeft - $padRight) . 'mm;
-            min-height: ' . ($paperDim['height'] - $padTop - $padBottom) . 'mm;
-            margin: ' . $padTop . 'mm ' . $padRight . 'mm ' . $padBottom . 'mm ' . $padLeft . 'mm;
+            width: ' . $paperDim['width'] . 'mm;
+            min-height: ' . $paperDim['height'] . 'mm;
+            margin: 0;
+            padding: ' . $padTop . 'mm ' . $padRight . 'mm ' . $padBottom . 'mm ' . $padLeft . 'mm;
             position: relative;
         }
         .content {
             line-height: 1.6;
+            /* EXPLICIT WIDTH — dompdf tidak fully respect box-sizing: border-box
+               untuk padding calc → .page dgn width paperW mm + padding padT mm
+               actual render sbg paperW + 2×padding wide (content area wider dari
+               designer/screen expected). Bypass dgn set .content width eksplisit
+               = paper width - horizontal padding. Ensures text wraps at exact
+               same width as designer (170mm untuk A4 dgn 20mm padding). */
+            width: ' . ($paperDim['width'] - $padLeft - $padRight) . 'mm;
+            max-width: ' . ($paperDim['width'] - $padLeft - $padRight) . 'mm;
+            /* Overflow protection — force ALL content to stay within paper width.
+               dompdf sometimes tidak apply word-wrap ke heading/link/pre elements
+               → text overflow keluar paper area (kanan). word-break: break-word
+               = break di karakter kalau word terlalu panjang; word-wrap +
+               overflow-wrap = standard word boundary break. */
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            word-break: break-word;
         }
+        /* Semua descendant `.content` inherit overflow protection. Individual
+           element rules below reinforce untuk elements yg dompdf handle beda. */
+        .content * { max-width: 100%; }
+        .content h1, .content h2, .content h3,
+        .content h4, .content h5, .content h6 {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            word-break: break-word;
+        }
+        .content a { word-break: break-all; } /* URLs long tidak overflow */
+        .content pre, .content code {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .content img { max-width: 100%; height: auto; }
+        /* orphans/widows: 1 — match screen behavior (pixel-based break) so PDF
+           page break position sesuai dgn designer visualization. Default 2
+           push paragraph ke halaman berikutnya untuk hindari 1-line orphan. */
+        .content p, .content li { orphans: 1; widows: 1; }
         .content p {
             margin: 8px 0;
             min-height: 1.2em;
         }
         .content p.floating-only { min-height: 0; margin: 0; line-height: 0; }
+        /* List rendering — explicit rules match screen generate. Without these,
+           dompdf may render ol/ul without numbering/bullets (default varies). */
+        .content ol, .content ul { margin: 8px 0; padding-left: 2.5em; }
+        .content ol { list-style: decimal; }
+        .content ul { list-style: disc; }
+        .content ol ol { list-style: lower-alpha; }
+        .content ol ol ol { list-style: lower-roman; }
+        .content ul ul { list-style: circle; }
+        .content ul ul ul { list-style: square; }
+        .content li { display: list-item; }
         .content table { border-collapse: collapse; width: 100%; }
         /* Opt-in fixed layout: add class "tbl-fixed" on a table to force equal columns (useful for header-logo rows) */
         .content table.tbl-fixed { table-layout: fixed; }
@@ -1313,8 +1389,8 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
             overflow-wrap: break-word;
         }
         .content table[border="0"] td, .content table[border="0"] th { border: none; }
-        /* Logos & images in PDF: never exceed container */
-        .content img { max-width: 100%; height: auto; }
+        /* Logo images inline-block (max-width sudah declared di .content img rule
+           di block sebelumnya). */
         .content .logo-img { display: inline-block; }
 
         /* Field values - just show text */
@@ -1336,7 +1412,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         .logo-front { z-index: 100; }
         .logo-empty { display: none; }
 
-        /* TTD */
+        /* TTD — sync dgn screen generate rules exactly */
         .ttd-item-inline {
             display: inline-block;
             text-align: center;
@@ -1351,7 +1427,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         }
         .ttd-behind { z-index: -1; }
         .ttd-front { z-index: 100; }
-        .ttd-label { font-size: 11pt; margin-bottom: 5px; }
+        .ttd-label { font-size: 12pt; margin-bottom: 5px; }
         .ttd-img { min-height: 50px; text-align: center; }
         .ttd-signature { max-height: 60px; max-width: 120px; }
         .ttd-name { font-size: 11pt; margin-top: 3px; }
@@ -1464,17 +1540,42 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
     // echo $pdfHtml;
     // exit;
 
-    // Render PDF — prefer $ctx->pdf if consumer wired one, fallback to legacy generatePDF() helper.
-    // spec: ezdoc-spec/services/pdf_renderer.md
+    // Render PDF — library-native pattern (Ezdoc\Rendering\PdfRenderer contract).
+    //
+    // Priority:
+    //   1. Consumer-injected renderer via Context::withPdf() → $ctx->pdf
+    //   2. Ezdoc-native DompdfRenderer default (kalau dompdf/dompdf composer
+    //      package tersedia — most common case)
+    //   3. Error page (no PDF backend available)
+    //
+    // Zero dependency ke consumer's local functions (generatePDF, koneksi.php).
+    // spec: docs/PDF-RENDERING.md
     $paperMm     = [$paperDim['width'], $paperDim['height']];
-    $orientation = 'portrait';
-    if (isset($ctx->pdf) && is_object($ctx->pdf) && method_exists($ctx->pdf, 'stream')) {
-        $ctx->pdf->stream($pdfHtml, $filename, $paperMm, $orientation);
-    } elseif (function_exists('generatePDF')) {
-        generatePDF($pdfHtml, $filename, true, $paperMm, $orientation);
+    // $orientation already set at header parsing (line ~339) from configHeader.
+    // Fallback ke portrait kalau tidak set (defensive).
+    $orientation = $orientation ?? 'portrait';
+
+    $pdfRenderer = null;
+    if (isset($ctx->pdf) && $ctx->pdf instanceof \Ezdoc\Rendering\PdfRenderer) {
+        $pdfRenderer = $ctx->pdf;
+    } elseif (isset($ctx->pdf) && is_object($ctx->pdf) && method_exists($ctx->pdf, 'stream')) {
+        // Backward-compat: consumer wired object dgn stream() method but
+        // tidak implement PdfRenderer interface — duck-typing accept.
+        $pdfRenderer = $ctx->pdf;
+    } elseif (class_exists('\\Dompdf\\Dompdf')) {
+        // Auto-instantiate ezdoc-native DompdfRenderer (default fallback).
+        // basePath = views/document/../.. = ezdoc root, untuk relative asset resolution.
+        $pdfRenderer = new \Ezdoc\Rendering\DompdfRenderer([], __DIR__ . '/../../');
+    }
+
+    if ($pdfRenderer !== null) {
+        $pdfRenderer->stream($pdfHtml, $filename, $paperMm, $orientation);
     } else {
         header('Content-Type: text/html; charset=utf-8');
-        echo '<!doctype html><meta charset="utf-8"><body><h1>PDF renderer not configured</h1><p>Wire <code>$ctx->pdf</code> or define <code>generatePDF()</code>.</p></body>';
+        echo '<!doctype html><meta charset="utf-8"><body><h1>PDF renderer not available</h1>'
+            . '<p>Install <code>dompdf/dompdf</code> via Composer, or wire a custom renderer via '
+            . '<code>Ezdoc\\Rendering\\PdfRenderer</code> interface (inject via <code>Context::withPdf()</code>).</p>'
+            . '<p>spec: <code>docs/PDF-RENDERING.md</code></p></body>';
     }
     exit;
 }

@@ -1,16 +1,14 @@
 <?php
 /**
  * ezdoc doc_template_helpers — pure functions untuk template placeholder
- * resolution & conditional section logic. Extracted from inline blocks di
- * `page/form_pembuat_surat_cetak_v3.php` (v0.6.5 refactor).
+ * resolution & conditional section logic.
  *
  * No DB, no state (except `global $whitelistedVars` yang dipopulasi caller
  * lewat ezdoc_load_whitelisted_vars() sebelum resolveDefault dipanggil).
  * No side effects. Safe to load early.
  *
- * Dependencies:
- *   - `ubahTanggalKeIndonesia()` — defined in `pengeluaran/koneksi.php`
- *     (loaded ahead of this file oleh main entry).
+ * Library-standalone — tidak require consumer app functions. Locale-aware
+ * date translation via {@see \Ezdoc\Format\DateFormatter}.
  */
 
 if (defined('EZDOC_DOC_TEMPLATE_HELPERS_LOADED')) return;
@@ -20,7 +18,7 @@ if (!function_exists('resolveDefault')) {
     /**
      * Resolve template default value string ke actual value.
      * Format:
-     *   - "date:FORMAT"  → ubahTanggalKeIndonesia(date(FORMAT))
+     *   - "date:FORMAT"  → DateFormatter::localize(date(FORMAT), 'id')
      *   - "$varname"     → nilai global $varname (harus ada di $whitelistedVars)
      *   - lainnya        → literal string
      *
@@ -35,7 +33,17 @@ if (!function_exists('resolveDefault')) {
         // Date format: date:FORMAT
         if (strncmp($default, 'date:', 5) === 0) {
             $format = substr($default, 5);
-            return ubahTanggalKeIndonesia(date($format));
+            $formatted = date($format);
+            // Prefer library-native DateFormatter (industry-standard OO). Fallback
+            // ke legacy ubahTanggalKeIndonesia() untuk backward-compat kalau
+            // consumer app override dengan versi custom.
+            if (class_exists(\Ezdoc\Format\DateFormatter::class)) {
+                return \Ezdoc\Format\DateFormatter::localize($formatted, 'id');
+            }
+            if (function_exists('ubahTanggalKeIndonesia')) {
+                return ubahTanggalKeIndonesia($formatted);
+            }
+            return $formatted; // last resort: raw English
         }
 
         // PHP variable: $varname (must be in whitelist)

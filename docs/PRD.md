@@ -1464,7 +1464,47 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - ❌ Hand-maintain SQL DDL files terpisah per DB (drift risk) — spec files harus generated
 - ❌ ORM feature creep (relations, lazy loading, entity manager) — Repository + QueryBuilder cukup untuk YAGNI
 
-### 6.15 Milestone v1.0 — "PHP library extraction (Packagist)"  ⏱ ~1 week
+### 6.15 Milestone v0.9.10 — "Standalone library hardening"  ⏱ ~1-2 weeks
+
+**Goal**: audit + eliminate semua consumer-app runtime dependencies dari library. Ezdoc runs standalone tanpa consumer's `koneksi.php` / `page/*.php` / project-specific helpers. Prereq mandatory sebelum v1.0 Packagist extraction.
+
+**Motivation**: dogfood consumer (`SIMpel`) exposes ezdoc ke consumer-specific globals (`generatePDF()`, `ubahTanggalKeIndonesia()`, `query()`, `hasRole()`). Sebelum extraction ke Packagist, semua ini harus punya library-native replacement + backward-compat fallback.
+
+**Design principle**: setiap consumer dependency di-replace dgn (1) contract interface, (2) library-native default implementation, (3) optional backward-compat shim yg detect existing consumer function dan pakai kalau available. Industry-standard pattern: Symfony transports, Laravel drivers, Filament contracts.
+
+**Contracts extracted** (each = interface + default impl + Context wiring):
+
+| Consumer function | Contract | Default impl | Industry precedent |
+|---|---|---|---|
+| `generatePDF()` | `Ezdoc\Rendering\PdfRenderer` | `DompdfRenderer` | Symfony Mailer `TransportInterface`, Barryvdh/laravel-dompdf `stream()` |
+| `ubahTanggalKeIndonesia()` | `Ezdoc\Format\DateFormatter` (static) | Built-in `en`, `id` locale tables | Carbon `translatedFormat()`, Symfony Intl |
+| `query()` global | `Ezdoc\Db\Connection` | `MysqliConnection`, `PdoConnection` | Doctrine DBAL, Laravel `Illuminate\Database` |
+| `hasRole()` global | `Ezdoc\Auth\RoleProvider` (already exists v0.6+) | `HasRoleProvider`, `CallableRoleProvider` | Symfony Security voters |
+
+- [x] `Ezdoc\Rendering\PdfRenderer` interface + `DompdfRenderer` default impl
+- [x] `Ezdoc\Format\DateFormatter` static utility (`localize()`, `registerLocale()`)
+- [x] Context extended with `$pdf` property + `withPdf()` immutable wither
+- [x] `generate.php` uses library-native renderer (removed `function_exists('generatePDF')` fallback)
+- [x] `resolveDefault()` uses `DateFormatter::localize()` (with `ubahTanggalKeIndonesia()` backward-compat shim)
+- [ ] `Ezdoc\Db\Connection` abstraction usage sweep — replace `query()` global calls di actions/, views/
+- [ ] `Ezdoc\Auth\RoleProvider` usage sweep — replace `hasRole()` global calls
+- [ ] Audit consumer-specific constants (`RSIA_*`, `SIMPEL_*`) — remove or route via config
+- [ ] Update `docs/QUICKSTART.md`, `docs/UI-CUSTOMIZATION.md`, `README.md` — remove `koneksi.php` references (say "consumer bootstrap" generically)
+- [ ] Add `docs/PDF-RENDERING.md` — PdfRenderer contract + DompdfRenderer + custom backend guide
+- [ ] Add `docs/LOCALIZATION.md` — DateFormatter API + locale registration
+- [ ] Add integration test: run designer + generate + PDF export dengan pure ezdoc bootstrap (no `koneksi.php` required)
+
+**Definition of Done**:
+- `grep -r "koneksi.php\|generatePDF\|ubahTanggalKeIndonesia\|hasRole\|\$conn" ezdoc/src ezdoc/lib ezdoc/actions ezdoc/views` → zero runtime call sites (only comments/docs referencing consumer pattern as example)
+- Fresh consumer install: composer require + `Context::default()->withPdf(new DompdfRenderer())` + all features work
+- Backward-compat shims retained where they don't add runtime cost (function_exists checks)
+- All contracts documented dgn precedent cited (Symfony/Laravel/Carbon/Doctrine equivalent)
+
+**Non-goals**:
+- Removing CLI dependency on koneksi.php (CLI is opt-in for consumer, kept for backward-compat via `require_once` in `cli/migrate.php` header docs)
+- Introducing new abstractions beyond parity with removed consumer functions
+
+### 6.16 Milestone v1.0 — "PHP library extraction (Packagist)"  ⏱ ~1 week
 
 **Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Depends on v0.9.7 (full views) + v0.9.8 (App orchestrator) + v0.9.9 (DB abstraction)** completed.
 
