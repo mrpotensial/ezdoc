@@ -15,9 +15,8 @@
  * fungsi berbeda: `->>` di Postgres, `json_extract()` di SQLite).
  */
 
+use Ezdoc\Context;
 use Ezdoc\Db\Mysqli\MysqliConnection;
-
-global $conn;
 
 ezdoc_require_manage_templates('Tidak berhak inspect field usage');
 
@@ -28,7 +27,7 @@ if ($tid <= 0 || $fieldName === '') {
     ezdoc_respond_error(t('response.incomplete_parameters', [], 'Incomplete parameters'));
 }
 
-$db = new MysqliConnection($conn);
+$db = new MysqliConnection(Context::default()->db);
 $count = (int) $db->fetchScalar(
     "SELECT COUNT(*) FROM ezdoc_documents
      WHERE template_id = ?

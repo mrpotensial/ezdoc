@@ -19,9 +19,8 @@
  * introspection. Cross-DB coverage endpoint ini di-defer (v0.9.10+).
  */
 
+use Ezdoc\Context;
 use Ezdoc\Db\Mysqli\MysqliConnection;
-
-global $conn;
 
 ezdoc_require_manage_templates('Tidak berhak menganalisa query template');
 
@@ -46,7 +45,7 @@ $safeQuery = rtrim($safeQuery, "; \t\n\r") . ' LIMIT 0';
 
 // Escape hatch: mysqli metadata introspection (num_fields / fetch_field_direct)
 // tidak di Connection interface — pakai raw() untuk mysqli-specific probe.
-$db = new MysqliConnection($conn);
+$db = new MysqliConnection(Context::default()->db);
 $mysqli = $db->raw();
 $result = @mysqli_query($mysqli, $safeQuery);
 if (!$result) {

@@ -14,11 +14,11 @@
  * Thin controller — persistence via `Ezdoc\DefaultVars\DefaultVarsRepository`.
  */
 
-global $conn;
+use Ezdoc\Context;
 
 ezdoc_require_manage_templates('Tidak berhak melihat default variables');
 
-$repo = new \Ezdoc\DefaultVars\DefaultVarsRepository($conn);
+$repo = new \Ezdoc\DefaultVars\DefaultVarsRepository(Context::default()->db);
 $vars = $repo->listAll();
 
 ezdoc_respond_success(['vars' => $vars]);

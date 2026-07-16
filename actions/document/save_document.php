@@ -28,7 +28,9 @@
 use Ezdoc\Db\Mysqli\MysqliConnection;
 use Ezdoc\Template\TemplateRepository;
 
-global $conn, $author_id;
+use Ezdoc\Context;
+
+global $author_id;
 
 $template_id = (int)($_POST['template_id'] ?? 0);
 $norm  = trim($_POST['_norm']  ?? '');
@@ -37,7 +39,7 @@ $label = trim($_POST['_label'] ?? '-');
 if ($label === '') $label = '-';
 $doc_id = (int)($_POST['_doc_id'] ?? 0);
 
-$db = new MysqliConnection($conn);
+$db = new MysqliConnection(Context::default()->db);
 $tplRepo = new TemplateRepository($db);
 
 // ─── Load template (include name utk auto-computed doc title) ───

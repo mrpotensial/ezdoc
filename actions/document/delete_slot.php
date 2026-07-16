@@ -16,7 +16,9 @@
 
 use Ezdoc\Db\Mysqli\MysqliConnection;
 
-global $conn, $author_id;
+use Ezdoc\Context;
+
+global $author_id;
 
 $tid = (int)($_POST['template_id'] ?? 0);
 $n   = trim($_POST['norm']  ?? '');
@@ -27,7 +29,7 @@ if ($tid <= 0 || $n === '' || $np === '') {
     ezdoc_respond_error(t('response.incomplete_parameters', [], 'Incomplete parameters'));
 }
 
-$db = new MysqliConnection($conn);
+$db = new MysqliConnection(Context::default()->db);
 
 // Resolve template_id → uuid + access_config
 $tpl = $db->fetchOne(

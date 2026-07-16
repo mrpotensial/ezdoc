@@ -17,14 +17,16 @@
 
 use Ezdoc\Db\Mysqli\MysqliConnection;
 
-global $conn, $author_id;
+use Ezdoc\Context;
+
+global $author_id;
 
 ezdoc_require_manage_templates('Tidak berhak duplikat template');
 
 $tid = (int)($_POST['template_id'] ?? 0);
 if ($tid <= 0) ezdoc_respond_error(t('response.invalid_id', [], 'Invalid ID'));
 
-$db = new MysqliConnection($conn);
+$db = new MysqliConnection(Context::default()->db);
 
 // Fetch source template
 $row = $db->fetchOne(

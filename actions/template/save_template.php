@@ -26,7 +26,11 @@
 
 use Ezdoc\Db\Mysqli\MysqliConnection;
 
-global $conn, $author_id;
+use Ezdoc\Context;
+
+// $author_id (consumer-provided current user id) kept global untuk audit/versioning.
+// $conn removed — use Context::default()->db instead (library-standalone since v0.9.10).
+global $author_id;
 
 ezdoc_require_manage_templates('Tidak berhak simpan template');
 
@@ -68,7 +72,7 @@ if (empty($name)) {
     ezdoc_respond_error(t('response.template_name_required', [], 'Template name is required'));
 }
 
-$db = new MysqliConnection($conn);
+$db = new MysqliConnection(Context::default()->db);
 
 try {
     if ($template_id > 0) {

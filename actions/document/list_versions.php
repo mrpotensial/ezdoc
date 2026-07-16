@@ -17,9 +17,8 @@
  * pattern ini clean, jadi tetap raw SQL via Connection::fetchAll.
  */
 
+use Ezdoc\Context;
 use Ezdoc\Db\Mysqli\MysqliConnection;
-
-global $conn;
 
 $tid = (int)($_POST['template_id'] ?? 0);
 $n   = trim($_POST['norm']  ?? '');
@@ -31,7 +30,7 @@ if ($tid <= 0 || $n === '' || $np === '') {
     ezdoc_respond_raw(['success' => false, 'versions' => []]);
 }
 
-$db = new MysqliConnection($conn);
+$db = new MysqliConnection(Context::default()->db);
 
 $rows = $db->fetchAll(
     'SELECT d.id, d.version, d.is_locked, d.updated_at

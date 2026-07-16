@@ -16,9 +16,8 @@
  * raw SQL (QueryBuilder MVP belum ideal untuk JOIN + JSON column projection).
  */
 
+use Ezdoc\Context;
 use Ezdoc\Db\Mysqli\MysqliConnection;
-
-global $conn;
 
 $did    = (int)($_POST['doc_id'] ?? 0);
 $locked = (int)($_POST['locked'] ?? 0);
@@ -29,7 +28,7 @@ if ($locked === 0) {
     ezdoc_require_role('superadmin', 'Unlock hanya bisa dilakukan superadmin. Untuk revisi, buat versi baru.');
 }
 
-$db = new MysqliConnection($conn);
+$db = new MysqliConnection(Context::default()->db);
 
 // Lock guard — cek template access_config lewat JOIN via template_id.
 if ($locked === 1) {

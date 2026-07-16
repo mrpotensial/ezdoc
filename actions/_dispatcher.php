@@ -2,12 +2,22 @@
 /**
  * ezdoc action dispatcher.
  *
- * Dipanggil dari main page (form_pembuat_surat_v2/v3, form_pembuat_surat_cetak_v2/v3, dll)
- * di TOP setelah bootstrap. Kalau match ke suatu action → require handler → exit.
- * Kalau tidak match → return biar page lanjut rendering normal.
+ * Dipanggil dari main page (consumer's dispatch entry point, mis. designer.php,
+ * generate.php, list.php) di TOP setelah bootstrap. Kalau match ke suatu action
+ * → require handler → exit. Kalau tidak match → return biar page lanjut rendering
+ * normal.
  *
- * Assumsi: koneksi.php sudah di-require sebelum ini (untuk $conn, hasRole(), $author_id).
- * ezdoc/bootstrap.php sudah di-require (untuk helper functions).
+ * ## Runtime dependencies (library-standalone since v0.9.10)
+ * - `Ezdoc\Context::default()` — DI container providing db (mysqli), roleProvider,
+ *   pdf renderer. Auto-init via `Context::fromGlobals()` fallback yg detect
+ *   consumer bootstrap globals ($conn, $author_id) atau di-inject explicit
+ *   oleh consumer.
+ * - `ezdoc/bootstrap.php` — helper functions (`ezdoc_respond_success`,
+ *   `ezdoc_respond_error`, `ezdoc_require_*`, `resolveDefault`, dll).
+ *
+ * Action handlers TIDAK boleh call consumer-specific globals langsung (`hasRole`,
+ * `$author_id`, `query()`). Semua akses via `Context` atau ezdoc helper wrappers
+ * yang route through abstraction (RoleProvider, Connection, PdfRenderer).
  *
  * Routing map:
  *   ─ Document actions ─

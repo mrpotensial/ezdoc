@@ -16,7 +16,7 @@
  * (auto-wrap raw mysqli). Raw `mysqli_prepare` calls removed.
  */
 
-global $conn;
+use Ezdoc\Context;
 
 ezdoc_require_manage_templates('Tidak berhak menambahkan default variable');
 
@@ -34,7 +34,7 @@ if ($varNameClean === '') {
 }
 
 try {
-    $repo = new \Ezdoc\DefaultVars\DefaultVarsRepository($conn);
+    $repo = new \Ezdoc\DefaultVars\DefaultVarsRepository(Context::default()->db);
     $insertedId = $repo->add($varNameClean, $varDesc !== '' ? $varDesc : null);
 } catch (\Throwable $e) {
     ezdoc_respond_error(t('response.add_var_failed', ['error' => $e->getMessage()], 'Failed to add variable: {error}'));

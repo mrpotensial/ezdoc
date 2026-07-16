@@ -14,9 +14,8 @@
  * ## v0.9.9 refactor — bulk UPDATE dalam transaction
  */
 
+use Ezdoc\Context;
 use Ezdoc\Db\Mysqli\MysqliConnection;
-
-global $conn;
 
 ezdoc_require_manage_templates('Tidak berhak rename field');
 
@@ -32,7 +31,7 @@ if (!preg_match('/^[a-zA-Z0-9_\-]+$/', $newName)) {
     ezdoc_respond_error(t('response.new_name_invalid_chars', [], 'New name must be alphanumeric, underscore, or hyphen'));
 }
 
-$db = new MysqliConnection($conn);
+$db = new MysqliConnection(Context::default()->db);
 $rows = $db->fetchAll(
     'SELECT id, field_values FROM ezdoc_documents WHERE template_id = ?',
     [$tid]

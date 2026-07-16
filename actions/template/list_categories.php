@@ -7,16 +7,20 @@
  *
  * Response: { success: true, categories: [{ name, count }, ...] }
  *
- * ## v0.9.9 refactor — Connection.fetchAll (aggregate SQL)
+ * ## History
+ * - v0.9.9 — refactor to Connection.fetchAll (aggregate SQL)
+ * - v0.9.10 — Context::default()->db replaces `global $conn` (library-standalone)
  */
 
+use Ezdoc\Context;
 use Ezdoc\Db\Mysqli\MysqliConnection;
-
-global $conn;
 
 ezdoc_require_manage_templates('Tidak berhak melihat kategori template');
 
-$db = new MysqliConnection($conn);
+// Library-standalone data access — Context DI container returns mysqli
+// (auto-init dari consumer globals via Context::fromGlobals() kalau consumer
+// belum inject explicit). No direct `global $conn` needed.
+$db = new MysqliConnection(Context::default()->db);
 $rows = $db->fetchAll(
     "SELECT category, COUNT(*) AS c
      FROM ezdoc_templates

@@ -18,12 +18,14 @@
 
 use Ezdoc\Db\Mysqli\MysqliConnection;
 
-global $conn, $author_id;
+use Ezdoc\Context;
+
+global $author_id;
 
 $did = (int)($_POST['doc_id'] ?? 0);
 if ($did <= 0) ezdoc_respond_error(t('response.invalid_doc_id', [], 'Invalid document ID'));
 
-$db = new MysqliConnection($conn);
+$db = new MysqliConnection(Context::default()->db);
 
 // Load doc + template access_config (JOIN via template_id)
 $doc = $db->fetchOne(

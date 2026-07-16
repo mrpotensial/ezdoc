@@ -12,7 +12,7 @@
  * Thin controller — persistence via `Ezdoc\DefaultVars\DefaultVarsRepository`.
  */
 
-global $conn;
+use Ezdoc\Context;
 
 ezdoc_require_manage_templates('Tidak berhak menghapus default variable');
 
@@ -21,7 +21,7 @@ if ($varId <= 0) {
     ezdoc_respond_error(t('response.invalid_id', [], 'Invalid ID'));
 }
 
-$repo = new \Ezdoc\DefaultVars\DefaultVarsRepository($conn);
+$repo = new \Ezdoc\DefaultVars\DefaultVarsRepository(Context::default()->db);
 
 // Fetch nama untuk audit log (best-effort — supaya audit context lengkap)
 $existing = $repo->findById($varId);

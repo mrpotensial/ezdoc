@@ -13,10 +13,9 @@
  * Template UUID lookup via TemplateRepository. Bulk UPDATE via Connection.
  */
 
+use Ezdoc\Context;
 use Ezdoc\Db\Mysqli\MysqliConnection;
 use Ezdoc\Template\TemplateRepository;
-
-global $conn;
 
 ezdoc_require_role('superadmin', 'Restore hanya bisa dilakukan superadmin.');
 
@@ -29,7 +28,7 @@ if ($tid <= 0 || $n === '' || $np === '') {
     ezdoc_respond_error(t('response.incomplete_parameters', [], 'Incomplete parameters'));
 }
 
-$db = new MysqliConnection($conn);
+$db = new MysqliConnection(Context::default()->db);
 $tplRepo = new TemplateRepository($db);
 
 // Resolve template_id → uuid (untuk slot query lintas template version)

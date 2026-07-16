@@ -971,7 +971,7 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 
 ## 6. Roadmap
 
-**Total timeline (single dev, focused)**: ~34-35 weeks (~8 months) untuk v1.0 (termasuk v0.9.7 full views + v0.9.8 App orchestrator + v0.9.9 DB abstraction), tambah ~16 weeks (~4 bulan) untuk v2.0 = ~50-51 weeks (**~12 bulan**) ke ecosystem cross-language.
+**Total timeline (single dev, focused)**: ~35-36 weeks (~8 months) untuk v1.0 (termasuk v0.9.7 full views + v0.9.8 App orchestrator + v0.9.9 DB abstraction + v0.9.10 standalone hardening), tambah ~16 weeks (~4 bulan) untuk v2.0 = ~51-52 weeks (**~12 bulan**) ke ecosystem cross-language.
 
 **Note on v0.9.7 (added post-review)**: Milestone ini insertion baru based on user feedback "library tanpa WYSIWYG editor tidak akan di-adopt". Port full designer + generator dari dogfood consumer app ke library views = **~3-4 weeks extra** — critical blocker untuk v1.0 realistic adoption.
 
@@ -990,10 +990,11 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 | **Full views** | v0.9.7 | ~27 weeks | Migrate designer + generator + list dari consumer app ke library (WYSIWYG editor + PDF gen) |
 | **App orchestrator** | v0.9.8 | ~30 weeks | `Ezdoc\App::run()` 1-line mount + internal router + zero-config demo |
 | **DB abstraction** | v0.9.9 | ~34 weeks | Zero-dep DB layer + Blueprint DSL + 5 Grammars (T2) + spec-first artifacts |
-| **Extraction** | v1.0 | ~35 weeks | Standalone PHP library di Packagist |
-| **Spec** | v1.1 | ~37 weeks | ezdoc-spec repo publik (dari v0.9.9 seed) |
-| **Go port** | v1.5 | ~43 weeks | Native Go implementation |
-| **TS port** | v2.0 | ~51 weeks | Native TypeScript + Next.js sample |
+| **Standalone hardening** | v0.9.10 | ~35 weeks | Consumer-app dep extraction: PdfRenderer, DateFormatter, Db/Auth call sites |
+| **Extraction** | v1.0 | ~36 weeks | Standalone PHP library di Packagist |
+| **Spec** | v1.1 | ~38 weeks | ezdoc-spec repo publik (dari v0.9.9 seed) |
+| **Go port** | v1.5 | ~44 weeks | Native Go implementation |
+| **TS port** | v2.0 | ~52 weeks | Native TypeScript + Next.js sample |
 
 **Catatan estimation**:
 - Timeline asumsi **1 dev fokus purnawaktu**. Parallelization (mis. UI dev sambil PSrE integration) bisa potong 30-40%.
@@ -1468,6 +1469,8 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 
 **Goal**: audit + eliminate semua consumer-app runtime dependencies dari library. Ezdoc runs standalone tanpa consumer's `koneksi.php` / `page/*.php` / project-specific helpers. Prereq mandatory sebelum v1.0 Packagist extraction.
 
+**Scope boundary**: milestone ini fokus ke **consumer-app dependency extraction** (PdfRenderer, DateFormatter, Db call sites, Auth call sites). Deferred DoD items dari v0.9.9 (Grammar test matrix CI, docker-compose, `App::demo()` SQLite mode, integration test suite) referenced dengan tag `deferred v0.9.10` di section 6.14 → di-roll ke **v0.9.10-track-B** (separate mini-milestone) atau langsung ke v1.0 prep, TIDAK di-scope di sini untuk hindari overload. Sub-track split by domain: **A** = consumer dep removal (this section), **B** = DB abstraction CI completion (deferred v0.9.9).
+
 **Motivation**: dogfood consumer (`SIMpel`) exposes ezdoc ke consumer-specific globals (`generatePDF()`, `ubahTanggalKeIndonesia()`, `query()`, `hasRole()`). Sebelum extraction ke Packagist, semua ini harus punya library-native replacement + backward-compat fallback.
 
 **Design principle**: setiap consumer dependency di-replace dgn (1) contract interface, (2) library-native default implementation, (3) optional backward-compat shim yg detect existing consumer function dan pakai kalau available. Industry-standard pattern: Symfony transports, Laravel drivers, Filament contracts.
@@ -1506,7 +1509,7 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 
 ### 6.16 Milestone v1.0 — "PHP library extraction (Packagist)"  ⏱ ~1 week
 
-**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Depends on v0.9.7 (full views) + v0.9.8 (App orchestrator) + v0.9.9 (DB abstraction)** completed.
+**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Depends on v0.9.7 (full views) + v0.9.8 (App orchestrator) + v0.9.9 (DB abstraction) + v0.9.10 (standalone hardening — no consumer-app runtime deps)** completed.
 
 - [ ] Move `ezdoc/` folder ke repo baru `mrpotensial/ezdoc`
 - [ ] Setup GitHub Actions CI (phpunit + phpstan level 6 + PHP matrix 7.4-8.3)
@@ -1522,7 +1525,7 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - **`Ezdoc\App::run()` 1-line mount + `Ezdoc\App::demo()` zero-config SQLite mode** (from v0.9.8) — consumer install verification tanpa DB config
 - Fresh consumer test: install → `Ezdoc\App::demo()` → save template → generate doc → sign → verify (semua works out-of-box, tanpa manual wiring)
 
-### 6.16 Milestone v1.1 — "Spec extraction (repo split + conformance vectors)"  ⏱ ~1-2 weeks
+### 6.17 Milestone v1.1 — "Spec extraction (repo split + conformance vectors)"  ⏱ ~1-2 weeks
 
 **Goal**: split `ezdoc-spec/` subfolder (seeded di v0.9.9) → standalone repo publik `mrpotensial/ezdoc-spec`; enrich dengan conformance test vectors untuk native ports.
 
@@ -1542,7 +1545,7 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - Repo has: schemas/, ddl/, protocol/, conformance/, docs/
 - Docs: "How to write a new port" guide dgn Go + Rust + TS starter examples
 
-### 6.17 Milestone v1.5 — "Go port"  ⏱ ~4-6 weeks
+### 6.18 Milestone v1.5 — "Go port"  ⏱ ~4-6 weeks
 
 **Goal**: `ezdoc-go` — native Go implementation, container-friendly.
 
@@ -1560,7 +1563,7 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - Conformance test pass (signature dari PHP di-verify oleh Go = same result)
 - Docker image jalan di Kubernetes cluster
 
-### 6.18 Milestone v2.0 — "TypeScript port + full ecosystem"  ⏱ ~6-8 weeks
+### 6.19 Milestone v2.0 — "TypeScript port + full ecosystem"  ⏱ ~6-8 weeks
 
 **Goal**: `@mrpotensial/ezdoc` — TypeScript native untuk Next.js / Node / browser.
 

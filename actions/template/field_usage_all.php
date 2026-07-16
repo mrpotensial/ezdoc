@@ -15,16 +15,15 @@
  * Postgres vs SQLite) punya JSON function syntax berbeda.
  */
 
+use Ezdoc\Context;
 use Ezdoc\Db\Mysqli\MysqliConnection;
-
-global $conn;
 
 ezdoc_require_manage_templates('Tidak berhak scan field usage');
 
 $tid = (int) ($_POST['template_id'] ?? 0);
 if ($tid <= 0) ezdoc_respond_error(t('response.invalid_template_id', [], 'Invalid template ID'));
 
-$db = new MysqliConnection($conn);
+$db = new MysqliConnection(Context::default()->db);
 $rows = $db->fetchAll(
     'SELECT field_values FROM ezdoc_documents WHERE template_id = ?',
     [$tid]

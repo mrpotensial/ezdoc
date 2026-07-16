@@ -16,9 +16,8 @@
  * UPDATE gagal, rollback semua (bukan partial state).
  */
 
+use Ezdoc\Context;
 use Ezdoc\Db\Mysqli\MysqliConnection;
-
-global $conn;
 
 ezdoc_require_manage_templates('Tidak berhak cleanup field orphans');
 
@@ -30,7 +29,7 @@ if ($tid <= 0) ezdoc_respond_error(t('response.invalid_template_id', [], 'Invali
 $validFields = array_filter(array_map('trim', explode(',', $validFieldsCsv)));
 $validSet = array_flip($validFields);
 
-$db = new MysqliConnection($conn);
+$db = new MysqliConnection(Context::default()->db);
 $rows = $db->fetchAll(
     'SELECT id, field_values FROM ezdoc_documents WHERE template_id = ?',
     [$tid]

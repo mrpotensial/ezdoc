@@ -10,9 +10,8 @@
  * ## v0.9.9 refactor — Connection.execute (simple UPDATE)
  */
 
+use Ezdoc\Context;
 use Ezdoc\Db\Mysqli\MysqliConnection;
-
-global $conn;
 
 ezdoc_require_manage_templates('Tidak berhak lock/unlock template');
 
@@ -20,7 +19,7 @@ $tid    = (int)($_POST['template_id'] ?? 0);
 $locked = (int)($_POST['locked'] ?? 0);
 if ($tid <= 0) ezdoc_respond_error(t('response.invalid_id', [], 'Invalid ID'));
 
-$db = new MysqliConnection($conn);
+$db = new MysqliConnection(Context::default()->db);
 
 try {
     $db->execute('UPDATE ezdoc_templates SET is_locked = ? WHERE id = ?', [$locked, $tid]);

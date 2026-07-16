@@ -14,10 +14,9 @@
  * ## v0.9.9 refactor — Connection + TemplateRepository
  */
 
+use Ezdoc\Context;
 use Ezdoc\Db\Mysqli\MysqliConnection;
 use Ezdoc\Template\TemplateRepository;
-
-global $conn;
 
 // Guard 1: global template management
 ezdoc_require_manage_templates('Tidak berhak modify template');
@@ -31,7 +30,7 @@ if ($delete_id <= 0) {
     exit;
 }
 
-$db = new MysqliConnection($conn);
+$db = new MysqliConnection(Context::default()->db);
 $repo = new TemplateRepository($db);
 
 // Fetch name untuk audit log (best-effort)
