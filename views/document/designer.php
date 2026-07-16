@@ -2411,13 +2411,13 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     height: 120px;
                     pointer-events: none;
                 }
-                /* ─── Shared content baseline (Ezdoc\UI\ContentCss) ───
+                /* --- Shared content baseline (Ezdoc\UI\ContentCss) ---
                    Single source of truth for paragraph, list, table, heading
                    rendering across designer + generate + PDF. TinyMCE body has
-                   `content` class (via body_class option) supaya `.content p`
-                   selectors match. Sebelumnya rules ini duplicated dan drifted
-                   antara 3 contexts → text flow accumulation bugs (~1 line
-                   offset per page). Centralized now. */
+                   the "content" class (via body_class option) so .content
+                   selectors match. Previously these rules were duplicated
+                   and drifted between 3 contexts, causing text flow
+                   accumulation bugs (~1 line offset per page). Centralized now. */
                 <?= \Ezdoc\UI\ContentCss::render() ?>
                 /* Field placeholder — dimensions match rendered .f di generate.php
                    edit-on state (padding 1px 4px + border-bottom 1px dotted). Editor
