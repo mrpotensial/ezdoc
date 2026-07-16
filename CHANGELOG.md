@@ -6,6 +6,45 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v0.9.11 track — "View separation + generate UX polish"
+
+Split overloaded views ke industry-standard MVC one-view-per-action structure
+(Laravel `index.blade.php`, Filament `ListResource`, Symfony
+`{controller}/{action}.html.twig`, Rails `views/{controller}/{action}.html.erb`
+convention). Plus generate view UX polish matching designer.
+
+**Added**
+
+- **`views/document/template_list.php`** — extracted template list view dari
+  `designer.php`. Standalone file (214 lines: 37 docblock + 177 content).
+  Include via `require` pattern preserves backward-compat, no routing change
+  needed. Docblock declares expected vars + slot names + backward-compat notes
+- **`views/document/generate_list.php`** — extracted template picker view dari
+  `generate.php` (99 lines). Same include pattern, backward-compat preserved
+
+**Changed**
+
+- `designer.php` — list conditional (lines 344-521, 177 lines) replaced dgn
+  single `require __DIR__ . '/template_list.php'`. Line count: 5534 → 5362
+  (−172 lines, cleaner separation)
+- `generate.php` — picker section (lines 184-249, ~65 lines HTML + closing)
+  replaced dgn `require __DIR__ . '/generate_list.php'`. Line count: 4666 →
+  4639 (−27 lines)
+- `generate.php` `.page` — added dashed page break preview line (dual-layer
+  bg masking technique dari designer, hardcoded values via PHP interpolation).
+  Visible di `edit-on` state only. Hidden di `edit-off` + `@media print`.
+  Precedent: Google Docs page break markers, Word Web, Notion — all
+  edit-mode indicator convention
+
+**Deferred to v1.0 prep**
+
+- Router direct routing ke sub-view identifiers (breaking change)
+- Slot rename dari `designer:list-*` → `template_list:*` dgn backward-compat
+  forwarding (breaking untuk existing consumer slot registrations)
+- Full `designer.php ≤ 2500 lines` + `generate.php ≤ 3000 lines` DoD target
+  (needs bigger refactor of shared JS blocks; scope too big untuk v0.9.11
+  tanpa breaking dispatch flow)
+
 ### v0.9.10 track — "Standalone library hardening" (in progress)
 
 Prereq mandatory sebelum v1.0 Packagist extraction — eliminate semua
