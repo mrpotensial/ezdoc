@@ -1325,70 +1325,21 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
             padding: ' . $padTop . 'mm ' . $padRight . 'mm ' . $padBottom . 'mm ' . $padLeft . 'mm;
             position: relative;
         }
+        /* Content baseline — shared via Ezdoc\UI\ContentCss (single source of
+           truth designer + generate + PDF). Historically these rules duplicated
+           and drifted. Centralized now. */
         .content {
             line-height: 1.6;
             /* EXPLICIT WIDTH — dompdf tidak fully respect box-sizing: border-box
-               untuk padding calc → .page dgn width paperW mm + padding padT mm
-               actual render sbg paperW + 2×padding wide (content area wider dari
-               designer/screen expected). Bypass dgn set .content width eksplisit
+               untuk padding calc. Bypass dgn set .content width eksplisit
                = paper width - horizontal padding. Ensures text wraps at exact
                same width as designer (170mm untuk A4 dgn 20mm padding). */
             width: ' . ($paperDim['width'] - $padLeft - $padRight) . 'mm;
             max-width: ' . ($paperDim['width'] - $padLeft - $padRight) . 'mm;
-            /* Overflow protection — force ALL content to stay within paper width.
-               dompdf sometimes tidak apply word-wrap ke heading/link/pre elements
-               → text overflow keluar paper area (kanan). word-break: break-word
-               = break di karakter kalau word terlalu panjang; word-wrap +
-               overflow-wrap = standard word boundary break. */
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            word-break: break-word;
         }
-        /* Semua descendant `.content` inherit overflow protection. Individual
-           element rules below reinforce untuk elements yg dompdf handle beda. */
+        /* Semua descendant `.content` inherit overflow protection. */
         .content * { max-width: 100%; }
-        .content h1, .content h2, .content h3,
-        .content h4, .content h5, .content h6 {
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            word-break: break-word;
-        }
-        .content a { word-break: break-all; } /* URLs long tidak overflow */
-        .content pre, .content code {
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-        .content img { max-width: 100%; height: auto; }
-        /* orphans/widows: 1 — match screen behavior (pixel-based break) so PDF
-           page break position sesuai dgn designer visualization. Default 2
-           push paragraph ke halaman berikutnya untuk hindari 1-line orphan. */
-        .content p, .content li { orphans: 1; widows: 1; }
-        .content p {
-            margin: 8px 0;
-            min-height: 1.2em;
-        }
-        .content p.floating-only { min-height: 0; margin: 0; line-height: 0; }
-        /* List rendering — explicit rules match screen generate. Without these,
-           dompdf may render ol/ul without numbering/bullets (default varies). */
-        .content ol, .content ul { margin: 8px 0; padding-left: 2.5em; }
-        .content ol { list-style: decimal; }
-        .content ul { list-style: disc; }
-        .content ol ol { list-style: lower-alpha; }
-        .content ol ol ol { list-style: lower-roman; }
-        .content ul ul { list-style: circle; }
-        .content ul ul ul { list-style: square; }
-        .content li { display: list-item; }
-        .content table { border-collapse: collapse; width: 100%; }
-        /* Opt-in fixed layout: add class "tbl-fixed" on a table to force equal columns (useful for header-logo rows) */
-        .content table.tbl-fixed { table-layout: fixed; }
-        .content td, .content th {
-            border: 1px solid #ccc;
-            padding: 6px;
-            vertical-align: top;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-        }
-        .content table[border="0"] td, .content table[border="0"] th { border: none; }
+        ' . \Ezdoc\UI\ContentCss::render() . '
         /* Logo images inline-block (max-width sudah declared di .content img rule
            di block sebelumnya). */
         .content .logo-img { display: inline-block; }
@@ -1976,38 +1927,13 @@ function renderFieldForPdf($name, $type, $val, $label) {
             .page { width: 100%; padding: 15px; }
         }
 
-        /* Content styles from editor */
+        /* Content baseline — shared across designer editor, generate view, PDF.
+           Single source of truth via Ezdoc\UI\ContentCss. Historically these
+           rules diverged causing text flow drift ~1 line per page. Centralized
+           now — any content rendering property change updates 3 contexts atomically.
+           Precedent: Notion/Google Docs shared editor+view CSS. */
         .content { line-height: 1.6; }
-        /* orphans/widows: 1 — override CSS default (2) supaya print break di pixel
-           boundary saja, tanpa push paragraf ke halaman berikutnya untuk hindari
-           orphan/widow. Designer visualization pakai pure background-image gradient
-           yang tidak respect orphans/widows → mismatch. Setting keduanya 1 bikin
-           print break behavior match designer visualization. */
-        .content p, .content li {
-            orphans: 1;
-            widows: 1;
-        }
-        .content p { margin: 8px 0; min-height: 1.2em; }
-        /* Collapse paragraph that only contains floating/absolute elements */
-        .content p.floating-only { min-height: 0; margin: 0; line-height: 0; }
-        /* Restore browser-default list rendering (Tailwind preflight strips
-           list-style/padding/margin from ol/ul globally). Without this,
-           <ol>/<ul> render tanpa numbering/bullets di generate meski designer
-           menampilkan list marker via TinyMCE default. Values match typical
-           browser defaults for consistency with designer preview. */
-        .content ol, .content ul { margin: 8px 0; padding-left: 2.5em; }
-        .content ol { list-style: decimal; }
-        .content ul { list-style: disc; }
-        .content ol ol { list-style: lower-alpha; }
-        .content ol ol ol { list-style: lower-roman; }
-        .content ul ul { list-style: circle; }
-        .content ul ul ul { list-style: square; }
-        .content li { display: list-item; }
-        .content table { border-collapse: collapse; width: 100%; }
-        /* Opt-in fixed layout (matches PDF rule) */
-        .content table.tbl-fixed { table-layout: fixed; }
-        .content td, .content th { border: 1px solid #ccc; padding: 6px; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; }
-        .content table[border="0"] td, .content table[border="0"] th { border: none; }
+        <?= \Ezdoc\UI\ContentCss::render() ?>
 
         /* Field (contenteditable) - auto-adjusts for 1 or multi line */
         .f-wrap { display: inline; }

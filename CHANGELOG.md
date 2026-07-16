@@ -6,6 +6,80 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v0.9.10 track — "Standalone library hardening" (in progress)
+
+Prereq mandatory sebelum v1.0 Packagist extraction — eliminate semua
+consumer-app runtime dependencies. Contracts extracted dgn industry-standard
+precedent (Symfony transports, Carbon locale tables, Filament driver pattern).
+
+**Added — new contracts (industry-standard OO)**
+
+- **`Ezdoc\Rendering\PdfRenderer`** interface — PDF backend contract.
+  Consumer app inject via `Context::withPdf()` untuk custom backend
+  (mPDF, wkhtmltopdf, Weasyprint). Precedent: Symfony Mailer
+  `TransportInterface`, Laravel Mail `MailManager::extend()`, Filament
+  contract-based renderers, Barryvdh/laravel-dompdf `stream()` method
+- **`Ezdoc\Rendering\DompdfRenderer`** — default impl, zero-dep beyond
+  `dompdf/dompdf` composer package. Auto-instantiated by `generate.php`
+  kalau consumer skip injection
+- **`Ezdoc\Format\DateFormatter`** static utility — locale-aware date
+  component translation. Precedent: Carbon `translatedFormat()`
+  translation array structure (identical), Symfony Intl proxy pattern.
+  Built-in locales: `en` (identity), `id` (Bahasa Indonesia default)
+- **`Context::$pdf`** property + `withPdf()` immutable wither
+- **`Ezdoc\UI\ContentCss`** static utility — shared content CSS single
+  source of truth across designer editor, generate view, PDF export.
+  Historically these 3 contexts had duplicated `.content` rules that
+  drifted causing text flow bugs. Centralized now via
+  `ContentCss::render()` embedded in each context's `<style>` tag.
+  Precedent: Notion/Google Docs shared editor+view CSS, Filament shared
+  component styles
+
+**Changed — runtime dependency removal**
+
+- `generate.php` PDF flow rewritten — removed `generatePDF()` consumer
+  function fallback (was in `koneksi.php`). Auto-instantiate library-
+  native `DompdfRenderer` kalau dompdf class exists. Duck-typing accept
+  legacy `stream()`-shaped objects untuk backward-compat
+- `resolveDefault()` (di `lib/doc_template_helpers.php`) — pakai
+  `DateFormatter::localize()` dgn `ubahTanggalKeIndonesia()`
+  backward-compat shim (function_exists guard)
+- **20 action files** migrated dari `global $conn` → `Context::default()->db`:
+  - Template (10): list_categories, toggle_template_lock, field_usage,
+    rename_field, field_usage_all, analyze_query, cleanup_orphans,
+    delete_template, save_template, copy_template
+  - Document (7): list_versions, toggle_lock, restore_slot, delete_slot,
+    delete_version, new_version, save_document
+  - Default vars (3): list_vars, add_var, delete_var
+  - Files dgn `$author_id` retain global (application-scoped current
+    user identity — Laravel `auth()->id()` pattern)
+
+**Deprecated**
+
+- `lib/schema.php` — legacy consumer-specific auto-migration untuk
+  `surat_template_v2` + `surat_audit_log` (SIMpel/RSIA tables, BUKAN
+  library's own `ezdoc_*` tables). Marked `@deprecated`, akan dihapus
+  di v1.0. Consumer apps dgn legacy tables harus migrate ke consumer's
+  own bootstrap
+- `generatePDF()` fallback path — removed dari generate.php (breaking
+  untuk consumer apps yang hanya define `generatePDF()` tanpa install
+  dompdf composer package)
+
+**Docs**
+
+- `docs/PDF-RENDERING.md` — PdfRenderer contract lengkap dgn integration
+  guide (dompdf default, mPDF example, wkhtmltopdf example)
+- `docs/LOCALIZATION.md` — DateFormatter API + locale extension pattern
+- `docs/CONTENT-CSS.md` — shared content CSS pattern + migration
+  checklist untuk adding new rules
+- `docs/PRD.md` — v0.9.10 milestone (§6.15) formal + Fase table + v1.0
+  dependency list update
+- README + QUICKSTART + UI-CUSTOMIZATION — replace `koneksi.php` spesifik
+  references dgn generic "consumer app's own bootstrap" wording
+- `_dispatcher.php` docblock — library-standalone runtime deps documented
+- Context.php, HasRoleProvider.php, role_provider.php docblocks — generic
+  wording dgn Symfony/Carbon/Filament precedent citations
+
 ## [0.9.9] - 2026-07-15 — "DB abstraction + Blueprint DSL + spec-first bootstrap + UX polish"
 
 ### Added — DB abstraction layer (in-house, zero external dep)

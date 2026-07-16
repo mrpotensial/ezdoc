@@ -2306,6 +2306,11 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             base_url: 'https://cdn.jsdelivr.net/npm/tinymce@6',
             suffix: '.min',
             min_height: 400,
+            // body_class 'content' — matches .content selectors di shared
+            // Ezdoc\UI\ContentCss rules (so editor + generate + PDF all use
+            // uniform ".content p", ".content table" selectors). Single source
+            // of truth without needing dual selectors like "p, .content p".
+            body_class: 'content',
             // Preserve custom attributes and styles
             extended_valid_elements: 'span[*],div[*]',
             custom_elements: '~span,~div',
@@ -2406,41 +2411,14 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     height: 120px;
                     pointer-events: none;
                 }
-                /* Paragraph baseline — sync EXACTLY dgn print CSS di generate.php
-                   supaya editor visual page break match print break. Sebelumnya
-                   editor cuma set margin, tanpa min-height + tanpa floating-only
-                   collapse → floating paragraph (logo/TTD/materai/QR floating)
-                   render dgn full line-height di editor (~6.77mm each), tapi
-                   di print collapse ke 0 height. Selisih tersebut yg bikin
-                   editor visual break 1+ baris lebih cepat dari print reality. */
-                p { margin: 8px 0; min-height: 1.2em; }
-                /* Collapse paragraph yg cuma berisi floating/absolute elements
-                   (identical dgn print CSS ".content p.floating-only" rule).
-                   TinyMCE render sama seperti browser print → line count sync. */
-                p.floating-only { min-height: 0; margin: 0; line-height: 0; }
-                /* List rendering — explicit rules match generate.php restoration.
-                   Editor TinyMCE default sudah render list correctly, tapi rules
-                   ini pastikan editor + generate render identical values. */
-                ol, ul { margin: 8px 0; padding-left: 2.5em; }
-                ol { list-style: decimal; }
-                ul { list-style: disc; }
-                ol ol { list-style: lower-alpha; }
-                ol ol ol { list-style: lower-roman; }
-                ul ul { list-style: circle; }
-                ul ul ul { list-style: square; }
-                li { display: list-item; }
-                /* Table rules — sync EXACTLY dgn generate.php .content table.
-                   Missing rules sebelumnya (vertical-align, word-wrap, table[border="0"])
-                   bikin cell content flow beda antara editor + generate → column
-                   widths + text wrap position drift. */
-                table { border-collapse: collapse; width: 100%; }
-                table.tbl-fixed { table-layout: fixed; }
-                td, th {
-                    border: 1px solid #ccc; padding: 6px;
-                    vertical-align: top;
-                    word-wrap: break-word; overflow-wrap: break-word;
-                }
-                table[border="0"] td, table[border="0"] th { border: none; }
+                /* ─── Shared content baseline (Ezdoc\UI\ContentCss) ───
+                   Single source of truth for paragraph, list, table, heading
+                   rendering across designer + generate + PDF. TinyMCE body has
+                   `content` class (via body_class option) supaya `.content p`
+                   selectors match. Sebelumnya rules ini duplicated dan drifted
+                   antara 3 contexts → text flow accumulation bugs (~1 line
+                   offset per page). Centralized now. */
+                <?= \Ezdoc\UI\ContentCss::render() ?>
                 /* Field placeholder — dimensions match rendered .f di generate.php
                    edit-on state (padding 1px 4px + border-bottom 1px dotted). Editor
                    renders identical box size dgn generate view saat field diisi user

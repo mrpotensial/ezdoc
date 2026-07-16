@@ -1,4 +1,4 @@
-<?php
+ <?php
 /**
  * POST action=add_var (body: var_name, description)
  *
