@@ -1,36 +1,55 @@
 <?php
 /**
- * ezdoc Role Provider — abstraksi auth/RBAC supaya bisa di-swap consumer lain.
+ * ezdoc Role Provider — auth/RBAC abstraction, swappable per consumer app.
  *
- * Design:
- *   - Default provider wraps koneksi.php: hasRole(), $author_id, $author_role_array
- *   - Consumer (project lain) bisa override via ezdoc_set_role_provider($custom)
- *   - Semua helper `ezdoc_has_role`, `ezdoc_current_user_id`, `ezdoc_current_user_roles`
- *     internal route via provider ini
+ * ## Design (industry-standard DI pattern)
+ *   - Default provider wraps consumer's own globals: `hasRole()`, `$author_id`,
+ *     `$author_role_array` (backward-compat shim untuk consumer apps yang punya
+ *     existing global-function auth pattern).
+ *   - Consumer bisa override via `ezdoc_set_role_provider($custom)` untuk framework-
+ *     specific auth (Laravel, Symfony, custom).
+ *   - Semua helper (`ezdoc_has_role`, `ezdoc_current_user_id`,
+ *     `ezdoc_current_user_roles`) route internally via provider.
  *
- * Provider contract — array dengan 3 callable:
+ * ## Contract
+ * Provider = array dengan 3 callable:
+ *   ```
  *   [
- *     'has_role' => function ($rolesStringOrArray): bool { ... },
- *     'current_user_id' => function (): int { ... },
+ *     'has_role'           => function ($rolesStringOrArray): bool { ... },
+ *     'current_user_id'    => function (): int { ... },
  *     'current_user_roles' => function (): array { ... },
  *   ]
+ *   ```
  *
- * Untuk consumer library (nanti):
- *   // In consumer bootstrap:
- *   require 'vendor/mrpotensial/ezdoc/bootstrap.php';
- *   ezdoc_set_role_provider([
- *     'has_role' => fn($r) => auth()->user()->hasRole($r),
- *     'current_user_id' => fn() => auth()->id(),
- *     'current_user_roles' => fn() => auth()->user()->roles->pluck('name')->all(),
- *   ]);
+ * ## Usage
+ *
+ * Consumer bootstrap (Laravel example):
+ * ```php
+ * require 'vendor/mrpotensial/ezdoc/bootstrap.php';
+ * ezdoc_set_role_provider([
+ *   'has_role'           => fn($r) => auth()->user()->hasRole($r),
+ *   'current_user_id'    => fn() => auth()->id(),
+ *   'current_user_roles' => fn() => auth()->user()->roles->pluck('name')->all(),
+ * ]);
+ * ```
+ *
+ * Legacy consumer (with global `hasRole()` function from their own bootstrap):
+ * ```php
+ * // No setup needed — default provider auto-detects consumer globals.
+ * require 'vendor/mrpotensial/ezdoc/bootstrap.php';
+ * ```
  */
 
 if (defined('EZDOC_ROLE_PROVIDER_LOADED')) return;
 define('EZDOC_ROLE_PROVIDER_LOADED', true);
 
 /**
- * Default provider — wraps global hasRole() + $author_id + $author_role_array
- * dari koneksi.php. Backward compat dengan sistem existing.
+ * Default provider — wraps consumer's own `hasRole()` global function +
+ * `$author_id` + `$author_role_array` globals (assumed set by consumer's own
+ * bootstrap file). Backward-compat shim for legacy monolith consumers.
+ *
+ * Consumer apps using different auth mechanism (Laravel, Symfony, custom)
+ * should call `ezdoc_set_role_provider()` in their bootstrap to override.
  *
  * @return array{has_role: callable, current_user_id: callable, current_user_roles: callable}
  */

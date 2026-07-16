@@ -131,7 +131,8 @@ Ezdoc\App::run([
 ```php
 require_once __DIR__ . '/ezdoc/bootstrap.php';
 
-// Auto-picks up $conn mysqli global from koneksi.php pattern
+// Auto-picks up $conn mysqli global from consumer's own bootstrap file
+// (whatever the consumer app calls it — koneksi.php, db.php, config.php, etc.).
 // Global helpers ready to use
 ezdoc_audit_log('doc.created', ['doc_id' => 42]);
 
@@ -270,7 +271,7 @@ ezdoc/
 │   │   └── DefaultVarsRepository.php
 │   ├── Auth/
 │   │   ├── RoleProvider.php      interface
-│   │   ├── HasRoleProvider.php   koneksi.php default
+│   │   ├── HasRoleProvider.php   consumer hasRole() global default (backward-compat shim)
 │   │   └── CallableRoleProvider.php  closure-based (Laravel/Symfony friendly)
 │   ├── Access/                   RBAC per-template + per-TTD
 │   ├── Exceptions/               typed exception hierarchy

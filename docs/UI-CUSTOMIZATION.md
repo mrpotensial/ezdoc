@@ -328,7 +328,7 @@ Example starter setup for a plain PHP monolith consumer app:
 
 ```php
 // bootstrap.php — run once per request, e.g. from index.php
-require __DIR__ . '/koneksi.php';         // exposes $conn (mysqli)
+require __DIR__ . '/app-bootstrap.php';   // consumer bootstrap that exposes $conn (mysqli or PDO)
 require __DIR__ . '/ezdoc/autoload.php';
 
 use Ezdoc\Config;

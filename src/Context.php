@@ -21,15 +21,19 @@ use mysqli;
  *
  * ## Usage
  *
- * Native PHP + koneksi.php (monolith):
+ * Legacy PHP monolith (consumer's own bootstrap sets `$GLOBALS['conn']`):
  * ```php
- * global $conn;
+ * global $conn;               // from consumer's bootstrap file
  * $ctx = Context::fromGlobals();
  * ```
  *
- * Custom (library consumer):
+ * Custom wiring (framework consumer, Laravel/Symfony/Filament):
  * ```php
- * $ctx = new Context($mysqli, new LaravelRoleProvider());
+ * $ctx = new Context(
+ *     $mysqli,
+ *     new LaravelRoleProvider(),  // implements Ezdoc\Auth\RoleProvider
+ *     new DompdfRenderer()        // implements Ezdoc\Rendering\PdfRenderer
+ * );
  * ```
  *
  * Default global instance untuk backward compat:
@@ -66,8 +70,13 @@ final class Context
     }
 
     /**
-     * Create Context dari koneksi.php globals ($conn, $author_id, $author_role_array).
-     * Convenience factory untuk existing koneksi.php-based monolith codebase.
+     * Create Context dari consumer's own bootstrap globals ($conn, $author_id,
+     * $author_role_array). Convenience factory untuk legacy monolith codebase
+     * yang pakai global-based bootstrap pattern.
+     *
+     * Consumer harus set `$GLOBALS['conn']` sebagai mysqli instance dari
+     * bootstrap file (whatever the consumer names it — koneksi.php, db.php,
+     * config.php, dst.).
      */
     public static function fromGlobals(): self
     {
@@ -77,7 +86,7 @@ final class Context
             // existing code yang `catch (\RuntimeException)` tetap catch ini.
             throw new EzdocException(
                 'Context::fromGlobals() memerlukan $GLOBALS[\'conn\'] sebagai mysqli instance. '
-                . 'Pastikan koneksi.php sudah di-require sebelum call ini.'
+                . 'Pastikan consumer app\'s bootstrap file sudah di-require sebelum call ini.'
             );
         }
 

@@ -5,13 +5,19 @@ declare(strict_types=1);
 namespace Ezdoc\Auth;
 
 /**
- * Default RoleProvider — wraps koneksi.php globals:
- *   - hasRole() function
- *   - $author_id
- *   - $author_role_array
+ * Default RoleProvider — backward-compat shim yang wrap consumer app's own
+ * globals (untuk legacy monolith consumer apps yang punya existing pattern):
+ *   - `hasRole()` global function
+ *   - `$author_id` global (current user id)
+ *   - `$author_role_array` global (current user roles array)
  *
- * Untuk koneksi.php-based monolith apps, ini adalah default provider.
- * Untuk library consumer di app lain, implement RoleProvider sendiri.
+ * Consumer app yang pakai framework auth (Laravel, Symfony, Filament) atau
+ * custom auth mechanism → implement {@see RoleProvider} sendiri + inject via
+ * `Context::withRoleProvider()` atau `ezdoc_set_role_provider()`.
+ *
+ * ## Precedent
+ * Modeled after Symfony Security voter pattern + Laravel Gate abstraction —
+ * decouples authorization logic from underlying auth implementation.
  */
 final class HasRoleProvider implements RoleProvider
 {

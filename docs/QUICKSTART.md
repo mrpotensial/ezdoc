@@ -37,15 +37,18 @@ Replaces ~100 lines of manual URL / Config wiring with a single call.
 
 ```php
 <?php
-require_once 'koneksi.php';        // your app's mysqli setup
+// Load your app's own bootstrap file (whatever name/location it uses —
+// db.php, bootstrap.php, config.php, etc.). This is the file that sets up
+// $conn (mysqli or PDO) and $_SESSION with authenticated user info.
+require_once 'app-bootstrap.php';   // your consumer app's bootstrap
 require_once 'ezdoc/autoload.php';
 
 \Ezdoc\App::run([
-    'app.db'         => $conn,                 // mysqli or PDO
+    'app.db'         => $conn,                 // mysqli or PDO from consumer bootstrap
     'app.base_path'  => '?page=ezdoc_ui',      // whatever URL your host page uses
-    'app.author_id'  => $_SESSION['user_id_pegawai'] ?? null,
+    'app.author_id'  => $_SESSION['user_id'] ?? null,
     'app.hmac_secret'=> getenv('EZDOC_HMAC_SECRET'),
-    'brand.app_name' => 'RSIA Anugrah — Dokumen',
+    'brand.app_name' => 'My App — Documents',
 ]);
 ```
 

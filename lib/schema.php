@@ -1,10 +1,23 @@
 <?php
 /**
- * ezdoc schema — auto-migrations untuk kolom yang ezdoc butuhkan.
+ * ezdoc schema — LEGACY consumer-specific auto-migrations.
+ *
+ * ## ⚠️ DEPRECATED as of v0.9.10 — will be removed in v1.0
+ *
+ * File ini mengelola tabel **consumer-app-specific** (`surat_template_v2`,
+ * `surat_audit_log`) yang merupakan legacy tables dari dogfood consumer
+ * (SIMpel/RSIA). BUKAN tabel ezdoc library (`ezdoc_templates`,
+ * `ezdoc_audit_log`) yang di-manage via proper migrations runner di
+ * `ezdoc/migrations/`.
+ *
+ * Consumer apps yang punya legacy `surat_*` tables → copy migration ini
+ * ke consumer's own bootstrap (bukan di ezdoc library). Untuk v1.0 Packagist
+ * release, file ini akan dihapus.
+ *
  * Idempotent — safe call multiple times.
  *
- * Design: bikin di 1 tempat, dipanggil sekali dari bootstrap.php.
- * Kalau schema berubah, edit di sini saja (bukan tersebar di banyak file).
+ * @deprecated Since v0.9.10 — akan dihapus di v1.0. Consumer migrate legacy
+ *             tables via consumer's own bootstrap (not via library).
  */
 
 if (defined('EZDOC_SCHEMA_LOADED')) return;
