@@ -1667,7 +1667,20 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     body.style.padding = `${padTop}mm ${padRight}mm ${padBottom}mm ${padLeft}mm`;
                     // max-width = paper width (constrains body to paper card look)
                     body.style.maxWidth = paperWidth + 'mm';
-                    body.style.minHeight = (paperHeight - padTop - padBottom) + 'mm';
+                    // Content area min-height sync dgn print .page semantic:
+                    // - Print CSS `.page { min-height: paperH }` (default content-box) →
+                    //   content area minimum = paperH mm (297mm A4)
+                    // - Editor body pakai `box-sizing: border-box` → butuh
+                    //   min-height = paperH + padT + padB supaya content area minimum
+                    //   sama dgn print (border-box counts padding INTO min-height).
+                    // Bug sebelumnya: min-height = paperH - padT - padB → content area
+                    //   effective = paperH - 2*(padT+padB) → jauh lebih kecil dari print
+                    //   → editor visual break lebih cepat 1+ baris dari print reality.
+                    body.style.minHeight = (paperHeight + padTop + padBottom) + 'mm';
+                    // Page break visualization — CSS var yg drive repeating
+                    // background-image di content_style. Line muncul di setiap
+                    // paperHeight (bukan content area) sesuai actual print page.
+                    body.style.setProperty('--ezdoc-page-h', paperHeight + 'mm');
                 }
 
                 // TinyMCE widget height = viewport-fill (getEditorHeight).
@@ -2280,6 +2293,11 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             // Prevent cleanup of styles and classes
             valid_children: '+body[style|div|span],+div[style|div|span|p]',
             content_style: `
+                /* Global box-sizing — MATCH generate.php's "* { box-sizing: border-box }".
+                   Without this, td/th/p default to content-box in editor iframe,
+                   causing width+padding calculation diff → table column widths
+                   drift → text wrap point shifts → accumulated layout diff. */
+                * { box-sizing: border-box; }
                 /* Google Docs pattern — paper visualization DI DALAM iframe:
                    - html = gray backdrop (fills iframe viewport)
                    - body = paper card (fixed width A4, centered on backdrop)
@@ -2288,7 +2306,6 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 html {
                     background: #64748b;
                     padding: 20px 0;
-                    box-sizing: border-box;
                 }
                 body {
                     font-family: "Times New Roman", serif;
@@ -2296,10 +2313,48 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     line-height: 1.6;
                     max-width: 210mm;      /* A4 width — updated dinamis via updatePageSize() */
                     margin: 0 auto;         /* center on gray backdrop */
-                    background: white;
+                    background-color: white;
                     box-shadow: 0 4px 20px rgba(0,0,0,0.3);
                     box-sizing: border-box;
                     position: relative;
+                    /* Page break hint — 1px semi-transparent line di setiap
+                       paper-height mark. Simple + accurate — no cumulative
+                       displacement across pages.
+
+                       Design rationale (setelah eksplorasi gap-band approach):
+                       - Gap DI DALAM paperHeight tile → paper visual < paperHeight,
+                         content near paper bottom overlap gap (ugly)
+                       - Gap DI LUAR paperHeight tile (tile = paperHeight + gap)
+                         → cumulative displacement (page N visual off by (N-1)×gap
+                         dari actual print page position)
+                       - 1px line di paperHeight boundary → accurate untuk semua N,
+                         no content displacement, tetap visible sebagai page marker
+
+                       Ini sesuai dgn continuous-DOM editor pattern (TinyMCE flat
+                       body). Real "paper separated" look tidak achievable tanpa
+                       hard page break DOM structure (Google Docs custom editor).
+
+                       CSS var --ezdoc-page-h di-set dinamis oleh updatePageSize().
+                       Fallback 297mm (A4 portrait) kalau var belum set. */
+                    background-image: linear-gradient(
+                        to bottom,
+                        transparent 0,
+                        transparent calc(var(--ezdoc-page-h, 297mm) - 1px),
+                        rgba(100, 116, 139, 0.45) calc(var(--ezdoc-page-h, 297mm) - 1px),
+                        rgba(100, 116, 139, 0.45) var(--ezdoc-page-h, 297mm)
+                    );
+                    background-size: 100% var(--ezdoc-page-h, 297mm);
+                    background-repeat: repeat-y;
+                    background-attachment: local; /* scroll dgn content */
+                }
+                /* "Page N" label di setiap page-break line — subtle floating
+                   indicator, tidak affect content flow. Positioned via same
+                   var. Nice-to-have: only page 2+ (skip first page label). */
+                body::before {
+                    content: '';
+                    /* Placeholder — actual page labels rendered via JS overlay
+                       (kalau butuh detail). CSS-only approach di sini fokus
+                       ke visible break line saja. */
                 }
                 /* Scroll room bottom — pseudo-element supaya persist even ketika
                    updatePageSize() reset body.style.padding. Industri: Google Docs
@@ -2310,31 +2365,61 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     height: 120px;
                     pointer-events: none;
                 }
-                p { margin: 8px 0; }
+                /* Paragraph baseline — sync EXACTLY dgn print CSS di generate.php
+                   supaya editor visual page break match print break. Sebelumnya
+                   editor cuma set margin, tanpa min-height + tanpa floating-only
+                   collapse → floating paragraph (logo/TTD/materai/QR floating)
+                   render dgn full line-height di editor (~6.77mm each), tapi
+                   di print collapse ke 0 height. Selisih tersebut yg bikin
+                   editor visual break 1+ baris lebih cepat dari print reality. */
+                p { margin: 8px 0; min-height: 1.2em; }
+                /* Collapse paragraph yg cuma berisi floating/absolute elements
+                   (identical dgn print CSS ".content p.floating-only" rule).
+                   TinyMCE render sama seperti browser print → line count sync. */
+                p.floating-only { min-height: 0; margin: 0; line-height: 0; }
+                /* Table rules — sync EXACTLY dgn generate.php .content table.
+                   Missing rules sebelumnya (vertical-align, word-wrap, table[border="0"])
+                   bikin cell content flow beda antara editor + generate → column
+                   widths + text wrap position drift. */
                 table { border-collapse: collapse; width: 100%; }
-                td, th { border: 1px solid #ccc; padding: 6px; }
+                table.tbl-fixed { table-layout: fixed; }
+                td, th {
+                    border: 1px solid #ccc; padding: 6px;
+                    vertical-align: top;
+                    word-wrap: break-word; overflow-wrap: break-word;
+                }
+                table[border="0"] td, table[border="0"] th { border: none; }
+                /* Layout-transparent decoration (Google Docs / Notion pattern):
+                   outline + background saja, NO padding/border. Guarantees
+                   text flow width identical dgn print (.edit-off .f = zero decor).
+                   Field type distinguishable via background color; emoji indicators
+                   removed karena ::before content adds inline width → text wrap
+                   diff vs print. Type icon di sidebar/tooltip cukup untuk UX. */
                 .field-placeholder {
-                    background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 3px;
+                    background: #dbeafe; color: #1e40af;
+                    padding: 0; margin: 0;
+                    border: none; outline: 1px dashed #93c5fd; outline-offset: 0;
+                    border-radius: 2px;
                     font-family: inherit; font-size: inherit; font-weight: inherit; font-style: inherit;
-                    white-space: nowrap; display: inline; border: 1px solid #93c5fd;
+                    white-space: nowrap; display: inline;
                 }
-                .field-placeholder[data-type="number"] { background: #fef3c7; border-color: #fbbf24; color: #92400e; }
-                .field-placeholder[data-type="number"]::before { content: '#'; margin-right: 3px; }
-                .field-placeholder[data-type="date"] { background: #e0e7ff; border-color: #818cf8; color: #3730a3; }
-                .field-placeholder[data-type="date"]::before { content: '📅'; margin-right: 3px; }
-                .field-placeholder[data-type="checkbox"] { background: #dcfce7; border-color: #22c55e; color: #166534; }
-                .field-placeholder[data-type="checkbox"]::before { content: '☐'; margin-right: 3px; }
-                .field-placeholder[data-type="radio"] { background: #fce7f3; border-color: #ec4899; color: #9d174d; }
-                .field-placeholder[data-type="radio"]::before { content: '◉'; margin-right: 3px; }
-                .field-placeholder[data-type="select"] { background: #f3e8ff; border-color: #a855f7; color: #6b21a8; }
-                .field-placeholder[data-type="select"]::before { content: '▼'; margin-right: 3px; }
-                /* Inline logo */
+                .field-placeholder[data-type="number"] { background: #fef3c7; outline-color: #fbbf24; color: #92400e; }
+                .field-placeholder[data-type="date"] { background: #e0e7ff; outline-color: #818cf8; color: #3730a3; }
+                .field-placeholder[data-type="checkbox"] { background: #dcfce7; outline-color: #22c55e; color: #166534; }
+                .field-placeholder[data-type="radio"] { background: #fce7f3; outline-color: #ec4899; color: #9d174d; }
+                .field-placeholder[data-type="select"] { background: #f3e8ff; outline-color: #a855f7; color: #6b21a8; }
+                /* Inline logo — layout-transparent (outline, no padding/border/min-width).
+                   Non-floating placeholder tanpa image renders sebagai text label;
+                   dgn image renders at natural image dimensions (matches print
+                   <img class="logo-img"> exact). */
                 .logo-placeholder {
-                    display: inline-block; border: 2px dashed #94a3b8; background: #f1f5f9;
-                    padding: 8px; border-radius: 4px; color: #64748b; font-size: 12px;
-                    min-width: 60px; text-align: center; vertical-align: middle;
+                    display: inline-block;
+                    padding: 0; margin: 0;
+                    border: none; outline: 2px dashed #94a3b8; outline-offset: -2px;
+                    background: rgba(241, 245, 249, 0.5);
+                    border-radius: 2px; color: #64748b; font-size: 12px;
+                    text-align: center; vertical-align: middle;
                 }
-                /* Logo placeholder with image - minimal padding */
                 .logo-placeholder img {
                     display: block; border-radius: 2px;
                 }
@@ -2367,12 +2452,18 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     padding: 0 2px;
                     border-radius: 2px;
                 }
-                /* TTD Placeholder */
+                /* TTD Placeholder — match rendered .ttd-item-inline di generate.php:
+                   display inline-block + margin 5px + min-width 120px + vertical-align top.
+                   Inner .ttd-canvas-placeholder 100×50 → total box ~130×~80 with margin.
+                   Editor renders equivalent box → identical text flow position. */
                 .ttd-placeholder {
-                    display: inline-block; border: 2px dashed #10b981; background: #ecfdf5;
-                    padding: 15px 25px; border-radius: 4px; color: #065f46; font-size: 11px;
-                    min-width: 100px; min-height: 60px; text-align: center;
-                    vertical-align: middle;
+                    display: inline-block;
+                    padding: 0; margin: 5px;
+                    border: none; outline: 2px dashed #10b981; outline-offset: -2px;
+                    background: rgba(236, 253, 245, 0.5);
+                    border-radius: 2px; color: #065f46; font-size: 11px;
+                    min-width: 120px; min-height: 60px;
+                    text-align: center; vertical-align: top;
                 }
                 .ttd-placeholder.floating {
                     position: absolute;
@@ -2392,10 +2483,19 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     color: #10b981;
                 }
                 /* Materai Placeholder */
-                /* Conditional Section visual marker (editor only) */
+                /* Conditional Section visual marker (editor only) — pakai OUTLINE
+                   bukan border+padding. Outline render visually tapi TIDAK
+                   affect layout (tidak add size ke element). Tanpa
+                   padding/margin/border → content position editor exact match
+                   dgn print (yg reset .conditional-section ke padding:0 margin:0
+                   border:none). Sebelumnya editor pakai border 1px + padding 8px
+                   + margin 8px 0 → tambah ~9mm per section (~1 baris teks) →
+                   visual page break 1+ baris lebih cepat dari print reality. */
                 .conditional-section {
-                    border: 1px dashed #06b6d4; background: #ecfeff;
-                    padding: 8px; border-radius: 4px; margin: 8px 0;
+                    outline: 1px dashed #06b6d4;
+                    outline-offset: -1px;
+                    background: #ecfeff;
+                    border-radius: 4px;
                 }
 
                 .materai-placeholder {
@@ -2416,12 +2516,17 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     font-size: 10px;
                     color: #c2410c;
                 }
-                /* QR Placeholder */
+                /* QR Placeholder — dimensions + margin match rendered .qr-item-inline
+                   di generate.php (inline-block + margin 5px + inner .qr-canvas-placeholder
+                   80×80). Total occupied box = 90×90 including margin. Editor renders
+                   identical box → identical text flow position. */
                 .qr-placeholder {
-                    display: inline-block; border: 2px dashed #6366f1; background: #eef2ff;
-                    padding: 8px; border-radius: 4px; color: #4338ca; font-size: 11px;
-                    min-width: 60px; min-height: 60px; text-align: center;
-                    vertical-align: middle;
+                    display: inline-block;
+                    padding: 0; margin: 5px;
+                    border: 2px dashed #6366f1; background: #eef2ff;
+                    border-radius: 4px; color: #4338ca; font-size: 11px;
+                    width: 80px; height: 80px;
+                    text-align: center; vertical-align: top;
                 }
                 .qr-placeholder.floating {
                     position: absolute;
