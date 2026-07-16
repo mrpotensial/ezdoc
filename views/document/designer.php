@@ -296,6 +296,26 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         }
         .panel-list-item.ezdoc-flash-focus { animation: ezdocFlashFocus 1.4s ease-out; }
 
+        /* Active card — persistent state: user sedang edit input di card, atau
+           card baru saja dipilih via click placeholder di editor. Industry
+           pattern: VS Code Outline focused row, Figma layer active, Notion
+           block-focus. Distinct dari flash (temporal, 1.4s) — is-active retain
+           sampai user pindah ke card lain / klik luar sidebar. */
+        .panel-list-item.is-active {
+            background-color: rgba(238, 242, 255, 0.85); /* indigo-50 tint */
+            border-color: rgba(99, 102, 241, 0.55) !important; /* indigo-500 */
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25),
+                        0 4px 12px rgba(15, 23, 42, 0.08);
+            transform: translateY(-1px);
+            transition: box-shadow 160ms ease-out, transform 160ms ease-out,
+                        background-color 160ms ease-out;
+        }
+        /* Boost left accent stripe for active card */
+        .panel-list-item.is-active::before {
+            width: 4px !important;
+            background-color: rgb(99, 102, 241) !important; /* solid indigo-500 */
+        }
+
         /* Field card details — hide default triangle marker (Safari + Firefox) */
         details.group summary::-webkit-details-marker { display: none; }
         details.group summary::marker { display: none; }
@@ -2493,33 +2513,31 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     padding: 0 2px;
                     border-radius: 2px;
                 }
-                /* TTD Placeholder — match rendered .ttd-item-inline di generate.php:
-                   display inline-block + margin 5px + min-width 120px + vertical-align top.
-                   Inner .ttd-canvas-placeholder 100×50 → total box ~130×~80 with margin.
-                   Editor renders equivalent box → identical text flow position. */
+                /* TTD Placeholder — visual polish version. Border dashed (clean
+                   corners vs outline yg broken), small padding untuk breathing
+                   room, background subtle tint. Total dimensions closely match
+                   generate .ttd-item-inline (~120×110px content + margin). */
                 .ttd-placeholder {
                     display: inline-block;
-                    padding: 0; margin: 5px;
-                    border: none; outline: 2px dashed #10b981; outline-offset: -2px;
-                    background: rgba(236, 253, 245, 0.5);
-                    border-radius: 2px; color: #065f46; font-size: 11px;
-                    min-width: 120px; min-height: 60px;
+                    padding: 6px 10px; margin: 5px;
+                    border: 2px dashed #10b981; outline: none;
+                    background: rgba(236, 253, 245, 0.25);
+                    border-radius: 6px; color: #065f46;
+                    min-width: 116px; min-height: 96px;
                     text-align: center; vertical-align: top;
                 }
-                /* Floating TTD — margin: 0 override base (base pakai margin: 5px
-                   untuk match inline .ttd-item-inline; floating variant HARUS
-                   margin: 0 supaya top/left coord = actual visual position,
-                   match generate .ttd-item-floating). line-height: 0 + font-size: 0
-                   kill baseline gap phantom di inline-block container. */
+                /* Floating TTD — hanya override margin: 0 (position accuracy).
+                   Padding + font-size + line-height inherit dari base supaya
+                   inner text (label, name) render dgn proper spacing.
+                   TTD adalah block element (bukan inline-block img wrapper
+                   seperti logo) → tidak butuh line-height: 0 phantom descender
+                   kill. */
                 .ttd-placeholder.floating {
                     position: absolute;
                     cursor: move;
                     border-color: #10b981;
                     background: rgba(236, 253, 245, 0.95);
                     margin: 0;
-                    padding: 0;
-                    line-height: 0;
-                    font-size: 0;
                 }
                 .ttd-placeholder.floating.behind { z-index: -1; }
                 .ttd-placeholder.floating.front { z-index: 100; }
@@ -2849,11 +2867,17 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                         // Preview text di editor: kalau ada default nama, tampilkan, kalau tidak dots
                         const previewNama = defaultNama || '..................';
+                        // Dimensions match generate .ttd-item-inline structure exactly:
+                        // - label: font-size 12pt (was 10px) → matches .ttd-label
+                        // - canvas box: 100×50 dashed border → matches .ttd-canvas-placeholder
+                        // - name: font-size 11pt (was 10px) → matches .ttd-name
+                        // Total height ~107px, width ≥120px → identical footprint to
+                        // generate rendered TTD box. Regex-safe (3 flat sibling divs).
                         const content = `
                             <div class="${classes}" data-ttd="${ttdId}" data-label="${label.trim()}" data-nama-field="${namaField}"${posAttrs}${extraAttrs}${style} contenteditable="false">
-                                <div style="font-size:10px;margin-bottom:5px;">${label.trim()}</div>
-                                <div style="border-bottom:1px solid #065f46;width:80px;margin:20px auto 5px;"></div>
-                                <div style="font-size:10px;">(${previewNama})</div>
+                                <div style="font-size:12pt;margin-bottom:5px;">${label.trim()}</div>
+                                <div style="width:100px;height:50px;border:1px dashed #10b981;background:#ecfdf5;margin:0 auto;"></div>
+                                <div style="font-size:11pt;margin-top:3px;">(${previewNama})</div>
                             </div>
                         `;
                         editor.insertContent(content + '&nbsp;');
@@ -3985,6 +4009,33 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             scanCondSections();
         }
 
+        // ===== ACTIVE CARD STATE =====
+        // Persistent active state — hanya SATU card yg is-active at a time.
+        // Industry: VS Code focused outline row, Figma active layer, Notion focus.
+        // Call dgn null untuk clear semua.
+        window.ezdocSetActivePanelCard = function(cardEl) {
+            document.querySelectorAll('.panel-list-item.is-active').forEach(c => {
+                if (c !== cardEl) c.classList.remove('is-active');
+            });
+            if (cardEl) cardEl.classList.add('is-active');
+        };
+
+        // Event delegation: klik atau focus input di dalam card → set active.
+        // Runs once at page load. Handles all sidebar cards regardless of when
+        // they're rendered (delegation dari sidebar container).
+        (function() {
+            const sidebar = document.querySelector('.sidebar-scroll');
+            if (!sidebar) return;
+            const setFromEvent = (e) => {
+                const card = e.target.closest('.panel-list-item');
+                if (card) window.ezdocSetActivePanelCard(card);
+            };
+            // Click sub-tree: mark active on any card interaction
+            sidebar.addEventListener('click', setFromEvent);
+            // Focus input/textarea/select: mark parent card active
+            sidebar.addEventListener('focusin', setFromEvent);
+        })();
+
         // ===== CLICK-TO-FOCUS SIDEBAR =====
         // Editor click → auto-scroll ke sub-card di panel kanan. VS Code Outline /
         // Figma Layers / Filament Forms pattern. Called by editor.on('click') listener.
@@ -4028,10 +4079,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 // Restore visibility kalau filter search sedang aktif
                 card.classList.remove('panel-list-item-hidden');
                 card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-                card.classList.remove('ezdoc-flash-focus'); // reset (retrigger)
-                void card.offsetWidth;                       // force reflow
-                card.classList.add('ezdoc-flash-focus');
-                setTimeout(() => card.classList.remove('ezdoc-flash-focus'), 1400);
+                // Persistent active state — no temporary flash (flash animation
+                // over-rode active bg/shadow → flicker perception). Active class
+                // alone gives clear, stable visual cue.
+                if (window.ezdocSetActivePanelCard) window.ezdocSetActivePanelCard(card);
             };
             setTimeout(doScroll, wasCollapsed ? 320 : 30);
         };
