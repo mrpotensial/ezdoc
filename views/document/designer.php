@@ -1667,16 +1667,19 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     body.style.padding = `${padTop}mm ${padRight}mm ${padBottom}mm ${padLeft}mm`;
                     // max-width = paper width (constrains body to paper card look)
                     body.style.maxWidth = paperWidth + 'mm';
-                    // Content area min-height sync dgn print .page semantic:
-                    // - Print CSS `.page { min-height: paperH }` (default content-box) →
-                    //   content area minimum = paperH mm (297mm A4)
-                    // - Editor body pakai `box-sizing: border-box` → butuh
-                    //   min-height = paperH + padT + padB supaya content area minimum
-                    //   sama dgn print (border-box counts padding INTO min-height).
-                    // Bug sebelumnya: min-height = paperH - padT - padB → content area
-                    //   effective = paperH - 2*(padT+padB) → jauh lebih kecil dari print
-                    //   → editor visual break lebih cepat 1+ baris dari print reality.
-                    body.style.minHeight = (paperHeight + padTop + padBottom) + 'mm';
+                    // Body min-height = paperHeight mm (match generate .page min-height).
+                    //
+                    // Setelah `* { box-sizing: border-box }` ditambahkan ke generate.php,
+                    // generate `.page { min-height: paperH }` render border-box → total
+                    // .page height = paperH mm, content area = paperH - padT - padB.
+                    // Editor body dgn box-sizing: border-box + min-height: paperH mm
+                    // punya semantic identical → total body = paperH, content area same.
+                    //
+                    // Sebelumnya editor pakai (paperH + padT + padB) → over-inflated 40mm
+                    // (20mm padding × 2), bikin editor visual paper 40mm lebih tinggi dari
+                    // generate. Floating element di visual "paper bottom" editor mapped ke
+                    // beyond-paper area di generate → coordinate offset.
+                    body.style.minHeight = paperHeight + 'mm';
                     // Page break visualization — CSS var yg drive repeating
                     // background-image di content_style. Line muncul di setiap
                     // paperHeight (bukan content area) sesuai actual print page.
@@ -2377,6 +2380,17 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                    (identical dgn print CSS ".content p.floating-only" rule).
                    TinyMCE render sama seperti browser print → line count sync. */
                 p.floating-only { min-height: 0; margin: 0; line-height: 0; }
+                /* List rendering — explicit rules match generate.php restoration.
+                   Editor TinyMCE default sudah render list correctly, tapi rules
+                   ini pastikan editor + generate render identical values. */
+                ol, ul { margin: 8px 0; padding-left: 2.5em; }
+                ol { list-style: decimal; }
+                ul { list-style: disc; }
+                ol ol { list-style: lower-alpha; }
+                ol ol ol { list-style: lower-roman; }
+                ul ul { list-style: circle; }
+                ul ul ul { list-style: square; }
+                li { display: list-item; }
                 /* Table rules — sync EXACTLY dgn generate.php .content table.
                    Missing rules sebelumnya (vertical-align, word-wrap, table[border="0"])
                    bikin cell content flow beda antara editor + generate → column
@@ -2389,16 +2403,17 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     word-wrap: break-word; overflow-wrap: break-word;
                 }
                 table[border="0"] td, table[border="0"] th { border: none; }
-                /* Layout-transparent decoration (Google Docs / Notion pattern):
-                   outline + background saja, NO padding/border. Guarantees
-                   text flow width identical dgn print (.edit-off .f = zero decor).
-                   Field type distinguishable via background color; emoji indicators
-                   removed karena ::before content adds inline width → text wrap
-                   diff vs print. Type icon di sidebar/tooltip cukup untuk UX. */
+                /* Field placeholder — dimensions match rendered .f di generate.php
+                   edit-on state (padding 1px 4px + border-bottom 1px dotted). Editor
+                   renders identical box size dgn generate view saat field diisi user
+                   → zero horizontal/vertical drift. Outline dashed = editor-only
+                   visibility indicator, doesn't affect box (outline vs border). */
                 .field-placeholder {
                     background: #dbeafe; color: #1e40af;
-                    padding: 0; margin: 0;
-                    border: none; outline: 1px dashed #93c5fd; outline-offset: 0;
+                    padding: 1px 4px; margin: 0;
+                    border: none;
+                    border-bottom: 1px dotted #333;
+                    outline: 1px dashed #93c5fd; outline-offset: 0;
                     border-radius: 2px;
                     font-family: inherit; font-size: inherit; font-weight: inherit; font-style: inherit;
                     white-space: nowrap; display: inline;
@@ -2423,13 +2438,21 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 .logo-placeholder img {
                     display: block; border-radius: 2px;
                 }
-                /* Floating logo - can be positioned freely */
+                /* Floating logo — padding: 0 supaya <img> di dalam span posisi
+                   sama dgn generate rendering (generate render <img> langsung
+                   at top/left tanpa wrapping span). line-height: 0 + font-size: 0
+                   kill inline-block phantom descender space (baseline gap ~4-8px
+                   at bottom due to font-metrics). Result: span dimensions = img
+                   dimensions exactly, no baseline offset. */
                 .logo-placeholder.floating {
                     position: absolute;
                     cursor: move;
                     border-color: #8b5cf6;
                     background: rgba(255, 255, 255, 0.95);
-                    padding: 4px;
+                    padding: 0;
+                    margin: 0;
+                    line-height: 0;
+                    font-size: 0;
                 }
                 .logo-placeholder.floating.behind {
                     z-index: -1;
@@ -2465,11 +2488,20 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     min-width: 120px; min-height: 60px;
                     text-align: center; vertical-align: top;
                 }
+                /* Floating TTD — margin: 0 override base (base pakai margin: 5px
+                   untuk match inline .ttd-item-inline; floating variant HARUS
+                   margin: 0 supaya top/left coord = actual visual position,
+                   match generate .ttd-item-floating). line-height: 0 + font-size: 0
+                   kill baseline gap phantom di inline-block container. */
                 .ttd-placeholder.floating {
                     position: absolute;
                     cursor: move;
                     border-color: #10b981;
                     background: rgba(236, 253, 245, 0.95);
+                    margin: 0;
+                    padding: 0;
+                    line-height: 0;
+                    font-size: 0;
                 }
                 .ttd-placeholder.floating.behind { z-index: -1; }
                 .ttd-placeholder.floating.front { z-index: 100; }
@@ -2528,11 +2560,17 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     width: 80px; height: 80px;
                     text-align: center; vertical-align: top;
                 }
+                /* Floating QR — margin: 0 override base (base pakai margin: 5px
+                   untuk match inline .qr-item-inline; floating variant HARUS
+                   margin: 0 supaya top/left coord = actual visual position,
+                   match generate .qr-item-floating). */
                 .qr-placeholder.floating {
                     position: absolute;
                     cursor: move;
                     border-color: #6366f1;
                     background: rgba(238, 242, 255, 0.95);
+                    margin: 0;
+                    padding: 0;
                 }
                 .qr-placeholder.floating.behind { z-index: -1; }
                 .qr-placeholder.floating.front { z-index: 100; }

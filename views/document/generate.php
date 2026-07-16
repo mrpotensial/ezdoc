@@ -1877,9 +1877,31 @@ function renderFieldForPdf($name, $type, $val, $label) {
 
         /* Content styles from editor */
         .content { line-height: 1.6; }
+        /* orphans/widows: 1 — override CSS default (2) supaya print break di pixel
+           boundary saja, tanpa push paragraf ke halaman berikutnya untuk hindari
+           orphan/widow. Designer visualization pakai pure background-image gradient
+           yang tidak respect orphans/widows → mismatch. Setting keduanya 1 bikin
+           print break behavior match designer visualization. */
+        .content p, .content li {
+            orphans: 1;
+            widows: 1;
+        }
         .content p { margin: 8px 0; min-height: 1.2em; }
         /* Collapse paragraph that only contains floating/absolute elements */
         .content p.floating-only { min-height: 0; margin: 0; line-height: 0; }
+        /* Restore browser-default list rendering (Tailwind preflight strips
+           list-style/padding/margin from ol/ul globally). Without this,
+           <ol>/<ul> render tanpa numbering/bullets di generate meski designer
+           menampilkan list marker via TinyMCE default. Values match typical
+           browser defaults for consistency with designer preview. */
+        .content ol, .content ul { margin: 8px 0; padding-left: 2.5em; }
+        .content ol { list-style: decimal; }
+        .content ul { list-style: disc; }
+        .content ol ol { list-style: lower-alpha; }
+        .content ol ol ol { list-style: lower-roman; }
+        .content ul ul { list-style: circle; }
+        .content ul ul ul { list-style: square; }
+        .content li { display: list-item; }
         .content table { border-collapse: collapse; width: 100%; }
         /* Opt-in fixed layout (matches PDF rule) */
         .content table.tbl-fixed { table-layout: fixed; }
@@ -2319,18 +2341,21 @@ function renderFieldForPdf($name, $type, $val, $label) {
             0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
             50%      { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
         }
-        /* Conditional Section (#7) — visual hint in edit mode only */
+        /* Conditional Section (#7) — layout-transparent visual hint in edit mode.
+           Uses outline+background only (no border/padding/margin) supaya edit-on
+           view + editor + print + PDF render identical box. Outline doesn't
+           affect layout. Google Docs/Notion pattern. */
         .edit-on .conditional-section {
-            border-left: 3px solid #06b6d4;
+            outline: 2px dashed #06b6d4;
+            outline-offset: -2px;
             background: rgba(236, 254, 255, 0.4);
-            padding: 4px 8px;
-            margin: 4px 0;
+            border-radius: 4px;
         }
         /* Hide marker in print + locked view (final document) */
         .edit-off .conditional-section,
-        .conditional-section { border: none; background: transparent; padding: 0; margin: inherit; }
+        .conditional-section { outline: none; background: transparent; }
         @media print {
-            .conditional-section { border: none !important; background: transparent !important; padding: 0 !important; }
+            .conditional-section { outline: none !important; background: transparent !important; }
             .conditional-section[data-cond-result="0"] { display: none !important; }
         }
 
