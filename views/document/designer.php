@@ -2339,15 +2339,33 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                        CSS var --ezdoc-page-h di-set dinamis oleh updatePageSize().
                        Fallback 297mm (A4 portrait) kalau var belum set. */
-                    background-image: linear-gradient(
-                        to bottom,
-                        transparent 0,
-                        transparent calc(var(--ezdoc-page-h, 297mm) - 1px),
-                        rgba(100, 116, 139, 0.45) calc(var(--ezdoc-page-h, 297mm) - 1px),
-                        rgba(100, 116, 139, 0.45) var(--ezdoc-page-h, 297mm)
-                    );
-                    background-size: 100% var(--ezdoc-page-h, 297mm);
-                    background-repeat: repeat-y;
+                    /* Dashed page break line — dual-layer background:
+                       - Layer 1 (front): horizontal alternating transparent/white
+                         stripes, 12px wide (6 transparent + 6 white). Masks layer 2
+                         line into dashes. White opaque matches body bg → invisible
+                         over paper area.
+                       - Layer 2 (back): solid horizontal line at Y=paperH-1, tiled
+                         vertically at paperH intervals.
+                       Layer 1 masks layer 2 → visible dashed line at each page break
+                       boundary. */
+                    background-image:
+                        linear-gradient(
+                            to right,
+                            transparent 0,
+                            transparent 6px,
+                            white 6px,
+                            white 12px
+                        ),
+                        linear-gradient(
+                            to bottom,
+                            transparent 0,
+                            transparent calc(var(--ezdoc-page-h, 297mm) - 1px),
+                            rgba(100, 116, 139, 0.55) calc(var(--ezdoc-page-h, 297mm) - 1px),
+                            rgba(100, 116, 139, 0.55) var(--ezdoc-page-h, 297mm)
+                        );
+                    background-size: 12px 100%, 100% var(--ezdoc-page-h, 297mm);
+                    background-position: 0 0, 0 0;
+                    background-repeat: repeat-x, repeat-y;
                     background-attachment: local; /* scroll dgn content */
                 }
                 /* "Page N" label di setiap page-break line — subtle floating
