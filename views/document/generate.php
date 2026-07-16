@@ -1918,9 +1918,41 @@ function renderFieldForPdf($name, $type, $val, $label) {
             min-height: <?= $paperDim['height'] ?>mm;
             margin: 0 auto;
             padding: <?= $padTop ?>mm <?= $padRight ?>mm <?= $padBottom ?>mm <?= $padLeft ?>mm;
-            background: #fff;
+            background-color: #fff;
             box-shadow: 0 4px 20px rgba(0,0,0,0.3);
             position: relative;
+            /* Page break preview (edit-on only) — dashed horizontal line at
+               every paperH mm boundary. Same dual-layer bg masking technique
+               dari designer.php (Notion / Google Docs page marker convention):
+               - Layer 1 (front): horizontal alternating transparent/white
+                 stripes, 12px pattern. White segments invisible over paper.
+               - Layer 2 (back): solid horizontal line at Y=paperH-1, tiled
+                 vertically every paperH.
+               Result: dashed page break line visible di boundary halaman.
+               Hidden di edit-off + @media print (rules di bawah). */
+            background-image:
+                linear-gradient(
+                    to right,
+                    transparent 0,
+                    transparent 6px,
+                    #fff 6px,
+                    #fff 12px
+                ),
+                linear-gradient(
+                    to bottom,
+                    transparent 0,
+                    transparent calc(<?= $paperDim['height'] ?>mm - 1px),
+                    rgba(100, 116, 139, 0.55) calc(<?= $paperDim['height'] ?>mm - 1px),
+                    rgba(100, 116, 139, 0.55) <?= $paperDim['height'] ?>mm
+                );
+            background-size: 12px 100%, 100% <?= $paperDim['height'] ?>mm;
+            background-position: 0 0, 0 0;
+            background-repeat: repeat-x, repeat-y;
+        }
+        /* Hide page break preview di edit-off (locked/final) state + print.
+           Preview marker adalah edit-mode visual hint, bukan bagian dokumen final. */
+        .edit-off .page {
+            background-image: none;
         }
         @media screen and (max-width: 900px) {
             body { padding: 10px; }
@@ -2603,6 +2635,8 @@ function renderFieldForPdf($name, $type, $val, $label) {
             .materai-serial-input { border: none !important; background: transparent !important; }
             .ttd-qr-content-input { display: none !important; }
             .ttd-canvas-placeholder { display: none !important; }
+            /* Page break preview edit-mode marker — hide dari printed output. */
+            .page { background-image: none !important; }
         }
     </style>
 </head>

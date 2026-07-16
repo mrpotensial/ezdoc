@@ -971,7 +971,7 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 
 ## 6. Roadmap
 
-**Total timeline (single dev, focused)**: ~35-36 weeks (~8 months) untuk v1.0 (termasuk v0.9.7 full views + v0.9.8 App orchestrator + v0.9.9 DB abstraction + v0.9.10 standalone hardening), tambah ~16 weeks (~4 bulan) untuk v2.0 = ~51-52 weeks (**~12 bulan**) ke ecosystem cross-language.
+**Total timeline (single dev, focused)**: ~36-37 weeks (~8-9 months) untuk v1.0 (termasuk v0.9.7 full views + v0.9.8 App orchestrator + v0.9.9 DB abstraction + v0.9.10 standalone hardening + v0.9.11 view separation), tambah ~16 weeks (~4 bulan) untuk v2.0 = ~52-53 weeks (**~12-13 bulan**) ke ecosystem cross-language.
 
 **Note on v0.9.7 (added post-review)**: Milestone ini insertion baru based on user feedback "library tanpa WYSIWYG editor tidak akan di-adopt". Port full designer + generator dari dogfood consumer app ke library views = **~3-4 weeks extra** — critical blocker untuk v1.0 realistic adoption.
 
@@ -991,10 +991,11 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 | **App orchestrator** | v0.9.8 | ~30 weeks | `Ezdoc\App::run()` 1-line mount + internal router + zero-config demo |
 | **DB abstraction** | v0.9.9 | ~34 weeks | Zero-dep DB layer + Blueprint DSL + 5 Grammars (T2) + spec-first artifacts |
 | **Standalone hardening** | v0.9.10 | ~35 weeks | Consumer-app dep extraction: PdfRenderer, DateFormatter, Db/Auth call sites |
-| **Extraction** | v1.0 | ~36 weeks | Standalone PHP library di Packagist |
-| **Spec** | v1.1 | ~38 weeks | ezdoc-spec repo publik (dari v0.9.9 seed) |
-| **Go port** | v1.5 | ~44 weeks | Native Go implementation |
-| **TS port** | v2.0 | ~52 weeks | Native TypeScript + Next.js sample |
+| **View separation** | v0.9.11 | ~36 weeks | Split designer + generate ke per-action files (MVC convention), page break preview di generate |
+| **Extraction** | v1.0 | ~37 weeks | Standalone PHP library di Packagist |
+| **Spec** | v1.1 | ~39 weeks | ezdoc-spec repo publik (dari v0.9.9 seed) |
+| **Go port** | v1.5 | ~45 weeks | Native Go implementation |
+| **TS port** | v2.0 | ~53 weeks | Native TypeScript + Next.js sample |
 
 **Catatan estimation**:
 - Timeline asumsi **1 dev fokus purnawaktu**. Parallelization (mis. UI dev sambil PSrE integration) bisa potong 30-40%.
@@ -1507,9 +1508,62 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - Removing CLI dependency on koneksi.php (CLI is opt-in for consumer, kept for backward-compat via `require_once` in `cli/migrate.php` header docs)
 - Introducing new abstractions beyond parity with removed consumer functions
 
-### 6.16 Milestone v1.0 — "PHP library extraction (Packagist)"  ⏱ ~1 week
+### 6.16 Milestone v0.9.11 — "View separation + generate UX polish"  ⏱ ~1-2 weeks
 
-**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Depends on v0.9.7 (full views) + v0.9.8 (App orchestrator) + v0.9.9 (DB abstraction) + v0.9.10 (standalone hardening — no consumer-app runtime deps)** completed.
+**Goal**: pisah views yg overloaded jadi single-file-per-action structure (MVC convention) + tambah page break preview di generate view untuk match designer UX.
+
+**Motivation**: `designer.php` (5534 lines) dan `generate.php` (4666 lines) currently mix multiple views (list + edit + create + action) di satu file. Susah maintain, susah customize per-consumer, susah publish overrides. Industry-standard MVC one-view-per-action pattern (Laravel, Filament, Symfony, Rails) makes code navigable + consumer publish override targeted.
+
+**Precedent (industry-standard MVC view convention)**:
+- **Laravel**: `resources/views/documents/{index,create,edit,show}.blade.php` — one Blade per action, follows REST verb convention
+- **Filament**: `ListResource`, `CreateResource`, `EditResource`, `ViewResource` — separate classes per action, each with own view file
+- **Symfony**: `templates/{controller}/{action}.html.twig` — action-per-file convention
+- **Rails**: `views/{controller}/{index,new,edit,show,create,update}.html.erb` — resourceful routing → per-action view file
+- **Django**: `templates/{app}/{model}_{action}.html` — same pattern
+
+**Deliverables**:
+
+- **Template list separation**:
+  - [ ] Extract template LIST section dari `designer.php` (lines ~340-460 area: table of templates + filter + search + row actions) → new file `views/document/template_list.php`
+  - [ ] Reduce `designer.php` ke edit/create UI only (TinyMCE editor + toolbars + panels)
+  - [ ] Router update: consumer routes `?page=ezdoc_ui&view=template_list` → new file
+  - [ ] Preserve slots (`designer:list-header-extra`, `designer:list-row-actions-extra` → migrate ke `template_list:*` naming)
+  - [ ] Backward-compat: kalau consumer masih pakai old routing, log deprecation notice
+
+- **Generate view separation**:
+  - [ ] Audit `generate.php` — identify list section vs generate action vs PDF export section
+  - [ ] Extract list section (kalau ada) → new file `views/document/generate_list.php`
+  - [ ] Keep `generate.php` fokus ke document generation + PDF export
+  - [ ] Similarly update slot naming + router
+
+- **Page break preview di generate view**:
+  - [ ] Apply dashed page break line CSS dari designer ke generate `.page`
+  - [ ] Use same `Ezdoc\UI\ContentCss`-adjacent shared utility atau inline CSS with `--ezdoc-page-h` var
+  - [ ] Only visible di edit-on state (edit-off + print media = hidden)
+  - [ ] Precedent: Google Docs page break markers di edit view, Word Web page boundaries
+
+**Design principles**:
+- **Backward-compat via slot forwarding**: old slot names still work, forwarded to new naming with deprecation notice
+- **Router smart-defaults**: consumer routing tetap works kalau tidak explicit override (main router detects sub-view via query param)
+- **Publish override friendly**: `php cli/publish.php views` copies BOTH old dan new file structure — consumer can pick
+
+**Definition of Done**:
+- `designer.php` line count ≤ 2500 (from 5534) — editor UI only
+- `generate.php` line count ≤ 3000 (from 4666) — generate + PDF only  
+- `template_list.php` + `generate_list.php` new files exist with extracted sections
+- Router handles new sub-view identifiers
+- Slots renamed with backward-compat forwarding
+- Page break dashed line visible di generate edit-on view
+- No visual regression di existing consumer deployment
+- Docs updated: `docs/VIEWS.md` explains new file structure + migration for consumers that published old files
+
+**Non-goals**:
+- Rewriting to Blade template syntax (still plain PHP for library-standalone)
+- Introducing new component framework (staying compatible with v0.9.9 slot system)
+
+### 6.17 Milestone v1.0 — "PHP library extraction (Packagist)"  ⏱ ~1 week
+
+**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Depends on v0.9.7 (full views) + v0.9.8 (App orchestrator) + v0.9.9 (DB abstraction) + v0.9.10 (standalone hardening — no consumer-app runtime deps) + v0.9.11 (view separation + generate polish)** completed.
 
 - [ ] Move `ezdoc/` folder ke repo baru `mrpotensial/ezdoc`
 - [ ] Setup GitHub Actions CI (phpunit + phpstan level 6 + PHP matrix 7.4-8.3)
@@ -1525,7 +1579,7 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - **`Ezdoc\App::run()` 1-line mount + `Ezdoc\App::demo()` zero-config SQLite mode** (from v0.9.8) — consumer install verification tanpa DB config
 - Fresh consumer test: install → `Ezdoc\App::demo()` → save template → generate doc → sign → verify (semua works out-of-box, tanpa manual wiring)
 
-### 6.17 Milestone v1.1 — "Spec extraction (repo split + conformance vectors)"  ⏱ ~1-2 weeks
+### 6.18 Milestone v1.1 — "Spec extraction (repo split + conformance vectors)"  ⏱ ~1-2 weeks
 
 **Goal**: split `ezdoc-spec/` subfolder (seeded di v0.9.9) → standalone repo publik `mrpotensial/ezdoc-spec`; enrich dengan conformance test vectors untuk native ports.
 
@@ -1545,7 +1599,7 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - Repo has: schemas/, ddl/, protocol/, conformance/, docs/
 - Docs: "How to write a new port" guide dgn Go + Rust + TS starter examples
 
-### 6.18 Milestone v1.5 — "Go port"  ⏱ ~4-6 weeks
+### 6.19 Milestone v1.5 — "Go port"  ⏱ ~4-6 weeks
 
 **Goal**: `ezdoc-go` — native Go implementation, container-friendly.
 
@@ -1563,7 +1617,7 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - Conformance test pass (signature dari PHP di-verify oleh Go = same result)
 - Docker image jalan di Kubernetes cluster
 
-### 6.19 Milestone v2.0 — "TypeScript port + full ecosystem"  ⏱ ~6-8 weeks
+### 6.20 Milestone v2.0 — "TypeScript port + full ecosystem"  ⏱ ~6-8 weeks
 
 **Goal**: `@mrpotensial/ezdoc` — TypeScript native untuk Next.js / Node / browser.
 
