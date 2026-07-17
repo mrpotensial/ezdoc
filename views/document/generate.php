@@ -200,6 +200,7 @@ $stmt = mysqli_prepare($conn, "
            category,
            scope AS doc_scope,
            content AS template_html,
+           floating_elements,
            signature_config AS config_ttd,
            layout_config AS config_header,
            verify_config,
@@ -220,7 +221,16 @@ if (!$template) {
     exit;
 }
 
+// v0.9.12 sidecar rehydration — inject floating markers dari JSON column
+// balik ke templateHtml supaya renderContent pipeline unchanged. Backward-
+// compat: legacy rows dgn floating markers still in HTML tetap works.
 $templateHtml = $template['template_html'] ?: '';
+if (!empty($template['floating_elements'])) {
+    $floating = \Ezdoc\Template\FloatingExtractor::fromJson($template['floating_elements']);
+    if (!empty($floating)) {
+        $templateHtml = \Ezdoc\Template\FloatingInjector::inject($templateHtml, $floating);
+    }
+}
 $configTtdRaw = json_decode($template['config_ttd'] ?: '[]', true) ?: [];
 $configHeader = json_decode($template['config_header'] ?: '{}', true) ?: [];
 // Scope template: patient (butuh NORM+NOPEN) atau general (tanpa)

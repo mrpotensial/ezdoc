@@ -168,6 +168,7 @@ if ($action === 'edit' && $id > 0) {
                category,
                scope AS doc_scope,
                content AS template_html,
+               floating_elements,
                signature_config AS config_ttd,
                layout_config AS config_header,
                verify_config,
@@ -181,6 +182,20 @@ if ($action === 'edit' && $id > 0) {
     $result = mysqli_stmt_get_result($stmt);
     $template = mysqli_fetch_assoc($result);
     if (!$template) { header("Location: " . $urlList); exit; }
+
+    // v0.9.12 sidecar rehydration — kalau ada floating_elements JSON, inject
+    // markers ke template_html supaya editor + rendering pipeline unchanged.
+    // Backward-compat: legacy rows dgn floating markers still in HTML tetap works
+    // (floating_elements NULL → no injection, content HTML retains markers as-is).
+    if (!empty($template['floating_elements'])) {
+        $floating = \Ezdoc\Template\FloatingExtractor::fromJson($template['floating_elements']);
+        if (!empty($floating)) {
+            $template['template_html'] = \Ezdoc\Template\FloatingInjector::inject(
+                (string) $template['template_html'],
+                $floating
+            );
+        }
+    }
 }
 
 if (!isset($templates) || !is_array($templates)) {

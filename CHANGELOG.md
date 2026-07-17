@@ -6,6 +6,62 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v0.9.12 track — "Sidecar metadata for floating elements"
+
+Sidecar JSON metadata pattern untuk floating positioned elements (logo/TTD/QR/
+materai floating variants). Industry-standard document object model separation
+(Google Docs, MS Word, Figma layer, CKEditor 5 widget, Slate.js void nodes).
+
+**Added — data model + services**
+
+- **`Ezdoc\Template\FloatingElement`** — immutable value object dgn TYPE_* and
+  Z_* constants. `fromArray()` / `toArray()` serialization. `withPosition()`
+  immutable copy pattern. Validation via `Ezdoc\Exceptions\ValidationException`
+- **`Ezdoc\Template\FloatingExtractor`** — regex-based HTML markers →
+  FloatingElement[] extraction. Handles legacy (bare markers) + widget-wrapper
+  (v0.9.12 phase 1) patterns. `toJson()` / `fromJson()` serialization
+- **`Ezdoc\Template\FloatingInjector`** — reverse: FloatingElement[] → HTML
+  markers wrapped dalam `<p class="floating-only" contenteditable="false">`
+  widget wrappers appended ke content HTML
+
+**Added — schema**
+
+- **DB migration** `2026_07_16_000001_alter_ezdoc_templates_add_floating_elements`:
+  - `ezdoc_templates.floating_elements JSON NULL` (after `content` column)
+  - `ezdoc_documents.floating_elements JSON NULL` (per-doc overrides, NULL = inherit)
+
+**Changed — save/load flow**
+
+- `actions/template/save_template.php`:
+  - Extract floating dari submitted HTML markers (backward-compat) OR accept
+    client-sent `floating_elements_json` (preferred future flow)
+  - Store cleaned HTML (no markers) di `content` column
+  - Store JSON array di `floating_elements` column
+  - Dual-write during transition period
+- `views/document/designer.php` template load:
+  - Read `floating_elements` column
+  - Rehydrate markers via `FloatingInjector::inject()` before editor initialization
+  - Rendering pipeline unchanged
+- `views/document/generate.php` template load:
+  - Same rehydration pattern
+  - `renderContent()` receives HTML dgn markers as before, no changes needed
+
+**Backward-compat**
+
+- Legacy rows (`floating_elements` NULL) tetap works: content column retains
+  HTML markers, rendering pipeline processes them as before
+- Save flow will auto-populate JSON column on next save (dual-write during
+  transition)
+- Optional bulk migration script deferred untuk v0.9.13 kalau consumer perlu
+  force-migrate all rows
+
+**Added — docs**
+
+- `docs/FLOATING-ELEMENTS.md` — sidecar pattern documentation dgn precedent
+  citations (Google Docs `EmbeddedDrawing`, MS Word OOXML `<w:drawing>`, Figma
+  layer, CKEditor 5 Widget, Slate.js void nodes, Prosemirror NodeView),
+  schema, save/load flow diagrams, migration path
+
 ### v0.9.11 track — "View separation + generate UX polish"
 
 Split overloaded views ke industry-standard MVC one-view-per-action structure

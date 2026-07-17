@@ -25,8 +25,8 @@
  */
 
 use Ezdoc\Db\Mysqli\MysqliConnection;
-
 use Ezdoc\Context;
+use Ezdoc\Template\FloatingExtractor;
 
 // $author_id (consumer-provided current user id) kept global untuk audit/versioning.
 // $conn removed — use Context::default()->db instead (library-standalone since v0.9.10).
@@ -72,24 +72,47 @@ if (empty($name)) {
     ezdoc_respond_error(t('response.template_name_required', [], 'Template name is required'));
 }
 
+// Sidecar floating elements extraction (v0.9.12).
+// - Client CAN send floating_elements_json directly (preferred flow: editor
+//   maintains sidecar state separately dan explicitly serializes on save).
+// - Fallback: extract dari embedded HTML markers (backward-compat for
+//   pre-v0.9.12 designers atau legacy save flows).
+// Extracted floating stripped from content column → clean HTML saved.
+$floatingJson = trim((string) ($_POST['floating_elements_json'] ?? ''));
+if ($floatingJson !== '' && $floatingJson !== 'null') {
+    // Client-sent JSON: validate + normalize
+    $floatingElements = FloatingExtractor::fromJson($floatingJson);
+    $floatingJson = FloatingExtractor::toJson($floatingElements);
+    // NOTE: content already-cleaned by client (editor stripped markers before send)
+} else {
+    // Extract from embedded HTML markers (backward-compat path)
+    $extracted = FloatingExtractor::extract($content);
+    $content = $extracted['html']; // cleaned HTML
+    $floatingJson = FloatingExtractor::toJson($extracted['floating']);
+    // If no floating elements found, store NULL (not empty array string)
+    if ($floatingJson === '[]') {
+        $floatingJson = null;
+    }
+}
+
 $db = new MysqliConnection(Context::default()->db);
 
 try {
     if ($template_id > 0) {
         if ($hasAccessConfigInPost) {
             $db->execute(
-                'UPDATE ezdoc_templates SET name = ?, category = ?, scope = ?, content = ?,
+                'UPDATE ezdoc_templates SET name = ?, category = ?, scope = ?, content = ?, floating_elements = ?,
                     signature_config = ?, layout_config = ?, verify_config = ?, access_config = ?
                  WHERE id = ?',
-                [$name, $category, $scope, $content, $signatureConfig, $layoutConfig, $verifyConfig, $accessConfig, $template_id]
+                [$name, $category, $scope, $content, $floatingJson, $signatureConfig, $layoutConfig, $verifyConfig, $accessConfig, $template_id]
             );
         } else {
             // Preserve existing access_config (partial update)
             $db->execute(
-                'UPDATE ezdoc_templates SET name = ?, category = ?, scope = ?, content = ?,
+                'UPDATE ezdoc_templates SET name = ?, category = ?, scope = ?, content = ?, floating_elements = ?,
                     signature_config = ?, layout_config = ?, verify_config = ?
                  WHERE id = ?',
-                [$name, $category, $scope, $content, $signatureConfig, $layoutConfig, $verifyConfig, $template_id]
+                [$name, $category, $scope, $content, $floatingJson, $signatureConfig, $layoutConfig, $verifyConfig, $template_id]
             );
         }
         $newId = $template_id;
@@ -102,13 +125,13 @@ try {
 
         $db->execute(
             'INSERT INTO ezdoc_templates
-             (uuid, slug, version, is_current, name, category, scope, content,
+             (uuid, slug, version, is_current, name, category, scope, content, floating_elements,
               signature_config, layout_config, verify_config, access_config,
               owner_id, is_active, is_locked)
-             VALUES (?, ?, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)',
+             VALUES (?, ?, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)',
             [
                 $newUuid, $newSlug,
-                $name, $category, $scope, $content,
+                $name, $category, $scope, $content, $floatingJson,
                 $signatureConfig, $layoutConfig, $verifyConfig, $accessConfig,
                 $ownerId,
             ]
