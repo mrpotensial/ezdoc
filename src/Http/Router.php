@@ -175,6 +175,26 @@ final class Router
         $this->handlers['download']     = [$this, 'handleDownload'];
         $this->handlers['asset']        = [$this, 'handleAsset'];
         $this->handlers['action']       = [$this, 'handleAction'];
+        $this->handlers['admin_migrate'] = [$this, 'handleAdminMigrate'];
+    }
+
+    /**
+     * Admin migration dashboard — visual alternative to CLI `migrate.php`.
+     *
+     * Industry-standard precedent: Laravel Nova/Filament admin panels,
+     * Django `/admin/migrations/`, Rails webconsole, WordPress upgrade.php.
+     * Auto-migrate already runs on bootstrap; this view untuk explicit
+     * control + status visibility (untuk yg prefer visual over CLI).
+     *
+     * Auth: superadmin only (destructive DB operations).
+     *
+     * spec: docs/ADMIN-MIGRATE.md (planned)
+     */
+    public function handleAdminMigrate(RequestContext $req, ResponseWriter $res): ?string
+    {
+        return $this->renderView(__DIR__ . '/../../views/admin/migrate.php', [
+            '__ezdoc_fragment' => true,
+        ], $res);
     }
 
     // ─── Handlers ────────────────────────────────────────────────────

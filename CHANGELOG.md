@@ -55,6 +55,19 @@ materai floating variants). Industry-standard document object model separation
 - Optional bulk migration script deferred untuk v0.9.13 kalau consumer perlu
   force-migrate all rows
 
+**Added — admin migration dashboard (web UI alternative to CLI)**
+
+- **`views/admin/migrate.php`** — admin dashboard page dgn migration status
+  visualization + one-click buttons untuk run pending migrations + bulk
+  migrate floating elements. Auth: superadmin only. URL:
+  `?ezdoc_page=admin_migrate`
+- **Router integration** — `handleAdminMigrate` handler + `admin_migrate`
+  route registered di `src/Http/Router.php`
+- Auto-migration already runs at bootstrap (EZDOC_AUTO_MIGRATE); admin
+  dashboard menyediakan explicit control + status visibility (untuk yg
+  prefer visual over CLI). Precedent: Laravel Nova/Filament dashboards,
+  Django `/admin/migrations/`, WordPress `wp-admin/upgrade.php`
+
 **Added — docs**
 
 - `docs/FLOATING-ELEMENTS.md` — sidecar pattern documentation dgn precedent
