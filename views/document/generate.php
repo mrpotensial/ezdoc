@@ -1243,9 +1243,21 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
     <meta charset="UTF-8">
     <title>' . h($template['nama_template']) . '</title>
     <style>
+        /* v0.9.13 phase 2: @page margin (bukan .page padding) untuk per-physical-page
+           margin. dompdf paginator TREAT .page{padding} as ELEMENT padding
+           (applied ONCE at start/end of element, sama seperti browser),
+           BUKAN re-applied per physical page break. Result: middle pages
+           tidak dapat padTop/padBottom → content flush against physical
+           edge.
+           Fix industry-standard: @page { margin } reserves margin di setiap
+           physical page (CSS Paged Media spec). .page shrunk ke printable area
+           (paperW - padL - padR × paperH - padT - padB) supaya content sync
+           dgn browser printable area. Floating elements (absolute positioned
+           dari .page origin) shift by (padL, padT) — compensated via CSS
+           translate below. */
         @page {
             size: ' . $paperDim['width'] . 'mm ' . $paperDim['height'] . 'mm;
-            margin: 0;
+            margin: ' . $padTop . 'mm ' . $padRight . 'mm ' . $padBottom . 'mm ' . $padLeft . 'mm;
         }
         /* Global box-sizing only. Selective reset (body, .page margin/padding
            handled below). Blanket "* { margin: 0; padding: 0 }" reset removed —
@@ -1279,17 +1291,26 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         /* Inheritance safeguard — semua content dari .content, .page, body
            inherit line-height 1.6 kecuali override eksplisit (heading). */
         .page, .content { line-height: inherit; }
-        /* .page structure identical dgn screen generate .page: full paper
-           size (paperW × paperH) dgn padding = paper margin. Sebelumnya PDF
-           pakai margin-based structure (width reduced + margin as padding)te
-           yg bikin absolute-positioned floating elements shift padT mm
-           downward vs screen. Padding-based structure sync coord origin. */
+        /* v0.9.13 phase 2 REFACTOR: .page shrunk ke printable area (paperW - padL
+           - padR × paperH - padT - padB). @page above sudah reserve margin di
+           setiap physical page. .page padding = 0 supaya no double margin.
+           Floating position compensation di rule below. */
         .page {
-            width: ' . $paperDim['width'] . 'mm;
-            min-height: ' . $paperDim['height'] . 'mm;
+            width: ' . ($paperDim['width'] - $padLeft - $padRight) . 'mm;
+            min-height: ' . ($paperDim['height'] - $padTop - $padBottom) . 'mm;
             margin: 0;
-            padding: ' . $padTop . 'mm ' . $padRight . 'mm ' . $padBottom . 'mm ' . $padLeft . 'mm;
+            padding: 0;
             position: relative;
+        }
+        /* Floating position compensation — @page margin shifts .page origin ke
+           (padL, padT) di physical page coord. Floating stored di designer coord
+           (from .page top-left = paper corner). Translate back ke visual paper
+           corner position: -padL horizontal, -padT vertical.
+           Precedent: CSS Paged Media Level 3 spec, WeasyPrint floating handling. */
+        .logo-floating, .ttd-item-floating, .qr-item-floating,
+        .qr-behind, .qr-front, .materai-floating,
+        .materai-behind, .materai-front {
+            transform: translate(-' . $padLeft . 'mm, -' . $padTop . 'mm);
         }
         /* Content baseline — shared via Ezdoc\UI\ContentCss (single source of
            truth designer + generate + PDF). Historically these rules duplicated

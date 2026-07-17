@@ -2578,12 +2578,15 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     // Precedent: TinyMCE core pagebreak plugin, imagetools plugin —
                     // pakai serializer filter untuk transform elements at save time
                     // tanpa modify DOM tree (yg akan bikin visible flicker).
-                    if (editor.serializer && typeof editor.serializer.addNodeFilter === 'function') {
-                        editor.serializer.addNodeFilter('*', function(nodes) {
+                    // TinyMCE 6 addNodeFilter('*') NOT wildcard — cuma match
+                    // literal tag '*' (yg tidak ada). Pakai addAttributeFilter
+                    // dgn our marker attribute → fires untuk any element yg
+                    // punya data-pg-original-mt → precise strip.
+                    if (editor.serializer && typeof editor.serializer.addAttributeFilter === 'function') {
+                        editor.serializer.addAttributeFilter('data-pg-original-mt', function(nodes) {
                             for (let i = 0; i < nodes.length; i++) {
                                 const node = nodes[i];
-                                const cls = node.attr('class');
-                                if (!cls || cls.indexOf('pg-boundary-push') === -1) continue;
+                                const cls = node.attr('class') || '';
                                 const newCls = cls.split(/\s+/).filter(function(c) {
                                     return c && c !== 'pg-boundary-push';
                                 }).join(' ');
