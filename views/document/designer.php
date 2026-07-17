@@ -1554,6 +1554,11 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 if (editorContainer) {
                     editorContainer.style.height = getEditorHeight() + 'px';
                 }
+
+                // Re-paginate — paper size / padding change → boundary shifts.
+                if (typeof repaginateEditorDebounced === 'function') {
+                    repaginateEditorDebounced();
+                }
             }
         }
 
@@ -2051,6 +2056,61 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             return Math.max(400, window.innerHeight - topH);
         }
 
+        /* ===== VIRTUAL PAGINATION (v0.9.13) =====
+           Bootstrap Ezdoc\UI\PaginationJs — inject spacer divs at page boundaries
+           di TinyMCE editor body supaya content flow respect margin di setiap
+           physical page break. Config di-override dynamically (see repaginateEditor
+           below) karena paper size / padding user-adjustable via toolbar. */
+        <?= \Ezdoc\UI\PaginationJs::render(297.0, 20.0, 20.0) ?>
+
+        /* Read current paper geometry from designer toolbar inputs, update
+           EzdocPagination.config, then paginate editor body. Called on:
+           - editor init
+           - editor NodeChange/KeyUp/SetContent (debounced)
+           - updatePageSize (paper size / padding change) */
+        function repaginateEditor() {
+            const editor = window.tinymce && tinymce.get('editor');
+            if (!editor || !window.EzdocPagination) return;
+            const iframe = editor.getContainer().querySelector('iframe');
+            if (!iframe || !iframe.contentDocument) return;
+            const body = iframe.contentDocument.body;
+            if (!body) return;
+
+            const ptEl = document.getElementById('padTop');
+            const pbEl = document.getElementById('padBottom');
+            const padT = ptEl && ptEl.value !== '' ? parseFloat(ptEl.value) : 20;
+            const padB = pbEl && pbEl.value !== '' ? parseFloat(pbEl.value) : 20;
+
+            let paperH = 297;
+            const psEl = document.getElementById('paperSize');
+            const paperSize = psEl ? psEl.value : 'A4';
+            const orientation = document.querySelector('input[name="orientation"]:checked');
+            const orient = orientation ? orientation.value : 'portrait';
+            if (paperSize === 'Custom') {
+                paperH = parseFloat(document.getElementById('customHeight')?.value) || 297;
+            } else if (typeof PAPER_SIZES !== 'undefined' && PAPER_SIZES[paperSize]) {
+                paperH = PAPER_SIZES[paperSize].height;
+            }
+            if (orient === 'landscape') {
+                const w = paperSize === 'Custom'
+                    ? (parseFloat(document.getElementById('customWidth')?.value) || 210)
+                    : (PAPER_SIZES[paperSize]?.width || 210);
+                paperH = w;
+            }
+
+            window.EzdocPagination.config.paperHeightMm = paperH;
+            window.EzdocPagination.config.padTopMm = padT;
+            window.EzdocPagination.config.padBottomMm = padB;
+            window.EzdocPagination.paginate(body);
+        }
+        const repaginateEditorDebounced = (function() {
+            let t = null;
+            return function() {
+                clearTimeout(t);
+                t = setTimeout(repaginateEditor, 250);
+            };
+        })();
+
         tinymce.init({
             selector: '#editor',
             height: getEditorHeight(),
@@ -2266,6 +2326,11 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                    and drifted between 3 contexts, causing text flow
                    accumulation bugs (~1 line offset per page). Centralized now. */
                 <?= \Ezdoc\UI\ContentCss::render() ?>
+                /* Virtual pagination spacer companion CSS (Ezdoc\UI\PaginationJs).
+                   Spacer straddles physical page boundary — visible gap sync
+                   dgn dashed page break line above. Content resumes on next
+                   virtual page with padT margin below break. */
+                <?= \Ezdoc\UI\PaginationJs::renderCss() ?>
                 /* Field placeholder — dimensions match rendered .f di generate.php
                    edit-on state (padding 1px 4px + border-bottom 1px dotted). Editor
                    renders identical box size dgn generate view saat field diisi user
@@ -2488,6 +2553,16 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     if (typeof invalidateVerifyFieldsCache === 'function') {
                         invalidateVerifyFieldsCache();
                     }
+                });
+
+                // Virtual pagination — inject spacer divs at page boundaries
+                // supaya content flow respect margin di setiap physical page break.
+                // Debounced 250ms sehingga typing tidak jank.
+                editor.on('init', function() {
+                    if (typeof repaginateEditor === 'function') repaginateEditor();
+                });
+                editor.on('NodeChange KeyUp SetContent change input', function() {
+                    if (typeof repaginateEditorDebounced === 'function') repaginateEditorDebounced();
                 });
 
                 // ===== Register custom SVG icons (Bootstrap Icons paths) =====

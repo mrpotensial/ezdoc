@@ -1933,6 +1933,11 @@ function renderFieldForPdf($name, $type, $val, $label) {
         .content { line-height: 1.6; }
         <?= \Ezdoc\UI\ContentCss::render() ?>
 
+        /* Virtual pagination spacer companion CSS (Ezdoc\UI\PaginationJs).
+           JS injects .pg-spacer divs at page boundaries so content flow
+           respects margin at EVERY physical page break. */
+        <?= \Ezdoc\UI\PaginationJs::renderCss() ?>
+
         /* Field (contenteditable) - auto-adjusts for 1 or multi line */
         .f-wrap { display: inline; }
         .f {
@@ -2999,6 +3004,51 @@ function renderFieldForPdf($name, $type, $val, $label) {
         window.EZDOC_DEBUG.load = <?= json_encode($__ezdocLoadDebug ?? ['result' => ['found' => false], 'hint' => 'No lookup performed (missing norm/nopen or new doc)'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
         window.EZDOC_DEBUG.saves = [];
         console.log('%c[ezdoc:load]', 'color:#0e7490;font-weight:bold', window.EZDOC_DEBUG.load);
+
+        /* ===== VIRTUAL PAGINATION (v0.9.13) =====
+           JS-injected spacer divs at every page boundary so content flow
+           respects margin di setiap physical page break. Paper geometry
+           di-embed dari server. Bootstrap helper via Ezdoc\UI\PaginationJs. */
+        <?= \Ezdoc\UI\PaginationJs::render(
+            (float) $paperDim['height'],
+            (float) $padTop,
+            (float) $padBottom
+        ) ?>
+
+        /* Debounce util — shared across pagination + other event handlers. */
+        function ezdocDebounce(fn, wait) {
+            let t = null;
+            return function() {
+                const args = arguments, ctx = this;
+                clearTimeout(t);
+                t = setTimeout(function() { fn.apply(ctx, args); }, wait || 200);
+            };
+        }
+
+        /* Re-paginate on: DOM load, window resize, field input (values may
+           change content height), image load (async). Debounced 200ms so
+           rapid typing tidak jank. */
+        const repaginate = ezdocDebounce(function() {
+            const content = document.querySelector('.content');
+            if (content && window.EzdocPagination) {
+                window.EzdocPagination.paginate(content);
+            }
+        }, 200);
+
+        document.addEventListener('DOMContentLoaded', function() {
+            repaginate();
+            /* Trigger re-paginate on any field change (edit mode) — content
+               height changes as user fills fields. */
+            document.querySelectorAll('.f[data-field], input[name], select[name], textarea[name]').forEach(function(el) {
+                el.addEventListener('input', repaginate);
+                el.addEventListener('change', repaginate);
+            });
+            /* Images load async — re-measure when they finish. */
+            document.querySelectorAll('img').forEach(function(img) {
+                if (!img.complete) img.addEventListener('load', repaginate);
+            });
+        });
+        window.addEventListener('resize', repaginate);
 
         const templateId = <?= $template_id ?>;
         const isEditMode = <?= $isEditMode ? 'true' : 'false' ?>;
