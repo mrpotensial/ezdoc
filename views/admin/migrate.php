@@ -164,30 +164,46 @@ if ($rs) {
     }
 }
 
-// All migration files
+// Build unified migration list combining:
+//   1. Files on disk (from ezdoc_scan_migration_files) — status: applied|pending
+//   2. Registry entries without matching file (orphans) — status: orphan
+//
+// User feedback: table sebelumnya hanya show files; sekarang ALSO show orphan
+// registry entries (rows di ezdoc_migrations tanpa file — mis. after v0.9.12
+// legacy cleanup deleted 14 legacy migration files, registry masih ada entries
+// referring to them). "Riwayat migrasi di tabel" per user's insight.
 $migrationFiles = ezdoc_scan_migration_files();
 $allMigrations = [];
+
+// File-backed entries
+$fileNamesSet = [];
 foreach ($migrationFiles as $path) {
     $name = basename($path, '.php');
+    $fileNamesSet[$name] = true;
     $allMigrations[$name] = [
         'name' => $name,
-        'applied' => isset($applied[$name]),
+        'status' => isset($applied[$name]) ? 'applied' : 'pending',
         'executed_at' => $applied[$name] ?? null,
+        'has_file' => true,
     ];
+}
+
+// Orphan registry entries (dalam registry tapi file tidak ada)
+foreach ($applied as $regName => $execAt) {
+    if (!isset($fileNamesSet[$regName])) {
+        $allMigrations[$regName] = [
+            'name' => $regName,
+            'status' => 'orphan',
+            'executed_at' => $execAt,
+            'has_file' => false,
+        ];
+    }
 }
 ksort($allMigrations);
 
-$pendingCount = count(array_filter($allMigrations, fn($m) => !$m['applied']));
-$appliedCount = count($allMigrations) - $pendingCount;
-
-// Count orphan registry entries (rows in ezdoc_migrations without corresponding
-// migration file — v0.9.12 cleanup left surat_* entries orphaned).
-$orphanCount = 0;
-$fileNamesSet = [];
-foreach ($allMigrations as $m) { $fileNamesSet[$m['name']] = true; }
-foreach ($applied as $regName => $_) {
-    if (!isset($fileNamesSet[$regName])) $orphanCount++;
-}
+$appliedCount = count(array_filter($allMigrations, fn($m) => $m['status'] === 'applied'));
+$pendingCount = count(array_filter($allMigrations, fn($m) => $m['status'] === 'pending'));
+$orphanCount  = count(array_filter($allMigrations, fn($m) => $m['status'] === 'orphan'));
 
 // Query floating migration stats
 $floatingStats = null;
@@ -216,18 +232,26 @@ if ($rs) {
     <?php endif; ?>
 
     <!-- Summary cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
             <div class="text-xs uppercase tracking-wide text-gray-500 font-medium">Applied</div>
             <div class="mt-1 text-2xl font-semibold text-green-700"><?= $appliedCount ?></div>
+            <div class="mt-0.5 text-[10px] text-gray-400">has file + in registry</div>
         </div>
         <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
             <div class="text-xs uppercase tracking-wide text-gray-500 font-medium">Pending</div>
             <div class="mt-1 text-2xl font-semibold <?= $pendingCount > 0 ? 'text-amber-700' : 'text-gray-400' ?>"><?= $pendingCount ?></div>
+            <div class="mt-0.5 text-[10px] text-gray-400">has file, not yet run</div>
         </div>
         <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <div class="text-xs uppercase tracking-wide text-gray-500 font-medium">Total Migrations</div>
+            <div class="text-xs uppercase tracking-wide text-gray-500 font-medium">Orphan</div>
+            <div class="mt-1 text-2xl font-semibold <?= $orphanCount > 0 ? 'text-purple-700' : 'text-gray-400' ?>"><?= $orphanCount ?></div>
+            <div class="mt-0.5 text-[10px] text-gray-400">registry entry, no file</div>
+        </div>
+        <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <div class="text-xs uppercase tracking-wide text-gray-500 font-medium">Total Shown</div>
             <div class="mt-1 text-2xl font-semibold text-gray-900"><?= count($allMigrations) ?></div>
+            <div class="mt-0.5 text-[10px] text-gray-400">files + orphans combined</div>
         </div>
     </div>
 
@@ -323,22 +347,29 @@ if ($rs) {
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     <?php foreach ($allMigrations as $m): ?>
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-2 font-mono text-xs text-gray-700"><?= htmlspecialchars($m['name'], ENT_QUOTES, 'UTF-8') ?></td>
+                    <tr class="hover:bg-gray-50 <?= $m['status'] === 'orphan' ? 'bg-purple-50/30' : '' ?>">
+                        <td class="px-4 py-2 font-mono text-xs <?= $m['status'] === 'orphan' ? 'text-purple-800 line-through' : 'text-gray-700' ?>"><?= htmlspecialchars($m['name'], ENT_QUOTES, 'UTF-8') ?></td>
                         <td class="px-4 py-2">
-                            <?php if ($m['applied']): ?>
+                            <?php if ($m['status'] === 'applied'): ?>
                             <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 ring-1 ring-inset ring-green-200">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
                                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                                 </svg>
                                 Applied
                             </span>
-                            <?php else: ?>
+                            <?php elseif ($m['status'] === 'pending'): ?>
                             <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 ring-1 ring-inset ring-amber-200">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
                                     <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
                                 </svg>
                                 Pending
+                            </span>
+                            <?php else: /* orphan */ ?>
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 ring-1 ring-inset ring-purple-200" title="Registry entry exists tapi file sudah dihapus (mis. v0.9.12 legacy cleanup). Prune button di atas untuk cleanup.">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                </svg>
+                                Orphan (no file)
                             </span>
                             <?php endif; ?>
                         </td>
