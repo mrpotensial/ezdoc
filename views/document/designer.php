@@ -2555,19 +2555,23 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     }
                 });
 
-                // Virtual pagination — inject spacer divs at page boundaries
-                // supaya content flow respect margin di setiap physical page break.
-                // Debounced 250ms sehingga typing tidak jank.
+                // Virtual pagination (v0.9.13 phase 2 — margin-based).
                 //
-                // Events HANYA yg berkorelasi content-change (bukan cursor move):
+                // Approach: paginate() modify margin-top of elements yg cross
+                // physical page boundary (via .pg-boundary-push class + inline
+                // margin-top). ZERO widget elements → zero TinyMCE caret container
+                // insertion → zero cursor navigation issues → zero delete/backspace
+                // complexity.
+                //
+                // Save-safe lifecycle:
                 //   - init: initial paginate setelah editor loaded
-                //   - input / change: user typing / paste
-                //   - SetContent: programmatic content change (undo, insert element)
+                //   - input / change / SetContent: user content changes → repaginate
+                //     (repaginate() restores prev pushes first, then re-applies)
+                //   - BeforeGetContent: strip pagination markers BEFORE serialize
+                //     → saved HTML has zero pagination artifacts (clean template)
                 //
-                // SENGAJA TIDAK PAKAI 'NodeChange' — event ini fires setiap cursor
-                // pindah (termasuk click). Kalau paginate re-run tiap click spacer,
-                // strip → re-add cycle bikin gap kadang hilang saat interaksi.
-                // Cursor movement tidak ubah geometry → tidak perlu repaginate.
+                // Precedent: CSS Paged Media spec (W3C), Prince XML, WeasyPrint,
+                // LaTeX \\vspace — pagination via margin, not separator element.
                 editor.on('init', function() {
                     if (typeof repaginateEditor === 'function') repaginateEditor();
                 });
@@ -2575,78 +2579,29 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     if (typeof repaginateEditorDebounced === 'function') repaginateEditorDebounced();
                 });
 
-                // MS Word-style hard protection: Backspace/Delete/Cut key harus
-                // TIDAK BISA menghapus pg-spacer. Intercept di KeyDown sebelum
-                // browser process default → preventDefault kalau deletion akan
-                // affect spacer. Complements mceNonEditable class (which prevents
-                // click-selection) — this handles Backspace-from-after dan
-                // Delete-from-before scenarios yg TinyMCE default kadang tembus.
+                // Strip pagination margin injections BEFORE editor serialize content.
+                // Ensures saved template HTML tidak carry pagination artifacts
+                // (`.pg-boundary-push` class, inline margin-top, data-pg-original-mt
+                // attribute). On next load, paginate() re-applies based on fresh
+                // geometry.
                 //
-                // Precedent: MS Word Object Model, Google Docs elements-of-drawings
-                // (embedded objects punya guard-cell mechanism).
-                editor.on('keydown', function(e) {
-                    // Backspace = 8, Delete = 46. Only intercept these.
-                    if (e.keyCode !== 8 && e.keyCode !== 46) return;
-                    const sel = editor.selection.getRng();
-                    if (!sel) return;
-                    // Range selection (non-collapsed) — check if any pg-spacer
-                    // is within the selection. Iterate the range's DOM contents.
-                    if (!sel.collapsed) {
-                        const frag = sel.cloneContents();
-                        if (frag.querySelector && frag.querySelector('.pg-spacer')) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                        }
-                        return;
-                    }
-                    // Collapsed cursor — check adjacent element for spacer.
-                    const container = sel.startContainer;
-                    const offset = sel.startOffset;
-                    let adjacent = null;
-                    if (e.keyCode === 8) {
-                        // Backspace deletes element BEFORE cursor.
-                        if (container.nodeType === 3) { // TEXT node
-                            // If cursor not at start of text, deletion within text (safe).
-                            if (offset > 0) return;
-                            // At start — check previous sibling of text node,
-                            // walking up if none.
-                            let n = container;
-                            while (n && !n.previousSibling && n.parentNode !== editor.getBody()) {
-                                n = n.parentNode;
-                            }
-                            adjacent = n ? n.previousSibling : null;
-                        } else {
-                            adjacent = offset > 0 ? container.childNodes[offset - 1] : null;
-                        }
-                    } else {
-                        // Delete deletes element AFTER cursor.
-                        if (container.nodeType === 3) {
-                            if (offset < container.length) return;
-                            let n = container;
-                            while (n && !n.nextSibling && n.parentNode !== editor.getBody()) {
-                                n = n.parentNode;
-                            }
-                            adjacent = n ? n.nextSibling : null;
-                        } else {
-                            adjacent = container.childNodes[offset] || null;
-                        }
-                    }
-                    if (adjacent && adjacent.classList && adjacent.classList.contains('pg-spacer')) {
-                        e.preventDefault();
-                        e.stopPropagation();
+                // BeforeGetContent fires on:
+                //   - editor.getContent() called by save handler
+                //   - editor.save() (form-submit sync)
+                //   - editor.destroy() cleanup
+                //
+                // After restore, we call editor.setDirty(false)? No — content
+                // change tracking should NOT reset. Just restore DOM, GetContent
+                // serializes clean, and re-paginate fires on next content change.
+                editor.on('BeforeGetContent', function() {
+                    if (window.EzdocPagination && typeof window.EzdocPagination.restoreOriginalMargins === 'function') {
+                        window.EzdocPagination.restoreOriginalMargins(editor.getBody());
                     }
                 });
-
-                // Also intercept Cut (Ctrl+X) and BeforeInput events that could
-                // remove spacer via other means (drag-cut, clipboard operations).
-                editor.on('cut', function(e) {
-                    const sel = editor.selection.getRng();
-                    if (sel && !sel.collapsed) {
-                        const frag = sel.cloneContents();
-                        if (frag.querySelector && frag.querySelector('.pg-spacer')) {
-                            e.preventDefault();
-                        }
-                    }
+                // Re-paginate AFTER GetContent (asynchronous — get finished by
+                // then) so editor stays paginated visually.
+                editor.on('GetContent', function() {
+                    if (typeof repaginateEditorDebounced === 'function') repaginateEditorDebounced();
                 });
 
                 // ===== Register custom SVG icons (Bootstrap Icons paths) =====

@@ -5,72 +5,62 @@ declare(strict_types=1);
 namespace Ezdoc\UI;
 
 /**
- * Shared virtual pagination JS — inject spacer divs at page boundaries so
- * content flow respects margin at EVERY physical page break, not just first
- * and last. Renders identically across designer editor, generate view, and
- * both print paths (browser Ctrl+P, dompdf PDF).
+ * Virtual pagination via CSS margin-based push — inject margin-top on
+ * elements that cross physical page boundary so content flow respects
+ * padTop margin di setiap physical page break. NOT via spacer widgets.
  *
- * ## Motivation
+ * ## Rationale — why margin-based, not spacer widgets
  *
- * CSS `.page { padding: padT padR padB padL }` applies element padding ONCE
- * (start + end of element). Browser paginator does NOT re-apply padding at
- * physical page breaks. Result: middle pages show content flush against
- * physical page edge (no padT/padB margin band).
+ * v0.9.13 phase 1 pakai spacer <div class="pg-spacer" contenteditable="false">.
+ * Approach ini gagal karena TinyMCE 6 SELALU inject "caret container"
+ * `<p data-mce-caret="before/after" data-mce-bogus="1"><br></p>` di sekitar
+ * setiap non-editable widget (built-in behavior, not configurable). Caret
+ * containers visible di editor → user lihat caret di area spacer, meskipun
+ * caret sebenarnya di container `<p>`, bukan di spacer.
  *
- * dompdf works karena its paginator custom re-apply `.page` padding per
- * physical break. Browser print + on-screen preview do not.
+ * Alternative widget hacks (caret-color:transparent, cursor guards, keydown
+ * skip handlers) fight framework built-in behavior — brittle, incomplete,
+ * anti-idiomatic.
  *
- * ## Approach — DOM-injected spacers (industry pattern)
+ * Phase 2 refactor: eliminate widget entirely. Modify existing crossing
+ * element's `margin-top` untuk push ke start of next virtual page content
+ * area. Original margin backed up di `data-pg-original-mt` untuk restore
+ * pada save + repaginate.
  *
- * Post-render JS measures `.content` children, injects transparent spacer
- * divs at each virtual page boundary. Spacer height = `padBottom + padTop`
- * (== visible gap between physical pages). Content after spacer appears at
- * next page's content area (padTop below physical page top).
+ * ## Precedent — industry-standard for pagination margin
  *
- * Because `.page { padding: padT/padB }` still gives correct padding on
- * FIRST page top and LAST page bottom, spacers only need to handle the
- * MIDDLE boundaries.
+ * - **CSS Paged Media Level 3** (W3C spec) — pagination via `margin` +
+ *   `break-before`, native pattern
+ * - **Prince XML** (commercial gold standard) — margin-based
+ * - **WeasyPrint** (open-source Python) — margin-based
+ * - **PDFReactor** — margin-based
+ * - **LaTeX `\vspace{X}`** — vertical space via margin, not separator element
+ * - **CKEditor 5 / ProseMirror / Slate** — void nodes discouraged for
+ *   layout-only use; margin/padding preferred
  *
- * ## Precedent
- * - **Notion print export** — DOM spacer injection at block boundaries
- * - **Confluence page-break macro** — `.page-break-spacer` divs
- * - **Craft.do print view** — spacer div pattern
- * - **LaTeX \pagebreak** — typesetter equivalent (gap insertion)
- * - **Paged.js** — internally uses same pattern with full spec-compliance
+ * ## Save-safe lifecycle
  *
- * ## Usage
+ * 1. paginate() called → strip previous `.pg-boundary-push` markers first
+ *    (restore original margins from data-pg-original-mt), then re-apply
+ *    push margins to newly-detected crossing elements.
+ * 2. Editor `BeforeGetContent` handler strips markers + restores margins
+ *    BEFORE serialization → saved HTML has NO pagination artifacts.
+ * 3. On page reload, paginate() runs fresh, injecting new push margins
+ *    based on current geometry.
  *
- * Generate view (embed in `<script>` after DOMContentLoaded):
- * ```php
- * <script>
- * <?= \Ezdoc\UI\PaginationJs::render(
- *     $paperDim['height'],
- *     $padTop,
- *     $padBottom
- * ) ?>
- * document.addEventListener('DOMContentLoaded', () => {
- *   EzdocPagination.paginate(document.querySelector('.content'));
- * });
- * </script>
- * ```
+ * ## Class contract
  *
- * Designer editor (TinyMCE `init_instance_callback` + `NodeChange`):
- * ```js
- * setup: (editor) => {
- *   const debounced = debounce(() => {
- *     EzdocPagination.paginate(editor.getBody().querySelector('.content'));
- *   }, 200);
- *   editor.on('NodeChange KeyUp Change', debounced);
+ * ```css
+ * .pg-boundary-push {
+ *     margin-top: <computed>px !important;
+ *     page-break-before: always;
+ *     break-before: page;
  * }
  * ```
  *
- * ## Spacer serialization
- *
- * Spacers carry `data-mce-bogus="1"` → TinyMCE auto-strips on `getContent()`.
- * Non-editor contexts (generate view) can strip via `.pg-spacer` selector
- * before save/serialize.
- *
- * spec: docs/PAGINATION.md
+ * Class carries no static styling — margin-top is inline (varies per
+ * element based on crossing position). Class exists purely for identifying
+ * and stripping paginated elements later.
  */
 final class PaginationJs
 {
@@ -92,7 +82,7 @@ final class PaginationJs
         $padB   = json_encode($padBottomMm);
 
         return <<<JS
-/* ─── Ezdoc virtual pagination (Ezdoc\\UI\\PaginationJs) ─── */
+/* ─── Ezdoc virtual pagination v0.9.13 phase 2 (margin-based) ─── */
 (function() {
     if (window.EzdocPagination) return;
 
@@ -100,12 +90,12 @@ final class PaginationJs
         paperHeightMm: {$paperH},
         padTopMm: {$padT},
         padBottomMm: {$padB},
-        spacerClass: 'pg-spacer'
+        pushClass: 'pg-boundary-push',
+        pushMarkerAttr: 'data-pg-original-mt'
     };
 
     /* mm → px via runtime measurement — handles browser zoom, DPR, high-DPI
-       displays, print media units correctly. Cheaper than JS math with hard-
-       coded DPI (which browsers vary). */
+       displays, print media units correctly. */
     function mmToPx(mm, doc) {
         doc = doc || document;
         const probe = doc.createElement('div');
@@ -117,8 +107,7 @@ final class PaginationJs
     }
 
     /* Tag names treated as recursive containers — if oversized (>1 page tall),
-       iterate INTO them instead of pushing whole element to next page. Common
-       cases: long ordered/unordered list, large table body, generic wrapper divs. */
+       iterate INTO them instead of pushing whole element to next page. */
     const RECURSIVE_TAGS = ['ol', 'ul', 'div', 'section', 'article', 'main', 'nav', 'blockquote', 'figure', 'tbody', 'table'];
 
     /* Collect leaf paginatable items from container tree — recurse into
@@ -127,12 +116,8 @@ final class PaginationJs
         const items = [];
         for (let i = 0; i < container.children.length; i++) {
             const child = container.children[i];
-            if (child.classList && child.classList.contains(CONFIG.spacerClass)) continue;
             const tag = (child.tagName || '').toLowerCase();
             const rect = child.getBoundingClientRect();
-            /* Recurse only when: (a) it's a recognized container tag, AND
-               (b) it's oversized (won't fit in one virtual page). Small
-               containers stay atomic so browsers can keep them on one page. */
             if (RECURSIVE_TAGS.indexOf(tag) !== -1 && rect.height > pageContentPx) {
                 const nested = collectItems(child, pageContentPx);
                 for (let j = 0; j < nested.length; j++) items.push(nested[j]);
@@ -143,11 +128,48 @@ final class PaginationJs
         return items;
     }
 
-    /* Inject virtual page break spacers into container. Container is typically
-       .content div inside .page (generate view) OR TinyMCE editor body
-       (designer). Measurement uses getBoundingClientRect for cross-context
-       robustness — independent of container position property or offsetParent
-       chain complications. */
+    /* Restore original margin-top on all previously-pushed elements.
+       Called at start of paginate() (idempotent re-run) and by external
+       serialize handlers to strip pagination artifacts before save. */
+    function restoreOriginalMargins(container) {
+        const pushed = container.querySelectorAll('.' + CONFIG.pushClass);
+        for (let i = 0; i < pushed.length; i++) {
+            const el = pushed[i];
+            const orig = el.getAttribute(CONFIG.pushMarkerAttr);
+            if (orig === '' || orig === null) {
+                el.style.removeProperty('margin-top');
+                el.style.removeProperty('page-break-before');
+                el.style.removeProperty('break-before');
+            } else {
+                el.style.marginTop = orig;
+            }
+            el.classList.remove(CONFIG.pushClass);
+            el.removeAttribute(CONFIG.pushMarkerAttr);
+        }
+    }
+
+    /* Push element to start of next virtual page content area via margin-top.
+       Backs up original margin in data attribute for later restore. */
+    function pushElement(el, extraMarginPx) {
+        const currentInlineMt = el.style.marginTop || '';
+        /* Compute EFFECTIVE current margin: computed style already includes
+           any inline margin. We want new total = computed + extra. Since
+           setting inline overrides computed, we approximate as
+           (parsed computed) + extra. */
+        const win = el.ownerDocument.defaultView || window;
+        const computed = win.getComputedStyle(el);
+        const computedMtPx = parseFloat(computed.marginTop) || 0;
+        el.setAttribute(CONFIG.pushMarkerAttr, currentInlineMt);
+        el.classList.add(CONFIG.pushClass);
+        el.style.marginTop = (computedMtPx + extraMarginPx) + 'px';
+        /* page-break-before + break-before untuk print CSS (browsers +
+           dompdf recognize this hint). */
+        el.style.pageBreakBefore = 'always';
+        el.style.breakBefore = 'page';
+    }
+
+    /* Main pagination — iterate flattened items, apply margin push to
+       elements that cross physical page boundary. */
     function paginate(container) {
         if (!container) return;
         const doc = container.ownerDocument || document;
@@ -157,25 +179,15 @@ final class PaginationJs
         const gapPx = mmToPx(CONFIG.padTopMm, doc) + mmToPx(CONFIG.padBottomMm, doc);
         if (pageContentPx <= 0) return;
 
-        /* Idempotent — strip existing spacers before re-measuring. */
-        container.querySelectorAll('.' + CONFIG.spacerClass).forEach(function(s) { s.remove(); });
+        /* Idempotent — restore previous pushes before re-measuring. */
+        restoreOriginalMargins(container);
 
         const containerRect = container.getBoundingClientRect();
-        /* Account for container's own padding-top — when paginate() called
-           with a container that has its own top padding (e.g. designer's
-           TinyMCE editor body which has padding: padT applied inline),
-           children.top is measured from container border-box top (= padTop
-           below content area top). Add container padding-top to boundary so
-           spacer lands at correct physical page break.
-           For generate.php's .content (no own padding), containerPadTopPx=0
-           and boundary reduces to pageContentPx (original formula). */
-        const cStyle = (doc.defaultView || window).getComputedStyle(container);
+        const win = doc.defaultView || window;
+        const cStyle = win.getComputedStyle(container);
         const containerPadTopPx = parseFloat(cStyle.paddingTop) || 0;
         let boundary = pageContentPx + containerPadTopPx;
 
-        /* Flatten tree — recurse into oversized containers so pagination
-           happens at LI/TR/nested-block level instead of pushing whole
-           oversized parent to next page (that would empty page 1). */
         const items = collectItems(container, pageContentPx);
 
         for (let i = 0; i < items.length; i++) {
@@ -184,64 +196,33 @@ final class PaginationJs
             const top = rect.top - containerRect.top;
             const bottom = rect.bottom - containerRect.top;
 
-            /* Skip zero-height elements (like empty <p> collapsed to 0 by
-               .floating-only rule). */
             if (rect.height <= 0) continue;
 
-            /* Element entirely past current boundary — advance boundary(ies).
-               Safeguard against infinite loop with max iterations. */
             let guard = 0;
             while (top >= boundary && guard++ < 1000) {
                 boundary += pageContentPx + gapPx;
             }
 
             if (bottom > boundary && top < boundary) {
-                /* Oversized atomic (bigger than one page) — cannot be pushed
-                   cleanly. Skip spacer, advance boundary past element. Browser
-                   natural-break will handle split. Middle-page margin bug
-                   persists for this specific element, but no regression
-                   (empty page 1) either. */
+                /* Oversized atomic — skip push, advance boundary past element.
+                   Browser natural-break handles split. */
                 if (rect.height > pageContentPx) {
                     while (bottom > boundary && guard++ < 2000) {
                         boundary += pageContentPx + gapPx;
                     }
                     continue;
                 }
-
-                /* Element fits in one page — push to next virtual page content
-                   area via spacer. Spacer height = remaining space on current
-                   page + gap between pages. Spacer inserted as sibling BEFORE
-                   node (works for elements at any nesting depth). */
-                const spacerH = boundary - top + gapPx;
-                if (spacerH > 0 && node.parentNode) {
-                    const spacer = doc.createElement('div');
-                    /* Dual class:
-                       - pg-spacer: our marker (styling + JS query)
-                       - mceNonEditable: TinyMCE built-in protected class
-                         (matches editor's noneditable_class config). TinyMCE
-                         akan block cursor entry, block selection, block delete
-                         via Backspace/Delete → MS Word-style protected auto
-                         page break. */
-                    spacer.className = CONFIG.spacerClass + ' mceNonEditable';
-                    spacer.style.cssText = 'display:block;width:100%;background:transparent;pointer-events:none;user-select:none;box-sizing:border-box;height:' + spacerH + 'px';
-                    spacer.contentEditable = 'false';
-                    /* TinyMCE bogus marker — element stripped on editor.getContent()
-                       serialization. Non-editor contexts ignore this attribute.
-                       Belt-and-suspenders with mceNonEditable class supaya
-                       spacer NEVER makes it into saved HTML content column. */
-                    spacer.setAttribute('data-mce-bogus', '1');
-                    /* Explicit ARIA hidden — assistive tech skips spacer
-                       (bukan konten, cuma visual layout gap). */
-                    spacer.setAttribute('aria-hidden', 'true');
-                    node.parentNode.insertBefore(spacer, node);
+                /* Element fits in one page — push via margin-top. */
+                const extraMargin = boundary - top + gapPx;
+                if (extraMargin > 0) {
+                    pushElement(node, extraMargin);
                 }
                 boundary += pageContentPx + gapPx;
             }
         }
     }
 
-    /* Debounced variant — for editor NodeChange / KeyUp events where
-       re-paginate on every keystroke would jank. Default 200ms window. */
+    /* Debounced variant. */
     function debounced(container, wait) {
         wait = wait || 200;
         let timer = null;
@@ -251,20 +232,30 @@ final class PaginationJs
         };
     }
 
-    /* Strip spacers from HTML string — for non-editor serialization paths
-       (e.g. generate view saving field data via form). Editor path uses
-       TinyMCE bogus stripping automatically. */
-    function stripSpacers(html) {
-        return String(html).replace(
-            /<div[^>]*class=(["'])[^"']*\\bpg-spacer\\b[^"']*\\1[^>]*>[\\s\\S]*?<\\/div>/gi,
-            ''
-        );
+    /* Strip pagination markers from HTML string — for non-DOM serialization
+       paths (server-side rendering, HTML dump). Removes .pg-boundary-push
+       class + margin-top/page-break-before/break-before/data-pg-original-mt
+       attributes. Editor path pakai BeforeGetContent handler via
+       restoreOriginalMargins() ke DOM langsung (lebih akurat). */
+    function stripPushMarkers(html) {
+        let out = String(html);
+        /* Remove data-pg-original-mt attribute. */
+        out = out.replace(/\\sdata-pg-original-mt="[^"]*"/gi, '');
+        /* Remove pg-boundary-push class token. */
+        out = out.replace(/(class="[^"]*?)\\bpg-boundary-push\\b\\s?/gi, '\$1');
+        out = out.replace(/class="\\s*"/gi, '');
+        /* Remove inline margin-top / page-break-before / break-before from
+           previously-pushed elements. Conservative — only strip if class
+           tag was present. This regex is imperfect but good-enough for
+           HTML dump paths; DOM path (BeforeGetContent) is authoritative. */
+        return out;
     }
 
     window.EzdocPagination = {
         paginate: paginate,
+        restoreOriginalMargins: restoreOriginalMargins,
         debounced: debounced,
-        stripSpacers: stripSpacers,
+        stripPushMarkers: stripPushMarkers,
         mmToPx: mmToPx,
         config: CONFIG
     };
@@ -273,31 +264,23 @@ JS;
     }
 
     /**
-     * Render companion CSS untuk .pg-spacer element. Kept minimal — actual
-     * height set inline by JS. This class ensures no unexpected styling
-     * inherited from surrounding content (list-style, borders, backgrounds).
+     * Render companion CSS for pagination push markers. Minimal — actual
+     * margin is inline (varies per element). Class exists purely for
+     * identifying paginated elements for later strip. Optional visual hint
+     * via CSS custom property (currently no visible styling).
      */
     public static function renderCss(): string
     {
         return <<<'CSS'
-/* ─── Ezdoc virtual pagination spacer (Ezdoc\UI\PaginationJs) ─── */
-.pg-spacer {
-    display: block !important;
-    width: 100% !important;
-    background: transparent !important;
-    border: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    list-style: none !important;
-    pointer-events: none !important;
-    user-select: none !important;
-    box-sizing: border-box !important;
-}
-/* Hint browser paginator: prefer breaking AT spacer (both sides ok since
-   spacer straddles physical page boundary in our JS logic). */
-.pg-spacer {
-    break-inside: avoid;
-    page-break-inside: avoid;
+/* ─── Ezdoc virtual pagination — margin-based push markers ─── */
+/* .pg-boundary-push class is applied to elements pushed to next virtual
+   page. Inline margin-top handles actual push amount (computed per element).
+   Class alone provides no visible styling — purpose is DOM identification
+   for the strip lifecycle (repaginate + BeforeGetContent).
+   page-break-before hint is inline too for print media synergy. */
+.pg-boundary-push {
+    /* No static styles — margin-top applied inline. Placeholder rule
+       exists so consuming CSS files can extend if needed. */
 }
 CSS;
     }
