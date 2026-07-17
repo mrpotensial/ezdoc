@@ -2244,7 +2244,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                    indicator, tidak affect content flow. Positioned via same
                    var. Nice-to-have: only page 2+ (skip first page label). */
                 body::before {
-                    content: '⋮⋮';
+                    content: '';
                     /* Placeholder — actual page labels rendered via JS overlay
                        (kalau butuh detail). CSS-only approach di sini fokus
                        ke visible break line saja. */
@@ -2253,7 +2253,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                    updatePageSize() reset body.style.padding. Industri: Google Docs
                    / Notion editor invisible "scroll spacer" pattern. */
                 body::after {
-                    content: '⋮⋮';
+                    content: '';
                     display: block;
                     height: 120px;
                     pointer-events: none;
