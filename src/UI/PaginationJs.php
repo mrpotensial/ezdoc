@@ -95,12 +95,14 @@ final class PaginationJs
     };
 
     /* mm → px via runtime measurement — handles browser zoom, DPR, high-DPI
-       displays, print media units correctly. */
+       displays, print media units correctly. Probe attached ke documentElement
+       (<html>) bukan body — supaya MutationObserver yg watch body content
+       tidak fires oleh probe add/remove (avoid paginate recursion). */
     function mmToPx(mm, doc) {
         doc = doc || document;
         const probe = doc.createElement('div');
         probe.style.cssText = 'position:absolute;visibility:hidden;height:' + mm + 'mm;top:-9999px;left:0';
-        doc.body.appendChild(probe);
+        (doc.documentElement || doc.body).appendChild(probe);
         const px = probe.offsetHeight;
         probe.remove();
         return px;
@@ -136,10 +138,14 @@ final class PaginationJs
         for (let i = 0; i < pushed.length; i++) {
             const el = pushed[i];
             const orig = el.getAttribute(CONFIG.pushMarkerAttr);
+            /* Always clear our page-break markers (added unconditionally by
+               pushElement). */
+            el.style.removeProperty('page-break-before');
+            el.style.removeProperty('break-before');
+            /* Restore margin-top: empty means no inline was set originally
+               (removeProperty), else set back to original value. */
             if (orig === '' || orig === null) {
                 el.style.removeProperty('margin-top');
-                el.style.removeProperty('page-break-before');
-                el.style.removeProperty('break-before');
             } else {
                 el.style.marginTop = orig;
             }

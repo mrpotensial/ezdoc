@@ -2560,48 +2560,88 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 // Approach: paginate() modify margin-top of elements yg cross
                 // physical page boundary (via .pg-boundary-push class + inline
                 // margin-top). ZERO widget elements → zero TinyMCE caret container
-                // insertion → zero cursor navigation issues → zero delete/backspace
-                // complexity.
+                // insertion → zero cursor navigation issues.
                 //
-                // Save-safe lifecycle:
-                //   - init: initial paginate setelah editor loaded
-                //   - input / change / SetContent: user content changes → repaginate
-                //     (repaginate() restores prev pushes first, then re-applies)
-                //   - BeforeGetContent: strip pagination markers BEFORE serialize
-                //     → saved HTML has zero pagination artifacts (clean template)
-                //
-                // Precedent: CSS Paged Media spec (W3C), Prince XML, WeasyPrint,
-                // LaTeX \\vspace — pagination via margin, not separator element.
+                // Trigger via MutationObserver (bukan TinyMCE event listeners) —
+                // TinyMCE 'input'/'change' events kadang fire on cursor move di
+                // beberapa browser (arrow key flicker bug). MutationObserver hanya
+                // fires pada REAL DOM content changes (childList + characterData),
+                // ignore attribute mutations (yg dilakukan paginate sendiri).
                 editor.on('init', function() {
+                    const body = editor.getBody();
                     if (typeof repaginateEditor === 'function') repaginateEditor();
-                });
-                editor.on('SetContent change input', function() {
-                    if (typeof repaginateEditorDebounced === 'function') repaginateEditorDebounced();
-                });
 
-                // Strip pagination margin injections BEFORE editor serialize content.
-                // Ensures saved template HTML tidak carry pagination artifacts
-                // (`.pg-boundary-push` class, inline margin-top, data-pg-original-mt
-                // attribute). On next load, paginate() re-applies based on fresh
-                // geometry.
-                //
-                // BeforeGetContent fires on:
-                //   - editor.getContent() called by save handler
-                //   - editor.save() (form-submit sync)
-                //   - editor.destroy() cleanup
-                //
-                // After restore, we call editor.setDirty(false)? No — content
-                // change tracking should NOT reset. Just restore DOM, GetContent
-                // serializes clean, and re-paginate fires on next content change.
-                editor.on('BeforeGetContent', function() {
-                    if (window.EzdocPagination && typeof window.EzdocPagination.restoreOriginalMargins === 'function') {
-                        window.EzdocPagination.restoreOriginalMargins(editor.getBody());
+                    // Register serializer node filter untuk strip pagination markers
+                    // saat editor.getContent(). Registered di 'init' handler karena
+                    // editor.serializer belum available di setup callback.
+                    //
+                    // Precedent: TinyMCE core pagebreak plugin, imagetools plugin —
+                    // pakai serializer filter untuk transform elements at save time
+                    // tanpa modify DOM tree (yg akan bikin visible flicker).
+                    if (editor.serializer && typeof editor.serializer.addNodeFilter === 'function') {
+                        editor.serializer.addNodeFilter('*', function(nodes) {
+                            for (let i = 0; i < nodes.length; i++) {
+                                const node = nodes[i];
+                                const cls = node.attr('class');
+                                if (!cls || cls.indexOf('pg-boundary-push') === -1) continue;
+                                const newCls = cls.split(/\s+/).filter(function(c) {
+                                    return c && c !== 'pg-boundary-push';
+                                }).join(' ');
+                                node.attr('class', newCls || null);
+                                node.attr('data-pg-original-mt', null);
+                                const style = node.attr('style') || '';
+                                if (style) {
+                                    const newStyle = style
+                                        .replace(/(^|;)\s*margin-top\s*:[^;]*(;|$)/gi, '$1')
+                                        .replace(/(^|;)\s*page-break-before\s*:[^;]*(;|$)/gi, '$1')
+                                        .replace(/(^|;)\s*break-before\s*:[^;]*(;|$)/gi, '$1')
+                                        .replace(/^;+/, '')
+                                        .replace(/;+$/, '')
+                                        .trim();
+                                    node.attr('style', newStyle || null);
+                                }
+                            }
+                        });
                     }
-                });
-                // Re-paginate AFTER GetContent (asynchronous — get finished by
-                // then) so editor stays paginated visually.
-                editor.on('GetContent', function() {
-                    if (typeof repaginateEditorDebounced === 'function') repaginateEditorDebounced();
+
+                    // MutationObserver — fires HANYA pada real content mutations.
+                    // Kita observe childList + characterData (NOT attributes) supaya
+                    // paginate's own attribute mutations (class, style, data-*) tidak
+                    // trigger recursion. Also filter out mmToPx probe elements
+                    // (position:absolute + visibility:hidden = clearly non-content).
+                    if (typeof MutationObserver === 'function') {
+                        const observer = new MutationObserver(function(mutations) {
+                            let contentChanged = false;
+                            for (let i = 0; i < mutations.length; i++) {
+                                const m = mutations[i];
+                                if (m.type === 'characterData') { contentChanged = true; break; }
+                                if (m.type === 'childList') {
+                                    const nodes = [];
+                                    for (let j = 0; j < m.addedNodes.length; j++) nodes.push(m.addedNodes[j]);
+                                    for (let j = 0; j < m.removedNodes.length; j++) nodes.push(m.removedNodes[j]);
+                                    for (let j = 0; j < nodes.length; j++) {
+                                        const n = nodes[j];
+                                        // Skip mmToPx probes (offscreen hidden divs).
+                                        if (n.nodeType === 1 && n.style
+                                            && n.style.position === 'absolute'
+                                            && n.style.visibility === 'hidden') continue;
+                                        contentChanged = true; break;
+                                    }
+                                    if (contentChanged) break;
+                                }
+                            }
+                            if (contentChanged && typeof repaginateEditorDebounced === 'function') {
+                                repaginateEditorDebounced();
+                            }
+                        });
+                        observer.observe(body, {
+                            childList: true,
+                            subtree: true,
+                            characterData: true
+                            // attributes: false — paginate mutates attributes, tidak
+                            // boleh trigger observer (avoid infinite recursion).
+                        });
+                    }
                 });
 
                 // ===== Register custom SVG icons (Bootstrap Icons paths) =====
