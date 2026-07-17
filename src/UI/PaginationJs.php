@@ -270,23 +270,36 @@ JS;
     }
 
     /**
-     * Render companion CSS for pagination push markers. Minimal — actual
-     * margin is inline (varies per element). Class exists purely for
-     * identifying paginated elements for later strip. Optional visual hint
-     * via CSS custom property (currently no visible styling).
+     * Render companion CSS for pagination push markers. Includes @media print
+     * override yg suppress screen-only spacer margin-top → biar print pakai
+     * padT saja (via native browser page-break-before + our replacement mt).
+     *
+     * @param float $padTopMm Top margin for print media (default 20mm A4)
      */
-    public static function renderCss(): string
+    public static function renderCss(float $padTopMm = 20.0): string
     {
-        return <<<'CSS'
+        $padT = json_encode($padTopMm);
+        return <<<CSS
 /* ─── Ezdoc virtual pagination — margin-based push markers ─── */
-/* .pg-boundary-push class is applied to elements pushed to next virtual
-   page. Inline margin-top handles actual push amount (computed per element).
-   Class alone provides no visible styling — purpose is DOM identification
-   for the strip lifecycle (repaginate + BeforeGetContent).
-   page-break-before hint is inline too for print media synergy. */
+/* .pg-boundary-push class applied to elements pushed to next virtual page.
+   Inline margin-top handles actual push amount (computed per element for
+   SCREEN media). Class alone provides no static styling. */
 .pg-boundary-push {
-    /* No static styles — margin-top applied inline. Placeholder rule
-       exists so consuming CSS files can extend if needed. */
+    /* No static styles for screen — margin-top applied inline. */
+}
+
+/* PRINT media override — screen margin-top berupa "spacer gap" untuk visual
+   pagination di editor. Untuk print, browser handles physical page break
+   via page-break-before: always (also inline). Element yg break-before'd
+   starts at TOP of physical next page → margin-top on screen would DOUBLE
+   the top gap on print. Suppress screen margin, replace dgn just padTop mm
+   supaya content di physical page 2+ dapat konsisten padT top margin.
+   Precedent: CSS Paged Media pattern — margin-top on break-before element
+   provides per-page top margin. */
+@media print {
+    .pg-boundary-push {
+        margin-top: {$padT}mm !important;
+    }
 }
 CSS;
     }

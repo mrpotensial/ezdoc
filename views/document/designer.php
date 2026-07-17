@@ -2330,7 +2330,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                    Spacer straddles physical page boundary — visible gap sync
                    dgn dashed page break line above. Content resumes on next
                    virtual page with padT margin below break. */
-                <?= \Ezdoc\UI\PaginationJs::renderCss() ?>
+                <?= \Ezdoc\UI\PaginationJs::renderCss(20.0) ?>
                 /* Field placeholder — dimensions match rendered .f di generate.php
                    edit-on state (padding 1px 4px + border-bottom 1px dotted). Editor
                    renders identical box size dgn generate view saat field diisi user

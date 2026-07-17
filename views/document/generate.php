@@ -1936,7 +1936,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
         /* Virtual pagination spacer companion CSS (Ezdoc\UI\PaginationJs).
            JS injects .pg-spacer divs at page boundaries so content flow
            respects margin at EVERY physical page break. */
-        <?= \Ezdoc\UI\PaginationJs::renderCss() ?>
+        <?= \Ezdoc\UI\PaginationJs::renderCss((float) $padTop) ?>
 
         /* Field (contenteditable) - auto-adjusts for 1 or multi line */
         .f-wrap { display: inline; }
