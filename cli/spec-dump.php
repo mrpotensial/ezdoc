@@ -165,7 +165,7 @@ if ($isCheck) {
         }
     }
     if ($mismatches !== []) {
-        fwrite(STDERR, "\n❌ Spec out-of-date. Run `php cli/spec-dump.php` to regenerate.\n");
+        fwrite(STDERR, "\nERROR: Spec out-of-date. Run `php cli/spec-dump.php` to regenerate.\n");
         fwrite(STDERR, "   Files needing update:\n");
         foreach ($mismatches as $m) fwrite(STDERR, "     - $m\n");
         exit(1);

@@ -2,7 +2,7 @@
 /**
  * ezdoc schema — LEGACY consumer-specific auto-migrations.
  *
- * ## ⚠️ DEPRECATED as of v0.9.10 — will be removed in v1.0
+ * ## DEPRECATED as of v0.9.10 — will be removed in v1.0
  *
  * File ini mengelola tabel **consumer-app-specific** (`surat_template_v2`,
  * `surat_audit_log`) yang merupakan legacy tables dari dogfood consumer

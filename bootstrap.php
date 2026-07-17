@@ -79,7 +79,7 @@ if (EZDOC_STRICT_SETUP && isset($GLOBALS['conn']) && $GLOBALS['conn']) {
                . '<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>'
                . '<body class="bg-light"><div class="container py-5"><div class="col-md-8 mx-auto">'
                . '<div class="card border-warning"><div class="card-header bg-warning">'
-               . '<h5 class="mb-0">⚠ Setup Database Diperlukan</h5></div>'
+               . '<h5 class="mb-0">Setup Database Diperlukan</h5></div>'
                . '<div class="card-body">'
                . '<p>Tables ezdoc missing: <code>' . htmlspecialchars($__missingList) . '</code></p>'
                . '<p>Migration ter-record tapi tabelnya tidak ada. Beberapa cara fix:</p>'
@@ -94,7 +94,7 @@ if (EZDOC_STRICT_SETUP && isset($GLOBALS['conn']) && $GLOBALS['conn']) {
                . '$conn: ' . (isset($GLOBALS['conn']) && $GLOBALS['conn'] ? 'connected' : 'MISSING') . '<br>'
                . 'Migration dir: <code>' . htmlspecialchars(EZDOC_ROOT . '/migrations') . '</code>'
                . '</div>'
-               . '<div class="mt-3"><a href="javascript:location.reload()" class="btn btn-primary">🔄 Coba Lagi</a></div>'
+               . '<div class="mt-3"><a href="javascript:location.reload()" class="btn btn-primary">Coba Lagi</a></div>'
                . '</div></div></div></div></body></html>';
             exit;
         }

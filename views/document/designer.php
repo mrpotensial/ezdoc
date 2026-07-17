@@ -1225,7 +1225,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             toast.className = `p-4 rounded-lg mb-2 flex items-start justify-between shadow-xl min-w-[280px] max-w-[420px] ${color}`;
             const icon = document.createElement('span');
             icon.className = 'mr-2 text-lg leading-none';
-            icon.innerHTML = isErr ? '⚠' : '✓';
+            icon.innerHTML = isErr ? '!' : 'OK';
             const msgSpan = document.createElement('span');
             msgSpan.className = 'flex-1';
             msgSpan.innerHTML = message;
@@ -2244,7 +2244,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                    indicator, tidak affect content flow. Positioned via same
                    var. Nice-to-have: only page 2+ (skip first page label). */
                 body::before {
-                    content: '';
+                    content: '⋮⋮';
                     /* Placeholder — actual page labels rendered via JS overlay
                        (kalau butuh detail). CSS-only approach di sini fokus
                        ke visible break line saja. */
@@ -2253,7 +2253,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                    updatePageSize() reset body.style.padding. Industri: Google Docs
                    / Notion editor invisible "scroll spacer" pattern. */
                 body::after {
-                    content: '';
+                    content: '⋮⋮';
                     display: block;
                     height: 120px;
                     pointer-events: none;
@@ -2822,7 +2822,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         if (!expr || !expr.trim()) return;
                         const escExpr = expr.trim().replace(/"/g, '&quot;');
                         const placeholder = `<div class="conditional-section" data-cond="${escExpr}" contenteditable="true">
-                            <div style="font-size:10px;color:#0e7490;background:#ecfeff;padding:2px 6px;border-radius:3px;margin-bottom:4px;display:inline-block;">⏱ ${t('cond.display_if_prefix', {}, 'Show if:')} <strong>${escapeHtml(expr.trim())}</strong></div>
+                            <div style="font-size:10px;color:#0e7490;background:#ecfeff;padding:2px 6px;border-radius:3px;margin-bottom:4px;display:inline-block;">${t('cond.display_if_prefix', {}, 'Show if:')} <strong>${escapeHtml(expr.trim())}</strong></div>
                             <p>${escapeHtml(t('toolbar_insert.cond_placeholder_text', {}, 'Write the conditional content here... (this paragraph will be hidden if the condition is not met)'))}</p>
                         </div>`;
                         editor.insertContent(placeholder + '<p></p>');
@@ -3902,7 +3902,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             // Update badge label di dalam section
             const badge = el.querySelector('div[style*="ecfeff"], div[style*="ECFEFF"]');
             if (badge) {
-                badge.innerHTML = '⏱ ' + t('cond.display_if_prefix', {}, 'Show if:') + ' <strong>' + escapeHtml(trimmed) + '</strong>';
+                badge.innerHTML = t('cond.display_if_prefix', {}, 'Show if:') + ' <strong>' + escapeHtml(trimmed) + '</strong>';
             }
             const editor = tinymce.get('editor');
             if (editor) editor.setDirty(true);

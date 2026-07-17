@@ -28,12 +28,12 @@ namespace Ezdoc\Rendering;
 
 interface PdfRenderer
 {
-    public function stream(
-        string $html,        // Full HTML document
-        string $filename,    // Suggested filename ("document_123.pdf")
-        array $paperMm,      // [width_mm, height_mm]
-        string $orientation  // 'portrait' | 'landscape'
-    ): void;
+ public function stream(
+ string $html, // Full HTML document
+ string $filename, // Suggested filename ("document_123.pdf")
+ array $paperMm, // [width_mm, height_mm]
+ string $orientation // 'portrait' | 'landscape'
+ ): void;
 }
 ```
 
@@ -54,12 +54,12 @@ $renderer = new DompdfRenderer();
 
 // With custom options
 $renderer = new DompdfRenderer([
-    'tempDir'                => '/var/tmp/dompdf',
-    'chroot'                 => '/var/www',
-    'defaultFont'            => 'Times',
-    'isRemoteEnabled'        => true,
-    'isHtml5ParserEnabled'   => true,
-    'isFontSubsettingEnabled' => true,
+ 'tempDir' => '/var/tmp/dompdf',
+ 'chroot' => '/var/www',
+ 'defaultFont' => 'Times',
+ 'isRemoteEnabled' => true,
+ 'isHtml5ParserEnabled' => true,
+ 'isFontSubsettingEnabled' => true,
 ], basePath: '/var/www/app');
 ```
 
@@ -86,7 +86,7 @@ use Ezdoc\Context;
 use Ezdoc\Rendering\DompdfRenderer;
 
 $renderer = new DompdfRenderer([
-    'defaultFont' => 'Times',
+ 'defaultFont' => 'Times',
 ], __DIR__);
 
 $ctx = Context::default()->withPdf($renderer);
@@ -103,15 +103,15 @@ use Mpdf\Mpdf;
 
 final class MpdfRenderer implements PdfRenderer
 {
-    public function stream(string $html, string $filename, array $paperMm, string $orientation): void
-    {
-        $mpdf = new Mpdf([
-            'format' => [$paperMm[0], $paperMm[1]],
-            'orientation' => $orientation === 'landscape' ? 'L' : 'P',
-        ]);
-        $mpdf->WriteHTML($html);
-        $mpdf->Output($filename, 'I'); // Inline
-    }
+ public function stream(string $html, string $filename, array $paperMm, string $orientation): void
+ {
+ $mpdf = new Mpdf([
+ 'format' => [$paperMm[0], $paperMm[1]],
+ 'orientation' => $orientation === 'landscape' ? 'L' : 'P',
+ ]);
+ $mpdf->WriteHTML($html);
+ $mpdf->Output($filename, 'I'); // Inline
+ }
 }
 
 Context::setDefault(Context::default()->withPdf(new MpdfRenderer()));
@@ -125,23 +125,23 @@ use Knp\Snappy\Pdf;
 
 final class WkhtmlToPdfRenderer implements PdfRenderer
 {
-    private Pdf $snappy;
+ private Pdf $snappy;
 
-    public function __construct(string $binary)
-    {
-        $this->snappy = new Pdf($binary);
-    }
+ public function __construct(string $binary)
+ {
+ $this->snappy = new Pdf($binary);
+ }
 
-    public function stream(string $html, string $filename, array $paperMm, string $orientation): void
-    {
-        $this->snappy->setOption('page-width', $paperMm[0] . 'mm');
-        $this->snappy->setOption('page-height', $paperMm[1] . 'mm');
-        $this->snappy->setOption('orientation', $orientation);
+ public function stream(string $html, string $filename, array $paperMm, string $orientation): void
+ {
+ $this->snappy->setOption('page-width', $paperMm[0] . 'mm');
+ $this->snappy->setOption('page-height', $paperMm[1] . 'mm');
+ $this->snappy->setOption('orientation', $orientation);
 
-        header('Content-Type: application/pdf');
-        header('Content-Disposition: inline; filename="' . $filename . '"');
-        echo $this->snappy->getOutputFromHtml($html);
-    }
+ header('Content-Type: application/pdf');
+ header('Content-Disposition: inline; filename="' . $filename . '"');
+ echo $this->snappy->getOutputFromHtml($html);
+ }
 }
 ```
 
@@ -173,19 +173,19 @@ Verify renderer contract compliance:
 ```php
 public function testRendererStreamsPdf(): void
 {
-    $renderer = new DompdfRenderer();
+ $renderer = new DompdfRenderer();
 
-    ob_start();
-    $renderer->stream(
-        html: '<h1>Test</h1>',
-        filename: 'test.pdf',
-        paperMm: [210, 297],
-        orientation: 'portrait'
-    );
-    $output = ob_get_clean();
+ ob_start();
+ $renderer->stream(
+ html: '<h1>Test</h1>',
+ filename: 'test.pdf',
+ paperMm: [210, 297],
+ orientation: 'portrait'
+ );
+ $output = ob_get_clean();
 
-    $this->assertStringStartsWith('%PDF-', $output);
-    $this->assertGreaterThan(1000, strlen($output));
+ $this->assertStringStartsWith('%PDF-', $output);
+ $this->assertGreaterThan(1000, strlen($output));
 }
 ```
 
@@ -195,8 +195,8 @@ public function testRendererStreamsPdf(): void
 ```php
 // In consumer's koneksi.php:
 function generatePDF($html, $filename, $stream, $paper, $orientation) {
-    $dompdf = new Dompdf();
-    // ...
+ $dompdf = new Dompdf();
+ // ...
 }
 
 // Ezdoc calls global function:

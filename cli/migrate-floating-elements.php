@@ -92,7 +92,7 @@ echo "Total rows skipped (already migrated): " . ($stats['skipped'] + $docStats[
 echo "Errors: " . ($stats['errors'] + $docStats['errors']) . "\n";
 
 if (!$isApply) {
-    echo "\n⚠️  DRY-RUN mode — no changes written. Re-run dgn 'apply' untuk execute.\n";
+    echo "\nNOTE: DRY-RUN mode — no changes written. Re-run dgn 'apply' untuk execute.\n";
 }
 exit(0);
 

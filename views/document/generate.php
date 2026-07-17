@@ -2765,7 +2765,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 <!-- ═══ PRIMARY ROW: Update (2/3) + Print (1/3 icon) ═══ -->
                 <div class="grid grid-cols-3 gap-1 mt-1">
                     <button type="button" class="btn-success col-span-2 !m-0 !py-1.5 !text-[12px]" onclick="submitForm()" <?= $param_is_locked ? 'disabled title="' . h(t('title.locked_cannot_update', [], 'Locked - cannot update')) . '"' : '' ?>>
-                        <?= $isEditMode ? ($param_is_locked ? '🔒 ' . h(t('toolbar.locked', [], 'Locked')) : h(t('toolbar.update', [], 'Update'))) : h(t('toolbar.save_new', [], 'Save New')) ?>
+                        <?= $isEditMode ? ($param_is_locked ? h(t('toolbar.locked', [], 'Locked')) : h(t('toolbar.update', [], 'Update'))) : h(t('toolbar.save_new', [], 'Save New')) ?>
                     </button>
                     <button type="button" class="!m-0 !py-1.5 !px-1 !text-[11px]" onclick="window.print()" title="<?= h(t('title.print_shortcut', [], 'Print (Ctrl+P)')) ?>"><i class="bi bi-printer"></i> <?= h(t('toolbar.print', [], 'Print')) ?></button>
                 </div>
@@ -3873,7 +3873,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     } else {
                         statusBadge = imgVal
                             ? `<span class="text-green-600 text-[11px]">✓ ${t('modal.doc_info.materai_filled_status', {}, 'Filled')}</span>`
-                            : `<span class="text-red-600 text-[11px]">⚠ ${t('modal.doc_info.materai_missing_status', {}, 'Not uploaded')}</span>`;
+                            : `<span class="text-red-600 text-[11px]">${t('modal.doc_info.materai_missing_status', {}, 'Not uploaded')}</span>`;
                     }
                     materaiRows += `<tr>
                         <td class="py-1 px-0 text-gray-500 text-xs">${escapeHtmlSimple(lbl)}</td>
@@ -3899,7 +3899,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     </div>
                     <table class="w-full text-[13px]" style="border-collapse:collapse;">
                         <tr><td class="py-1.5 px-0 text-gray-500 w-[40%]">${t('modal.doc_info.document_id_label', {}, 'Document ID')}</td><td class="py-1.5 px-0"><code>${meta.id}</code></td></tr>
-                        <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.version_row_label', {}, 'Version')}</td><td class="py-1.5 px-0">v${CURRENT_VERSION} ${<?= $param_is_locked ? 'true' : 'false' ?> ? '🔒 ' + t('toolbar.locked', {}, 'Locked') : t('modal.doc_info.editable_suffix', {}, '(Editable)')}</td></tr>
+                        <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.version_row_label', {}, 'Version')}</td><td class="py-1.5 px-0">v${CURRENT_VERSION} ${<?= $param_is_locked ? 'true' : 'false' ?> ? t('toolbar.locked', {}, 'Locked') : t('modal.doc_info.editable_suffix', {}, '(Editable)')}</td></tr>
                         <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.norm_row_label', {}, 'MR No.')}</td><td class="py-1.5 px-0">${escapeHtmlSimple(CURRENT_NORM || '-')}</td></tr>
                         <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.nopen_row_label', {}, 'Registration No.')}</td><td class="py-1.5 px-0">${escapeHtmlSimple(CURRENT_NOPEN || '-')}</td></tr>
                         <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.label_row_label', {}, 'Label')}</td><td class="py-1.5 px-0">${escapeHtmlSimple(CURRENT_LABEL || '-')}</td></tr>
@@ -3948,7 +3948,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
             data.versions.forEach(v => {
                 const opt = document.createElement('option');
                 opt.value = v.version;
-                const lockIcon = v.is_locked ? ' 🔒' : '';
+                const lockIcon = v.is_locked ? ' [Locked]' : '';
                 const currMark = v.version === CURRENT_VERSION ? ' ' + t('toolbar.version_current_suffix', {}, '(current)') : '';
                 opt.textContent = `v${v.version}${lockIcon}${currMark}`;
                 if (v.version === CURRENT_VERSION) opt.selected = true;
@@ -4087,7 +4087,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 document.body.appendChild(modal);
             }
             const optsHtml = versions.map(v =>
-                `<option value="${v.version}">v${v.version}${v.is_locked ? ' 🔒' : ''}</option>`
+                `<option value="${v.version}">v${v.version}${v.is_locked ? ' [Locked]' : ''}</option>`
             ).join('');
 
             modal.innerHTML = `

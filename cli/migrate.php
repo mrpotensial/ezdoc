@@ -86,7 +86,7 @@ switch ($action) {
         echo "Skipped: " . count($result['skipped']) . "\n";
         foreach ($result['skipped'] as $name) echo "  ⏭  {$name}\n";
         if (!empty($result['failed'])) {
-            echo "\n⚠ FAILED (" . count($result['failed']) . "):\n";
+            echo "\nFAILED (" . count($result['failed']) . "):\n";
             foreach ($result['failed'] as $name => $err) {
                 echo "  ✗ {$name}\n";
                 echo "     Error: {$err}\n";
@@ -107,7 +107,7 @@ switch ($action) {
         echo "Applied: " . count($result['applied']) . "\n";
         foreach ($result['applied'] as $name) echo "  ✓ {$name}\n";
         if (!empty($result['failed'])) {
-            echo "\n⚠ FAILED (" . count($result['failed']) . "):\n";
+            echo "\nFAILED (" . count($result['failed']) . "):\n";
             foreach ($result['failed'] as $name => $err) {
                 echo "  ✗ {$name}: {$err}\n";
             }

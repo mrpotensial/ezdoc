@@ -15,69 +15,69 @@ materai floating variants). Industry-standard document object model separation
 **Added — data model + services**
 
 - **`Ezdoc\Template\FloatingElement`** — immutable value object dgn TYPE_* and
-  Z_* constants. `fromArray()` / `toArray()` serialization. `withPosition()`
-  immutable copy pattern. Validation via `Ezdoc\Exceptions\ValidationException`
+ Z_* constants. `fromArray()` / `toArray()` serialization. `withPosition()`
+ immutable copy pattern. Validation via `Ezdoc\Exceptions\ValidationException`
 - **`Ezdoc\Template\FloatingExtractor`** — regex-based HTML markers →
-  FloatingElement[] extraction. Handles legacy (bare markers) + widget-wrapper
-  (v0.9.12 phase 1) patterns. `toJson()` / `fromJson()` serialization
+ FloatingElement[] extraction. Handles legacy (bare markers) + widget-wrapper
+ (v0.9.12 phase 1) patterns. `toJson()` / `fromJson()` serialization
 - **`Ezdoc\Template\FloatingInjector`** — reverse: FloatingElement[] → HTML
-  markers wrapped dalam `<p class="floating-only" contenteditable="false">`
-  widget wrappers appended ke content HTML
+ markers wrapped dalam `<p class="floating-only" contenteditable="false">`
+ widget wrappers appended ke content HTML
 
 **Added — schema**
 
 - **DB migration** `2026_07_16_000001_alter_ezdoc_templates_add_floating_elements`:
-  - `ezdoc_templates.floating_elements JSON NULL` (after `content` column)
-  - `ezdoc_documents.floating_elements JSON NULL` (per-doc overrides, NULL = inherit)
+ - `ezdoc_templates.floating_elements JSON NULL` (after `content` column)
+ - `ezdoc_documents.floating_elements JSON NULL` (per-doc overrides, NULL = inherit)
 
 **Changed — save/load flow**
 
 - `actions/template/save_template.php`:
-  - Extract floating dari submitted HTML markers (backward-compat) OR accept
-    client-sent `floating_elements_json` (preferred future flow)
-  - Store cleaned HTML (no markers) di `content` column
-  - Store JSON array di `floating_elements` column
-  - Dual-write during transition period
+ - Extract floating dari submitted HTML markers (backward-compat) OR accept
+ client-sent `floating_elements_json` (preferred future flow)
+ - Store cleaned HTML (no markers) di `content` column
+ - Store JSON array di `floating_elements` column
+ - Dual-write during transition period
 - `views/document/designer.php` template load:
-  - Read `floating_elements` column
-  - Rehydrate markers via `FloatingInjector::inject()` before editor initialization
-  - Rendering pipeline unchanged
+ - Read `floating_elements` column
+ - Rehydrate markers via `FloatingInjector::inject()` before editor initialization
+ - Rendering pipeline unchanged
 - `views/document/generate.php` template load:
-  - Same rehydration pattern
-  - `renderContent()` receives HTML dgn markers as before, no changes needed
+ - Same rehydration pattern
+ - `renderContent()` receives HTML dgn markers as before, no changes needed
 
 **Backward-compat**
 
 - Legacy rows (`floating_elements` NULL) tetap works: content column retains
-  HTML markers, rendering pipeline processes them as before
+ HTML markers, rendering pipeline processes them as before
 - Save flow will auto-populate JSON column on next save (dual-write during
-  transition)
+ transition)
 - Optional bulk migration script deferred untuk v0.9.13 kalau consumer perlu
-  force-migrate all rows
+ force-migrate all rows
 
 **Removed — legacy consumer-specific migrations (library neutrality)**
 
 - **14 legacy migration files deleted** dari `migrations/` folder:
-  - `20260701000001_create_surat_template_v2.php`
-  - `20260701000002_alter_surat_template_v2_add_columns.php`
-  - `20260701000003_create_surat_dokumen_v2.php`
-  - `20260701000004_alter_surat_dokumen_v2_add_columns.php`
-  - `20260701000005_alter_surat_dokumen_v2_indexes.php`
-  - `20260701000006_create_surat_default_vars.php`
-  - `20260701000007_create_surat_audit_log.php`
-  - `20260706000001_create_ezdoc_templates.php` (duplicate of 2026_01_01_000001)
-  - `20260706000002_create_ezdoc_documents.php` (duplicate)
-  - `20260706000003_create_ezdoc_default_vars.php` (duplicate)
-  - `20260706000004_migrate_data_surat_template_to_ezdoc.php`
-  - `20260706000005_migrate_data_surat_dokumen_to_ezdoc.php`
-  - `20260706000006_migrate_data_surat_default_vars_to_ezdoc.php`
-  - `2026_01_01_000099_migrate_legacy_surat_data.php`
+ - `20260701000001_create_surat_template_v2.php`
+ - `20260701000002_alter_surat_template_v2_add_columns.php`
+ - `20260701000003_create_surat_dokumen_v2.php`
+ - `20260701000004_alter_surat_dokumen_v2_add_columns.php`
+ - `20260701000005_alter_surat_dokumen_v2_indexes.php`
+ - `20260701000006_create_surat_default_vars.php`
+ - `20260701000007_create_surat_audit_log.php`
+ - `20260706000001_create_ezdoc_templates.php` (duplicate of 2026_01_01_000001)
+ - `20260706000002_create_ezdoc_documents.php` (duplicate)
+ - `20260706000003_create_ezdoc_default_vars.php` (duplicate)
+ - `20260706000004_migrate_data_surat_template_to_ezdoc.php`
+ - `20260706000005_migrate_data_surat_dokumen_to_ezdoc.php`
+ - `20260706000006_migrate_data_surat_default_vars_to_ezdoc.php`
+ - `2026_01_01_000099_migrate_legacy_surat_data.php`
 - Library sekarang **fully ezdoc_*-tables-only**. Consumer apps yg butuh
-  `surat_*` legacy tables (mis. SIMpel/RSIA-specific) harus ship migrations
-  sendiri di consumer-side migration folder
+ `surat_*` legacy tables (mis. SIMpel/RSIA-specific) harus ship migrations
+ sendiri di consumer-side migration folder
 - Existing consumers where these ran → data preserved (`ezdoc_*` tables tetap
-  populated dari earlier data migration). Registry has orphan entries yg bisa
-  di-prune via admin UI
+ populated dari earlier data migration). Registry has orphan entries yg bisa
+ di-prune via admin UI
 
 **Added — orphan registry pruner**
 
@@ -89,22 +89,22 @@ materai floating variants). Industry-standard document object model separation
 **Added — admin migration dashboard (web UI alternative to CLI)**
 
 - **`views/admin/migrate.php`** — admin dashboard page dgn migration status
-  visualization + one-click buttons untuk run pending migrations + bulk
-  migrate floating elements. Auth: superadmin only. URL:
-  `?ezdoc_page=admin_migrate`
+ visualization + one-click buttons untuk run pending migrations + bulk
+ migrate floating elements. Auth: superadmin only. URL:
+ `?ezdoc_page=admin_migrate`
 - **Router integration** — `handleAdminMigrate` handler + `admin_migrate`
-  route registered di `src/Http/Router.php`
+ route registered di `src/Http/Router.php`
 - Auto-migration already runs at bootstrap (EZDOC_AUTO_MIGRATE); admin
-  dashboard menyediakan explicit control + status visibility (untuk yg
-  prefer visual over CLI). Precedent: Laravel Nova/Filament dashboards,
-  Django `/admin/migrations/`, WordPress `wp-admin/upgrade.php`
+ dashboard menyediakan explicit control + status visibility (untuk yg
+ prefer visual over CLI). Precedent: Laravel Nova/Filament dashboards,
+ Django `/admin/migrations/`, WordPress `wp-admin/upgrade.php`
 
 **Added — docs**
 
 - `docs/FLOATING-ELEMENTS.md` — sidecar pattern documentation dgn precedent
-  citations (Google Docs `EmbeddedDrawing`, MS Word OOXML `<w:drawing>`, Figma
-  layer, CKEditor 5 Widget, Slate.js void nodes, Prosemirror NodeView),
-  schema, save/load flow diagrams, migration path
+ citations (Google Docs `EmbeddedDrawing`, MS Word OOXML `<w:drawing>`, Figma
+ layer, CKEditor 5 Widget, Slate.js void nodes, Prosemirror NodeView),
+ schema, save/load flow diagrams, migration path
 
 ### v0.9.11 track — "View separation + generate UX polish"
 
@@ -116,34 +116,34 @@ convention). Plus generate view UX polish matching designer.
 **Added**
 
 - **`views/document/template_list.php`** — extracted template list view dari
-  `designer.php`. Standalone file (214 lines: 37 docblock + 177 content).
-  Include via `require` pattern preserves backward-compat, no routing change
-  needed. Docblock declares expected vars + slot names + backward-compat notes
+ `designer.php`. Standalone file (214 lines: 37 docblock + 177 content).
+ Include via `require` pattern preserves backward-compat, no routing change
+ needed. Docblock declares expected vars + slot names + backward-compat notes
 - **`views/document/generate_list.php`** — extracted template picker view dari
-  `generate.php` (99 lines). Same include pattern, backward-compat preserved
+ `generate.php` (99 lines). Same include pattern, backward-compat preserved
 
 **Changed**
 
 - `designer.php` — list conditional (lines 344-521, 177 lines) replaced dgn
-  single `require __DIR__ . '/template_list.php'`. Line count: 5534 → 5362
-  (−172 lines, cleaner separation)
+ single `require __DIR__ . '/template_list.php'`. Line count: 5534 → 5362
+ (−172 lines, cleaner separation)
 - `generate.php` — picker section (lines 184-249, ~65 lines HTML + closing)
-  replaced dgn `require __DIR__ . '/generate_list.php'`. Line count: 4666 →
-  4639 (−27 lines)
+ replaced dgn `require __DIR__ . '/generate_list.php'`. Line count: 4666 →
+ 4639 (−27 lines)
 - `generate.php` `.page` — added dashed page break preview line (dual-layer
-  bg masking technique dari designer, hardcoded values via PHP interpolation).
-  Visible di `edit-on` state only. Hidden di `edit-off` + `@media print`.
-  Precedent: Google Docs page break markers, Word Web, Notion — all
-  edit-mode indicator convention
+ bg masking technique dari designer, hardcoded values via PHP interpolation).
+ Visible di `edit-on` state only. Hidden di `edit-off` + `@media print`.
+ Precedent: Google Docs page break markers, Word Web, Notion — all
+ edit-mode indicator convention
 
 **Deferred to v1.0 prep**
 
 - Router direct routing ke sub-view identifiers (breaking change)
 - Slot rename dari `designer:list-*` → `template_list:*` dgn backward-compat
-  forwarding (breaking untuk existing consumer slot registrations)
+ forwarding (breaking untuk existing consumer slot registrations)
 - Full `designer.php ≤ 2500 lines` + `generate.php ≤ 3000 lines` DoD target
-  (needs bigger refactor of shared JS blocks; scope too big untuk v0.9.11
-  tanpa breaking dispatch flow)
+ (needs bigger refactor of shared JS blocks; scope too big untuk v0.9.11
+ tanpa breaking dispatch flow)
 
 ### v0.9.10 track — "Standalone library hardening" (in progress)
 
@@ -154,70 +154,70 @@ precedent (Symfony transports, Carbon locale tables, Filament driver pattern).
 **Added — new contracts (industry-standard OO)**
 
 - **`Ezdoc\Rendering\PdfRenderer`** interface — PDF backend contract.
-  Consumer app inject via `Context::withPdf()` untuk custom backend
-  (mPDF, wkhtmltopdf, Weasyprint). Precedent: Symfony Mailer
-  `TransportInterface`, Laravel Mail `MailManager::extend()`, Filament
-  contract-based renderers, Barryvdh/laravel-dompdf `stream()` method
+ Consumer app inject via `Context::withPdf()` untuk custom backend
+ (mPDF, wkhtmltopdf, Weasyprint). Precedent: Symfony Mailer
+ `TransportInterface`, Laravel Mail `MailManager::extend()`, Filament
+ contract-based renderers, Barryvdh/laravel-dompdf `stream()` method
 - **`Ezdoc\Rendering\DompdfRenderer`** — default impl, zero-dep beyond
-  `dompdf/dompdf` composer package. Auto-instantiated by `generate.php`
-  kalau consumer skip injection
+ `dompdf/dompdf` composer package. Auto-instantiated by `generate.php`
+ kalau consumer skip injection
 - **`Ezdoc\Format\DateFormatter`** static utility — locale-aware date
-  component translation. Precedent: Carbon `translatedFormat()`
-  translation array structure (identical), Symfony Intl proxy pattern.
-  Built-in locales: `en` (identity), `id` (Bahasa Indonesia default)
+ component translation. Precedent: Carbon `translatedFormat()`
+ translation array structure (identical), Symfony Intl proxy pattern.
+ Built-in locales: `en` (identity), `id` (Bahasa Indonesia default)
 - **`Context::$pdf`** property + `withPdf()` immutable wither
 - **`Ezdoc\UI\ContentCss`** static utility — shared content CSS single
-  source of truth across designer editor, generate view, PDF export.
-  Historically these 3 contexts had duplicated `.content` rules that
-  drifted causing text flow bugs. Centralized now via
-  `ContentCss::render()` embedded in each context's `<style>` tag.
-  Precedent: Notion/Google Docs shared editor+view CSS, Filament shared
-  component styles
+ source of truth across designer editor, generate view, PDF export.
+ Historically these 3 contexts had duplicated `.content` rules that
+ drifted causing text flow bugs. Centralized now via
+ `ContentCss::render()` embedded in each context's `<style>` tag.
+ Precedent: Notion/Google Docs shared editor+view CSS, Filament shared
+ component styles
 
 **Changed — runtime dependency removal**
 
 - `generate.php` PDF flow rewritten — removed `generatePDF()` consumer
-  function fallback (was in `koneksi.php`). Auto-instantiate library-
-  native `DompdfRenderer` kalau dompdf class exists. Duck-typing accept
-  legacy `stream()`-shaped objects untuk backward-compat
+ function fallback (was in `koneksi.php`). Auto-instantiate library-
+ native `DompdfRenderer` kalau dompdf class exists. Duck-typing accept
+ legacy `stream()`-shaped objects untuk backward-compat
 - `resolveDefault()` (di `lib/doc_template_helpers.php`) — pakai
-  `DateFormatter::localize()` dgn `ubahTanggalKeIndonesia()`
-  backward-compat shim (function_exists guard)
+ `DateFormatter::localize()` dgn `ubahTanggalKeIndonesia()`
+ backward-compat shim (function_exists guard)
 - **20 action files** migrated dari `global $conn` → `Context::default()->db`:
-  - Template (10): list_categories, toggle_template_lock, field_usage,
-    rename_field, field_usage_all, analyze_query, cleanup_orphans,
-    delete_template, save_template, copy_template
-  - Document (7): list_versions, toggle_lock, restore_slot, delete_slot,
-    delete_version, new_version, save_document
-  - Default vars (3): list_vars, add_var, delete_var
-  - Files dgn `$author_id` retain global (application-scoped current
-    user identity — Laravel `auth()->id()` pattern)
+ - Template (10): list_categories, toggle_template_lock, field_usage,
+ rename_field, field_usage_all, analyze_query, cleanup_orphans,
+ delete_template, save_template, copy_template
+ - Document (7): list_versions, toggle_lock, restore_slot, delete_slot,
+ delete_version, new_version, save_document
+ - Default vars (3): list_vars, add_var, delete_var
+ - Files dgn `$author_id` retain global (application-scoped current
+ user identity — Laravel `auth()->id()` pattern)
 
 **Deprecated**
 
 - `lib/schema.php` — legacy consumer-specific auto-migration untuk
-  `surat_template_v2` + `surat_audit_log` (SIMpel/RSIA tables, BUKAN
-  library's own `ezdoc_*` tables). Marked `@deprecated`, akan dihapus
-  di v1.0. Consumer apps dgn legacy tables harus migrate ke consumer's
-  own bootstrap
+ `surat_template_v2` + `surat_audit_log` (SIMpel/RSIA tables, BUKAN
+ library's own `ezdoc_*` tables). Marked `@deprecated`, akan dihapus
+ di v1.0. Consumer apps dgn legacy tables harus migrate ke consumer's
+ own bootstrap
 - `generatePDF()` fallback path — removed dari generate.php (breaking
-  untuk consumer apps yang hanya define `generatePDF()` tanpa install
-  dompdf composer package)
+ untuk consumer apps yang hanya define `generatePDF()` tanpa install
+ dompdf composer package)
 
 **Docs**
 
 - `docs/PDF-RENDERING.md` — PdfRenderer contract lengkap dgn integration
-  guide (dompdf default, mPDF example, wkhtmltopdf example)
+ guide (dompdf default, mPDF example, wkhtmltopdf example)
 - `docs/LOCALIZATION.md` — DateFormatter API + locale extension pattern
 - `docs/CONTENT-CSS.md` — shared content CSS pattern + migration
-  checklist untuk adding new rules
+ checklist untuk adding new rules
 - `docs/PRD.md` — v0.9.10 milestone (§6.15) formal + Fase table + v1.0
-  dependency list update
+ dependency list update
 - README + QUICKSTART + UI-CUSTOMIZATION — replace `koneksi.php` spesifik
-  references dgn generic "consumer app's own bootstrap" wording
+ references dgn generic "consumer app's own bootstrap" wording
 - `_dispatcher.php` docblock — library-standalone runtime deps documented
 - Context.php, HasRoleProvider.php, role_provider.php docblocks — generic
-  wording dgn Symfony/Carbon/Filament precedent citations
+ wording dgn Symfony/Carbon/Filament precedent citations
 
 ## [0.9.9] - 2026-07-15 — "DB abstraction + Blueprint DSL + spec-first bootstrap + UX polish"
 
@@ -229,178 +229,178 @@ dari Doctrine DBAL Platforms + Laravel Query Builder (studied, reimplemented
 from spec).
 
 - **`Ezdoc\Db\Connection`** interface — driver-agnostic contract: `prepare`,
-  `execute`, `fetchOne`, `fetchAll`, `fetchScalar`, `transaction`, `query`,
-  `lastInsertId`, `schemaManager`, `grammar`
+ `execute`, `fetchOne`, `fetchAll`, `fetchScalar`, `transaction`, `query`,
+ `lastInsertId`, `schemaManager`, `grammar`
 - **`Ezdoc\Db\Mysqli\MysqliConnection`** — default zero-dep adapter, wrap
-  raw mysqli. Auto-detect MySQL vs MariaDB via `server_info`. Backward
-  compat dgn consumer `koneksi.php` pattern (constructor accept both
-  `Connection` OR `mysqli` global)
+ raw mysqli. Auto-detect MySQL vs MariaDB via `server_info`. Backward
+ compat dgn consumer `koneksi.php` pattern (constructor accept both
+ `Connection` OR `mysqli` global)
 - **`Ezdoc\Db\Pdo\PdoConnection`** — universal PDO wrapper (mysql/sqlite/
-  pgsql/sqlsrv). Auto-detect grammar dari `PDO::ATTR_DRIVER_NAME`, enable
-  `PRAGMA foreign_keys` untuk SQLite. Factory `fromDsn($dsn, $user, $pass)`
+ pgsql/sqlsrv). Auto-detect grammar dari `PDO::ATTR_DRIVER_NAME`, enable
+ `PRAGMA foreign_keys` untuk SQLite. Factory `fromDsn($dsn, $user, $pass)`
 - **5 Grammar implementations** (T2 coverage): `MysqlGrammar`,
-  `MariaDbGrammar` (extends MySQL), `SqliteGrammar` (INTEGER PRIMARY KEY
-  AUTOINCREMENT special-case, TEXT+json_valid CHECK), `PostgresGrammar`
-  (JSONB, native UUID, GENERATED ALWAYS AS IDENTITY, TIMESTAMP WITHOUT
-  TIME ZONE), `SqlServerGrammar` (bracket idents, NVARCHAR(MAX)+ISJSON,
-  IDENTITY(1,1), OFFSET…FETCH NEXT). Feature flags per grammar:
-  `supportsNativeJson`, `supportsNativeUuid`, `supportsNativeEnum`,
-  `supportsSavepoints`
+ `MariaDbGrammar` (extends MySQL), `SqliteGrammar` (INTEGER PRIMARY KEY
+ AUTOINCREMENT special-case, TEXT+json_valid CHECK), `PostgresGrammar`
+ (JSONB, native UUID, GENERATED ALWAYS AS IDENTITY, TIMESTAMP WITHOUT
+ TIME ZONE), `SqlServerGrammar` (bracket idents, NVARCHAR(MAX)+ISJSON,
+ IDENTITY(1,1), OFFSET…FETCH NEXT). Feature flags per grammar:
+ `supportsNativeJson`, `supportsNativeUuid`, `supportsNativeEnum`,
+ `supportsSavepoints`
 - **`Ezdoc\Db\QueryBuilder`** — chainable fluent SQL builder (SELECT/
-  DISTINCT/FROM/WHERE(and/or)/JOIN(inner/left/right)/ORDER/LIMIT/OFFSET,
-  INSERT single+batch, UPDATE (set/setRaw), DELETE). Grammar-driven
-  per-platform compilation
+ DISTINCT/FROM/WHERE(and/or)/JOIN(inner/left/right)/ORDER/LIMIT/OFFSET,
+ INSERT single+batch, UPDATE (set/setRaw), DELETE). Grammar-driven
+ per-platform compilation
 - **`Ezdoc\Db\Schema\Blueprint`** — Laravel-familiar schema DSL (framework-
-  neutral semantic). Column types: id/uuid/string/integer/bigint/boolean/
-  json/text/enum/datetime/date/time/decimal/float/binary + foreignId
-  helper + timestamps + softDeletes composites. Modifiers: nullable/
-  default/defaultRaw/unique/index/primary/unsigned/autoIncrement/comment/
-  references+on+cascadeOnDelete. Indexes: primary/unique/index/foreign.
+ neutral semantic). Column types: id/uuid/string/integer/bigint/boolean/
+ json/text/enum/datetime/date/time/decimal/float/binary + foreignId
+ helper + timestamps + softDeletes composites. Modifiers: nullable/
+ default/defaultRaw/unique/index/primary/unsigned/autoIncrement/comment/
+ references+on+cascadeOnDelete. Indexes: primary/unique/index/foreign.
 - **`Ezdoc\Db\Types\*`** — 8 core types (String/Integer/BigInt/Boolean/Json/
-  Uuid/DateTime/Text) + EnumType parametric + TypeRegistry. PHP↔DB value
-  conversion (mis. JSON encode/decode, UUID normalize lowercase)
+ Uuid/DateTime/Text) + EnumType parametric + TypeRegistry. PHP↔DB value
+ conversion (mis. JSON encode/decode, UUID normalize lowercase)
 - **`Ezdoc\Db\Schema\Comparator`** — MVP diff engine, produces SchemaDiff/
-  TableDiff untuk added/dropped/changed tables + columns + indexes + FKs.
-  ALTER SQL emission deferred v0.9.10
+ TableDiff untuk added/dropped/changed tables + columns + indexes + FKs.
+ ALTER SQL emission deferred v0.9.10
 - **`Ezdoc\Db\Schema\ColumnIntrospector`** — introspect actual columns per
-  table via SHOW COLUMNS (MySQL/MariaDB) / PRAGMA table_info (SQLite) /
-  information_schema (Postgres/SQLServer). Cached per-request. Repository
-  uses intersection dgn desired columns → handle schema drift gracefully
-  (consumer DB dgn older migration missing kolom baru = no crash, no
-  `Unknown column` error)
+ table via SHOW COLUMNS (MySQL/MariaDB) / PRAGMA table_info (SQLite) /
+ information_schema (Postgres/SQLServer). Cached per-request. Repository
+ uses intersection dgn desired columns → handle schema drift gracefully
+ (consumer DB dgn older migration missing kolom baru = no crash, no
+ `Unknown column` error)
 - **Typed exception hierarchy** (`Ezdoc\Db\Exception\*`) — DbException +
-  ConnectionException + QueryException (dgn SQLSTATE code) +
-  TransactionException + SchemaException
+ ConnectionException + QueryException (dgn SQLSTATE code) +
+ TransactionException + SchemaException
 
 ### Added — Repository sweep (in-house DB layer dogfooded)
 
 - **`Ezdoc\Document\DocumentRepository`** — refactored dari mysqli hard-
-  coupled ke Connection interface (518→340 LOC, -35%). ColumnIntrospector
-  untuk adaptive SELECT. Optimistic locking preserved
+ coupled ke Connection interface (518→340 LOC, -35%). ColumnIntrospector
+ untuk adaptive SELECT. Optimistic locking preserved
 - **`Ezdoc\Template\TemplateRepository`** — refactored (478→325 LOC, -32%).
-  Transaction sugar via Connection::transaction() untuk createNewVersion
-  (exception-safe callback pattern)
+ Transaction sugar via Connection::transaction() untuk createNewVersion
+ (exception-safe callback pattern)
 - **`Ezdoc\Signature\SignatureRepository`** — NEW. Envelope CRUD + verify
-  status update. Support L1 HMAC + L2 LocalPKI + L3 PSrE per
-  envelope_format
+ status update. Support L1 HMAC + L2 LocalPKI + L3 PSrE per
+ envelope_format
 - **`Ezdoc\Audit\AuditRepository`** — NEW read-side gateway (write tetap
-  di `Ezdoc\Audit\Logger` append-only). Query patterns: findByActor,
-  findByDocument, findByTemplate, findByEvent, findByRequestId,
-  findDenied, countByActor/Event
+ di `Ezdoc\Audit\Logger` append-only). Query patterns: findByActor,
+ findByDocument, findByTemplate, findByEvent, findByRequestId,
+ findDenied, countByActor/Event
 - **`Ezdoc\DefaultVars\DefaultVarsRepository`** — NEW whitelist CRUD
-  (add/find/delete/setEnabled), portable duplicate detection (check-first,
-  bukan INSERT IGNORE MySQL-specific)
+ (add/find/delete/setEnabled), portable duplicate detection (check-first,
+ bukan INSERT IGNORE MySQL-specific)
 - **Actions sweep** — 21 file di `actions/*.php` refactored dari raw
-  mysqli ke Connection interface. Zero `mysqli_query|->query(` di
-  actions/. Bulk mutations wrapped dalam transaction. MySQL-specific
-  queries (JSON_EXTRACT) tetap raw SQL dgn cross-DB caveat comment
+ mysqli ke Connection interface. Zero `mysqli_query|->query(` di
+ actions/. Bulk mutations wrapped dalam transaction. MySQL-specific
+ queries (JSON_EXTRACT) tetap raw SQL dgn cross-DB caveat comment
 
 ### Added — Spec-first cross-language artifacts
 
 - **`migrations/blueprints/*.php`** — 5 Blueprint files single source of
-  truth: ezdoc_templates, ezdoc_documents, ezdoc_default_vars,
-  ezdoc_audit_log, ezdoc_signatures. BIGINT SIGNED convention untuk FK
-  compatibility dgn existing prod schema
+ truth: ezdoc_templates, ezdoc_documents, ezdoc_default_vars,
+ ezdoc_audit_log, ezdoc_signatures. BIGINT SIGNED convention untuk FK
+ compatibility dgn existing prod schema
 - **`cli/spec-dump.php`** — regenerate `ezdoc-spec/` artifacts dari
-  Blueprint source. Args: (no args) = regenerate, `--check` = CI gate
-  (exit 1 kalau drift), `--help`
+ Blueprint source. Args: (no args) = regenerate, `--check` = CI gate
+ (exit 1 kalau drift), `--help`
 - **`ezdoc-spec/` folder (generated, checked-in)**:
-  - `schema/tables.{json,yaml}` — cross-lang DB descriptor
-  - `ddl/{mysql,mariadb,sqlite,postgres,sqlserver}.sql` — generated DDL
-  - `meta/{version.json,checksum.txt}` — CI gate metadata
-  - `README.md` — "How to consume in Go/Rust/TS"
+ - `schema/tables.{json,yaml}` — cross-lang DB descriptor
+ - `ddl/{mysql,mariadb,sqlite,postgres,sqlserver}.sql` — generated DDL
+ - `meta/{version.json,checksum.txt}` — CI gate metadata
+ - `README.md` — "How to consume in Go/Rust/TS"
 - **CI gate**: `php cli/spec-dump.php --check` → exit 1 kalau spec
-  out-of-date. Enforce contribution flow (edit Blueprint → regen spec →
-  commit both)
+ out-of-date. Enforce contribution flow (edit Blueprint → regen spec →
+ commit both)
 - Minimal YAML emitter inline di CLI (no `symfony/yaml` external dep)
 
 ### Added — Documentation
 
 - **`docs/DB-ABSTRACTION.md`** — full guide: Connection interface,
-  adapters, Blueprint DSL, Grammar per platform, Types system,
-  QueryBuilder, Repository pattern, transactions, migration & backward
-  compat, extending (custom Grammar, custom Type, custom exception)
+ adapters, Blueprint DSL, Grammar per platform, Types system,
+ QueryBuilder, Repository pattern, transactions, migration & backward
+ compat, extending (custom Grammar, custom Type, custom exception)
 - **`docs/CROSS-LANGUAGE.md`** — spec-first ecosystem strategy: separate
-  audience sections untuk consumer applications (use native package) vs
-  port implementers (honor spec contract), roadmap Go/TS/Rust ports,
-  conformance testing plan
+ audience sections untuk consumer applications (use native package) vs
+ port implementers (honor spec contract), roadmap Go/TS/Rust ports,
+ conformance testing plan
 
 ### Added — UX polish (designer + generate)
 
 - **Modern brand navbar** (Vercel/Linear/Filament pattern) — logo mark
-  (gradient square dgn initial atau custom logo) + app name + optional
-  tagline + optional badge pill. Auto-split legacy `brand.app_name`
-  format "Foo (Bar)" / "Foo · Bar" untuk backward compat
+ (gradient square dgn initial atau custom logo) + app name + optional
+ tagline + optional badge pill. Auto-split legacy `brand.app_name`
+ format "Foo (Bar)" / "Foo · Bar" untuk backward compat
 - **List view template filter** — dropdown pilih template + Airtable-
-  style active-filter breadcrumb pill dgn count + clear button. Preserve
-  `ezdoc_page=list` routing prefix via hidden inputs
+ style active-filter breadcrumb pill dgn count + clear button. Preserve
+ `ezdoc_page=list` routing prefix via hidden inputs
 - **Click-to-focus sidebar** (VS Code Outline / Figma Layers / Filament
-  Forms pattern) — click placeholder di editor → auto-expand parent
-  panel + scroll ke matching sub-card + flash animation 1.4s. 6
-  placeholder types wired: field/ttd/materai/logo/qr/cond
+ Forms pattern) — click placeholder di editor → auto-expand parent
+ panel + scroll ke matching sub-card + flash animation 1.4s. 6
+ placeholder types wired: field/ttd/materai/logo/qr/cond
 - **Sticky panel headers** (macOS Preferences / Notion / Apple Mail
-  pattern) — `position:sticky` dgn backdrop-blur. Multi-panel natural
-  stacking as user scrolls
+ pattern) — `position:sticky` dgn backdrop-blur. Multi-panel natural
+ stacking as user scrolls
 - **Tailwind dialog helper** (`views/_partials/dialog_helper.php`) —
-  ezdocAlert/ezdocConfirm Promise-based, replace native alert/confirm.
-  5 variants (info/success/warning/error/danger) dgn icon + color
-  scheme. WAI-ARIA 1.2 compliance: role/aria-modal/aria-labelledby,
-  autofocus, focus trap (Tab cycle), Escape/Enter/backdrop handling,
-  restore focus on close. Shared partial included dari layout +
-  generate + designer (2 latter render standalone full HTML)
+ ezdocAlert/ezdocConfirm Promise-based, replace native alert/confirm.
+ 5 variants (info/success/warning/error/danger) dgn icon + color
+ scheme. WAI-ARIA 1.2 compliance: role/aria-modal/aria-labelledby,
+ autofocus, focus trap (Tab cycle), Escape/Enter/backdrop handling,
+ restore focus on close. Shared partial included dari layout +
+ generate + designer (2 latter render standalone full HTML)
 - **35 native alert/confirm calls migrated** ke ezdocAlert/ezdocConfirm
-  (15 di generate.php + 20 di designer.php) dgn proper variant per
-  context (danger untuk destructive, warning untuk caution, success
-  untuk positive feedback, error untuk failures)
+ (15 di generate.php + 20 di designer.php) dgn proper variant per
+ context (danger untuk destructive, warning untuk caution, success
+ untuk positive feedback, error untuk failures)
 
 ### Fixed
 
 - **Beforeunload dirty-aware** — TinyMCE `autosave_ask_before_unload`
-  over-triggered meski nothing changed. Fix: matikan TinyMCE built-in,
-  custom handler yg cek `editor.isDirty()` via 'dirty' event. Add
-  `_ezdocSuppressUnload` flag (Livewire wire:navigate pattern) untuk
-  intentional programmatic navigation
+ over-triggered meski nothing changed. Fix: matikan TinyMCE built-in,
+ custom handler yg cek `editor.isDirty()` via 'dirty' event. Add
+ `_ezdocSuppressUnload` flag (Livewire wire:navigate pattern) untuk
+ intentional programmatic navigation
 - **generate.php versionSelect dirty leak** — bindDirtyTracking binds
-  `change` di ALL `<select>` termasuk versionSelect (navigation-only,
-  bukan data edit). Skip via id check + `data-no-dirty` opt-out attr
+ `change` di ALL `<select>` termasuk versionSelect (navigation-only,
+ bukan data edit). Skip via id check + `data-no-dirty` opt-out attr
 - **Routing prefix preservation** — 5 programmatic redirects di
-  generate.php (createNew/switchVersion/deleteThisVersion/
-  restoreDeletedSlot/doCreateNewVersion) sekarang preserve
-  `ezdoc_page=generate` prefix via `_preservedParams()`
+ generate.php (createNew/switchVersion/deleteThisVersion/
+ restoreDeletedSlot/doCreateNewVersion) sekarang preserve
+ `ezdoc_page=generate` prefix via `_preservedParams()`
 - **Schema drift graceful fallback** — TemplateRepository/
-  DocumentRepository SELECT_COLS include kolom baru (content_hash,
-  metadata, revision, dsb) yang mungkin missing di consumer DB dgn
-  older migration. ColumnIntrospector intersection prevent
-  `Unknown column` errors
+ DocumentRepository SELECT_COLS include kolom baru (content_hash,
+ metadata, revision, dsb) yang mungkin missing di consumer DB dgn
+ older migration. ColumnIntrospector intersection prevent
+ `Unknown column` errors
 - **FK type mismatch di Blueprint** — `$t->id()` default UNSIGNED
-  (Laravel-familiar) collide dgn existing ezdoc convention BIGINT
-  SIGNED. Fix: 5 Blueprint files pakai `$t->bigint('id')->autoIncrement()
-  ->primary()` SIGNED explicit
+ (Laravel-familiar) collide dgn existing ezdoc convention BIGINT
+ SIGNED. Fix: 5 Blueprint files pakai `$t->bigint('id')->autoIncrement()
+ ->primary()` SIGNED explicit
 - **`access_config` type mismatch** — save_document.php pakai
-  TemplateRepository::findById() yg return Template object dgn
-  `getAccessConfig(): array` (already decoded), tapi still call
-  `ezdoc_parse_access_config($array)` yg expect `?string`. Fix: skip
-  parse, use array langsung
+ TemplateRepository::findById() yg return Template object dgn
+ `getAccessConfig(): array` (already decoded), tapi still call
+ `ezdoc_parse_access_config($array)` yg expect `?string`. Fix: skip
+ parse, use array langsung
 - **`.doc-info` DOM regression** — toolbar-compact refactor hilangkan
-  `<div class="doc-info">` tapi save handler JS masih query. Fix:
-  restore class hook + defensive null-check
+ `<div class="doc-info">` tapi save handler JS masih query. Fix:
+ restore class hook + defensive null-check
 - **`ezdocConfirm is not defined`** — helper cuma di layout.php, tapi
-  generate.php + designer.php render standalone full HTML → skip layout
-  wrap. Fix: extract ke `views/_partials/dialog_helper.php`, include
-  dari 3 tempat
+ generate.php + designer.php render standalone full HTML → skip layout
+ wrap. Fix: extract ke `views/_partials/dialog_helper.php`, include
+ dari 3 tempat
 - **EN lang `\\n\\n` literal** — 9 keys di `lang/en/{designer,generate}
-  .php` pakai single-quote dgn `'\\n\\n'` → literal 4-char backslash-n
-  sequence (bukan real newline). Fix: convert ke double-quote
-  `"\n\n"`. Dialog `whitespace-pre-line` sekarang render sebagai line
-  break proper
+ .php` pakai single-quote dgn `'\\n\\n'` → literal 4-char backslash-n
+ sequence (bukan real newline). Fix: convert ke double-quote
+ `"\n\n"`. Dialog `whitespace-pre-line` sekarang render sebagai line
+ break proper
 
 ### Deferred to v0.9.10
 
 - Full `SchemaManager` implementation (Mysqli + PDO) — sekarang stub
-  throws "not yet implemented"
+ throws "not yet implemented"
 - Comparator ALTER SQL emission per Grammar
 - Migration runner switch pakai Blueprint (currently legacy imperative
-  SQL migrations still work + Blueprint feed spec-dump only)
+ SQL migrations still work + Blueprint feed spec-dump only)
 - Formal PHPUnit test coverage untuk Repositories + ColumnIntrospector
 - Docker-compose test matrix (real DB per Grammar)
 
@@ -412,59 +412,59 @@ and `views/document/generate.php` into per-locale PHP array catalogs — see
 [docs/I18N.md](docs/I18N.md).
 
 - **`Ezdoc\UI\Translator`** (`src/UI/Translator.php`) — composes `Ezdoc\UI\Config`
-  internally (same pattern as `Theme`). `t(key, params, default)` never throws;
-  falls back to `default`/key on a missing or malformed catalog. `{param}`
-  interpolation via `strtr()` (deliberately not `{{param}}`, which collides with
-  ezdoc's own document-template mustache syntax).
+ internally (same pattern as `Theme`). `t(key, params, default)` never throws;
+ falls back to `default`/key on a missing or malformed catalog. `{param}`
+ interpolation via `strtr()` (deliberately not `{{param}}`, which collides with
+ ezdoc's own document-template mustache syntax).
 - **`lang/id/{common,designer,generate}.php`** — Indonesian string catalogs.
-  Only `id` populated for now; structure supports adding `lang/en/*` later
-  without view-code changes.
+ Only `id` populated for now; structure supports adding `lang/en/*` later
+ without view-code changes.
 - Both view files wire `$translator` through their existing bootstrap-fallback
-  block (mirrors the `$ctx`/`$config` dual-path resolution already there), with
-  explicit `$GLOBALS['translator']` promotion — required because
-  `Router::renderView()` includes views from method scope (same scope-isolation
-  class of bug fixed for `$dbFields`/`$dbTtd` previously). A local
-  `function_exists`-guarded `t()` helper sits next to each view's existing `h()`.
-  JS side gets a matching `EZDOC_I18N` dictionary + `t()` walker, injected via
-  each file's existing URL-bag mechanism (`data-ezdoc-urls` attribute for
-  designer.php, inline `window.EZDOC_URLS` const for generate.php).
+ block (mirrors the `$ctx`/`$config` dual-path resolution already there), with
+ explicit `$GLOBALS['translator']` promotion — required because
+ `Router::renderView()` includes views from method scope (same scope-isolation
+ class of bug fixed for `$dbFields`/`$dbTtd` previously). A local
+ `function_exists`-guarded `t()` helper sits next to each view's existing `h()`.
+ JS side gets a matching `EZDOC_I18N` dictionary + `t()` walker, injected via
+ each file's existing URL-bag mechanism (`data-ezdoc-urls` attribute for
+ designer.php, inline `window.EZDOC_URLS` const for generate.php).
 - Out of scope for this pass (see docs/I18N.md): per-document/template
-  author-entered content (`data-label`, `data-options`, category/template
-  names), the pre-existing `Config`-driven copy overrides
-  (`designer.page_title`, `generate.picker_*`), and internal status/mode
-  discriminator values baked into persisted template/config data (e.g. a
-  literal `'kosong'` materai-mode value, or the `data-nama-field` attribute
-  name) — renaming those needs a backward-compatible migration, not a `t()`
-  swap.
+ author-entered content (`data-label`, `data-options`, category/template
+ names), the pre-existing `Config`-driven copy overrides
+ (`designer.page_title`, `generate.picker_*`), and internal status/mode
+ discriminator values baked into persisted template/config data (e.g. a
+ literal `'kosong'` materai-mode value, or the `data-nama-field` attribute
+ name) — renaming those needs a backward-compatible migration, not a `t()`
+ swap.
 - **`lang/en/{common,designer,generate}.php`** — English catalog, generated
-  directly from the `$default` argument already present at every `t()` call
-  site (not hand-translated) — that argument doubles as the English source
-  string per this system's convention. Verified via `php -l` plus a
-  standalone runtime smoke test (key resolution, `{param}` interpolation,
-  per-locale isolation, missing-key/bad-locale fallback) for both `id` and
-  `en`.
+ directly from the `$default` argument already present at every `t()` call
+ site (not hand-translated) — that argument doubles as the English source
+ string per this system's convention. Verified via `php -l` plus a
+ standalone runtime smoke test (key resolution, `{param}` interpolation,
+ per-locale isolation, missing-key/bad-locale fallback) for both `id` and
+ `en`.
 - **`views/document/list.php`** — the library's generic starter list view
-  (shown at `/ezdoc/public/?ezdoc_page=list`) had its own ~8 hardcoded
-  Indonesian strings, never covered by the above. Extended its existing
-  `$config->get('pages.list.*', 'default')` pattern (Level-1 config-only
-  customization per docs/UI-CUSTOMIZATION.md) rather than pulling in the
-  Translator system, since this file is a small starter template, not a
-  heavily-customized view like designer.php/generate.php.
+ (shown at `/ezdoc/public/?ezdoc_page=list`) had its own ~8 hardcoded
+ Indonesian strings, never covered by the above. Extended its existing
+ `$config->get('pages.list.*', 'default')` pattern (Level-1 config-only
+ customization per docs/UI-CUSTOMIZATION.md) rather than pulling in the
+ Translator system, since this file is a small starter template, not a
+ heavily-customized view like designer.php/generate.php.
 - **AJAX action-endpoint responses** (`actions/**/*.php`, 21 files, ~59
-  `ezdoc_respond_success()`/`ezdoc_respond_error()` call sites) — now
-  covered too. These keys live under a new reserved `response.*` section in
-  `lang/id/common.php`/`lang/en/common.php` rather than a per-view catalog,
-  because an action file can run under whichever Translator instance the
-  including view already built; `common.php` is merged by every
-  `Translator::forView()` call regardless of `$view`, so `response.*`
-  resolves correctly no matter which instance is active. `actions/_dispatcher.php`
-  gained the same defensive `$translator`/`t()` bootstrap already used in
-  the two views, for the legacy standalone-entry-point case.
+ `ezdoc_respond_success()`/`ezdoc_respond_error()` call sites) — now
+ covered too. These keys live under a new reserved `response.*` section in
+ `lang/id/common.php`/`lang/en/common.php` rather than a per-view catalog,
+ because an action file can run under whichever Translator instance the
+ including view already built; `common.php` is merged by every
+ `Translator::forView()` call regardless of `$view`, so `response.*`
+ resolves correctly no matter which instance is active. `actions/_dispatcher.php`
+ gained the same defensive `$translator`/`t()` bootstrap already used in
+ the two views, for the legacy standalone-entry-point case.
 - **`Ezdoc\App::demo()`** (used by `public/index.php`'s zero-config
-  fallback — the library's own generic showcase, not a real consumer app's
-  `App::run()` config) now defaults `app.locale` to `'en'`, since it's the
-  general try-it-out surface, not the SIMpel-specific Indonesian production
-  deployment.
+ fallback — the library's own generic showcase, not a real consumer app's
+ `App::run()` config) now defaults `app.locale` to `'en'`, since it's the
+ general try-it-out surface, not the SIMpel-specific Indonesian production
+ deployment.
 
 ## [0.8.0] - 2026-07-10 — "PAdES envelope + RFC 3161 timestamp + PDF sign/verify wrapper"
 
@@ -475,52 +475,52 @@ RFC 3161 Timestamp Authority (TSA) integration untuk PAdES-B-T long-term validit
 - **TimestampToken** — DTO dengan auto-parse via minimal DER walker (best-effort, tidak throw on malformed). Getters: `getGenTime()`, `getSerialNumber()`, `getPolicyOid()`, `getTsaCertPem()`. `toBase64()` / `fromBase64()` untuk transport.
 - **TimestampVerdict** — DTO dengan status factories: `valid(genTime)`, `invalid(reason)`, `untrusted(reason)` (structurally OK tapi CA missing)
 - **OpensslTimestampClient** — shell-out ke `openssl ts` CLI:
-  - Request: `openssl ts -query -digest HEX -sha256 -cert` + curl POST ke TSA URL (Content-Type: application/timestamp-query)
-  - Verify: `openssl ts -verify -in TOKEN -digest HEX -CAfile BUNDLE`
-  - Nonce included by default (anti-replay per RFC 3161)
-  - Accepts `$dataHash` as hex-string OR raw binary (auto-detect via `ctype_xdigit` + even length)
-  - Config: `openssl_bin` (Windows path override), `auth_header` (Basic Auth for BSrE), `ca_bundle_path`, `timeout`
-  - Uses `proc_open()` + `escapeshellarg()` — no unsafe shell interpolation
+ - Request: `openssl ts -query -digest HEX -sha256 -cert` + curl POST ke TSA URL (Content-Type: application/timestamp-query)
+ - Verify: `openssl ts -verify -in TOKEN -digest HEX -CAfile BUNDLE`
+ - Nonce included by default (anti-replay per RFC 3161)
+ - Accepts `$dataHash` as hex-string OR raw binary (auto-detect via `ctype_xdigit` + even length)
+ - Config: `openssl_bin` (Windows path override), `auth_header` (Basic Auth for BSrE), `ca_bundle_path`, `timeout`
+ - Uses `proc_open()` + `escapeshellarg()` — no unsafe shell interpolation
 - **HttpTimestampClient** — pure PHP fallback (no CLI dependency):
-  - Manually emits DER-encoded TimeStampReq via minimal ASN.1 builder
-  - Static `$HASH_OID_BYTES` lookup untuk SHA-256/384/512
-  - POST via `Ezdoc\Signature\Remote\HttpClient`
-  - Verify returns `TimestampVerdict::untrusted("HttpTimestampClient cannot verify — use OpensslTimestampClient")`
+ - Manually emits DER-encoded TimeStampReq via minimal ASN.1 builder
+ - Static `$HASH_OID_BYTES` lookup untuk SHA-256/384/512
+ - POST via `Ezdoc\Signature\Remote\HttpClient`
+ - Verify returns `TimestampVerdict::untrusted("HttpTimestampClient cannot verify — use OpensslTimestampClient")`
 
 ### Added — PAdES + PDF layer (6 files, ~1605 LOC, `src/Signature/{Envelope,Pdf}/`)
 PDF Advanced Electronic Signatures (ETSI EN 319 142) — PAdES-B-B baseline dengan extensibility ke B-T / B-LT.
 
 - **PadesEnvelope implements Envelope** — wraps PdfSigner interface:
-  - `pack(signature, content, cert, options)` — delegates to PdfSigner impl untuk embed
-  - `unpack(bytes)` — extract signature bytes + /ByteRange + signer cert
-  - `verify(bytes, originalContent, options)` — delegates ke `PdfSigner::verifyPdf()`
-  - `canDetached(): false` — PDF signatures are always attached
-  - Static `isPadesSignedPdf(bytes): bool` — sniff `/Sig` / `/Type/Sig` in PDF trailer
+ - `pack(signature, content, cert, options)` — delegates to PdfSigner impl untuk embed
+ - `unpack(bytes)` — extract signature bytes + /ByteRange + signer cert
+ - `verify(bytes, originalContent, options)` — delegates ke `PdfSigner::verifyPdf()`
+ - `canDetached(): false` — PDF signatures are always attached
+ - Static `isPadesSignedPdf(bytes): bool` — sniff `/Sig` / `/Type/Sig` in PDF trailer
 - **PdfSigner interface** — kontrak PDF signer:
-  - `embedSignature(pdfBytes, pkcs7Bytes, cert, options): string` — returns signed PDF
-  - `extractSignature(pdfBytes): array` — returns signature_bytes + byte_range + cert_pem + sig_info
-  - `verifyPdf(pdfBytes, options): array` — returns valid + reason + checks + signer_cert_pem + signed_at
+ - `embedSignature(pdfBytes, pkcs7Bytes, cert, options): string` — returns signed PDF
+ - `extractSignature(pdfBytes): array` — returns signature_bytes + byte_range + cert_pem + sig_info
+ - `verifyPdf(pdfBytes, options): array` — returns valid + reason + checks + signer_cert_pem + signed_at
 - **OpensslPdfSigner** — FULL extract/verify, embedSignature STUB:
-  - `extractSignature()` — FULL: manual `/ByteRange` + `/Contents` parse via regex, `openssl_pkcs7_read` untuk cert extraction, `/Sig` dict fields (M, Name, Reason, Location)
-  - `verifyPdf()` — FULL: `pdfsig` (poppler-utils) primary + `openssl cms -verify` fallback + ByteRange full-coverage check
-  - `embedSignature()` — **STUB** dengan 4 TODO markers. Throws `EzdocException` dengan actionable guidance untuk pakai JSignPdfSigner / SetasignPdfSigner / ExternalPdfSigner. Chose fail-loudly over silent no-op untuk prevent downstream assumptions.
+ - `extractSignature()` — FULL: manual `/ByteRange` + `/Contents` parse via regex, `openssl_pkcs7_read` untuk cert extraction, `/Sig` dict fields (M, Name, Reason, Location)
+ - `verifyPdf()` — FULL: `pdfsig` (poppler-utils) primary + `openssl cms -verify` fallback + ByteRange full-coverage check
+ - `embedSignature()` — **STUB** dengan 4 TODO markers. Throws `EzdocException` dengan actionable guidance untuk pakai JSignPdfSigner / SetasignPdfSigner / ExternalPdfSigner. Chose fail-loudly over silent no-op untuk prevent downstream assumptions.
 - **JSignPdfSigner** — FULL production-ready via shell-out ke `jsignpdf.jar`:
-  - Requires Java Runtime + jsignpdf.jar (free, https://jsignpdf.sourceforge.net/)
-  - Constructor: `jsignpdf_path`, `java_path`, `temp_dir`
-  - `embedSignature()` — full args: `-ksf` (keystore file), `-ksp` (passphrase), `-ka` (alias), `-r` (reason), `-l` (location), `-cn` (name), `-ts` (TSA URL), `-V` (visible sig), `-pg` + `-llx` (position)
-  - Supports PAdES-B-T via `-ts` flag; PAdES-B-LT via `-tsp` + OCSP options
-  - CLI flag baseline for JSignPdf 2.2.x (TODO: re-check untuk installed version)
+ - Requires Java Runtime + jsignpdf.jar (free, https://jsignpdf.sourceforge.net/)
+ - Constructor: `jsignpdf_path`, `java_path`, `temp_dir`
+ - `embedSignature()` — full args: `-ksf` (keystore file), `-ksp` (passphrase), `-ka` (alias), `-r` (reason), `-l` (location), `-cn` (name), `-ts` (TSA URL), `-V` (visible sig), `-pg` + `-llx` (position)
+ - Supports PAdES-B-T via `-ts` flag; PAdES-B-LT via `-tsp` + OCSP options
+ - CLI flag baseline for JSignPdf 2.2.x (TODO: re-check untuk installed version)
 - **ExternalPdfSigner** — closure-delegation untuk cloud signing services:
-  - Constructor: `embedFn`, `verifyFn`, `extractFn` callables
-  - Consumer wraps vendor REST client (Peruri PAdES endpoint, Privy PDF sign, VIDA)
+ - Constructor: `embedFn`, `verifyFn`, `extractFn` callables
+ - Consumer wraps vendor REST client (Peruri PAdES endpoint, Privy PDF sign, VIDA)
 - **PdfBytesRange** — utility for `/ByteRange` parsing/manipulation:
-  - `fromPdf(bytes): self` — parse first `/ByteRange` in PDF
-  - `findAll(bytes): array<self>` — multi-signature support
-  - `getSignatureOffset()`, `getSignatureLength()`
-  - `computeHashedContent(bytes)` — extract bytes covered by ByteRange
-  - Static `computeHash(pdfBytes, byteRange, algo)` — SHA-256 default
-  - `isFullCoverage()` — reject partial-coverage attacks
-  - `isPlaceholder()` — detect pre-sign placeholder ByteRange
+ - `fromPdf(bytes): self` — parse first `/ByteRange` in PDF
+ - `findAll(bytes): array<self>` — multi-signature support
+ - `getSignatureOffset()`, `getSignatureLength()`
+ - `computeHashedContent(bytes)` — extract bytes covered by ByteRange
+ - Static `computeHash(pdfBytes, byteRange, algo)` — SHA-256 default
+ - `isFullCoverage()` — reject partial-coverage attacks
+ - `isPlaceholder()` — detect pre-sign placeholder ByteRange
 
 ### Added — Documentation
 `docs/PADES-TSA.md` (~380 lines, 16.8 KB):
@@ -588,23 +588,23 @@ PDF Advanced Electronic Signatures (ETSI EN 319 142) — PAdES-B-B baseline deng
 
 **Root cause**:
 - `ezdoc_documents.id` = `BIGINT` (SIGNED)
-- `ezdoc_signatures.document_id` = `BIGINT UNSIGNED` ❌
+- `ezdoc_signatures.document_id` = `BIGINT UNSIGNED` (mismatch)
 - MySQL FK requires exact type match (sign/unsigned modifier included)
 - `$conn->query()` return `false` (bukan throw) → Runner `\Throwable` catch tidak trigger → migration recorded as applied padahal table tidak dibuat
 
 **Fixes applied**:
 1. **Migration file** (`migrations/2026_01_01_000005_create_ezdoc_signatures.php`):
-   - `id BIGINT UNSIGNED` → `BIGINT`
-   - `document_id BIGINT UNSIGNED` → `BIGINT`
-   - `signer_user_id BIGINT UNSIGNED` → `BIGINT`
-   - Added explicit `if ($ok === false) throw new RuntimeException(...)` with `$conn->error` context
+ - `id BIGINT UNSIGNED` → `BIGINT`
+ - `document_id BIGINT UNSIGNED` → `BIGINT`
+ - `signer_user_id BIGINT UNSIGNED` → `BIGINT`
+ - Added explicit `if ($ok === false) throw new RuntimeException(...)` with `$conn->error` context
 2. **Runner self-heal** (`src/Migrations/Runner.php`):
-   - Default `coreTables` sekarang include `ezdoc_signatures` — auto-detect orphan + clear registry
+ - Default `coreTables` sekarang include `ezdoc_signatures` — auto-detect orphan + clear registry
 3. **Runner fail-loudly mode**:
-   - Enable `MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT` selama migration execute
-   - Legacy `$conn->query()` sekarang throw `mysqli_sql_exception` on SQL error
-   - `try/catch/finally` restore previous report mode setelah selesai
-   - **Prevents future silent-failure bugs** untuk migration lain
+ - Enable `MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT` selama migration execute
+ - Legacy `$conn->query()` sekarang throw `mysqli_sql_exception` on SQL error
+ - `try/catch/finally` restore previous report mode setelah selesai
+ - **Prevents future silent-failure bugs** untuk migration lain
 
 Consumer action: **reload halaman** — self-heal akan trigger + re-run migrations dengan fixed types.
 
@@ -625,16 +625,16 @@ Industry-standard prepared-statement wrapper untuk consumer library user yang ti
 
 Functions provided:
 - `ezdoc_query_prepared($sql, array $params = [], string $types = ''): array`
-  - Empty `$params` → raw query fallback
-  - Auto-detect types kalau tidak disediakan (string, int, float, blob)
-  - Validate types length matches params count
-  - Returns array of assoc rows atau empty on error (silent + error_log)
+ - Empty `$params` → raw query fallback
+ - Auto-detect types kalau tidak disediakan (string, int, float, blob)
+ - Validate types length matches params count
+ - Returns array of assoc rows atau empty on error (silent + error_log)
 - `ezdoc_query($sql)` — backward-compat wrapper:
-  - Priority 1: pakai legacy `query()` kalau available (koneksi.php)
-  - Priority 2: fallback native mysqli via `ezdoc_get_db_connection()`
+ - Priority 1: pakai legacy `query()` kalau available (koneksi.php)
+ - Priority 2: fallback native mysqli via `ezdoc_get_db_connection()`
 - `ezdoc_get_db_connection(): ?\mysqli`:
-  - Priority 1: `\Ezdoc\Context::default()->db` (v0.3+ library-ready)
-  - Priority 2: `$GLOBALS['conn']` (legacy koneksi.php)
+ - Priority 1: `\Ezdoc\Context::default()->db` (v0.3+ library-ready)
+ - Priority 2: `$GLOBALS['conn']` (legacy koneksi.php)
 - `ezdoc_escape_identifier(string): string` — whitelist `[a-zA-Z0-9_]`, backtick-wrap, throw ValidationException on invalid
 
 ### Changed — UI starter templates: Bootstrap → Tailwind CSS
@@ -666,21 +666,21 @@ Industry-standard shift dari Bootstrap ke Tailwind CSS (utility-first, dominant 
 - Updated Level 2 dengan 3 patterns: CSS variables (recommended) / Tailwind utility overrides / component-level style overrides
 - Added "Dark mode" subsection dengan JS toggle example
 - New comprehensive "Tailwind production build" section (~80 lines):
-  - npm install + tailwind.config.js dengan library views scan
-  - CSS entrypoint pattern
-  - Compile commands (dev watch + production minify)
-  - Swap CDN with compiled bundle (Level 3 view publish)
-  - Sample bundle sizes (350 KB CDN → 15-25 KB compiled)
-  - Standalone Tailwind binary alternative (no Node.js)
-  - Skip Tailwind entirely pattern (use ezdoc.css fallback only)
+ - npm install + tailwind.config.js dengan library views scan
+ - CSS entrypoint pattern
+ - Compile commands (dev watch + production minify)
+ - Swap CDN with compiled bundle (Level 3 view publish)
+ - Sample bundle sizes (350 KB CDN → 15-25 KB compiled)
+ - Standalone Tailwind binary alternative (no Node.js)
+ - Skip Tailwind entirely pattern (use ezdoc.css fallback only)
 
 ### Notes on `query()` migration scope
 
 Grep menunjukkan **4,114 `query()` calls** di seluruh pengeluaran/ folder (bukan cuma ezdoc). Wholesale migration ke prepared statements = weeks of refactor + high regression risk. Library scope untuk ezdoc:
-- ✅ `ezdoc/lib/db_helpers.php` provides portable alternatives
-- ✅ Repository classes (v0.4+) sudah pakai prepared statements internally
-- ❌ Existing monolith consumer pages tetap pakai `query()` — that's consumer legacy code, not library concern
-- ✅ Consumer library user (framework or fresh install) dapat pakai `ezdoc_query_prepared()` atau Repository directly
+- Done: `ezdoc/lib/db_helpers.php` provides portable alternatives
+- Done: Repository classes (v0.4+) sudah pakai prepared statements internally
+- Out-of-scope: Existing monolith consumer pages tetap pakai `query()` — that's consumer legacy code, not library concern
+- Done: Consumer library user (framework or fresh install) dapat pakai `ezdoc_query_prepared()` atau Repository directly
 
 ## [0.7.0] - 2026-07-10 — "PSrE integration foundation (Envelope + HttpClient + Peruri/Privy stubs)"
 
@@ -690,10 +690,10 @@ Grep menunjukkan **4,114 `query()` calls** di seluruh pengeluaran/ folder (bukan
 - `RawEnvelope` — passthrough (no wrapping) untuk L1/L2
 - `HmacEnvelope` — `hmac:<hex>` prefix wrapper (tolerant of already-prefixed input)
 - `PkcsSevenEnvelope` — **full RFC 5652 CMS/PKCS#7 implementation** via `openssl_pkcs7_sign|verify|read`:
-  - Uses `tempnam()` + `chmod 0600` + `try/finally` untuk temp file safety (openssl_pkcs7_* functions require file paths, no string buffer support)
-  - `PKCS7_BINARY | PKCS7_DETACHED` flags default (avoid CRLF canonicalization)
-  - Static `isPkcs7(bytes): bool` — sniffs PEM armor `-----BEGIN PKCS7-----` atau DER signedData OID
-  - Drains OpenSSL error queue before + after operations
+ - Uses `tempnam()` + `chmod 0600` + `try/finally` untuk temp file safety (openssl_pkcs7_* functions require file paths, no string buffer support)
+ - `PKCS7_BINARY | PKCS7_DETACHED` flags default (avoid CRLF canonicalization)
+ - Static `isPkcs7(bytes): bool` — sniffs PEM armor `-----BEGIN PKCS7-----` atau DER signedData OID
+ - Drains OpenSSL error queue before + after operations
 - `EnvelopeRegistry` — format string → Envelope map dengan `defaultRegistry()` yang pre-register raw + hmac + pkcs7
 
 ### Added — Remote/HTTP layer (6 files, ~50 KB)
@@ -701,50 +701,50 @@ Grep menunjukkan **4,114 `query()` calls** di seluruh pengeluaran/ folder (bukan
 - `HttpClient` — interface (`request(method, url, options): HttpResponse`)
 - `HttpResponse` — immutable DTO dengan case-insensitive `getHeader()`, `isSuccess()` (2xx), `getJsonBody()` (throws ValidationException on invalid JSON)
 - `CurlHttpClient` — final class implementing `HttpClient` via curl:
-  - Constructor validates `extension_loaded('curl')` — throws ValidationException if missing
-  - Auto-encodes JSON body + Content-Type, form-urlencodes array body
-  - Parses response headers robustly (handles redirect chains)
-  - Throws `EzdocException` on curl transport error dengan errno/errstr context
-  - Supports mTLS + CA bundle + proxy via default curl opts
+ - Constructor validates `extension_loaded('curl')` — throws ValidationException if missing
+ - Auto-encodes JSON body + Content-Type, form-urlencodes array body
+ - Parses response headers robustly (handles redirect chains)
+ - Throws `EzdocException` on curl transport error dengan errno/errstr context
+ - Supports mTLS + CA bundle + proxy via default curl opts
 - `SignSession` — DTO for multi-step signing state:
-  - Constants: STATUS_PENDING / OTP_REQUIRED / PROCESSING / COMPLETED / EXPIRED / FAILED
-  - Methods: `isCompleted()`, `isExpired()`, `needsOtp()`, `toArray()`
+ - Constants: STATUS_PENDING / OTP_REQUIRED / PROCESSING / COMPLETED / EXPIRED / FAILED
+ - Methods: `isCompleted()`, `isExpired()`, `needsOtp()`, `toArray()`
 - `OtpChallenge` — DTO for "waiting for OTP" state:
-  - Constants: CHANNEL_EMAIL / SMS / APP / WA
-  - Fields: sessionId, channel, maskedTarget (mis. 'a***@example.com'), expiresAt, attemptsRemaining
+ - Constants: CHANNEL_EMAIL / SMS / APP / WA
+ - Fields: sessionId, channel, maskedTarget (mis. 'a***@example.com'), expiresAt, attemptsRemaining
 - `BaseRemoteProvider` — **abstract class implements SignatureProvider** (~26 KB) dengan template-method pattern:
-  - **9 abstract methods** subclass MUST implement (getProviderName, endpoints, authHeaders, buildSignRequestPayload, parseSignResponse, parseSessionResponse, parseOtpChallenge)
-  - `final sign()`: initiate → auto-poll async session dengan exponential backoff sampai completed/expired/failed
-  - `final verify()`: POST ke `/verify` endpoint dengan base64 envelope + content, maps JSON back to Verdict
-  - `final capabilities()` returns `getCaps()` (overridable hook, default L2)
-  - Public multi-step API: `initiate()`, `submitOtp()`, `getSession()`
-  - `final protected httpGet/httpPost/httpPut` — auto-inject `X-Request-Id` for idempotency, merge `authHeaders()` + default_headers
-  - `final protected requireSuccess()` — maps HTTP status ke canonical exception:
-    * 401/403 → `AccessDeniedException`
-    * 404 → `NotFoundException`
-    * 400/422 → `ValidationException`
-    * others → `EzdocException`
-  - Extracts provider error code/message/request_id dari JSON error envelope
-  - **Retry**: 3 attempts (configurable), exponential backoff dengan jitter, retryable on network error + 5xx + 429
-  - Optional `Logger` injection → silent `audit()` calls on state transitions
+ - **9 abstract methods** subclass MUST implement (getProviderName, endpoints, authHeaders, buildSignRequestPayload, parseSignResponse, parseSessionResponse, parseOtpChallenge)
+ - `final sign()`: initiate → auto-poll async session dengan exponential backoff sampai completed/expired/failed
+ - `final verify()`: POST ke `/verify` endpoint dengan base64 envelope + content, maps JSON back to Verdict
+ - `final capabilities()` returns `getCaps()` (overridable hook, default L2)
+ - Public multi-step API: `initiate()`, `submitOtp()`, `getSession()`
+ - `final protected httpGet/httpPost/httpPut` — auto-inject `X-Request-Id` for idempotency, merge `authHeaders()` + default_headers
+ - `final protected requireSuccess()` — maps HTTP status ke canonical exception:
+ * 401/403 → `AccessDeniedException`
+ * 404 → `NotFoundException`
+ * 400/422 → `ValidationException`
+ * others → `EzdocException`
+ - Extracts provider error code/message/request_id dari JSON error envelope
+ - **Retry**: 3 attempts (configurable), exponential backoff dengan jitter, retryable on network error + 5xx + 429
+ - Optional `Logger` injection → silent `audit()` calls on state transitions
 
 ### Added — PSrE Provider stubs (2 files, ~32 KB, 34 TODO markers)
 `src/Signature/Providers/*` — Peruri + Privy stubs dengan STRUCTURED TODO for real API integration
 - `PeruriProvider` (423 lines, **19 `TODO(v0.7-real)` markers**):
-  - `getProviderName(): 'peruri'`
-  - Config required: `base_url`, `client_id`, `client_secret`, `signer_id` (NIK)
-  - Config optional: `timeout` (default 30), `callback_url` for async, `test_mode`
-  - `getCaps()`: level=3, formats=[pkcs7, pades], supportsTimestamping=true
-  - Auth: `Bearer $accessToken` (TODO markers explain OAuth2 client credentials OR API key + HMAC)
-  - Static `fromConfig(array): self` helper
-  - Extensive docblocks: sandbox onboarding pointers, test cert acquisition, likely auth paths
+ - `getProviderName(): 'peruri'`
+ - Config required: `base_url`, `client_id`, `client_secret`, `signer_id` (NIK)
+ - Config optional: `timeout` (default 30), `callback_url` for async, `test_mode`
+ - `getCaps()`: level=3, formats=[pkcs7, pades], supportsTimestamping=true
+ - Auth: `Bearer $accessToken` (TODO markers explain OAuth2 client credentials OR API key + HMAC)
+ - Static `fromConfig(array): self` helper
+ - Extensive docblocks: sandbox onboarding pointers, test cert acquisition, likely auth paths
 - `PrivyProvider` (425 lines, **15 `TODO(v0.7-real)` markers**):
-  - `getProviderName(): 'privy'`
-  - Config: `base_url`, `client_id`, `client_secret`, `merchant_id` (Privy-specific), `signer_email`
-  - `getCaps()`: level=3, formats=[pkcs7, pades], supportsTimestamping=true
-  - Privy uses **signer_email** lookup (not NIK)
-  - Mobile-push default (`PRIVY_APP`) dengan OTP fallback
-  - Includes `maskEmail()` helper untuk OtpChallenge target masking
+ - `getProviderName(): 'privy'`
+ - Config: `base_url`, `client_id`, `client_secret`, `merchant_id` (Privy-specific), `signer_email`
+ - `getCaps()`: level=3, formats=[pkcs7, pades], supportsTimestamping=true
+ - Privy uses **signer_email** lookup (not NIK)
+ - Mobile-push default (`PRIVY_APP`) dengan OTP fallback
+ - Includes `maskEmail()` helper untuk OtpChallenge target masking
 
 ### Added — Documentation
 `docs/PSRE-INTEGRATION.md` (14 KB, 388 lines):
@@ -819,20 +819,20 @@ Consumer publish + edit — atau bangun sendiri di atas action endpoints:
 - `assets/js/ezdoc.js` (106 lines) — `window.Ezdoc = { version, config, slots, escapeHtml, formatDate, postJson }`. Idempotent init guard. Slot registry `register(name, cb, priority)`/`render(name, target, context)`/`list()`. Ascending priority, throw isolation per callback.
 - `config/ezdoc.example.php` (52 lines) — sample consumer config dengan `brand.*`, `pages.list.*`, `pages.form.*`, `custom_css`, `custom_js`, `urls.list`. Header shows copy + `Config::fromFile()` bootstrap.
 - `docs/UI-CUSTOMIZATION.md` (341 lines) — comprehensive customization guide:
-  - Table of Contents + 4-level effort table
-  - Level 1: Config only (5 min) — walkthrough + config-key reference table
-  - Level 2: CSS override (30 min) — CSS-variable reference table
-  - Level 3: View publish (1-2 jam) — `php cli/publish.php` example
-  - Level 4: Full UI replacement — 4-layer architecture diagram + `Ezdoc.postJson()` sample
-  - Slot registry (8 named slots documented) — PHP + JS registration + priority notes
-  - Framework adapters: Laravel (pointer v0.5), Plain PHP monolith (koneksi.php bootstrap example), WordPress plugin (shortcode + WpRoleProvider)
+ - Table of Contents + 4-level effort table
+ - Level 1: Config only (5 min) — walkthrough + config-key reference table
+ - Level 2: CSS override (30 min) — CSS-variable reference table
+ - Level 3: View publish (1-2 jam) — `php cli/publish.php` example
+ - Level 4: Full UI replacement — 4-layer architecture diagram + `Ezdoc.postJson()` sample
+ - Slot registry (8 named slots documented) — PHP + JS registration + priority notes
+ - Framework adapters: Laravel (pointer v0.5), Plain PHP monolith (koneksi.php bootstrap example), WordPress plugin (shortcode + WpRoleProvider)
 
 ### Design highlights
 - **4-tier customization pattern** (industry-standard, mirror Laravel Filament / shadcn):
-  - **Tier 1** — Config only (5 min): `Config::fromFile('/app/config/ezdoc.php')`
-  - **Tier 2** — CSS override (30 min): custom CSS setelah `ezdoc.css` load
-  - **Tier 3** — View publish (1-2 jam): `php cli/publish.php views ./resources/views/vendor/ezdoc` → edit copied files
-  - **Tier 4** — Full replacement (days): consumer build own UI, consume `actions/*.php` endpoints
+ - **Tier 1** — Config only (5 min): `Config::fromFile('/app/config/ezdoc.php')`
+ - **Tier 2** — CSS override (30 min): custom CSS setelah `ezdoc.css` load
+ - **Tier 3** — View publish (1-2 jam): `php cli/publish.php views ./resources/views/vendor/ezdoc` → edit copied files
+ - **Tier 4** — Full replacement (days): consumer build own UI, consume `actions/*.php` endpoints
 - **Slot system stable ordering**: SlotRegistry pakai monotonic sequence tiebreaker karena PHP < 8.0 `usort()` tidak stable. Priority ties preserve registration order.
 - **CSS variable bridge**: layout `<head>` inline `<style>` inject `--ezdoc-primary` dari Config → bridge Level-1 config to Level-2 CSS override tanpa build step
 - **Blade guard**: `ViewResolver::render()` explicitly refuses `.blade.php` (throws ValidationException) karena plain include tidak bisa execute Blade — file di-resolve tapi execution blocked. Consumer yang mau Blade harus wire Laravel adapter (v0.7+).
@@ -865,17 +865,17 @@ Original PRD DoD ("v3 files < 100 LOC") was **aspirational** — bulk of the ~95
 
 ### Added — 3 new helper libraries (~291 lines total, dari cetak + list pages)
 - `ezdoc/lib/doc_meta_helpers.php` (62 lines):
-  - `ezdoc_fetch_creator_name($conn, $id)` — SELECT nama_pegawai untuk display
-  - `ezdoc_load_whitelisted_vars($conn)` — SELECT var_name dari default vars whitelist
+ - `ezdoc_fetch_creator_name($conn, $id)` — SELECT nama_pegawai untuk display
+ - `ezdoc_load_whitelisted_vars($conn)` — SELECT var_name dari default vars whitelist
 - `ezdoc/lib/doc_template_helpers.php` (162 lines):
-  - `resolveDefault()` — resolve `{{@varname}}` placeholder ke default value
-  - `evalCondExprPHP()` — evaluate conditional expression di template content
-  - `evalSingleCondPHP()` — evaluate single condition
-  - `processConditionalSections()` — apply `{{#if}}...{{/if}}` conditionals
+ - `resolveDefault()` — resolve `{{@varname}}` placeholder ke default value
+ - `evalCondExprPHP()` — evaluate conditional expression di template content
+ - `evalSingleCondPHP()` — evaluate single condition
+ - `processConditionalSections()` — apply `{{#if}}...{{/if}}` conditionals
 - `ezdoc/lib/list_helpers.php` (67 lines):
-  - `h_list()` — HTML escape wrapper (function_exists-guarded)
-  - `ezdoc_relative_time($datetimeStr)` — "5d lalu"/"3m lalu"/"2j lalu"/"4h lalu"/tanggal
-  - `ezdoc_doc_link_params($row)` — build cetak URL query params
+ - `h_list()` — HTML escape wrapper (function_exists-guarded)
+ - `ezdoc_relative_time($datetimeStr)` — "5d lalu"/"3m lalu"/"2j lalu"/"4h lalu"/tanggal
+ - `ezdoc_doc_link_params($row)` — build cetak URL query params
 
 ### Changed — page file slim-down
 | File | Before | After | Removed |
@@ -915,46 +915,46 @@ Milestone di-eksekusi via workflow: 3 research + 3 extract + 1 verify agents. **
 
 ### Added
 - **Signature core** (7 files, ~29 KB): `Ezdoc\Signature\*`
-  - `SignatureProvider` — interface (`sign()`, `verify()`, `capabilities()`)
-  - `SignRequest` — DTO, auto-computes SHA-256 hex from `contentBytes` if `contentHash` omitted, validates envelope format whitelist
-  - `SignResult` — DTO with `envelope` (binary), `envelopeFormat`, `certificatePem`, `providerName`, `level (1-3)`, `signedAt`. `toArray()` base64-encodes envelope untuk binary-safe JSON, plus `toJson()` helper
-  - `Verdict` — immutable value object dengan `STATUS_*` constants (VALID/TAMPERED/EXPIRED/REVOKED/UNTRUSTED/ERROR/PENDING). Static factories: `valid()`, `tampered()`, `untrusted()`, `error()`. `isDenied()` excludes `ERROR`
-  - `VerifyContext` — DTO carrying `contentBytes`, `expectedSignerId`, `providerHint`, `metadata`
-  - `ProviderCapabilities` — DTO with `providerName`, `level`, `supportedFormats`, `supportsTimestamping`, `maxContentBytes`, `notes`, plus `supportsFormat()` helper
+ - `SignatureProvider` — interface (`sign()`, `verify()`, `capabilities()`)
+ - `SignRequest` — DTO, auto-computes SHA-256 hex from `contentBytes` if `contentHash` omitted, validates envelope format whitelist
+ - `SignResult` — DTO with `envelope` (binary), `envelopeFormat`, `certificatePem`, `providerName`, `level (1-3)`, `signedAt`. `toArray()` base64-encodes envelope untuk binary-safe JSON, plus `toJson()` helper
+ - `Verdict` — immutable value object dengan `STATUS_*` constants (VALID/TAMPERED/EXPIRED/REVOKED/UNTRUSTED/ERROR/PENDING). Static factories: `valid()`, `tampered()`, `untrusted()`, `error()`. `isDenied()` excludes `ERROR`
+ - `VerifyContext` — DTO carrying `contentBytes`, `expectedSignerId`, `providerHint`, `metadata`
+ - `ProviderCapabilities` — DTO with `providerName`, `level`, `supportedFormats`, `supportsTimestamping`, `maxContentBytes`, `notes`, plus `supportsFormat()` helper
 
 - **Providers** (2 files, ~16 KB): `Ezdoc\Signature\Providers\*`
-  - `HmacProvider` — L1 baseline. Constructor validates secret ≥ 32 chars (throws `ValidationException`) + algo via `hash_hmac_algos()`. `sign()` HMACs `contentHash` (mirrors legacy `doc_verify_sign_slug` domain-separation pattern). Full-length hex envelope (caller truncate at higher layer if needed). `fromEnv()` reads `EZDOC_HMAC_SECRET` env var or throws `EzdocException`
-  - `LocalPkiProvider` — L2. Constructor takes `KeyStore` + alias + algo. `sign()` uses `openssl_sign()` producing binary envelope + cert PEM in result. `verify()` uses `openssl_verify()` with strict `=== 1/0/-1` mapping ke Verdict states. Drains OpenSSL error queue before every call. Prefers cert from `VerifyContext::metadata['certificate_pem']` (persist-then-verify) with KeyStore fallback
+ - `HmacProvider` — L1 baseline. Constructor validates secret ≥ 32 chars (throws `ValidationException`) + algo via `hash_hmac_algos()`. `sign()` HMACs `contentHash` (mirrors legacy `doc_verify_sign_slug` domain-separation pattern). Full-length hex envelope (caller truncate at higher layer if needed). `fromEnv()` reads `EZDOC_HMAC_SECRET` env var or throws `EzdocException`
+ - `LocalPkiProvider` — L2. Constructor takes `KeyStore` + alias + algo. `sign()` uses `openssl_sign()` producing binary envelope + cert PEM in result. `verify()` uses `openssl_verify()` with strict `=== 1/0/-1` mapping ke Verdict states. Drains OpenSSL error queue before every call. Prefers cert from `VerifyContext::metadata['certificate_pem']` (persist-then-verify) with KeyStore fallback
 
 - **KeyStore layer** (5 files, ~24 KB): `Ezdoc\Signature\KeyStore\*`
-  - `KeyStore` — interface (`loadPrivateKey()`, `loadCertificate()`, `loadChain()`, `hasKey()`)
-  - `PrivateKey` — wrapper for cross-PHP-version safety. Internal `mixed` property holds resource (PHP 7.x) atau `OpenSSLAsymmetricKey` (8+). `__destruct` guards `PHP_VERSION_ID < 80000 && is_resource(...)` supaya PHP 8.4 (yang remove `openssl_pkey_free`) tetap aman. Factories: `fromPem(pem, passphrase)`, `fromFile(path, passphrase)`
-  - `X509Certificate` — wrapper dengan `getSubjectCN()`, `getIssuerCN()`, `getSerialNumber()`, `getNotBefore/After()`, `isExpired()`, `isValidAt(ts)`. Cross-version safe
-  - `EnvKeyStore` — reads env vars `EZDOC_KEY_{ALIAS}_PRIVATE` (base64 PEM), `_CERT`, `_CHAIN`, `_PASSPHRASE`. Alias sanitized (dash→underscore, uppercase)
-  - `FileKeyStore` — reads `{rootDir}/{alias}.key/.crt/.chain` files. Alias sanitized `[A-Za-z0-9_-]+` + `realpath()` for path traversal prevention
+ - `KeyStore` — interface (`loadPrivateKey()`, `loadCertificate()`, `loadChain()`, `hasKey()`)
+ - `PrivateKey` — wrapper for cross-PHP-version safety. Internal `mixed` property holds resource (PHP 7.x) atau `OpenSSLAsymmetricKey` (8+). `__destruct` guards `PHP_VERSION_ID < 80000 && is_resource(...)` supaya PHP 8.4 (yang remove `openssl_pkey_free`) tetap aman. Factories: `fromPem(pem, passphrase)`, `fromFile(path, passphrase)`
+ - `X509Certificate` — wrapper dengan `getSubjectCN()`, `getIssuerCN()`, `getSerialNumber()`, `getNotBefore/After()`, `isExpired()`, `isValidAt(ts)`. Cross-version safe
+ - `EnvKeyStore` — reads env vars `EZDOC_KEY_{ALIAS}_PRIVATE` (base64 PEM), `_CERT`, `_CHAIN`, `_PASSPHRASE`. Alias sanitized (dash→underscore, uppercase)
+ - `FileKeyStore` — reads `{rootDir}/{alias}.key/.crt/.chain` files. Alias sanitized `[A-Za-z0-9_-]+` + `realpath()` for path traversal prevention
 
 - **Migration**: `migrations/2026_01_01_000005_create_ezdoc_signatures.php` — creates `ezdoc_signatures` table dengan:
-  - Core: uuid, document_id (FK → ezdoc_documents), signature_id_within_doc, signer_id, signer_role, signer_user_id
-  - Provider: provider, level (1-3), envelope_format, envelope BLOB
-  - Content: content_hash (SHA-256), content_hash_algo
-  - Cert (L2/L3): certificate_pem, certificate_serial, certificate_subject, certificate_issuer
-  - Timestamp: tsa_response BLOB (untuk v0.8 RFC 3161), signed_at DATETIME(3), verified_at DATETIME(3)
-  - Status: verify_status ENUM(valid/tampered/expired/revoked/untrusted/error/pending), verify_reason
-  - Metadata JSON + audit columns (created_at, updated_at, deleted_at)
-  - Indexes: UNIQUE(uuid), idx_document, idx_signer, idx_provider_level, idx_signed_at, idx_verify_status, idx_cert_serial
-  - FK: `document_id` REFERENCES ezdoc_documents(id) ON DELETE RESTRICT ON UPDATE CASCADE
+ - Core: uuid, document_id (FK → ezdoc_documents), signature_id_within_doc, signer_id, signer_role, signer_user_id
+ - Provider: provider, level (1-3), envelope_format, envelope BLOB
+ - Content: content_hash (SHA-256), content_hash_algo
+ - Cert (L2/L3): certificate_pem, certificate_serial, certificate_subject, certificate_issuer
+ - Timestamp: tsa_response BLOB (untuk v0.8 RFC 3161), signed_at DATETIME(3), verified_at DATETIME(3)
+ - Status: verify_status ENUM(valid/tampered/expired/revoked/untrusted/error/pending), verify_reason
+ - Metadata JSON + audit columns (created_at, updated_at, deleted_at)
+ - Indexes: UNIQUE(uuid), idx_document, idx_signer, idx_provider_level, idx_signed_at, idx_verify_status, idx_cert_serial
+ - FK: `document_id` REFERENCES ezdoc_documents(id) ON DELETE RESTRICT ON UPDATE CASCADE
 
 - **Bootstrap**: `bootstrap.php` sanity check now includes `ezdoc_signatures` di `$__ezdocTables`
 
 - **Docs**: `docs/SIGNATURE.md` — 10 KB guide covering:
-  - Levels overview (L1 HMAC / L2 LocalPKI / L3 PSrE)
-  - Provider decision matrix
-  - Quick start L1 (env var + code sample)
-  - Quick start L2 (OpenSSL genpkey + req commands + FileKeyStore layout + code sample)
-  - Storage layer (ezdoc_signatures columns + query samples)
-  - 6-step verification chain
-  - Upgrade path L2 → L3 (PSrE)
-  - Security considerations (file perms, env-vs-file, rotation, immutability)
+ - Levels overview (L1 HMAC / L2 LocalPKI / L3 PSrE)
+ - Provider decision matrix
+ - Quick start L1 (env var + code sample)
+ - Quick start L2 (OpenSSL genpkey + req commands + FileKeyStore layout + code sample)
+ - Storage layer (ezdoc_signatures columns + query samples)
+ - 6-step verification chain
+ - Upgrade path L2 → L3 (PSrE)
+ - Security considerations (file perms, env-vs-file, rotation, immutability)
 
 ### Design highlights
 - **Adapter pattern**: single `SignatureProvider` interface, swappable impls. v0.7 (Peruri/Privy/VIDA) tinggal implement interface — consumer code tidak berubah
@@ -978,19 +978,19 @@ Milestone di-eksekusi via workflow: 2 research + 3 writer + 1 docs + 1 verify ag
 
 ### Added
 - **Document domain layer** (5 classes, ~40 KB):
-  - `Ezdoc\Document\Document` — immutable value object, `fromRow()` factory back-fills legacy schema columns (`norm`/`nopen`/`label`) into `field_values` array for domain-agnostic API
-  - `Ezdoc\Document\SaveDocumentRequest` — DTO for save operations (INSERT/UPDATE) with `expectedRevision` for optimistic locking
-  - `Ezdoc\Document\SaveDocumentResult` — DTO returning `documentId`, `uuid`, `revision`, `isNew`, `contentHash`
-  - `Ezdoc\Document\DocumentRepository` — CRUD + `findById/findByUuid/findByPublicSlug/listByTemplate/listByStatus`; INSERT auto-generates UUID v7 via `Ezdoc\UUID::v7()`; UPDATE checks `WHERE revision=$currentRevision` for concurrent-write detection; `save()` computes `content_hash` = SHA-256 of canonicalized `field_values` JSON
-  - `Ezdoc\Document\DocumentService` — orchestrator: loads template for `access_config`, RBAC check via `AccessControl`, delegates to Repository, emits `document.created` / `document.updated` audit events (or `authz.denied` on RBAC fail via `Logger::denied()`)
+ - `Ezdoc\Document\Document` — immutable value object, `fromRow()` factory back-fills legacy schema columns (`norm`/`nopen`/`label`) into `field_values` array for domain-agnostic API
+ - `Ezdoc\Document\SaveDocumentRequest` — DTO for save operations (INSERT/UPDATE) with `expectedRevision` for optimistic locking
+ - `Ezdoc\Document\SaveDocumentResult` — DTO returning `documentId`, `uuid`, `revision`, `isNew`, `contentHash`
+ - `Ezdoc\Document\DocumentRepository` — CRUD + `findById/findByUuid/findByPublicSlug/listByTemplate/listByStatus`; INSERT auto-generates UUID v7 via `Ezdoc\UUID::v7()`; UPDATE checks `WHERE revision=$currentRevision` for concurrent-write detection; `save()` computes `content_hash` = SHA-256 of canonicalized `field_values` JSON
+ - `Ezdoc\Document\DocumentService` — orchestrator: loads template for `access_config`, RBAC check via `AccessControl`, delegates to Repository, emits `document.created` / `document.updated` audit events (or `authz.denied` on RBAC fail via `Logger::denied()`)
 - **Template domain layer** (4 classes, ~40 KB):
-  - `Ezdoc\Template\Template` — immutable VO; JSON columns decoded in constructor; `getAccessConfigObject()` returns `AccessConfig` instance
-  - `Ezdoc\Template\ParsedTemplate` — immutable holder for `{fields, params, signatureSlots}` from parsed template HTML; provides `hasField()`, `getFieldNames()`
-  - `Ezdoc\Template\TemplateParser` — instantiable, single `parse()` entry. Regex adapted to actual codebase markers:
-    * Params: `/\{\{([^}]+)\}\}/` (double-curly)
-    * TTD slots: `ttd-placeholder` div with `data-ttd`, `data-label`, `data-nama-field`, `data-allowed-roles`
-    * Fields: union of params + `data-qr` + `materai-placeholder` + TTD `data-nama-field`, deduped by first-appearance order
-  - `Ezdoc\Template\TemplateRepository` — mysqli with prepared statements; `findById`, `findByUuid` (latest version), `findCurrentByUuid` (is_current=1), `findByIdOrFail`, `listCurrent/listByOwner/listByCategory`; `save()` INSERT bumps nothing, UPDATE does `revision = revision + 1`; `createNewVersion()` wraps INSERT-new + old-row `is_current=0` in atomic transaction; `softDelete()` sets `deleted_at/by/reason` + `is_current=0`
+ - `Ezdoc\Template\Template` — immutable VO; JSON columns decoded in constructor; `getAccessConfigObject()` returns `AccessConfig` instance
+ - `Ezdoc\Template\ParsedTemplate` — immutable holder for `{fields, params, signatureSlots}` from parsed template HTML; provides `hasField()`, `getFieldNames()`
+ - `Ezdoc\Template\TemplateParser` — instantiable, single `parse()` entry. Regex adapted to actual codebase markers:
+ * Params: `/\{\{([^}]+)\}\}/` (double-curly)
+ * TTD slots: `ttd-placeholder` div with `data-ttd`, `data-label`, `data-nama-field`, `data-allowed-roles`
+ * Fields: union of params + `data-qr` + `materai-placeholder` + TTD `data-nama-field`, deduped by first-appearance order
+ - `Ezdoc\Template\TemplateRepository` — mysqli with prepared statements; `findById`, `findByUuid` (latest version), `findCurrentByUuid` (is_current=1), `findByIdOrFail`, `listCurrent/listByOwner/listByCategory`; `save()` INSERT bumps nothing, UPDATE does `revision = revision + 1`; `createNewVersion()` wraps INSERT-new + old-row `is_current=0` in atomic transaction; `softDelete()` sets `deleted_at/by/reason` + `is_current=0`
 
 ### Notes
 - Domain classes are AVAILABLE for consumer usage, tapi existing procedural `actions/document/*.php` dan `actions/template/*.php` TIDAK di-refactor di release ini (backward compat 100%). Refactor deferred ke milestone berikutnya (v0.4.1 atau v0.6.5 UI extraction).
@@ -1022,13 +1022,13 @@ This milestone di-eksekusi via workflow orchestration (2 research + 2 writer + 1
 
 ### Added
 - Extract 7 inline handlers dari `form_pembuat_surat_v3.php` ke `ezdoc/actions/`:
-  - `actions/template/analyze_query.php`
-  - `actions/template/list_categories.php`
-  - `actions/template/field_usage.php`
-  - `actions/template/field_usage_all.php`
-  - `actions/template/rename_field.php` (dengan audit log + sanitize)
-  - `actions/template/cleanup_orphans.php` (dengan audit log)
-  - `actions/default_vars/list_vars.php`
+ - `actions/template/analyze_query.php`
+ - `actions/template/list_categories.php`
+ - `actions/template/field_usage.php`
+ - `actions/template/field_usage_all.php`
+ - `actions/template/rename_field.php` (dengan audit log + sanitize)
+ - `actions/template/cleanup_orphans.php` (dengan audit log)
+ - `actions/default_vars/list_vars.php`
 - `_dispatcher.php` whitelist expanded: 12 template actions + 3 default_vars actions (was 3 + 0)
 - HMAC secret hardening di `lib/doc_verify_helpers.php`: env var override via `EZDOC_HMAC_SECRET` (precedence: env → file → auto-generate)
 
@@ -1056,18 +1056,18 @@ This milestone di-eksekusi via workflow orchestration (2 research + 2 writer + 1
 ### Changed
 - **BREAKING (schema)**: Consolidated 13 legacy migrations → 5 canonical migrations
 - **BREAKING (schema)**: Tables renamed `surat_*_v2` → `ezdoc_*`:
-  - `surat_template_v2` → `ezdoc_templates`
-  - `surat_dokumen_v2` → `ezdoc_documents`
-  - `surat_default_vars` → `ezdoc_default_vars`
+ - `surat_template_v2` → `ezdoc_templates`
+ - `surat_dokumen_v2` → `ezdoc_documents`
+ - `surat_default_vars` → `ezdoc_default_vars`
 - **BREAKING (columns)**: Semantic column names:
-  - `nama_template` → `name`
-  - `doc_scope` → `scope`
-  - `template_html` → `content`
-  - `config_ttd` → `signature_config`
-  - `config_header` → `layout_config`
-  - `data_fields` → `field_values`
-  - `data_ttd` → `signature_values`
-  - `data_hash*` → `content_hash*`
+ - `nama_template` → `name`
+ - `doc_scope` → `scope`
+ - `template_html` → `content`
+ - `config_ttd` → `signature_config`
+ - `config_header` → `layout_config`
+ - `data_fields` → `field_values`
+ - `data_ttd` → `signature_values`
+ - `data_hash*` → `content_hash*`
 - UUID default upgraded v4 → v7 (time-ordered, RFC 9562)
 - Global function `ezdoc_uuid_v7()` (was `ezdoc_uuid_v4()`)
 - Global function `ezdoc_audit_log()` now routes via `Ezdoc\Audit\Logger`

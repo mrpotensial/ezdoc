@@ -28,9 +28,9 @@ namespace Ezdoc\Format;
 
 final class DateFormatter
 {
-    public static function localize(string $formattedDate, string $locale = 'id'): string;
-    public static function registerLocale(string $locale, array $translations): void;
-    public static function locales(): array;
+ public static function localize(string $formattedDate, string $locale = 'id'): string;
+ public static function registerLocale(string $locale, array $translations): void;
+ public static function locales(): array;
 }
 ```
 
@@ -48,11 +48,11 @@ Translate English weekday/month names in a formatted date string.
 ```php
 use Ezdoc\Format\DateFormatter;
 
-$today = date('l, d F Y');                     // "Wednesday, 15 January 2025"
+$today = date('l, d F Y'); // "Wednesday, 15 January 2025"
 $indo = DateFormatter::localize($today, 'id'); // "Rabu, 15 Januari 2025"
 
 // English pass-through:
-$eng = DateFormatter::localize($today, 'en');  // "Wednesday, 15 January 2025" (unchanged)
+$eng = DateFormatter::localize($today, 'en'); // "Wednesday, 15 January 2025" (unchanged)
 ```
 
 ### `registerLocale()`
@@ -66,18 +66,18 @@ Register or override a locale translation table.
 **Example**:
 ```php
 DateFormatter::registerLocale('ms', [
-    // Days
-    'Sunday'    => 'Ahad',
-    'Monday'    => 'Isnin',
-    'Tuesday'   => 'Selasa',
-    'Wednesday' => 'Rabu',
-    'Thursday'  => 'Khamis',
-    'Friday'    => 'Jumaat',
-    'Saturday'  => 'Sabtu',
-    // Months
-    'January'   => 'Januari',
-    'February'  => 'Februari',
-    // ... etc
+ // Days
+ 'Sunday' => 'Ahad',
+ 'Monday' => 'Isnin',
+ 'Tuesday' => 'Selasa',
+ 'Wednesday' => 'Rabu',
+ 'Thursday' => 'Khamis',
+ 'Friday' => 'Jumaat',
+ 'Saturday' => 'Sabtu',
+ // Months
+ 'January' => 'Januari',
+ 'February' => 'Februari',
+ // ... etc
 ]);
 
 $today = DateFormatter::localize(date('l, d F Y'), 'ms');
@@ -91,8 +91,8 @@ Get list of registered locale codes.
 **Example**:
 ```php
 DateFormatter::locales();
-// → ['en', 'id']  (before registerLocale)
-// → ['en', 'id', 'ms']  (after registerLocale('ms', ...))
+// → ['en', 'id'] (before registerLocale)
+// → ['en', 'id', 'ms'] (after registerLocale('ms', ...))
 ```
 
 ## Built-in Locales
@@ -137,11 +137,11 @@ Ezdoc `DateFormatter` remains the lightweight default for library-internal usage
 ```php
 // In consumer's koneksi.php:
 function ubahTanggalKeIndonesia($tanggal) {
-    return str_replace(
-        ['Sunday', 'Monday', ..., 'January', 'February', ...],
-        ['Minggu', 'Senin', ..., 'Januari', 'Februari', ...],
-        $tanggal
-    );
+ return str_replace(
+ ['Sunday', 'Monday', ..., 'January', 'February', ...],
+ ['Minggu', 'Senin', ..., 'Januari', 'Februari', ...],
+ $tanggal
+ );
 }
 
 // Ezdoc calls global function:
@@ -164,26 +164,26 @@ use Ezdoc\Format\DateFormatter;
 
 public function testLocalizeIndonesian(): void
 {
-    $input = 'Wednesday, 15 January 2025';
-    $this->assertSame(
-        'Rabu, 15 Januari 2025',
-        DateFormatter::localize($input, 'id')
-    );
+ $input = 'Wednesday, 15 January 2025';
+ $this->assertSame(
+ 'Rabu, 15 Januari 2025',
+ DateFormatter::localize($input, 'id')
+ );
 }
 
 public function testUnknownLocaleReturnsInput(): void
 {
-    $input = 'Wednesday';
-    $this->assertSame(
-        'Wednesday',
-        DateFormatter::localize($input, 'unknown-locale')
-    );
+ $input = 'Wednesday';
+ $this->assertSame(
+ 'Wednesday',
+ DateFormatter::localize($input, 'unknown-locale')
+ );
 }
 
 public function testRegisterCustomLocale(): void
 {
-    DateFormatter::registerLocale('test', ['Monday' => 'X-Monday']);
-    $this->assertSame('X-Monday', DateFormatter::localize('Monday', 'test'));
+ DateFormatter::registerLocale('test', ['Monday' => 'X-Monday']);
+ $this->assertSame('X-Monday', DateFormatter::localize('Monday', 'test'));
 }
 ```
 

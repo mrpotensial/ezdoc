@@ -60,11 +60,11 @@ Rules like `.content p { margin: 8px 0 }` match consistently in all 3.
 
 ```php
 tinymce.init({
-    body_class: 'content',  // matches .content selectors in shared rules
-    content_style: `
-        <?= \Ezdoc\UI\ContentCss::render() ?>
-        /* context-specific rules: paper visualization, placeholders, dst */
-    `,
+ body_class: 'content', // matches .content selectors in shared rules
+ content_style: `
+ <?= \Ezdoc\UI\ContentCss::render() ?>
+ /* context-specific rules: paper visualization, placeholders, dst */
+ `,
 });
 ```
 
@@ -72,9 +72,9 @@ tinymce.init({
 
 ```html
 <style>
-    .content { line-height: 1.6; }
-    <?= \Ezdoc\UI\ContentCss::render() ?>
-    /* context-specific: edit-on/edit-off, .f field styles, dst */
+ .content { line-height: 1.6; }
+ <?= \Ezdoc\UI\ContentCss::render() ?>
+ /* context-specific: edit-on/edit-off, .f field styles, dst */
 </style>
 ```
 
@@ -83,11 +83,11 @@ tinymce.init({
 ```php
 $pdfHtml .= '
 <style>
-    .content {
-        line-height: 1.6;
-        width: ' . ($paperW - $padL - $padR) . 'mm;
-    }
-    ' . \Ezdoc\UI\ContentCss::render() . '
+ .content {
+ line-height: 1.6;
+ width: ' . ($paperW - $padL - $padR) . 'mm;
+ }
+ ' . \Ezdoc\UI\ContentCss::render() . '
 </style>';
 ```
 
@@ -150,11 +150,11 @@ When adding a shared content rendering rule:
 ```php
 public function testContentCssRendersConsistentString(): void
 {
-    $css1 = \Ezdoc\UI\ContentCss::render();
-    $css2 = \Ezdoc\UI\ContentCss::render();
-    $this->assertSame($css1, $css2, 'CSS output must be deterministic');
-    $this->assertStringContainsString('.content p', $css1);
-    $this->assertStringContainsString('table-layout: fixed', $css1);
+ $css1 = \Ezdoc\UI\ContentCss::render();
+ $css2 = \Ezdoc\UI\ContentCss::render();
+ $this->assertSame($css1, $css2, 'CSS output must be deterministic');
+ $this->assertStringContainsString('.content p', $css1);
+ $this->assertStringContainsString('table-layout: fixed', $css1);
 }
 ```
 

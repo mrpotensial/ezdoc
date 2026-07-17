@@ -111,7 +111,7 @@ if (!function_exists('ezdoc_query_prepared')) {
  *   1. Kalau `query()` global function ada (koneksi.php loaded) → gunakan itu (backward compat)
  *   2. Fallback → wraps mysqli_query() dengan Context connection
  *
- * ⚠️  DEPRECATED for new code — pakai ezdoc_query_prepared() atau Repository class.
+ * DEPRECATED for new code — pakai ezdoc_query_prepared() atau Repository class.
  *
  * @return array<array<string,mixed>>|false  Rows or false on error
  *

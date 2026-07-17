@@ -34,28 +34,28 @@ Document object models yang separate positioned overlays dari text runs:
 
 ```json
 [
-    {
-        "id": "logo_hospital",
-        "type": "logo",
-        "position_x": 400,
-        "position_y": 100,
-        "z_index": "front",
-        "width": "80px",
-        "data": {}
-    },
-    {
-        "id": "ttd_dokter",
-        "type": "ttd",
-        "position_x": 500,
-        "position_y": 800,
-        "z_index": "front",
-        "width": "120px",
-        "data": {
-            "label": "Attending Physician",
-            "nama_field": "nama_dokter",
-            "ttd_modes": "image"
-        }
-    }
+ {
+ "id": "logo_hospital",
+ "type": "logo",
+ "position_x": 400,
+ "position_y": 100,
+ "z_index": "front",
+ "width": "80px",
+ "data": {}
+ },
+ {
+ "id": "ttd_dokter",
+ "type": "ttd",
+ "position_x": 500,
+ "position_y": 800,
+ "z_index": "front",
+ "width": "120px",
+ "data": {
+ "label": "Attending Physician",
+ "nama_field": "nama_dokter",
+ "ttd_modes": "image"
+ }
+ }
 ]
 ```
 
@@ -88,19 +88,19 @@ Immutable representation of single floating element.
 use Ezdoc\Template\FloatingElement;
 
 $logo = new FloatingElement(
-    id: 'logo_hospital',
-    type: FloatingElement::TYPE_LOGO,
-    positionX: 400,
-    positionY: 100,
-    zIndex: FloatingElement::Z_FRONT,
-    width: '80px',
-    data: []
+ id: 'logo_hospital',
+ type: FloatingElement::TYPE_LOGO,
+ positionX: 400,
+ positionY: 100,
+ zIndex: FloatingElement::Z_FRONT,
+ width: '80px',
+ data: []
 );
 
-$logo->toArray();  // → array<string, mixed>
-FloatingElement::fromArray($arr);  // → FloatingElement
+$logo->toArray(); // → array<string, mixed>
+FloatingElement::fromArray($arr); // → FloatingElement
 
-$moved = $logo->withPosition(500, 200);  // → immutable copy
+$moved = $logo->withPosition(500, 200); // → immutable copy
 ```
 
 ### `Ezdoc\Template\FloatingExtractor` — Service
@@ -112,12 +112,12 @@ use Ezdoc\Template\FloatingExtractor;
 
 $result = FloatingExtractor::extract($htmlWithMarkers);
 // $result = [
-//     'html' => '<p>Clean HTML without markers</p>',
-//     'floating' => [FloatingElement, FloatingElement, ...],
+// 'html' => '<p>Clean HTML without markers</p>',
+// 'floating' => [FloatingElement, FloatingElement, ...],
 // ]
 
-$json = FloatingExtractor::toJson($result['floating']);  // JSON string for DB
-$floating = FloatingExtractor::fromJson($json);          // deserialize
+$json = FloatingExtractor::toJson($result['floating']); // JSON string for DB
+$floating = FloatingExtractor::fromJson($json); // deserialize
 ```
 
 ### `Ezdoc\Template\FloatingInjector` — Service
@@ -137,29 +137,29 @@ $rehydratedHtml = FloatingInjector::inject($cleanHtml, $floatingArray);
 
 ```
 Editor content → save_template.php
-    ↓
+ ↓
 FloatingExtractor::extract(html)
-    ↓
-    [cleanHtml, floatingArray]
-    ↓
+ ↓
+ [cleanHtml, floatingArray]
+ ↓
 DB:
-    - ezdoc_templates.content = cleanHtml
-    - ezdoc_templates.floating_elements = json(floatingArray)
+ - ezdoc_templates.content = cleanHtml
+ - ezdoc_templates.floating_elements = json(floatingArray)
 ```
 
 ### Load flow (designer / generate)
 
 ```
 DB → SELECT content, floating_elements FROM ezdoc_templates
-    ↓
+ ↓
 IF floating_elements IS NULL:
-    templateHtml = content  (backward-compat: markers still in HTML)
+ templateHtml = content (backward-compat: markers still in HTML)
 ELSE:
-    floating = FloatingExtractor::fromJson(floating_elements)
-    templateHtml = FloatingInjector::inject(content, floating)
-    ↓
+ floating = FloatingExtractor::fromJson(floating_elements)
+ templateHtml = FloatingInjector::inject(content, floating)
+ ↓
 Rendering pipeline (renderContent) — receives HTML dgn markers as before
-    ↓
+ ↓
 Same rendered output as pre-v0.9.12
 ```
 
