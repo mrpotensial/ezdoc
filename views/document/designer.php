@@ -2575,6 +2575,80 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     if (typeof repaginateEditorDebounced === 'function') repaginateEditorDebounced();
                 });
 
+                // MS Word-style hard protection: Backspace/Delete/Cut key harus
+                // TIDAK BISA menghapus pg-spacer. Intercept di KeyDown sebelum
+                // browser process default → preventDefault kalau deletion akan
+                // affect spacer. Complements mceNonEditable class (which prevents
+                // click-selection) — this handles Backspace-from-after dan
+                // Delete-from-before scenarios yg TinyMCE default kadang tembus.
+                //
+                // Precedent: MS Word Object Model, Google Docs elements-of-drawings
+                // (embedded objects punya guard-cell mechanism).
+                editor.on('keydown', function(e) {
+                    // Backspace = 8, Delete = 46. Only intercept these.
+                    if (e.keyCode !== 8 && e.keyCode !== 46) return;
+                    const sel = editor.selection.getRng();
+                    if (!sel) return;
+                    // Range selection (non-collapsed) — check if any pg-spacer
+                    // is within the selection. Iterate the range's DOM contents.
+                    if (!sel.collapsed) {
+                        const frag = sel.cloneContents();
+                        if (frag.querySelector && frag.querySelector('.pg-spacer')) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }
+                        return;
+                    }
+                    // Collapsed cursor — check adjacent element for spacer.
+                    const container = sel.startContainer;
+                    const offset = sel.startOffset;
+                    let adjacent = null;
+                    if (e.keyCode === 8) {
+                        // Backspace deletes element BEFORE cursor.
+                        if (container.nodeType === 3) { // TEXT node
+                            // If cursor not at start of text, deletion within text (safe).
+                            if (offset > 0) return;
+                            // At start — check previous sibling of text node,
+                            // walking up if none.
+                            let n = container;
+                            while (n && !n.previousSibling && n.parentNode !== editor.getBody()) {
+                                n = n.parentNode;
+                            }
+                            adjacent = n ? n.previousSibling : null;
+                        } else {
+                            adjacent = offset > 0 ? container.childNodes[offset - 1] : null;
+                        }
+                    } else {
+                        // Delete deletes element AFTER cursor.
+                        if (container.nodeType === 3) {
+                            if (offset < container.length) return;
+                            let n = container;
+                            while (n && !n.nextSibling && n.parentNode !== editor.getBody()) {
+                                n = n.parentNode;
+                            }
+                            adjacent = n ? n.nextSibling : null;
+                        } else {
+                            adjacent = container.childNodes[offset] || null;
+                        }
+                    }
+                    if (adjacent && adjacent.classList && adjacent.classList.contains('pg-spacer')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                });
+
+                // Also intercept Cut (Ctrl+X) and BeforeInput events that could
+                // remove spacer via other means (drag-cut, clipboard operations).
+                editor.on('cut', function(e) {
+                    const sel = editor.selection.getRng();
+                    if (sel && !sel.collapsed) {
+                        const frag = sel.cloneContents();
+                        if (frag.querySelector && frag.querySelector('.pg-spacer')) {
+                            e.preventDefault();
+                        }
+                    }
+                });
+
                 // ===== Register custom SVG icons (Bootstrap Icons paths) =====
                 // Digunakan oleh custom insert buttons (Logo/QR/Field/TTD/Materai/Kondisi/Tabel).
                 editor.ui.registry.addIcon('ezdoc-logo', '<svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/><path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/></svg>');
