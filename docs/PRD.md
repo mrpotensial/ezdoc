@@ -107,11 +107,16 @@ Library ini standalone project — tidak vendor-locked ke industry manapun. Dogf
 | `Ezdoc\Exceptions\*` | EzdocException, AccessDeniedException, NotFoundException, ValidationException | `\RuntimeException` |
 | `Ezdoc\Template\*` | Template, ParsedTemplate, TemplateParser, TemplateRepository | Procedural di `actions/template/*.php` + inline handlers di `page/form_pembuat_surat_v3.php` |
 
-### 3.4 Migration path 🟡 Legacy still there
+### 3.4 Migration path ✅ Clean (v0.9.12)
 
-- **13 legacy migrations** (`20260701_surat_*` + `20260706_ezdoc_*` + data-migration) masih ada di folder `migrations/`
-- **5 canonical migrations** (`2026_01_01_00000{1..4,99}`) sudah ada
-- Belum jelas: legacy migrations akan di-delete kapan? (butuh cek env production)
+- **14 legacy migrations DELETED** (v0.9.12 cleanup): `20260701_create_surat_*` (7),
+  `20260706_create_ezdoc_*` (3 duplicates), `20260706_migrate_data_surat_to_ezdoc_*` (3),
+  `2026_01_01_000099_migrate_legacy_surat_data.php` (1)
+- **6 canonical migrations retained**: `2026_01_01_000001..5_create_ezdoc_*` + `2026_07_16_000001_alter_ezdoc_templates_add_floating_elements`
+- Registry cleanup: orphan entries (`20260701*`, `20260706*` records tanpa file) can be pruned
+  via admin UI ("Prune Orphan Registry Entries" button di `?ezdoc_page=admin_migrate`).
+  Idempotent, safe repeated
+- Library now **fully ezdoc_*-tables-only** — no consumer-app-specific tables in library scope
 
 ### 3.5 Tests 🟡 Minimal
 

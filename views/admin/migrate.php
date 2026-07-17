@@ -15,8 +15,42 @@
  * @var \Ezdoc\UI\Translator $translator
  */
 
-// Auth gate — superadmin only
-ezdoc_require_role('superadmin', 'Admin migration hanya untuk superadmin');
+// Force error display untuk debug (admin page — safe untuk display errors).
+// Kalau ada PHP fatal error, user akan lihat error message bukan blank page.
+@ini_set('display_errors', '1');
+@error_reporting(E_ALL);
+
+// Defensive: kalau bootstrap helpers tidak available (edge case: routing
+// misconfiguration), show clear error message bukan blank/crash.
+if (!function_exists('ezdoc_has_role')) {
+    echo '<pre style="padding:20px;font-family:monospace;background:#fee;color:#900;">';
+    echo "Admin migrate: ezdoc bootstrap helpers not loaded.\n";
+    echo "Expected function: ezdoc_has_role() (from lib/authorization.php)\n";
+    echo "Check: ezdoc/bootstrap.php require in your app entry.\n";
+    echo '</pre>';
+    return;
+}
+
+// Auth gate — superadmin only. Use ezdoc_has_role (not ezdoc_require_role)
+// karena require_role → JSON 403 response (untuk AJAX), tapi ini VIEW page →
+// perlu HTML response. Show 403 message inline kalau tidak authorized.
+if (!ezdoc_has_role('superadmin')) {
+    ?>
+    <section class="max-w-2xl mx-auto p-6">
+        <div class="rounded-lg border-l-4 border-red-400 bg-red-50 p-4">
+            <h1 class="text-lg font-semibold text-red-800 mb-2">Access Denied</h1>
+            <p class="text-sm text-red-700">
+                Admin migration dashboard hanya dapat diakses oleh <strong>superadmin</strong>.
+            </p>
+            <p class="mt-2 text-xs text-red-600">
+                Kalau kamu superadmin tapi tetap dapat error ini, cek role provider config
+                atau login ulang.
+            </p>
+        </div>
+    </section>
+    <?php
+    return;
+}
 
 // Handle POST actions
 $actionMsg = '';
@@ -41,6 +75,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $actionMsg = 'Tidak ada pending migrations. Semua up-to-date.';
                     $actionType = 'info';
                 }
+                break;
+
+            case 'prune_orphan_registry':
+                // Remove registry entries yg corresponding migration file tidak
+                // ada lagi (mis. legacy files deleted di v0.9.12 cleanup).
+                // Idempotent — safe re-run.
+                $files = ezdoc_scan_migration_files();
+                $fileNames = [];
+                foreach ($files as $path) {
+                    $spec = @include $path;
+                    if (is_array($spec) && !empty($spec['name'])) {
+                        $fileNames[$spec['name']] = true;
+                    } else {
+                        $fileNames[basename($path, '.php')] = true;
+                    }
+                }
+                $rs = mysqli_query($conn, "SELECT id, migration FROM ezdoc_migrations");
+                $orphans = [];
+                if ($rs) {
+                    while ($row = mysqli_fetch_assoc($rs)) {
+                        if (!isset($fileNames[$row['migration']])) {
+                            $orphans[] = $row;
+                        }
+                    }
+                }
+                $pruned = 0;
+                foreach ($orphans as $orphan) {
+                    $stmt = mysqli_prepare($conn, "DELETE FROM ezdoc_migrations WHERE id = ?");
+                    mysqli_stmt_bind_param($stmt, 'i', $orphan['id']);
+                    if (mysqli_stmt_execute($stmt)) $pruned++;
+                    mysqli_stmt_close($stmt);
+                }
+                $actionMsg = "Pruned {$pruned} orphan registry entries" . ($pruned > 0 ? ': ' . implode(', ', array_map(fn($o) => $o['migration'], $orphans)) : ' (registry sudah clean).');
+                $actionType = 'success';
                 break;
 
             case 'migrate_floating':
@@ -85,13 +153,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Query migration status
+// Query migration status. Registry table `ezdoc_migrations` schema per
+// Ezdoc\Migrations\Runner: column is `migration` (name string) + `executed_at`.
 $conn = \Ezdoc\Context::default()->db;
 $applied = [];
-$rs = @mysqli_query($conn, "SELECT name, executed_at FROM ezdoc_migrations ORDER BY executed_at ASC");
+$rs = @mysqli_query($conn, "SELECT migration, executed_at FROM ezdoc_migrations ORDER BY executed_at ASC");
 if ($rs) {
     while ($row = mysqli_fetch_assoc($rs)) {
-        $applied[$row['name']] = $row['executed_at'];
+        $applied[$row['migration']] = $row['executed_at'];
     }
 }
 
@@ -110,6 +179,15 @@ ksort($allMigrations);
 
 $pendingCount = count(array_filter($allMigrations, fn($m) => !$m['applied']));
 $appliedCount = count($allMigrations) - $pendingCount;
+
+// Count orphan registry entries (rows in ezdoc_migrations without corresponding
+// migration file — v0.9.12 cleanup left surat_* entries orphaned).
+$orphanCount = 0;
+$fileNamesSet = [];
+foreach ($allMigrations as $m) { $fileNamesSet[$m['name']] = true; }
+foreach ($applied as $regName => $_) {
+    if (!isset($fileNamesSet[$regName])) $orphanCount++;
+}
 
 // Query floating migration stats
 $floatingStats = null;
@@ -179,6 +257,19 @@ if ($rs) {
                         <path d="M7 3a1 1 0 011-1h4a1 1 0 011 1v1h3a1 1 0 110 2h-1v10a2 2 0 01-2 2H6a2 2 0 01-2-2V6H3a1 1 0 010-2h3V3z"/>
                     </svg>
                     Migrate Floating Elements (<?= (int)$floatingStats['has_embedded_markers'] ?> pending)
+                </button>
+            </form>
+            <?php endif; ?>
+
+            <?php if ($orphanCount > 0): ?>
+            <form method="POST" onsubmit="return confirm('Prune <?= $orphanCount ?> orphan registry entries (rows without corresponding migration file)?');">
+                <input type="hidden" name="action" value="prune_orphan_registry">
+                <button type="submit"
+                        class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                    </svg>
+                    Prune <?= $orphanCount ?> Orphan Registry Entries
                 </button>
             </form>
             <?php endif; ?>

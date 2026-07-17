@@ -45,6 +45,7 @@ final class Router
     /** @var array<int,string> Whitelisted page names (protects against arbitrary include). */
     private static $PAGE_WHITELIST = [
         'list', 'designer', 'generate', 'view', 'download', 'action', 'new_document',
+        'admin_migrate',
     ];
 
     /**

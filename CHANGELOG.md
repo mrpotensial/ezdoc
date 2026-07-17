@@ -55,6 +55,37 @@ materai floating variants). Industry-standard document object model separation
 - Optional bulk migration script deferred untuk v0.9.13 kalau consumer perlu
   force-migrate all rows
 
+**Removed — legacy consumer-specific migrations (library neutrality)**
+
+- **14 legacy migration files deleted** dari `migrations/` folder:
+  - `20260701000001_create_surat_template_v2.php`
+  - `20260701000002_alter_surat_template_v2_add_columns.php`
+  - `20260701000003_create_surat_dokumen_v2.php`
+  - `20260701000004_alter_surat_dokumen_v2_add_columns.php`
+  - `20260701000005_alter_surat_dokumen_v2_indexes.php`
+  - `20260701000006_create_surat_default_vars.php`
+  - `20260701000007_create_surat_audit_log.php`
+  - `20260706000001_create_ezdoc_templates.php` (duplicate of 2026_01_01_000001)
+  - `20260706000002_create_ezdoc_documents.php` (duplicate)
+  - `20260706000003_create_ezdoc_default_vars.php` (duplicate)
+  - `20260706000004_migrate_data_surat_template_to_ezdoc.php`
+  - `20260706000005_migrate_data_surat_dokumen_to_ezdoc.php`
+  - `20260706000006_migrate_data_surat_default_vars_to_ezdoc.php`
+  - `2026_01_01_000099_migrate_legacy_surat_data.php`
+- Library sekarang **fully ezdoc_*-tables-only**. Consumer apps yg butuh
+  `surat_*` legacy tables (mis. SIMpel/RSIA-specific) harus ship migrations
+  sendiri di consumer-side migration folder
+- Existing consumers where these ran → data preserved (`ezdoc_*` tables tetap
+  populated dari earlier data migration). Registry has orphan entries yg bisa
+  di-prune via admin UI
+
+**Added — orphan registry pruner**
+
+- **Admin UI "Prune Orphan Registry Entries"** button di `?ezdoc_page=admin_migrate`
+- Detects rows in `ezdoc_migrations` registry tanpa corresponding migration file
+- Idempotent, safe to run repeatedly
+- Shown only when orphans exist; hidden otherwise
+
 **Added — admin migration dashboard (web UI alternative to CLI)**
 
 - **`views/admin/migrate.php`** — admin dashboard page dgn migration status
