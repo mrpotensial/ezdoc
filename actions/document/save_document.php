@@ -27,7 +27,7 @@
 
 use Ezdoc\Db\Mysqli\MysqliConnection;
 use Ezdoc\Template\TemplateRepository;
-
+use Ezdoc\Template\FloatingExtractor;
 use Ezdoc\Context;
 
 global $author_id;
@@ -232,15 +232,29 @@ if ($computedTitle === '') {
     if (mb_strlen($computedTitle) > 255) $computedTitle = mb_substr($computedTitle, 0, 255);
 }
 
+// ─── Per-doc floating_elements override (v0.9.12 sidecar pattern) ───
+// Client CAN send `floating_elements_json` untuk override template default
+// (mis. user drag floating logo ke posisi berbeda per-doc). NULL/absent =
+// inherit dari template.floating_elements di render time.
+$docFloatingJson = null;
+$docFloatingRaw = trim((string) ($_POST['floating_elements_json'] ?? ''));
+if ($docFloatingRaw !== '' && $docFloatingRaw !== 'null' && $docFloatingRaw !== '[]') {
+    // Validate + normalize
+    $docFloating = FloatingExtractor::fromJson($docFloatingRaw);
+    if (!empty($docFloating)) {
+        $docFloatingJson = FloatingExtractor::toJson($docFloating);
+    }
+}
+
 // ─── Save (update / insert) via Connection ───
 try {
     if ($isEdit) {
         // UPDATE — uuid, template_uuid, template_version immutable per doc
         $db->execute(
             'UPDATE ezdoc_documents SET title = ?, norm = ?, nopen = ?, label = ?,
-                field_values = ?, signature_values = ?, updated_by = ?
+                field_values = ?, signature_values = ?, floating_elements = ?, updated_by = ?
              WHERE id = ?',
-            [$computedTitle, $norm, $nopen, $label, $jsonFields, $jsonTtd, $authorId, $doc_id]
+            [$computedTitle, $norm, $nopen, $label, $jsonFields, $jsonTtd, $docFloatingJson, $authorId, $doc_id]
         );
     } else {
         $docUuid = ezdoc_uuid_v7();
@@ -249,13 +263,13 @@ try {
             'INSERT INTO ezdoc_documents
              (uuid, template_id, template_uuid, template_version,
               title, norm, nopen, label, version,
-              field_values, signature_values,
+              field_values, signature_values, floating_elements,
               status, published_at, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)',
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)',
             [
                 $docUuid, $template_id, $templateUuid, $templateVersion,
                 $computedTitle, $norm, $nopen, $label,
-                $jsonFields, $jsonTtd,
+                $jsonFields, $jsonTtd, $docFloatingJson,
                 'published', $publishedAt, $authorId,
             ]
         );

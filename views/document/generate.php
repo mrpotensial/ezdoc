@@ -398,6 +398,23 @@ if (!$dokumen && $canLookup) {
         $doc_id = $dokumen['id'];
         $dbFields = json_decode($dokumen['field_values'] ?: '{}', true) ?: [];
         $dbTtd = json_decode($dokumen['signature_values'] ?: '{}', true) ?: [];
+
+        // v0.9.12 sidecar per-doc floating override — kalau doc punya
+        // `floating_elements` non-null, override template default (rehydrate
+        // ke $templateHtml supaya rendering pipeline unchanged). Kalau NULL,
+        // inherit template.floating_elements yg sudah rehydrated earlier.
+        if (!empty($dokumen['floating_elements'])) {
+            $docFloating = \Ezdoc\Template\FloatingExtractor::fromJson($dokumen['floating_elements']);
+            if (!empty($docFloating)) {
+                // Strip any template-level markers pertama (template rehydration
+                // sudah append earlier), lalu inject doc-level override
+                $stripped = \Ezdoc\Template\FloatingExtractor::extract($templateHtml);
+                $templateHtml = \Ezdoc\Template\FloatingInjector::inject(
+                    $stripped['html'],
+                    $docFloating
+                );
+            }
+        }
         // BUG FIX: promote $dbFields + $dbTtd ke $GLOBALS supaya helper functions
         // `v()`, `t()`, `dbFieldRaw()` (yang pakai `global $dbFields`) bisa akses
         // saat generate.php di-include dari method Router::renderView() (scope
