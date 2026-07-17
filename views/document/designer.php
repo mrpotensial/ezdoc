@@ -2558,10 +2558,20 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 // Virtual pagination — inject spacer divs at page boundaries
                 // supaya content flow respect margin di setiap physical page break.
                 // Debounced 250ms sehingga typing tidak jank.
+                //
+                // Events HANYA yg berkorelasi content-change (bukan cursor move):
+                //   - init: initial paginate setelah editor loaded
+                //   - input / change: user typing / paste
+                //   - SetContent: programmatic content change (undo, insert element)
+                //
+                // SENGAJA TIDAK PAKAI 'NodeChange' — event ini fires setiap cursor
+                // pindah (termasuk click). Kalau paginate re-run tiap click spacer,
+                // strip → re-add cycle bikin gap kadang hilang saat interaksi.
+                // Cursor movement tidak ubah geometry → tidak perlu repaginate.
                 editor.on('init', function() {
                     if (typeof repaginateEditor === 'function') repaginateEditor();
                 });
-                editor.on('NodeChange KeyUp SetContent change input', function() {
+                editor.on('SetContent change input', function() {
                     if (typeof repaginateEditorDebounced === 'function') repaginateEditorDebounced();
                 });
 

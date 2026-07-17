@@ -215,12 +215,24 @@ final class PaginationJs
                 const spacerH = boundary - top + gapPx;
                 if (spacerH > 0 && node.parentNode) {
                     const spacer = doc.createElement('div');
-                    spacer.className = CONFIG.spacerClass;
+                    /* Dual class:
+                       - pg-spacer: our marker (styling + JS query)
+                       - mceNonEditable: TinyMCE built-in protected class
+                         (matches editor's noneditable_class config). TinyMCE
+                         akan block cursor entry, block selection, block delete
+                         via Backspace/Delete → MS Word-style protected auto
+                         page break. */
+                    spacer.className = CONFIG.spacerClass + ' mceNonEditable';
                     spacer.style.cssText = 'display:block;width:100%;background:transparent;pointer-events:none;user-select:none;box-sizing:border-box;height:' + spacerH + 'px';
                     spacer.contentEditable = 'false';
                     /* TinyMCE bogus marker — element stripped on editor.getContent()
-                       serialization. Non-editor contexts ignore this attribute. */
+                       serialization. Non-editor contexts ignore this attribute.
+                       Belt-and-suspenders with mceNonEditable class supaya
+                       spacer NEVER makes it into saved HTML content column. */
                     spacer.setAttribute('data-mce-bogus', '1');
+                    /* Explicit ARIA hidden — assistive tech skips spacer
+                       (bukan konten, cuma visual layout gap). */
+                    spacer.setAttribute('aria-hidden', 'true');
                     node.parentNode.insertBefore(spacer, node);
                 }
                 boundary += pageContentPx + gapPx;
