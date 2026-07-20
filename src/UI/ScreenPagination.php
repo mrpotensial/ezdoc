@@ -231,6 +231,15 @@ CSS;
     var _isRunning = false;
     var _splitIdCounter = 0;
 
+    // Debug mode via ?ezdoc_debug_pagination=1 — logs each spacer/split action.
+    var _debug = /[?&]ezdoc_debug_pagination=1/.test(window.location.search);
+    function dbg() {
+        if (!_debug) return;
+        var args = Array.prototype.slice.call(arguments);
+        args.unshift('[ScreenPagination]');
+        console.log.apply(console, args);
+    }
+
     /**
      * Merge split continuations back into originals. Called at cleanup phase
      * supaya re-pagination bekerja dari state HTML original (no accumulated
@@ -267,12 +276,13 @@ CSS;
 
     /**
      * Split a table into original (rows 0..rowIndex-1) + continuation (rest).
-     * Preserves thead (cloned into continuation for repeated header). Returns
-     * new continuation table (yg akan di-append ke DOM oleh caller).
+     * Preserves thead (cloned into continuation for repeated header) AND
+     * colgroup (column widths). Caption stays in original only.
      */
     function splitTableAt(tableEl, rowIndex) {
         var tbody = tableEl.querySelector('tbody') || tableEl;
         var thead = tableEl.querySelector('thead');
+        var colgroup = tableEl.querySelector('colgroup');
         var rows = Array.from(tbody.children);
         if (rowIndex <= 0 || rowIndex >= rows.length) return null;
 
@@ -280,8 +290,11 @@ CSS;
         tableEl.setAttribute('data-ezdoc-split-id', splitId);
 
         var newTable = tableEl.cloneNode(false);
+        newTable.removeAttribute('id'); // avoid duplicate IDs in DOM
         newTable.setAttribute('data-ezdoc-split-continues', splitId);
-        // Repeat thead di continuation (industri standar untuk table split).
+        // Clone colgroup (preserves column widths across split parts).
+        if (colgroup) newTable.appendChild(colgroup.cloneNode(true));
+        // Repeat thead di continuation (industri standar Word/Google Docs).
         if (thead) newTable.appendChild(thead.cloneNode(true));
         var newTbody = document.createElement('tbody');
         for (var i = rowIndex; i < rows.length; i++) {
@@ -303,6 +316,7 @@ CSS;
         listEl.setAttribute('data-ezdoc-split-id', splitId);
 
         var newList = listEl.cloneNode(false);
+        newList.removeAttribute('id'); // avoid duplicate IDs in DOM
         newList.setAttribute('data-ezdoc-split-continues', splitId);
 
         // OL numbering — preserve via `start` attribute.
@@ -321,8 +335,13 @@ CSS;
     /**
      * Attempt to split a container element (table/list) at first sub-child yg
      * cross paper boundary. Returns TRUE kalau split performed.
+     *
+     * Note: contentBottom + nextPaperTop di-RECOMPUTE per sub-child (not from
+     * caller's outer child paper). Reason: container spans multiple papers,
+     * different sub-children hit different paper boundaries. Using outer values
+     * would give wrong spacerH for late rows.
      */
-    function tryContainerSplit(child, contentEl, contentBottom, nextPaperTop, pageTop) {
+    function tryContainerSplit(child, contentEl, _outerContentBottom, _outerNextPaperTop, pageTop) {
         var tag = child.tagName;
         var subChildren = null;
         var splitFn = null;
@@ -340,26 +359,38 @@ CSS;
 
         for (var i = 0; i < subChildren.length; i++) {
             var sub = subChildren[i];
+            if (sub.classList && sub.classList.contains('ezdoc-page-spacer')) continue;
             var subRect = sub.getBoundingClientRect();
             if (subRect.height === 0) continue;
+
             var subTop = subRect.top + window.scrollY - pageTop;
             var subBottom = subTop + subRect.height;
-            if (subBottom <= contentBottom) continue;
 
-            // Sub-child crosses boundary at position i.
+            // Recompute paper boundary for THIS sub-child's paper.
+            var subPaperIdx = paperIndexAt(subTop);
+            var subContentBottom = contentBottomOfPaper(subPaperIdx);
+
+            if (subBottom <= subContentBottom) continue; // sub fits its paper
+
+            // Sub-child crosses ITS OWN paper's boundary at position i.
             if (i === 0) {
-                // First sub-child already crosses → can't split, caller should
-                // push whole container instead.
+                // First sub-child already crosses → can't split at row 0.
+                // Caller will fallback to push-whole (Case B fallback).
                 return false;
             }
 
             var newContainer = splitFn(child, i);
             if (!newContainer) return false;
 
-            // Compute spacer height dari sub-child yg pindah ke continuation:
-            // its new top setelah split = should be at nextPaperTop.
-            var spacerH = nextPaperTop - subTop;
+            // Compute spacer height BASED ON sub-child's OWN paper's next-top.
+            // subNextPaperTop = start of paper AFTER sub-child's current paper.
+            var subNextPaperTop = (subPaperIdx + 1) * (PAPER_H_PX + GAP_PX) + PAD_TOP_PX;
+            var spacerH = subNextPaperTop - subTop;
             if (spacerH < 5) return false;
+            if (spacerH > (PAPER_H_PX + GAP_PX) * 1.5) {
+                console.warn('[ScreenPagination] Split spacerH too big=' + spacerH + 'px', child);
+                return false;
+            }
 
             // Insert order: [original container] [div spacer] [continuation container]
             var divSpacer = createSpacer(spacerH);
@@ -390,6 +421,10 @@ CSS;
             var contentEl = pageEl.querySelector('.content') || pageEl;
             var paperCapacityPx = PAPER_H_PX - PAD_TOP_PX - PAD_BOTTOM_PX;
             var maxIterations = 300;
+            // Track elements yg sudah di-push. Prevents infinite push loop untuk
+            // element yg terlalu besar untuk fit (e.g., single-row table dgn row
+            // taller than paper capacity — no split possible, push doesn't help).
+            var pushedOnce = new WeakSet();
 
             while (maxIterations-- > 0) {
                 var pageRect = pageEl.getBoundingClientRect();
@@ -421,6 +456,7 @@ CSS;
                             console.warn('[ScreenPagination] Skip huge pushBy=' + pushBy + 'px', child);
                             continue;
                         }
+                        dbg('Case A push-whole', child.tagName, 'top=' + Math.round(childTop), 'h=' + Math.round(rect.height), 'pushBy=' + Math.round(pushBy));
                         var spacer = createSpacer(pushBy);
                         contentEl.insertBefore(spacer, child);
                         inserted = true;
@@ -429,11 +465,60 @@ CSS;
 
                     // Case B: element too big for one paper — try container split.
                     if (tryContainerSplit(child, contentEl, contentBottom, nextPaperTop, pageTop)) {
+                        dbg('Case B split', child.tagName, 'top=' + Math.round(childTop), 'h=' + Math.round(rect.height));
                         inserted = true;
                         break;
                     }
 
-                    // Case C: can't split, accept overflow (rare — huge single element).
+                    // Case B fallback: split failed AND element too big for paper.
+                    // NO PUSH — pushing would waste 1 full paper of remaining
+                    // space on current paper. Accept overflow at current position:
+                    // element bleeds through gap area (mask hides those parts),
+                    // reappears on next paper. Less wasted paper space.
+                    //
+                    // Root cause bagi table yg fail: single row taller than paper
+                    // capacity (e.g., td dgn banyak paragraphs). Proper fix perlu
+                    // descend into td content + paragraph-level split — significant
+                    // complexity, deferred untuk sekarang.
+                    if (child.tagName === 'TABLE' || child.tagName === 'UL' || child.tagName === 'OL') {
+                        dbg('Case C accept overflow (too big, unsplittable)', child.tagName, 'top=' + Math.round(childTop), 'h=' + Math.round(rect.height));
+                        pushedOnce.add(child);
+                        continue;
+                    }
+
+                    // Case D: child is a wrapper (div, section, etc.) yg terlalu
+                    // besar dan bukan table/list sendiri. Cari nested table/list
+                    // di dalam yg cross boundary, split them in place.
+                    var nested = child.querySelectorAll('table, ol, ul');
+                    var nestedSplit = false;
+                    for (var n = 0; n < nested.length; n++) {
+                        var nest = nested[n];
+                        // Skip nested yg jadi hasil split kita sendiri (marker).
+                        if (nest.hasAttribute('data-ezdoc-split-continues')) continue;
+                        var nRect = nest.getBoundingClientRect();
+                        if (nRect.height === 0) continue;
+                        // Skip kalau nested juga kecil (fits in one paper) — kita
+                        // fokus split hanya yg besar (untuk fix wrapper overflow).
+                        if (nRect.height <= paperCapacityPx * 0.98) continue;
+
+                        var nTop = nRect.top + window.scrollY - pageTop;
+                        var nBottom = nTop + nRect.height;
+                        var nPaperIdx = paperIndexAt(nTop);
+                        var nContentBottom = contentBottomOfPaper(nPaperIdx);
+                        if (nBottom <= nContentBottom) continue;
+
+                        var nNextPaperTop = (nPaperIdx + 1) * (PAPER_H_PX + GAP_PX) + PAD_TOP_PX;
+                        if (tryContainerSplit(nest, nest.parentNode, nContentBottom, nNextPaperTop, pageTop)) {
+                            nestedSplit = true;
+                            break;
+                        }
+                    }
+                    if (nestedSplit) {
+                        inserted = true;
+                        break;
+                    }
+
+                    // Case C: can't do anything, accept overflow (rare).
                 }
 
                 if (!inserted) break;
