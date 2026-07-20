@@ -53,23 +53,6 @@ $templateHtml    = $tpl->getContent() ?: '';
 $configTtdRaw    = $tpl->getSignatureConfig();
 $tplDocScope     = $tpl->getScope();
 
-// v0.9.12 sidecar rehydration — floating elements (QR/TTD/logo/materai
-// floating variants) sekarang stored di floating_elements JSON column,
-// stripped dari content HTML. Downstream field-collection regex scans di
-// bawah expect markers embedded di HTML (`data-qr="..."`, `data-ttd="..."`,
-// `data-materai="..."`). Rehydrate markers back into templateHtml supaya
-// scan lengkap → semua field names collected → $_POST values not lost.
-$__floatingJson = $db->fetchScalar(
-    "SELECT floating_elements FROM ezdoc_templates WHERE id = ?",
-    [(int) $template_id]
-);
-if (!empty($__floatingJson)) {
-    $__floating = \Ezdoc\Template\FloatingExtractor::fromJson((string) $__floatingJson);
-    if (!empty($__floating)) {
-        $templateHtml = \Ezdoc\Template\FloatingInjector::inject($templateHtml, $__floating);
-    }
-}
-
 // ─── RBAC: template-level access check ───
 // Template::getAccessConfig() sudah return decoded array (bukan raw string),
 // jadi TIDAK perlu ezdoc_parse_access_config() (yg expect string).

@@ -1243,21 +1243,9 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
     <meta charset="UTF-8">
     <title>' . h($template['nama_template']) . '</title>
     <style>
-        /* v0.9.13 phase 2: @page margin (bukan .page padding) untuk per-physical-page
-           margin. dompdf paginator TREAT .page{padding} as ELEMENT padding
-           (applied ONCE at start/end of element, sama seperti browser),
-           BUKAN re-applied per physical page break. Result: middle pages
-           tidak dapat padTop/padBottom → content flush against physical
-           edge.
-           Fix industry-standard: @page { margin } reserves margin di setiap
-           physical page (CSS Paged Media spec). .page shrunk ke printable area
-           (paperW - padL - padR × paperH - padT - padB) supaya content sync
-           dgn browser printable area. Floating elements (absolute positioned
-           dari .page origin) shift by (padL, padT) — compensated via CSS
-           translate below. */
         @page {
             size: ' . $paperDim['width'] . 'mm ' . $paperDim['height'] . 'mm;
-            margin: ' . $padTop . 'mm ' . $padRight . 'mm ' . $padBottom . 'mm ' . $padLeft . 'mm;
+            margin: 0;
         }
         /* Global box-sizing only. Selective reset (body, .page margin/padding
            handled below). Blanket "* { margin: 0; padding: 0 }" reset removed —
@@ -1291,26 +1279,17 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         /* Inheritance safeguard — semua content dari .content, .page, body
            inherit line-height 1.6 kecuali override eksplisit (heading). */
         .page, .content { line-height: inherit; }
-        /* v0.9.13 phase 2 REFACTOR: .page shrunk ke printable area (paperW - padL
-           - padR × paperH - padT - padB). @page above sudah reserve margin di
-           setiap physical page. .page padding = 0 supaya no double margin.
-           Floating position compensation di rule below. */
+        /* .page structure identical dgn screen generate .page: full paper
+           size (paperW × paperH) dgn padding = paper margin. Sebelumnya PDF
+           pakai margin-based structure (width reduced + margin as padding)te
+           yg bikin absolute-positioned floating elements shift padT mm
+           downward vs screen. Padding-based structure sync coord origin. */
         .page {
-            width: ' . ($paperDim['width'] - $padLeft - $padRight) . 'mm;
-            min-height: ' . ($paperDim['height'] - $padTop - $padBottom) . 'mm;
+            width: ' . $paperDim['width'] . 'mm;
+            min-height: ' . $paperDim['height'] . 'mm;
             margin: 0;
-            padding: 0;
+            padding: ' . $padTop . 'mm ' . $padRight . 'mm ' . $padBottom . 'mm ' . $padLeft . 'mm;
             position: relative;
-        }
-        /* Floating position compensation — @page margin shifts .page origin ke
-           (padL, padT) di physical page coord. Floating stored di designer coord
-           (from .page top-left = paper corner). Translate back ke visual paper
-           corner position: -padL horizontal, -padT vertical.
-           Precedent: CSS Paged Media Level 3 spec, WeasyPrint floating handling. */
-        .logo-floating, .ttd-item-floating, .qr-item-floating,
-        .qr-behind, .qr-front, .materai-floating,
-        .materai-behind, .materai-front {
-            transform: translate(-' . $padLeft . 'mm, -' . $padTop . 'mm);
         }
         /* Content baseline — shared via Ezdoc\UI\ContentCss (single source of
            truth designer + generate + PDF). Historically these rules duplicated
@@ -1908,36 +1887,33 @@ function renderFieldForPdf($name, $type, $val, $label) {
             background-color: #fff;
             box-shadow: 0 4px 20px rgba(0,0,0,0.3);
             position: relative;
-            /* Page break preview (edit-on only) — Google Docs-style visible
-               page separator gap at every paperH boundary. TWO gradients form
-               full 40mm gray band across physical page break:
-               - Layer 1: padB gray stripe at BOTTOM of each tile
-               - Layer 2: padT gray stripe at TOP of each tile (offset)
-               Combined: gray band from paperH-padB to paperH+padT.
-               NOTE: Multi-page mode (via PaginationJs::split) removes this
-               background di setiap .page via style.backgroundImage='none'.
-               Rule ini fallback saja untuk pre-split state. */
+            /* Page break preview (edit-on only) — dashed horizontal line at
+               every paperH mm boundary. Same dual-layer bg masking technique
+               dari designer.php (Notion / Google Docs page marker convention):
+               - Layer 1 (front): horizontal alternating transparent/white
+                 stripes, 12px pattern. White segments invisible over paper.
+               - Layer 2 (back): solid horizontal line at Y=paperH-1, tiled
+                 vertically every paperH.
+               Result: dashed page break line visible di boundary halaman.
+               Hidden di edit-off + @media print (rules di bawah). */
             background-image:
                 linear-gradient(
-                    to bottom,
+                    to right,
                     transparent 0,
-                    transparent calc(100% - <?= $padBottom ?>mm),
-                    rgba(100, 116, 139, 0.45) calc(100% - <?= $padBottom ?>mm),
-                    rgba(100, 116, 139, 0.45) 100%
+                    transparent 6px,
+                    #fff 6px,
+                    #fff 12px
                 ),
                 linear-gradient(
                     to bottom,
-                    rgba(100, 116, 139, 0.45) 0,
-                    rgba(100, 116, 139, 0.45) <?= $padTop ?>mm,
-                    transparent <?= $padTop ?>mm
+                    transparent 0,
+                    transparent calc(<?= $paperDim['height'] ?>mm - 1px),
+                    rgba(100, 116, 139, 0.55) calc(<?= $paperDim['height'] ?>mm - 1px),
+                    rgba(100, 116, 139, 0.55) <?= $paperDim['height'] ?>mm
                 );
-            background-size:
-                100% <?= $paperDim['height'] ?>mm,
-                100% <?= $paperDim['height'] ?>mm;
-            background-position:
-                0 0,
-                0 <?= $paperDim['height'] ?>mm;
-            background-repeat: repeat-y, repeat-y;
+            background-size: 12px 100%, 100% <?= $paperDim['height'] ?>mm;
+            background-position: 0 0, 0 0;
+            background-repeat: repeat-x, repeat-y;
         }
         /* Hide page break preview di edit-off (locked/final) state + print.
            Preview marker adalah edit-mode visual hint, bukan bagian dokumen final. */
@@ -1956,11 +1932,6 @@ function renderFieldForPdf($name, $type, $val, $label) {
            Precedent: Notion/Google Docs shared editor+view CSS. */
         .content { line-height: 1.6; }
         <?= \Ezdoc\UI\ContentCss::render() ?>
-
-        /* Virtual pagination spacer companion CSS (Ezdoc\UI\PaginationJs).
-           JS injects .pg-spacer divs at page boundaries so content flow
-           respects margin at EVERY physical page break. */
-        <?= \Ezdoc\UI\PaginationJs::renderCss((float) $padTop) ?>
 
         /* Field (contenteditable) - auto-adjusts for 1 or multi line */
         .f-wrap { display: inline; }
@@ -3028,51 +2999,6 @@ function renderFieldForPdf($name, $type, $val, $label) {
         window.EZDOC_DEBUG.load = <?= json_encode($__ezdocLoadDebug ?? ['result' => ['found' => false], 'hint' => 'No lookup performed (missing norm/nopen or new doc)'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
         window.EZDOC_DEBUG.saves = [];
         console.log('%c[ezdoc:load]', 'color:#0e7490;font-weight:bold', window.EZDOC_DEBUG.load);
-
-        /* ===== VIRTUAL PAGINATION (v0.9.13) =====
-           JS-injected spacer divs at every page boundary so content flow
-           respects margin di setiap physical page break. Paper geometry
-           di-embed dari server. Bootstrap helper via Ezdoc\UI\PaginationJs. */
-        <?= \Ezdoc\UI\PaginationJs::render(
-            (float) $paperDim['height'],
-            (float) $padTop,
-            (float) $padBottom
-        ) ?>
-
-        /* Debounce util — shared across pagination + other event handlers. */
-        function ezdocDebounce(fn, wait) {
-            let t = null;
-            return function() {
-                const args = arguments, ctx = this;
-                clearTimeout(t);
-                t = setTimeout(function() { fn.apply(ctx, args); }, wait || 200);
-            };
-        }
-
-        /* Re-paginate on: DOM load, window resize, field input (values may
-           change content height), image load (async). Debounced 200ms so
-           rapid typing tidak jank. */
-        const repaginate = ezdocDebounce(function() {
-            const content = document.querySelector('.content');
-            if (content && window.EzdocPagination) {
-                window.EzdocPagination.paginate(content);
-            }
-        }, 200);
-
-        document.addEventListener('DOMContentLoaded', function() {
-            repaginate();
-            /* Trigger re-paginate on any field change (edit mode) — content
-               height changes as user fills fields. */
-            document.querySelectorAll('.f[data-field], input[name], select[name], textarea[name]').forEach(function(el) {
-                el.addEventListener('input', repaginate);
-                el.addEventListener('change', repaginate);
-            });
-            /* Images load async — re-measure when they finish. */
-            document.querySelectorAll('img').forEach(function(img) {
-                if (!img.complete) img.addEventListener('load', repaginate);
-            });
-        });
-        window.addEventListener('resize', repaginate);
 
         const templateId = <?= $template_id ?>;
         const isEditMode = <?= $isEditMode ? 'true' : 'false' ?>;
