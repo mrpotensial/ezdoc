@@ -1908,33 +1908,36 @@ function renderFieldForPdf($name, $type, $val, $label) {
             background-color: #fff;
             box-shadow: 0 4px 20px rgba(0,0,0,0.3);
             position: relative;
-            /* Page break preview (edit-on only) — dashed horizontal line at
-               every paperH mm boundary. Same dual-layer bg masking technique
-               dari designer.php (Notion / Google Docs page marker convention):
-               - Layer 1 (front): horizontal alternating transparent/white
-                 stripes, 12px pattern. White segments invisible over paper.
-               - Layer 2 (back): solid horizontal line at Y=paperH-1, tiled
-                 vertically every paperH.
-               Result: dashed page break line visible di boundary halaman.
-               Hidden di edit-off + @media print (rules di bawah). */
+            /* Page break preview (edit-on only) — Google Docs-style visible
+               page separator gap at every paperH boundary. TWO gradients form
+               full 40mm gray band across physical page break:
+               - Layer 1: padB gray stripe at BOTTOM of each tile
+               - Layer 2: padT gray stripe at TOP of each tile (offset)
+               Combined: gray band from paperH-padB to paperH+padT.
+               NOTE: Multi-page mode (via PaginationJs::split) removes this
+               background di setiap .page via style.backgroundImage='none'.
+               Rule ini fallback saja untuk pre-split state. */
             background-image:
-                linear-gradient(
-                    to right,
-                    transparent 0,
-                    transparent 6px,
-                    #fff 6px,
-                    #fff 12px
-                ),
                 linear-gradient(
                     to bottom,
                     transparent 0,
-                    transparent calc(<?= $paperDim['height'] ?>mm - 1px),
-                    rgba(100, 116, 139, 0.55) calc(<?= $paperDim['height'] ?>mm - 1px),
-                    rgba(100, 116, 139, 0.55) <?= $paperDim['height'] ?>mm
+                    transparent calc(100% - <?= $padBottom ?>mm),
+                    rgba(100, 116, 139, 0.45) calc(100% - <?= $padBottom ?>mm),
+                    rgba(100, 116, 139, 0.45) 100%
+                ),
+                linear-gradient(
+                    to bottom,
+                    rgba(100, 116, 139, 0.45) 0,
+                    rgba(100, 116, 139, 0.45) <?= $padTop ?>mm,
+                    transparent <?= $padTop ?>mm
                 );
-            background-size: 12px 100%, 100% <?= $paperDim['height'] ?>mm;
-            background-position: 0 0, 0 0;
-            background-repeat: repeat-x, repeat-y;
+            background-size:
+                100% <?= $paperDim['height'] ?>mm,
+                100% <?= $paperDim['height'] ?>mm;
+            background-position:
+                0 0,
+                0 <?= $paperDim['height'] ?>mm;
+            background-repeat: repeat-y, repeat-y;
         }
         /* Hide page break preview di edit-off (locked/final) state + print.
            Preview marker adalah edit-mode visual hint, bukan bagian dokumen final. */

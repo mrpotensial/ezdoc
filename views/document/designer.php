@@ -239,8 +239,14 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         }
     </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
+    <!-- Alpine plugin loading order: plugins MUST load BEFORE Alpine core.
+         Plugin CDN script attaches listener to 'alpine:init' event, which
+         Alpine core fires saat start(). Kalau Alpine core loads first,
+         auto-starts, plugin listener attached AFTER alpine:init fired
+         → plugin never registered → 'x-collapse plugin not installed'.
+         Precedent: alpinejs.dev/plugins/collapse docs official pattern. -->
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.13.5/dist/cdn.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tinymce@6/tinymce.min.js"></script>
     <style>
         /* PRESERVE: dompdf renders this, Tailwind CDN not applied — do NOT rename or Tailwind-ify */
@@ -1025,20 +1031,28 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
     <?= \Ezdoc\UI\Slot::render('designer:modals-extra', ['template' => $template ?? null]) ?>
 
-    <!-- JS-triggered slots (Alpine event bridges) -->
-    <div x-data @ezdoc:before-save.window="/* consumer hook: see designer:save-hook-pre */">
+    <!-- JS-triggered slots (Alpine event bridges).
+         Alpine parses @event value sebagai JavaScript expression.
+         Comment-only value TIDAK valid expression → SyntaxError.
+         Pakai `void 0` no-op expression + HTML comment untuk consumer hint. -->
+    <!-- consumer hook: see designer:save-hook-pre -->
+    <div x-data @ezdoc:before-save.window="void 0">
         <?= \Ezdoc\UI\Slot::render('designer:save-hook-pre', ['template' => $template ?? null]) ?>
     </div>
-    <div x-data @ezdoc:after-save.window="/* consumer hook: see designer:save-hook-post */">
+    <!-- consumer hook: see designer:save-hook-post -->
+    <div x-data @ezdoc:after-save.window="void 0">
         <?= \Ezdoc\UI\Slot::render('designer:save-hook-post', ['template' => $template ?? null]) ?>
     </div>
-    <div x-data @ezdoc:field-context.window="/* consumer right-click field */">
+    <!-- consumer right-click field -->
+    <div x-data @ezdoc:field-context.window="void 0">
         <?= \Ezdoc\UI\Slot::render('designer:field-context-menu', ['template' => $template ?? null]) ?>
     </div>
-    <div x-data @ezdoc:ttd-context.window="/* consumer right-click ttd */">
+    <!-- consumer right-click ttd -->
+    <div x-data @ezdoc:ttd-context.window="void 0">
         <?= \Ezdoc\UI\Slot::render('designer:ttd-context-menu', ['template' => $template ?? null]) ?>
     </div>
-    <div x-data @ezdoc:materai-context.window="/* consumer right-click materai */">
+    <!-- consumer right-click materai -->
+    <div x-data @ezdoc:materai-context.window="void 0">
         <?= \Ezdoc\UI\Slot::render('designer:materai-context-menu', ['template' => $template ?? null]) ?>
     </div>
 
@@ -1547,6 +1561,11 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     // background-image di content_style. Line muncul di setiap
                     // paperHeight (bukan content area) sesuai actual print page.
                     body.style.setProperty('--ezdoc-page-h', paperHeight + 'mm');
+                    body.style.setProperty('--ezdoc-paper-w', paperWidth + 'mm');
+                    body.style.setProperty('--ezdoc-pad-top', padTop + 'mm');
+                    body.style.setProperty('--ezdoc-pad-right', padRight + 'mm');
+                    body.style.setProperty('--ezdoc-pad-bottom', padBottom + 'mm');
+                    body.style.setProperty('--ezdoc-pad-left', padLeft + 'mm');
                 }
 
                 // TinyMCE widget height = viewport-fill (getEditorHeight).
@@ -2068,13 +2087,27 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
            - editor init
            - editor NodeChange/KeyUp/SetContent (debounced)
            - updatePageSize (paper size / padding change) */
+        /* Recursion guard — MutationObserver in setup callback watches body
+           for content changes. splitEditor modifies DOM which would re-fire
+           observer → infinite loop. Flag prevents recursive re-trigger. */
+        let _pgSplitInProgress = false;
         function repaginateEditor() {
+            if (_pgSplitInProgress) return;
             const editor = window.tinymce && tinymce.get('editor');
             if (!editor || !window.EzdocPagination) return;
             const iframe = editor.getContainer().querySelector('iframe');
             if (!iframe || !iframe.contentDocument) return;
             const body = iframe.contentDocument.body;
             if (!body) return;
+            _pgSplitInProgress = true;
+            try { return _repaginateEditorImpl(editor, body); }
+            finally {
+                /* Reset flag on next tick supaya MutationObserver dari split
+                   operations tuntas tanpa re-trigger. */
+                setTimeout(function() { _pgSplitInProgress = false; }, 100);
+            }
+        }
+        function _repaginateEditorImpl(editor, body) {
 
             const ptEl = document.getElementById('padTop');
             const pbEl = document.getElementById('padBottom');
@@ -2101,13 +2134,34 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             window.EzdocPagination.config.paperHeightMm = paperH;
             window.EzdocPagination.config.padTopMm = padT;
             window.EzdocPagination.config.padBottomMm = padB;
-            window.EzdocPagination.paginate(body);
+            /* v0.9.13 phase 5: TRUE multi-page split di TinyMCE editor dgn
+               cursor preservation via bookmark API. Industry pattern proven
+               di CKEditor 5 Pagination Premium.
+               Bookmark API: getBookmark(2) saves cursor as ID-based reference
+               resilient to DOM restructure. moveToBookmark restores after
+               split. */
+            if (typeof window.EzdocPagination.splitEditor === 'function') {
+                /* editor + body come from outer repaginateEditor() param. */
+                let bookmark = null;
+                try {
+                    if (editor && editor.selection) {
+                        bookmark = editor.selection.getBookmark(2);
+                    }
+                } catch (e) { /* editor tidak ready atau selection kosong */ }
+                window.EzdocPagination.splitEditor(body, paperH, padT, padB);
+                if (bookmark && editor && editor.selection) {
+                    try { editor.selection.moveToBookmark(bookmark); }
+                    catch (e) { /* bookmark invalid setelah restructure — no-op */ }
+                }
+            }
         }
+        /* Debounce 500ms — allow rapid typing without re-splitting per key.
+           Trigger sekali setelah user pause 500ms. */
         const repaginateEditorDebounced = (function() {
             let t = null;
             return function() {
                 clearTimeout(t);
-                t = setTimeout(repaginateEditor, 250);
+                t = setTimeout(repaginateEditor, 500);
             };
         })();
 
@@ -2131,7 +2185,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             //   directionality: LTR/RTL toggle untuk multi-lang templates
             //   importcss    : import consumer app CSS (brand consistency)
             //   quickbars    : floating selection toolbar (Notion pattern)
-            plugins: 'advlist anchor autolink autosave charmap code directionality fullscreen help hr image importcss insertdatetime lists link nonbreaking pagebreak preview quickbars searchreplace table visualblocks visualchars wordcount',
+            plugins: 'advlist anchor autolink autosave charmap code directionality fullscreen help image importcss insertdatetime lists link nonbreaking pagebreak preview quickbars searchreplace table visualblocks visualchars wordcount',
             // Autosave — critical UX (recovers content kalau browser crash/close).
             // Prefix pakai template ID supaya per-template autosave.
             // NOTE: `autosave_ask_before_unload` sengaja OFF — TinyMCE builtin
@@ -2271,34 +2325,89 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
                        CSS var --ezdoc-page-h di-set dinamis oleh updatePageSize().
                        Fallback 297mm (A4 portrait) kalau var belum set. */
-                    /* Dashed page break line — dual-layer background:
-                       - Layer 1 (front): horizontal alternating transparent/white
-                         stripes, 12px wide (6 transparent + 6 white). Masks layer 2
-                         line into dashes. White opaque matches body bg → invisible
-                         over paper area.
-                       - Layer 2 (back): solid horizontal line at Y=paperH-1, tiled
-                         vertically at paperH intervals.
-                       Layer 1 masks layer 2 → visible dashed line at each page break
-                       boundary. */
+                    /* Google Docs-style visible page separator dgn 4 background layers:
+                       Layer 1+2: solid gray gap band (padB portion di bottom of
+                                  tile + padT portion di top of next tile, combined
+                                  = 40mm gray strip di setiap physical page break)
+                       Layer 3+4: subtle DARK inset shadow lines di edges of gap
+                                  band (fake "bottom edge of page N" + "top edge
+                                  of page N+1" = simulates paper card separation)
+                       Result: content flow continuous, tapi visual crisp "page
+                       cards separated by gap" look approximates Google Docs. */
                     background-image:
-                        linear-gradient(
-                            to right,
-                            transparent 0,
-                            transparent 6px,
-                            white 6px,
-                            white 12px
-                        ),
+                        /* Layer 1: bottom edge shadow of page N (dark line at
+                           top of gray band = bottom edge of previous page card) */
                         linear-gradient(
                             to bottom,
                             transparent 0,
-                            transparent calc(var(--ezdoc-page-h, 297mm) - 1px),
-                            rgba(100, 116, 139, 0.55) calc(var(--ezdoc-page-h, 297mm) - 1px),
-                            rgba(100, 116, 139, 0.55) var(--ezdoc-page-h, 297mm)
+                            transparent calc(100% - var(--ezdoc-pad-bottom, 20mm) - 2px),
+                            rgba(0, 0, 0, 0.18) calc(100% - var(--ezdoc-pad-bottom, 20mm)),
+                            transparent calc(100% - var(--ezdoc-pad-bottom, 20mm) + 4px)
+                        ),
+                        /* Layer 2: top edge shadow of page N+1 (dark line at
+                           bottom of gray band = top edge of next page card) */
+                        linear-gradient(
+                            to bottom,
+                            transparent 0,
+                            rgba(0, 0, 0, 0.18) var(--ezdoc-pad-top, 20mm),
+                            transparent calc(var(--ezdoc-pad-top, 20mm) + 4px),
+                            transparent 100%
+                        ),
+                        /* Layer 3: gray fill di bottom padB of tile */
+                        linear-gradient(
+                            to bottom,
+                            transparent 0,
+                            transparent calc(100% - var(--ezdoc-pad-bottom, 20mm)),
+                            rgba(100, 116, 139, 0.7) calc(100% - var(--ezdoc-pad-bottom, 20mm)),
+                            rgba(100, 116, 139, 0.7) 100%
+                        ),
+                        /* Layer 4: gray fill di top padT of next tile (offset paperH) */
+                        linear-gradient(
+                            to bottom,
+                            rgba(100, 116, 139, 0.7) 0,
+                            rgba(100, 116, 139, 0.7) var(--ezdoc-pad-top, 20mm),
+                            transparent var(--ezdoc-pad-top, 20mm)
                         );
-                    background-size: 12px 100%, 100% var(--ezdoc-page-h, 297mm);
-                    background-position: 0 0, 0 0;
-                    background-repeat: repeat-x, repeat-y;
+                    background-size:
+                        100% var(--ezdoc-page-h, 297mm),
+                        100% var(--ezdoc-page-h, 297mm),
+                        100% var(--ezdoc-page-h, 297mm),
+                        100% var(--ezdoc-page-h, 297mm);
+                    background-position:
+                        0 0,
+                        0 var(--ezdoc-page-h, 297mm),
+                        0 0,
+                        0 var(--ezdoc-page-h, 297mm);
+                    background-repeat: repeat-y, repeat-y, repeat-y, repeat-y;
                     background-attachment: local; /* scroll dgn content */
+                }
+                /* v0.9.13 phase 4: multi-page mode (via EzdocPagination.splitEditor).
+                   Body jadi gray canvas, .ezdoc-page-view divs jadi paper cards
+                   dgn shadow + margin gap between. True Google Docs UX.
+                   Precedent: CKEditor 5 Pagination widget, TinyMCE pagebreak
+                   plugin pattern. */
+                body.ezdoc-paginated {
+                    background-color: transparent !important;
+                    background-image: none !important;
+                    box-shadow: none !important;
+                    max-width: none !important;
+                    padding: 0 !important;
+                    margin: 0 !important;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 24px;
+                }
+                body.ezdoc-paginated .ezdoc-page-view {
+                    width: 210mm; /* dynamic via updatePageSize CSS var */
+                    max-width: var(--ezdoc-paper-w, 210mm);
+                    width: var(--ezdoc-paper-w, 210mm);
+                    min-height: var(--ezdoc-page-h, 297mm);
+                    padding: var(--ezdoc-pad-top, 20mm) var(--ezdoc-pad-right, 20mm) var(--ezdoc-pad-bottom, 20mm) var(--ezdoc-pad-left, 20mm);
+                    background: white;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                    box-sizing: border-box;
+                    position: relative;
                 }
                 /* "Page N" label di setiap page-break line — subtle floating
                    indicator, tidak affect content flow. Positioned via same
@@ -2583,6 +2692,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     // dgn our marker attribute → fires untuk any element yg
                     // punya data-pg-original-mt → precise strip.
                     if (editor.serializer && typeof editor.serializer.addAttributeFilter === 'function') {
+                        /* Legacy phase 3 filter — strip .pg-boundary-push markers
+                           kalau ada di saved content. Backward-compat only. */
                         editor.serializer.addAttributeFilter('data-pg-original-mt', function(nodes) {
                             for (let i = 0; i < nodes.length; i++) {
                                 const node = nodes[i];
@@ -2605,13 +2716,45 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                                 }
                             }
                         });
+
+                        /* v0.9.13 phase 4: multi-page wrapper unwrap filter.
+                           Match div dgn attribute data-ezdoc-page (dipasang oleh
+                           EzdocPagination.splitEditor). Unwrap: move children to
+                           parent, remove wrapper. Serialized HTML CLEAN (no
+                           wrapper divs saved to template).
+                           Precedent: TinyMCE core pagebreak plugin, imagetools —
+                           serializer filter untuk unwrap/transform elements at
+                           serialize time tanpa modify DOM. */
+                        editor.serializer.addAttributeFilter('data-ezdoc-page', function(nodes) {
+                            for (let i = 0; i < nodes.length; i++) {
+                                const wrapper = nodes[i];
+                                const parent = wrapper.parent;
+                                if (!parent) continue;
+                                /* Move all children out (before wrapper), then remove wrapper.
+                                   TinyMCE AST: node.firstChild, child.next, parent.insert(child, ref). */
+                                let child = wrapper.firstChild;
+                                while (child) {
+                                    const next = child.next;
+                                    parent.insert(child, wrapper, true); // insert before wrapper
+                                    child = next;
+                                }
+                                wrapper.remove();
+                            }
+                        });
                     }
 
-                    // MutationObserver — fires HANYA pada real content mutations.
-                    // Kita observe childList + characterData (NOT attributes) supaya
-                    // paginate's own attribute mutations (class, style, data-*) tidak
-                    // trigger recursion. Also filter out mmToPx probe elements
-                    // (position:absolute + visibility:hidden = clearly non-content).
+                    /* Note: BeforeSetContent handler tidak diperlukan.
+                       splitEditor() SELALU panggil flattenEditor() first
+                       (idempotent), sehingga content baru yg parsed TinyMCE
+                       (dgn atau tanpa existing wrappers) di-flatten dulu sebelum
+                       re-split. Safe untuk repeated setContent calls. */
+
+                    // v0.9.13 phase 5: MutationObserver + debounced repaginate
+                    // dgn cursor bookmark preservation. Content-change triggers
+                    // re-split with saved cursor position (via getBookmark(2)
+                    // ID-based reference resilient to DOM restructure).
+                    // Precedent: CKEditor 5 Pagination Premium uses same pattern.
+                    // Debounce 500ms untuk avoid re-split on every keystroke.
                     if (typeof MutationObserver === 'function') {
                         const observer = new MutationObserver(function(mutations) {
                             let contentChanged = false;
