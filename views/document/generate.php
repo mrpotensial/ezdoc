@@ -1230,9 +1230,16 @@ elseif ($param_norm && $param_nopen) {
 }
 
 // ============================================
-// PDF VIEW MODE
+// PDF VIEW MODE + PRINT VIEW MODE (Paged.js)
 // ============================================
-if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
+// view=pdf  → dompdf server-side rendering
+// view=print → Paged.js client-side pagination + auto window.print() (industri
+//              standar polyfill utk CSS Paged Media Level 3, dipakai Vivliostyle,
+//              proyek O'Reilly, arXiv HTML paper preview). Sama structure HTML
+//              seperti PDF view supaya output match.
+$__viewMode = $_GET['view'] ?? '';
+if ($__viewMode === 'pdf' || $__viewMode === 'print') {
+    $isPagedPrint = ($__viewMode === 'print');
     // Generate PDF version
     $forceDownload = isset($_GET['download']) && $_GET['download'] == '1';
 
@@ -1454,10 +1461,41 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         'template' => $template,
         'doc_id'   => (int)$doc_id,
     ]);
-    $pdfHtml .= '</div></body></html>';
+    $pdfHtml .= '</div>';
+
+    // ─── PRINT VIEW MODE: inject Paged.js polyfill + auto window.print() ───
+    // Paged.js processes @page rules + margin-boxes client-side, giving browser
+    // print output yang match dompdf server-side PDF. Same @page margin already
+    // set di head; Paged.js paginates content into .pagedjs_page divs, browser
+    // print sees proper per-page margins.
+    // spec: https://pagedjs.org/documentation/
+    if ($isPagedPrint) {
+        $pdfHtml .= '
+<script src="https://unpkg.com/pagedjs@0.4.3/dist/paged.polyfill.js"></script>
+<script>
+    // Handler: fires setelah Paged.js finish paginating semua content.
+    // Auto-trigger browser print dialog. User can Ctrl+P again atau close window.
+    class PrintHandler extends Paged.Handler {
+        afterRendered(pages) {
+            // Small delay untuk allow layout settle (images, fonts).
+            setTimeout(function() { window.print(); }, 500);
+        }
+    }
+    Paged.registerHandlers(PrintHandler);
+</script>';
+    }
+
+    $pdfHtml .= '</body></html>';
 
     // Debug mode: view=html to see raw HTML before PDF conversion
     if (isset($_GET['debug']) && $_GET['debug'] === 'html') {
+        header('Content-Type: text/html; charset=utf-8');
+        echo $pdfHtml;
+        exit;
+    }
+
+    // ─── PRINT VIEW: echo langsung, bukan lewat dompdf ───
+    if ($isPagedPrint) {
         header('Content-Type: text/html; charset=utf-8');
         echo $pdfHtml;
         exit;
@@ -1946,6 +1984,18 @@ function renderFieldForPdf($name, $type, $val, $label) {
            Precedent: Notion/Google Docs shared editor+view CSS. */
         .content { line-height: 1.6; }
         <?= \Ezdoc\UI\ContentCss::render() ?>
+
+        /* Screen pagination — visual multi-paper cards + JS spacer boundary.
+           Adopted patterns dari Paged.js chunker (overflow detection algo). */
+        <?= \Ezdoc\UI\ScreenPagination::renderCss(
+            (float)$paperDim['width'],
+            (float)$paperDim['height'],
+            (float)$padTop,
+            (float)$padRight,
+            (float)$padBottom,
+            (float)$padLeft,
+            12.0
+        ) ?>
 
         /* Field (contenteditable) - auto-adjusts for 1 or multi line */
         .f-wrap { display: inline; }
@@ -2781,7 +2831,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     <button type="button" class="btn-success col-span-2 !m-0 !py-1.5 !text-[12px]" onclick="submitForm()" <?= $param_is_locked ? 'disabled title="' . h(t('title.locked_cannot_update', [], 'Locked - cannot update')) . '"' : '' ?>>
                         <?= $isEditMode ? ($param_is_locked ? h(t('toolbar.locked', [], 'Locked')) : h(t('toolbar.update', [], 'Update'))) : h(t('toolbar.save_new', [], 'Save New')) ?>
                     </button>
-                    <button type="button" class="!m-0 !py-1.5 !px-1 !text-[11px]" onclick="window.print()" title="<?= h(t('title.print_shortcut', [], 'Print (Ctrl+P)')) ?>"><i class="bi bi-printer"></i> <?= h(t('toolbar.print', [], 'Print')) ?></button>
+                    <button type="button" class="!m-0 !py-1.5 !px-1 !text-[11px]" onclick="pagedPrint()" title="<?= h(t('title.print_shortcut', [], 'Print (via Paged.js)')) ?>"><i class="bi bi-printer"></i> <?= h(t('toolbar.print', [], 'Print')) ?></button>
                 </div>
 
                 <?php // Slot: toolbar-extra-actions — consumer buttons (Export Excel, WhatsApp, Email PDF, e-Sign, Copy Link) ?>
@@ -3850,6 +3900,26 @@ function renderFieldForPdf($name, $type, $val, $label) {
             window.open('?' + params.toString(), '_blank');
         }
 
+        // Print via Paged.js — open new window dgn ?view=print URL yg render
+        // clean content + Paged.js CDN + auto-trigger window.print().
+        // Isolation: new window tidak share DOM dgn generate.php, existing UI
+        // (toolbar, modal, floating elements) tidak terganggu.
+        // Industri precedent: Vivliostyle Viewer, arXiv HTML preview, O'Reilly
+        // ebook preview — semua pakai Paged.js dgn window/tab isolation.
+        function pagedPrint() {
+            const params = _preservedParams();
+            params.set('template_id', templateId);
+            if (CURRENT_DOC_ID) params.set('doc_id', CURRENT_DOC_ID);
+            else {
+                if (CURRENT_NORM) params.set('norm', CURRENT_NORM);
+                if (CURRENT_NOPEN) params.set('nopen', CURRENT_NOPEN);
+                if (CURRENT_LABEL && CURRENT_LABEL !== '-') params.set('label', CURRENT_LABEL);
+                if (CURRENT_VERSION) params.set('version', CURRENT_VERSION);
+            }
+            params.set('view', 'print');
+            window.open('?' + params.toString(), '_blank');
+        }
+
         // Show document info modal
         function showDocInfo() {
             const meta = <?= json_encode($docMeta, JSON_UNESCAPED_UNICODE) ?>;
@@ -4673,6 +4743,18 @@ function renderFieldForPdf($name, $type, $val, $label) {
             syncFields();
             return originalSubmitForm();
         };
+    </script>
+
+    <!-- Screen pagination — visual multi-paper cards + JS spacer at boundary.
+         Loaded LAST supaya semua content sudah settled (fields, floating elements,
+         TTD modal ready). Runs on DOMContentLoaded. -->
+    <script>
+        <?= \Ezdoc\UI\ScreenPagination::renderJs(
+            (float)$paperDim['height'],
+            (float)$padTop,
+            (float)$padBottom,
+            12.0
+        ) ?>
     </script>
 
     <?php include __DIR__ . '/../_partials/dialog_helper.php'; ?>

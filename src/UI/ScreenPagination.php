@@ -1,0 +1,377 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Ezdoc\UI;
+
+/**
+ * Screen pagination — visual multi-paper cards + JS spacer at page boundaries.
+ *
+ * ## Motivation
+ *
+ * Generate view previously rendered content di single tall `.page` container.
+ * Content overflowed paperH tanpa visual page break — text bleed continuously
+ * dari "paper 1" area ke "paper 2" area tanpa gap. User request: match Google
+ * Docs / Word Online visual (paper cards with gap between).
+ *
+ * ## Design decisions (why no DOM restructure)
+ *
+ * Prior attempts at true multi-page split (v0.9.13 phases 1-5) broke:
+ * - Cursor jumps during typing (DOM restructure interrupts caret)
+ * - Insert table di luar kertas (cursor position lost)
+ * - Save + reload = layout kacau
+ * - Text + Table not combining on same card
+ *
+ * Approach here: KEEP single `.page` container. Content stays in one DOM tree.
+ * Visual paper cards achieved via CSS mask-image (cutout gap regions from single
+ * background). Content properly-broken across paper boundaries via JS-inserted
+ * invisible spacer divs.
+ *
+ * Trade-off: only element-level break points (paragraph, heading, list-item,
+ * table-row). Line-level split within a single paragraph tidak supported —
+ * paragraph yg terlalu panjang untuk fit paper akan overflow ke gap area. Untuk
+ * MOST realistic docs (form-filled templates), paragraphs pendek, jarang isu.
+ *
+ * ## Precedent
+ * - **CKEditor 5 Pagination Premium** — commercial ($1500/yr) plugin dgn same
+ *   approach: single container + visual paper cards via CSS + JS spacer.
+ * - **Google Docs** — multi-container tapi dgn intense DOM management (their
+ *   solution too complex to port; we adopt visual approach only).
+ * - **Word Online** — similar single-container-visual-paginated pattern.
+ * - **Paged.js chunker** — inspiration untuk overflow detection algorithm
+ *   (traverse block children, measure position, decide break point).
+ *
+ * ## Usage
+ *
+ * Include CSS + JS in generate view AFTER shared ContentCss:
+ * ```html
+ * <style>
+ *     <?= \Ezdoc\UI\ContentCss::render() ?>
+ *     <?= \Ezdoc\UI\ScreenPagination::renderCss($paperW, $paperH, $padTop, $padRight, $padBottom, $padLeft, $gap) ?>
+ * </style>
+ * <script>
+ *     <?= \Ezdoc\UI\ScreenPagination::renderJs($paperH, $padTop, $padBottom, $gap) ?>
+ * </script>
+ * ```
+ *
+ * spec: docs/SCREEN-PAGINATION.md
+ */
+final class ScreenPagination
+{
+    /**
+     * Render CSS — multi-paper visual via mask-image cutouts + drop-shadow.
+     *
+     * @param float $paperW  Paper width in mm (e.g. 210 for A4).
+     * @param float $paperH  Paper height in mm (e.g. 297 for A4).
+     * @param float $padTop
+     * @param float $padRight
+     * @param float $padBottom
+     * @param float $padLeft
+     * @param float $gap     Visual gap between papers in mm (default 12mm).
+     */
+    public static function renderCss(
+        float $paperW,
+        float $paperH,
+        float $padTop,
+        float $padRight,
+        float $padBottom,
+        float $padLeft,
+        float $gap = 12.0
+    ): string {
+        $tileH = $paperH + $gap;
+        return <<<CSS
+/* ─── Screen Pagination — visual multi-paper cards ─── */
+
+/* .page = single container spanning all "papers". No box-shadow di sini —
+   shadow di-apply via drop-shadow filter yg respect mask cutouts (per-paper
+   shadow effect). */
+.page {
+    background-color: #ffffff;
+    box-shadow: none;
+    /* Mask cutout: alternating opaque (paper area, 0..paperH) + transparent
+       (gap area, paperH..paperH+gap). Repeating vertically. */
+    -webkit-mask-image: linear-gradient(
+        to bottom,
+        black 0mm,
+        black {$paperH}mm,
+        transparent {$paperH}mm,
+        transparent {$tileH}mm
+    );
+    mask-image: linear-gradient(
+        to bottom,
+        black 0mm,
+        black {$paperH}mm,
+        transparent {$paperH}mm,
+        transparent {$tileH}mm
+    );
+    -webkit-mask-size: 100% {$tileH}mm;
+    mask-size: 100% {$tileH}mm;
+    -webkit-mask-repeat: repeat-y;
+    mask-repeat: repeat-y;
+    /* Drop-shadow filter follows mask, giving per-paper shadow effect. */
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.25));
+    /* Remove existing dashed line pattern — replaced by real gap. */
+    background-image: none;
+}
+
+/* Marker class on body: enable pagination mode. Consumer sets this to opt-in. */
+.ezdoc-paginated .page {
+    background-color: #ffffff;
+}
+
+/* Spacer inserted by JS at page boundary — invisible, cannot be caret target. */
+.ezdoc-page-spacer {
+    display: block;
+    width: 100%;
+    user-select: none;
+    -webkit-user-select: none;
+    /* contenteditable=false blocks caret entry (industri standar TinyMCE
+       widget pattern). */
+    pointer-events: none;
+    /* Height set inline by JS (padB + gap + padT of next paper). */
+}
+
+/* Print — hide spacers + turn off mask (printer handles page break via @page). */
+@media print {
+    .page {
+        -webkit-mask-image: none;
+        mask-image: none;
+        filter: none;
+    }
+    .ezdoc-page-spacer { display: none !important; }
+}
+CSS;
+    }
+
+    /**
+     * Render JS — insert spacer divs at natural break points sebelum content
+     * yg akan cross paper boundary.
+     *
+     * Algorithm (adopted from Paged.js chunker):
+     * 1. Traverse .page's direct block children (p, h1-h6, ul/ol, table, div).
+     * 2. For each child, compute top + bottom position relative to .page.
+     * 3. If child bottom > current paper's content-area bottom:
+     *    - If child top < current paper's content-area bottom (crosses boundary):
+     *      → check page-break-inside: avoid (respect CSS)
+     *      → insert spacer BEFORE this child (push to next paper)
+     *    - Else (child entirely in gap area): also insert spacer to push down
+     * 4. Recompute after each insertion (subsequent children shift down).
+     *
+     * @param float $paperH Paper height in mm.
+     * @param float $padTop Top padding in mm.
+     * @param float $padBottom Bottom padding in mm.
+     * @param float $gap Gap between papers in mm.
+     */
+    public static function renderJs(
+        float $paperH,
+        float $padTop,
+        float $padBottom,
+        float $gap = 12.0
+    ): string {
+        $paperHJs = json_encode($paperH);
+        $padTopJs = json_encode($padTop);
+        $padBottomJs = json_encode($padBottom);
+        $gapJs = json_encode($gap);
+        return <<<JS
+/* ─── Screen Pagination — spacer insertion ─── */
+(function() {
+    'use strict';
+
+    var PAPER_H_MM = {$paperHJs};
+    var PAD_TOP_MM = {$padTopJs};
+    var PAD_BOTTOM_MM = {$padBottomJs};
+    var GAP_MM = {$gapJs};
+
+    // Convert mm to px using 1 CSS mm = 96 / 25.4 px (browser standard).
+    var MM_TO_PX = 96 / 25.4;
+    var PAPER_H_PX = PAPER_H_MM * MM_TO_PX;
+    var PAD_TOP_PX = PAD_TOP_MM * MM_TO_PX;
+    var PAD_BOTTOM_PX = PAD_BOTTOM_MM * MM_TO_PX;
+    var GAP_PX = GAP_MM * MM_TO_PX;
+
+    // Spacer height = padB (fill bottom of current paper) + gap + padT (top
+    // of next paper). Content after spacer resumes at correct position on
+    // next paper's content area.
+    var SPACER_H_PX = PAD_BOTTOM_PX + GAP_PX + PAD_TOP_PX;
+
+    /**
+     * Compute how many complete "papers" a given position (from .page top) is
+     * past. Position 0 = top of paper 1. Position paperH = start of gap after
+     * paper 1. Position paperH+gap = top of paper 2.
+     */
+    function paperIndexAt(y) {
+        var tileH = PAPER_H_PX + GAP_PX;
+        return Math.floor(y / tileH);
+    }
+
+    /**
+     * Compute the y-position of paper N's content-area bottom (where padding
+     * bottom starts). N=0 → paper 1's content bottom.
+     */
+    function contentBottomOfPaper(n) {
+        var tileH = PAPER_H_PX + GAP_PX;
+        return n * tileH + (PAPER_H_PX - PAD_BOTTOM_PX);
+    }
+
+    /**
+     * Create invisible spacer element. contenteditable=false + pointer-events:
+     * none blocks caret entry (browser tidak masuk cursor ke element ini).
+     */
+    function createSpacer(heightPx) {
+        var s = document.createElement('div');
+        s.className = 'ezdoc-page-spacer';
+        s.setAttribute('contenteditable', 'false');
+        s.style.height = heightPx + 'px';
+        return s;
+    }
+
+    // Shared MutationObserver reference — disconnect during spacer insertion
+    // supaya mutation events tidak fire kembali dan re-trigger schedule.
+    var _observer = null;
+    var _isRunning = false;
+
+    /**
+     * Main algorithm — iterative (NOT recursive supaya no stack overflow).
+     * Traverse .page block children, insert spacer before any element yg akan
+     * cross paper content-bottom boundary. Continue until no more crossings
+     * (max iterations for safety).
+     */
+    function insertSpacers(pageEl) {
+        if (_isRunning) return; // guard against re-entry
+        _isRunning = true;
+        if (_observer) _observer.disconnect();
+
+        try {
+            // Remove existing spacers once at entry (idempotent re-run).
+            var existing = pageEl.querySelectorAll('.ezdoc-page-spacer');
+            existing.forEach(function(s) { s.remove(); });
+
+            var contentEl = pageEl.querySelector('.content') || pageEl;
+            var paperCapacityPx = PAPER_H_PX - PAD_TOP_PX - PAD_BOTTOM_PX;
+            var maxIterations = 200;
+            var debugCount = 0;
+
+            while (maxIterations-- > 0) {
+                var pageRect = pageEl.getBoundingClientRect();
+                var pageTop = pageRect.top + window.scrollY;
+                var children = Array.from(contentEl.children);
+                var inserted = false;
+
+                for (var i = 0; i < children.length; i++) {
+                    var child = children[i];
+                    if (child.classList && child.classList.contains('ezdoc-page-spacer')) continue;
+
+                    var rect = child.getBoundingClientRect();
+                    // Skip zero-height children (hidden inputs, empty elements).
+                    if (rect.height === 0) continue;
+
+                    // Element bigger than single paper capacity — can't fix with
+                    // spacer (would infinite loop). Accept visual overflow.
+                    if (rect.height > paperCapacityPx * 0.98) {
+                        continue;
+                    }
+
+                    var childTop = rect.top + window.scrollY - pageTop;
+                    var childBottom = childTop + rect.height;
+                    var paperIdx = paperIndexAt(childTop);
+                    var contentBottom = contentBottomOfPaper(paperIdx);
+
+                    // No crossing → next child.
+                    if (childBottom <= contentBottom) continue;
+
+                    // Compute push amount to next paper's content-area top.
+                    var nextPaperTop = (paperIdx + 1) * (PAPER_H_PX + GAP_PX) + PAD_TOP_PX;
+                    var pushBy = nextPaperTop - childTop;
+
+                    // Sanity checks.
+                    if (pushBy < 5) continue; // negligible
+                    if (pushBy > (PAPER_H_PX + GAP_PX) * 1.5) {
+                        console.warn('[ScreenPagination] Skip huge pushBy=' + pushBy + 'px', child);
+                        continue;
+                    }
+
+                    var spacer = createSpacer(pushBy);
+                    contentEl.insertBefore(spacer, child);
+                    inserted = true;
+                    debugCount++;
+                    break; // restart from beginning (children shifted)
+                }
+
+                if (!inserted) break; // done — no more crossings this pass
+            }
+
+            if (maxIterations <= 0) {
+                console.warn('[ScreenPagination] Max iterations hit');
+            }
+        } finally {
+            _isRunning = false;
+            // Reconnect observer AFTER a microtask so pending mutations don't
+            // fire immediately.
+            if (_observer) {
+                setTimeout(function() {
+                    _observer.observe(pageEl, {
+                        characterData: true,
+                        childList: true,
+                        subtree: true
+                    });
+                }, 0);
+            }
+        }
+    }
+
+    /**
+     * Debounced trigger — recompute spacers after content changes settle.
+     */
+    var debounceTimer = null;
+    function schedule(pageEl, delay) {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function() {
+            insertSpacers(pageEl);
+        }, delay || 300);
+    }
+
+    // ─── Boot ───
+    document.addEventListener('DOMContentLoaded', function() {
+        var pageEl = document.querySelector('.page');
+        if (!pageEl) return;
+
+        // Add marker class so CSS knows pagination is active.
+        document.body.classList.add('ezdoc-paginated');
+
+        // Initial run — wait for fonts/images to load (affects height).
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(function() { insertSpacers(pageEl); });
+        } else {
+            setTimeout(function() { insertSpacers(pageEl); }, 100);
+        }
+
+        // Re-run on window resize (rare, but paperH-related media queries may
+        // change layout).
+        window.addEventListener('resize', function() { schedule(pageEl, 500); });
+
+        // Re-run on content changes to .f fields (debounced).
+        // Use MutationObserver on characterData + subtree — fires on any text
+        // change dalam contenteditable spans.
+        _observer = new MutationObserver(function(mutations) {
+            if (_isRunning) return; // ignore mutations WE created
+            var relevant = false;
+            for (var i = 0; i < mutations.length; i++) {
+                var m = mutations[i];
+                // Ignore mutations on spacers themselves (avoid loop).
+                if (m.target.classList && m.target.classList.contains('ezdoc-page-spacer')) continue;
+                if (m.target.closest && m.target.closest('.ezdoc-page-spacer')) continue;
+                relevant = true;
+                break;
+            }
+            if (relevant) schedule(pageEl, 500);
+        });
+        _observer.observe(pageEl, {
+            characterData: true,
+            childList: true,
+            subtree: true
+        });
+    });
+})();
+JS;
+    }
+}
