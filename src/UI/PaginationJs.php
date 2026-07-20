@@ -136,27 +136,35 @@ final class PaginationJs
     function restoreOriginalMargins(container) {
         const pushed = container.querySelectorAll('.' + CONFIG.pushClass);
         for (let i = 0; i < pushed.length; i++) {
-            const el = pushed[i];
-            const orig = el.getAttribute(CONFIG.pushMarkerAttr);
-            /* Always clear our page-break markers (added unconditionally by
-               pushElement). */
-            el.style.removeProperty('page-break-before');
-            el.style.removeProperty('break-before');
-            /* Restore margin-top: empty means no inline was set originally
-               (removeProperty), else set back to original value. */
-            if (orig === '' || orig === null) {
-                el.style.removeProperty('margin-top');
-            } else {
-                el.style.marginTop = orig;
-            }
-            el.classList.remove(CONFIG.pushClass);
-            el.removeAttribute(CONFIG.pushMarkerAttr);
+            restoreSingleMargin(pushed[i]);
         }
+    }
+
+    /* Restore single element (used by pushElement's defensive re-restore). */
+    function restoreSingleMargin(el) {
+        const orig = el.getAttribute(CONFIG.pushMarkerAttr);
+        el.style.removeProperty('page-break-before');
+        el.style.removeProperty('break-before');
+        if (orig === '' || orig === null) {
+            el.style.removeProperty('margin-top');
+        } else {
+            el.style.marginTop = orig;
+        }
+        el.classList.remove(CONFIG.pushClass);
+        el.removeAttribute(CONFIG.pushMarkerAttr);
     }
 
     /* Push element to start of next virtual page content area via margin-top.
        Backs up original margin in data attribute for later restore. */
     function pushElement(el, extraMarginPx) {
+        /* Defensive: kalau element SUDAH pushed (class present tapi belum restored),
+           restore dulu supaya computed margin fresh (bukan stale post-push).
+           Prevents double-push race condition kalau restoreOriginalMargins
+           somehow skipped this element. */
+        if (el.classList.contains(CONFIG.pushClass)) {
+            restoreSingleMargin(el);
+        }
+
         const currentInlineMt = el.style.marginTop || '';
         /* Compute EFFECTIVE current margin: computed style already includes
            any inline margin. We want new total = computed + extra. Since
@@ -205,11 +213,21 @@ final class PaginationJs
             if (rect.height <= 0) continue;
 
             let guard = 0;
-            while (top >= boundary && guard++ < 1000) {
+            /* Advance boundary only when element is ENTIRELY past current
+               margin band (top >= boundary + gap). Element with top in
+               [boundary, boundary+gap) range is in "physical page break
+               margin band" — must be pushed, NOT skipped.
+               Bug in previous version: `top >= boundary` (without +gap) advanced
+               boundary too early → item straddling physical break at margin
+               band gets skipped → no proper padTop margin at page 2/3+ start. */
+            while (top >= boundary + gapPx && guard++ < 1000) {
                 boundary += pageContentPx + gapPx;
             }
 
-            if (bottom > boundary && top < boundary) {
+            /* Element straddles boundary — bottom past page 1 content bottom
+               AND top within page 1 content area OR margin band. Both cases
+               need push to start of next page content area. */
+            if (bottom > boundary && top < boundary + gapPx) {
                 /* Oversized atomic — skip push, advance boundary past element.
                    Browser natural-break handles split. */
                 if (rect.height > pageContentPx) {
@@ -218,8 +236,9 @@ final class PaginationJs
                     }
                     continue;
                 }
-                /* Element fits in one page — push via margin-top. */
-                const extraMargin = boundary - top + gapPx;
+                /* Element fits in one page — push via margin-top ke start of
+                   next page content area (Y = boundary + gap). */
+                const extraMargin = (boundary + gapPx) - top;
                 if (extraMargin > 0) {
                     pushElement(node, extraMargin);
                 }
