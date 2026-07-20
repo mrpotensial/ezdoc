@@ -229,12 +229,153 @@ CSS;
     // supaya mutation events tidak fire kembali dan re-trigger schedule.
     var _observer = null;
     var _isRunning = false;
+    var _splitIdCounter = 0;
+
+    /**
+     * Merge split continuations back into originals. Called at cleanup phase
+     * supaya re-pagination bekerja dari state HTML original (no accumulated
+     * splits from previous runs).
+     */
+    function mergeSplitContinuations(pageEl) {
+        // Iterate continuations in document order — nested splits handled by
+        // repeated iteration (should be rare).
+        var continuations = pageEl.querySelectorAll('[data-ezdoc-split-continues]');
+        continuations.forEach(function(cont) {
+            var origId = cont.getAttribute('data-ezdoc-split-continues');
+            var orig = pageEl.querySelector('[data-ezdoc-split-id="' + origId + '"]');
+            if (!orig) { cont.remove(); return; }
+            // For tables — merge tbody rows.
+            if (orig.tagName === 'TABLE') {
+                var origTbody = orig.querySelector('tbody') || orig;
+                var contTbody = cont.querySelector('tbody') || cont;
+                while (contTbody.firstChild) {
+                    origTbody.appendChild(contTbody.firstChild);
+                }
+            } else {
+                // For lists — merge li elements directly.
+                while (cont.firstChild) {
+                    orig.appendChild(cont.firstChild);
+                }
+            }
+            cont.remove();
+        });
+        // Clean up markers.
+        pageEl.querySelectorAll('[data-ezdoc-split-id]').forEach(function(el) {
+            el.removeAttribute('data-ezdoc-split-id');
+        });
+    }
+
+    /**
+     * Split a table into original (rows 0..rowIndex-1) + continuation (rest).
+     * Preserves thead (cloned into continuation for repeated header). Returns
+     * new continuation table (yg akan di-append ke DOM oleh caller).
+     */
+    function splitTableAt(tableEl, rowIndex) {
+        var tbody = tableEl.querySelector('tbody') || tableEl;
+        var thead = tableEl.querySelector('thead');
+        var rows = Array.from(tbody.children);
+        if (rowIndex <= 0 || rowIndex >= rows.length) return null;
+
+        var splitId = 'split-' + (++_splitIdCounter);
+        tableEl.setAttribute('data-ezdoc-split-id', splitId);
+
+        var newTable = tableEl.cloneNode(false);
+        newTable.setAttribute('data-ezdoc-split-continues', splitId);
+        // Repeat thead di continuation (industri standar untuk table split).
+        if (thead) newTable.appendChild(thead.cloneNode(true));
+        var newTbody = document.createElement('tbody');
+        for (var i = rowIndex; i < rows.length; i++) {
+            newTbody.appendChild(rows[i]);
+        }
+        newTable.appendChild(newTbody);
+        return newTable;
+    }
+
+    /**
+     * Split OL/UL into original (items 0..itemIndex-1) + continuation.
+     * For OL, sets `start` attribute pada continuation supaya numbering lanjut.
+     */
+    function splitListAt(listEl, itemIndex) {
+        var items = Array.from(listEl.children);
+        if (itemIndex <= 0 || itemIndex >= items.length) return null;
+
+        var splitId = 'split-' + (++_splitIdCounter);
+        listEl.setAttribute('data-ezdoc-split-id', splitId);
+
+        var newList = listEl.cloneNode(false);
+        newList.setAttribute('data-ezdoc-split-continues', splitId);
+
+        // OL numbering — preserve via `start` attribute.
+        if (listEl.tagName === 'OL') {
+            var startAttr = listEl.getAttribute('start');
+            var startVal = startAttr ? parseInt(startAttr, 10) : 1;
+            newList.setAttribute('start', String(startVal + itemIndex));
+        }
+
+        for (var i = itemIndex; i < items.length; i++) {
+            newList.appendChild(items[i]);
+        }
+        return newList;
+    }
+
+    /**
+     * Attempt to split a container element (table/list) at first sub-child yg
+     * cross paper boundary. Returns TRUE kalau split performed.
+     */
+    function tryContainerSplit(child, contentEl, contentBottom, nextPaperTop, pageTop) {
+        var tag = child.tagName;
+        var subChildren = null;
+        var splitFn = null;
+
+        if (tag === 'TABLE') {
+            var tbody = child.querySelector('tbody') || child;
+            subChildren = Array.from(tbody.children);
+            splitFn = splitTableAt;
+        } else if (tag === 'UL' || tag === 'OL') {
+            subChildren = Array.from(child.children);
+            splitFn = splitListAt;
+        } else {
+            return false; // not splittable
+        }
+
+        for (var i = 0; i < subChildren.length; i++) {
+            var sub = subChildren[i];
+            var subRect = sub.getBoundingClientRect();
+            if (subRect.height === 0) continue;
+            var subTop = subRect.top + window.scrollY - pageTop;
+            var subBottom = subTop + subRect.height;
+            if (subBottom <= contentBottom) continue;
+
+            // Sub-child crosses boundary at position i.
+            if (i === 0) {
+                // First sub-child already crosses → can't split, caller should
+                // push whole container instead.
+                return false;
+            }
+
+            var newContainer = splitFn(child, i);
+            if (!newContainer) return false;
+
+            // Compute spacer height dari sub-child yg pindah ke continuation:
+            // its new top setelah split = should be at nextPaperTop.
+            var spacerH = nextPaperTop - subTop;
+            if (spacerH < 5) return false;
+
+            // Insert order: [original container] [div spacer] [continuation container]
+            var divSpacer = createSpacer(spacerH);
+            child.parentNode.insertBefore(divSpacer, child.nextSibling);
+            child.parentNode.insertBefore(newContainer, divSpacer.nextSibling);
+            return true;
+        }
+        return false;
+    }
 
     /**
      * Main algorithm — iterative (NOT recursive supaya no stack overflow).
-     * Traverse .page block children, insert spacer before any element yg akan
-     * cross paper content-bottom boundary. Continue until no more crossings
-     * (max iterations for safety).
+     * Traverse .page block children. For each crossing element:
+     * - Kalau fits di one paper → insert div spacer sebelum element (push whole)
+     * - Kalau lebih besar dari paper capacity dan tabel/list → split at sub-child
+     * - Lainnya → accept overflow
      */
     function insertSpacers(pageEl) {
         if (_isRunning) return; // guard against re-entry
@@ -242,14 +383,13 @@ CSS;
         if (_observer) _observer.disconnect();
 
         try {
-            // Remove existing spacers once at entry (idempotent re-run).
-            var existing = pageEl.querySelectorAll('.ezdoc-page-spacer');
-            existing.forEach(function(s) { s.remove(); });
+            // Cleanup previous state — remove spacers, merge split continuations.
+            pageEl.querySelectorAll('.ezdoc-page-spacer').forEach(function(s) { s.remove(); });
+            mergeSplitContinuations(pageEl);
 
             var contentEl = pageEl.querySelector('.content') || pageEl;
             var paperCapacityPx = PAPER_H_PX - PAD_TOP_PX - PAD_BOTTOM_PX;
-            var maxIterations = 200;
-            var debugCount = 0;
+            var maxIterations = 300;
 
             while (maxIterations-- > 0) {
                 var pageRect = pageEl.getBoundingClientRect();
@@ -262,42 +402,41 @@ CSS;
                     if (child.classList && child.classList.contains('ezdoc-page-spacer')) continue;
 
                     var rect = child.getBoundingClientRect();
-                    // Skip zero-height children (hidden inputs, empty elements).
                     if (rect.height === 0) continue;
-
-                    // Element bigger than single paper capacity — can't fix with
-                    // spacer (would infinite loop). Accept visual overflow.
-                    if (rect.height > paperCapacityPx * 0.98) {
-                        continue;
-                    }
 
                     var childTop = rect.top + window.scrollY - pageTop;
                     var childBottom = childTop + rect.height;
                     var paperIdx = paperIndexAt(childTop);
                     var contentBottom = contentBottomOfPaper(paperIdx);
 
-                    // No crossing → next child.
                     if (childBottom <= contentBottom) continue;
 
-                    // Compute push amount to next paper's content-area top.
                     var nextPaperTop = (paperIdx + 1) * (PAPER_H_PX + GAP_PX) + PAD_TOP_PX;
                     var pushBy = nextPaperTop - childTop;
+                    if (pushBy < 5) continue;
 
-                    // Sanity checks.
-                    if (pushBy < 5) continue; // negligible
-                    if (pushBy > (PAPER_H_PX + GAP_PX) * 1.5) {
-                        console.warn('[ScreenPagination] Skip huge pushBy=' + pushBy + 'px', child);
-                        continue;
+                    // Case A: element fits in one paper — push whole to next.
+                    if (rect.height <= paperCapacityPx * 0.98) {
+                        if (pushBy > (PAPER_H_PX + GAP_PX) * 1.5) {
+                            console.warn('[ScreenPagination] Skip huge pushBy=' + pushBy + 'px', child);
+                            continue;
+                        }
+                        var spacer = createSpacer(pushBy);
+                        contentEl.insertBefore(spacer, child);
+                        inserted = true;
+                        break;
                     }
 
-                    var spacer = createSpacer(pushBy);
-                    contentEl.insertBefore(spacer, child);
-                    inserted = true;
-                    debugCount++;
-                    break; // restart from beginning (children shifted)
+                    // Case B: element too big for one paper — try container split.
+                    if (tryContainerSplit(child, contentEl, contentBottom, nextPaperTop, pageTop)) {
+                        inserted = true;
+                        break;
+                    }
+
+                    // Case C: can't split, accept overflow (rare — huge single element).
                 }
 
-                if (!inserted) break; // done — no more crossings this pass
+                if (!inserted) break;
             }
 
             if (maxIterations <= 0) {
@@ -305,8 +444,6 @@ CSS;
             }
         } finally {
             _isRunning = false;
-            // Reconnect observer AFTER a microtask so pending mutations don't
-            // fire immediately.
             if (_observer) {
                 setTimeout(function() {
                     _observer.observe(pageEl, {
