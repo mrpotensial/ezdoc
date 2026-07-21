@@ -1236,16 +1236,9 @@ elseif ($param_norm && $param_nopen) {
 }
 
 // ============================================
-// PDF VIEW MODE + PRINT VIEW MODE (Paged.js)
+// PDF VIEW MODE
 // ============================================
-// view=pdf  → dompdf server-side rendering
-// view=print → Paged.js client-side pagination + auto window.print() (industri
-//              standar polyfill utk CSS Paged Media Level 3, dipakai Vivliostyle,
-//              proyek O'Reilly, arXiv HTML paper preview). Sama structure HTML
-//              seperti PDF view supaya output match.
-$__viewMode = $_GET['view'] ?? '';
-if ($__viewMode === 'pdf' || $__viewMode === 'print') {
-    $isPagedPrint = ($__viewMode === 'print');
+if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
     // Generate PDF version
     $forceDownload = isset($_GET['download']) && $_GET['download'] == '1';
 
@@ -1467,41 +1460,10 @@ if ($__viewMode === 'pdf' || $__viewMode === 'print') {
         'template' => $template,
         'doc_id'   => (int)$doc_id,
     ]);
-    $pdfHtml .= '</div>';
-
-    // ─── PRINT VIEW MODE: inject Paged.js polyfill + auto window.print() ───
-    // Paged.js processes @page rules + margin-boxes client-side, giving browser
-    // print output yang match dompdf server-side PDF. Same @page margin already
-    // set di head; Paged.js paginates content into .pagedjs_page divs, browser
-    // print sees proper per-page margins.
-    // spec: https://pagedjs.org/documentation/
-    if ($isPagedPrint) {
-        $pdfHtml .= '
-<script src="https://unpkg.com/pagedjs@0.4.3/dist/paged.polyfill.js"></script>
-<script>
-    // Handler: fires setelah Paged.js finish paginating semua content.
-    // Auto-trigger browser print dialog. User can Ctrl+P again atau close window.
-    class PrintHandler extends Paged.Handler {
-        afterRendered(pages) {
-            // Small delay untuk allow layout settle (images, fonts).
-            setTimeout(function() { window.print(); }, 500);
-        }
-    }
-    Paged.registerHandlers(PrintHandler);
-</script>';
-    }
-
-    $pdfHtml .= '</body></html>';
+    $pdfHtml .= '</div></body></html>';
 
     // Debug mode: view=html to see raw HTML before PDF conversion
     if (isset($_GET['debug']) && $_GET['debug'] === 'html') {
-        header('Content-Type: text/html; charset=utf-8');
-        echo $pdfHtml;
-        exit;
-    }
-
-    // ─── PRINT VIEW: echo langsung, bukan lewat dompdf ───
-    if ($isPagedPrint) {
         header('Content-Type: text/html; charset=utf-8');
         echo $pdfHtml;
         exit;
@@ -2650,10 +2612,12 @@ function renderFieldForPdf($name, $type, $val, $label) {
             margin-top: 10px;
         }
 
-        /* Print */
+        /* Print — @page margin per-physical-page (CSS Paged Media Level 3).
+           Browser applies margin to setiap physical page yg dipaginasi.
+           .page fills printable area (width: auto → follows body). */
         @page {
             size: <?= $paperDim['width'] ?>mm <?= $paperDim['height'] ?>mm;
-            margin: 0;
+            margin: <?= $padTop ?>mm <?= $padRight ?>mm <?= $padBottom ?>mm <?= $padLeft ?>mm;
         }
         @media print {
             /* Preserve background colors & images (browsers strip them by default on print) */
@@ -2662,15 +2626,41 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 print-color-adjust: exact !important;
                 color-adjust: exact !important;
             }
-            body { background: #fff; padding: 0; margin: 0; font-size: 12pt; }
-            .page {
-                width: <?= $paperDim['width'] ?>mm;
-                min-height: <?= $paperDim['height'] ?>mm;
-                margin: 0;
-                padding: <?= $padTop ?>mm <?= $padRight ?>mm <?= $padBottom ?>mm <?= $padLeft ?>mm;
-                box-shadow: none;
-                position: relative;
+            html, body {
+                background: #fff !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                width: auto !important;
+                max-width: none !important;
+                font-size: 12pt;
             }
+            .page {
+                /* auto = fill body (yg fills @page printable area). No explicit
+                   width/mm calc → prevents unit conversion mismatch. */
+                width: auto !important;
+                max-width: none !important;
+                min-height: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                box-shadow: none !important;
+                position: relative;
+                /* Screen pagination artifacts: mask + drop-shadow off untuk print. */
+                -webkit-mask-image: none !important;
+                mask-image: none !important;
+                filter: none !important;
+                /* Page break preview edit-mode marker — hide dari printed output. */
+                background-image: none !important;
+            }
+            /* Floating position compensation — @page margin shifts .page origin
+               (paper corner → padL,padT offset). Translate back to visual paper
+               corner position untuk floating logo/TTD/QR/materai. */
+            .logo-floating, .ttd-item-floating, .qr-item-floating,
+            .qr-behind, .qr-front, .materai-floating,
+            .materai-behind, .materai-front {
+                transform: translate(-<?= $padLeft ?>mm, -<?= $padTop ?>mm);
+            }
+            /* Hide screen-only pagination spacers (they exist untuk screen visual). */
+            .ezdoc-page-spacer { display: none !important; }
             .toolbar, .modal, .toast { display: none !important; }
             .f { border-bottom: none !important; background: transparent !important; }
             .f:empty::before { display: none; }
@@ -2681,8 +2671,6 @@ function renderFieldForPdf($name, $type, $val, $label) {
             .materai-serial-input { border: none !important; background: transparent !important; }
             .ttd-qr-content-input { display: none !important; }
             .ttd-canvas-placeholder { display: none !important; }
-            /* Page break preview edit-mode marker — hide dari printed output. */
-            .page { background-image: none !important; }
         }
     </style>
 </head>
@@ -2847,7 +2835,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     <button type="button" class="btn-success col-span-2 !m-0 !py-1.5 !text-[12px]" onclick="submitForm()" <?= $param_is_locked ? 'disabled title="' . h(t('title.locked_cannot_update', [], 'Locked - cannot update')) . '"' : '' ?>>
                         <?= $isEditMode ? ($param_is_locked ? h(t('toolbar.locked', [], 'Locked')) : h(t('toolbar.update', [], 'Update'))) : h(t('toolbar.save_new', [], 'Save New')) ?>
                     </button>
-                    <button type="button" class="!m-0 !py-1.5 !px-1 !text-[11px]" onclick="pagedPrint()" title="<?= h(t('title.print_shortcut', [], 'Print (via Paged.js)')) ?>"><i class="bi bi-printer"></i> <?= h(t('toolbar.print', [], 'Print')) ?></button>
+                    <button type="button" class="!m-0 !py-1.5 !px-1 !text-[11px]" onclick="window.print()" title="<?= h(t('title.print_shortcut', [], 'Print (Ctrl+P)')) ?>"><i class="bi bi-printer"></i> <?= h(t('toolbar.print', [], 'Print')) ?></button>
                 </div>
 
                 <?php // Slot: toolbar-extra-actions — consumer buttons (Export Excel, WhatsApp, Email PDF, e-Sign, Copy Link) ?>
@@ -3913,26 +3901,6 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 if (CURRENT_VERSION) params.set('version', CURRENT_VERSION);
             }
             params.set('view', 'pdf');
-            window.open('?' + params.toString(), '_blank');
-        }
-
-        // Print via Paged.js — open new window dgn ?view=print URL yg render
-        // clean content + Paged.js CDN + auto-trigger window.print().
-        // Isolation: new window tidak share DOM dgn generate.php, existing UI
-        // (toolbar, modal, floating elements) tidak terganggu.
-        // Industri precedent: Vivliostyle Viewer, arXiv HTML preview, O'Reilly
-        // ebook preview — semua pakai Paged.js dgn window/tab isolation.
-        function pagedPrint() {
-            const params = _preservedParams();
-            params.set('template_id', templateId);
-            if (CURRENT_DOC_ID) params.set('doc_id', CURRENT_DOC_ID);
-            else {
-                if (CURRENT_NORM) params.set('norm', CURRENT_NORM);
-                if (CURRENT_NOPEN) params.set('nopen', CURRENT_NOPEN);
-                if (CURRENT_LABEL && CURRENT_LABEL !== '-') params.set('label', CURRENT_LABEL);
-                if (CURRENT_VERSION) params.set('version', CURRENT_VERSION);
-            }
-            params.set('view', 'print');
             window.open('?' + params.toString(), '_blank');
         }
 
