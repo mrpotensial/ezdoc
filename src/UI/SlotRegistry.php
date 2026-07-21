@@ -31,10 +31,67 @@ final class SlotRegistry
     /** @var int Monotonic sequence to preserve registration order on ties. */
     private $sequence;
 
+    /**
+     * Slot alias map: [oldName => canonicalName]. When old name is used di
+     * register()/render()/etc, it resolves ke canonical. Enables backward-compat
+     * slot rename tanpa breaking existing consumer slot registrations.
+     *
+     * Cross-language spec parity: Filament view alias pattern
+     * (`livewire::renderView(alias) → resolve()`), Symfony EventDispatcher
+     * `getListenerPriority` alias lookup.
+     *
+     * @var array<string,string>
+     */
+    private $aliases;
+
     public function __construct()
     {
         $this->slots = [];
         $this->sequence = 0;
+        $this->aliases = [];
+    }
+
+    /**
+     * Register alias mapping: kalau $oldName di-refer, resolve ke $canonicalName.
+     *
+     * Idempotent — safe to call multiple times. Cycle detection via depth cap.
+     *
+     * Used untuk backward-compat slot rename (e.g., 'designer:list-*' →
+     * 'template_list:*' di v1.0). Existing consumer register('designer:list-header-extra',
+     * ...) tetap works; render('template_list:header-extra', ...) also picks up
+     * those entries.
+     *
+     * @throws ValidationException on empty name
+     */
+    public function alias(string $oldName, string $canonicalName): void
+    {
+        if ($oldName === '' || $canonicalName === '') {
+            throw new ValidationException('Slot alias names cannot be empty.');
+        }
+        $this->aliases[$oldName] = $canonicalName;
+    }
+
+    /**
+     * Resolve alias chain ke canonical name. Depth-capped untuk defensive
+     * cycle protection (should never cycle in well-formed config).
+     */
+    private function resolve(string $slotName): string
+    {
+        $seen = [];
+        $current = $slotName;
+        // Depth cap 8 — arbitrary, prevents cycles + accidental chain overflow.
+        for ($i = 0; $i < 8; $i++) {
+            if (!isset($this->aliases[$current])) {
+                return $current;
+            }
+            if (isset($seen[$current])) {
+                // Cycle detected — return input untuk fail gracefully.
+                return $slotName;
+            }
+            $seen[$current] = true;
+            $current = $this->aliases[$current];
+        }
+        return $current;
     }
 
     /**
@@ -55,6 +112,8 @@ final class SlotRegistry
                 . (is_object($content) ? get_class($content) : gettype($content)) . '.'
             );
         }
+        // Resolve alias — legacy slot names forward ke canonical.
+        $slotName = $this->resolve($slotName);
         if (!isset($this->slots[$slotName])) {
             $this->slots[$slotName] = [];
         }
@@ -74,6 +133,8 @@ final class SlotRegistry
      */
     public function render(string $slotName, array $context = []): string
     {
+        // Resolve alias — legacy slot names forward ke canonical.
+        $slotName = $this->resolve($slotName);
         if (!isset($this->slots[$slotName]) || $this->slots[$slotName] === []) {
             return '';
         }
@@ -110,6 +171,7 @@ final class SlotRegistry
 
     public function hasSlot(string $slotName): bool
     {
+        $slotName = $this->resolve($slotName);
         return isset($this->slots[$slotName]) && $this->slots[$slotName] !== [];
     }
 
@@ -126,6 +188,7 @@ final class SlotRegistry
      */
     public function clear(string $slotName): void
     {
+        $slotName = $this->resolve($slotName);
         unset($this->slots[$slotName]);
     }
 }

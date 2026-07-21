@@ -6,6 +6,58 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v1.0-prep track — "Slot rename + backward-compat aliases"
+
+Foundational rename untuk v1.0 slot naming convention. Slots di-namespace
+by VIEW file (bukan by originating monolith view) supaya consistent dgn v0.9.11
+view separation refactor. Backward-compat forwarding via alias mechanism.
+
+**Added**
+
+- **`Ezdoc\UI\SlotRegistry::alias($oldName, $canonicalName)`** — new method
+ register alias mapping. Kalau `$oldName` di-refer via `register()`/`render()`/
+ `hasSlot()`/`clear()`, resolve ke `$canonicalName` transparently. Depth-capped
+ cycle detection (max 8 hops) untuk defensive protection against pathological
+ config
+- **`Ezdoc\App::registerLegacySlotAliases()`** — bootstrap-time registration
+ of built-in v1.0 slot rename mappings:
+ - `designer:list-header-extra` → `template_list:header-extra`
+ - `designer:list-row-actions-extra` → `template_list:row-actions-extra`
+ Called dari `applySlotConfig()` after consumer registry wiring
+
+**Changed**
+
+- **`views/document/template_list.php`** — slot render calls updated ke new
+ canonical names (`template_list:*`). Docblock updated dgn alias mapping table
+- **`SlotRegistry` internal** — `register()`, `render()`, `hasSlot()`, `clear()`
+ semua resolve alias chain before storage lookup. Storage keyed by canonical
+ name only (deduplication automatic)
+
+**Added — test coverage**
+
+- **`tests/UI/SlotRegistryTest.php`** (new) — 16 tests covering: basic register/
+ render, callable context passing, priority ordering + ties, validation, alias
+ forwarding (bidirectional), alias chain resolution, cycle protection,
+ hasSlot/clear via alias, empty name rejection
+
+**Backward-compat**
+
+- Existing consumer registrations against old `designer:list-*` names TETAP
+ WORKS (transparently forwarded ke canonical storage)
+- Rendering call sites yg pakai old names TETAP WORKS
+- No breaking change untuk existing v0.9.x consumers
+- Migration path: consumer eventually switch registrations ke new canonical
+ names di their own timeline (aliases stay indefinitely)
+
+**Precedent (industry-standard aliasing patterns)**
+
+- **Symfony EventDispatcher** — deprecated event aliases via
+ `getListenerPriority` lookup
+- **Filament view alias** — `livewire::renderView($alias)` → canonical
+ resolution
+- **Laravel container alias** — `$app->alias('mail.manager', MailManager::class)`
+- **NPM package aliases** in dependencies
+
 ### v0.9.13 track — "Screen pagination + layout modes + Paged.js removal"
 
 Visual multi-paper cards di generate view (screen), inspired by CKEditor 5

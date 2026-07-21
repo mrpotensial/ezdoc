@@ -340,6 +340,29 @@ final class App
         if ($slotReg instanceof SlotRegistry) {
             Slot::setRegistry($slotReg);
         }
+        // Register built-in legacy slot aliases (v1.0 prep — slot rename dgn
+        // backward-compat forwarding). Existing consumer registrations against
+        // old names tetap works; view templates pakai new canonical names.
+        // spec: docs/VIEWS.md (v1.0)
+        self::registerLegacySlotAliases(Slot::getRegistry());
+    }
+
+    /**
+     * Register built-in legacy slot aliases untuk backward-compat slot rename.
+     *
+     * Naming convention v1.0: slots di-namespace by VIEW file, bukan by
+     * originating monolith view. Rename mapping:
+     *   'designer:list-header-extra'      → 'template_list:header-extra'
+     *   'designer:list-row-actions-extra' → 'template_list:row-actions-extra'
+     *
+     * Consumer registrations against old names tetap route ke canonical
+     * storage (transparently). Aliases removable via clear() atau via consumer
+     * override kalau butuh reset.
+     */
+    private static function registerLegacySlotAliases(SlotRegistry $reg): void
+    {
+        $reg->alias('designer:list-header-extra',      'template_list:header-extra');
+        $reg->alias('designer:list-row-actions-extra', 'template_list:row-actions-extra');
     }
 
     private static function buildRequest(Config $cfg): RequestContext

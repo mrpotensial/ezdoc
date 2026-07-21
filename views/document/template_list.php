@@ -25,8 +25,13 @@
  * designer.php's shared `<script>` block loaded in both list + editor modes.
  *
  * ## Slots
- * - `designer:list-header-extra` — consumer UI hook top of list
- * - `designer:list-row-actions-extra` — per-row extra action buttons
+ * - `template_list:header-extra` — consumer UI hook top of list (v1.0 canonical)
+ * - `template_list:row-actions-extra` — per-row extra action buttons (v1.0 canonical)
+ *
+ * Backward-compat aliases (registered di `App::registerLegacySlotAliases()`):
+ * - `designer:list-header-extra`      → `template_list:header-extra`
+ * - `designer:list-row-actions-extra` → `template_list:row-actions-extra`
+ * Existing consumer registrations against old names tetap works.
  *
  * ## Backward-compat
  * File called via `require` dari designer.php's list conditional. Consumer
@@ -36,7 +41,7 @@
  */
 ?>
     <section>
-        <?= \Ezdoc\UI\Slot::render('designer:list-header-extra', ['templates' => $templates]) ?>
+        <?= \Ezdoc\UI\Slot::render('template_list:header-extra', ['templates' => $templates]) ?>
         <?php if ($message): ?>
         <div x-data="{ open: true }" x-show="open" class="p-4 rounded-md mb-4 flex items-start justify-between <?= $messageType === 'error' ? 'bg-red-50 border-l-4 border-red-400 text-red-800' : 'bg-green-50 border-l-4 border-green-400 text-green-800' ?>">
             <div class="text-sm"><?= h($message) ?></div>
@@ -135,7 +140,7 @@
                                 </button>
                                 <button type="button" class="inline-flex items-center rounded-md border border-gray-300 bg-white p-1.5 text-gray-600 hover:bg-gray-50 hover:text-gray-900" onclick="copyTemplate(<?= $t['id'] ?>)" title="<?= h(t('title.duplicate', [], 'Duplicate')) ?>"><i class="bi bi-files"></i></button>
                                 <button type="button" class="inline-flex items-center rounded-md border border-red-300 bg-white p-1.5 text-red-600 hover:bg-red-50" onclick="confirmDelete(<?= $t['id'] ?>, '<?= h($t['nama_template']) ?>')" title="<?= h(t('actions.delete', [], 'Delete')) ?>"><i class="bi bi-trash"></i></button>
-                                <?= \Ezdoc\UI\Slot::render('designer:list-row-actions-extra', ['template' => $t]) ?>
+                                <?= \Ezdoc\UI\Slot::render('template_list:row-actions-extra', ['template' => $t]) ?>
                             </div>
                         </td>
                     </tr>

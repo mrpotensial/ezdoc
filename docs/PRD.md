@@ -1562,7 +1562,7 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - [x] Include pattern preserves backward-compat (no routing change needed)
 - [ ] Full ≤2500 designer + ≤3000 generate line targets — deferred to v1.0 prep (needs bigger refactor of shared JS blocks; scope too big for v0.9.11 without breaking dispatch)
 - [ ] Router direct routing ke sub-view identifiers — deferred to v1.0 (breaking change)
-- [ ] Slot rename (`designer:list-*` → `template_list:*`) with backward-compat forwarding — deferred to v1.0 (breaking for existing consumer slot registrations)
+- [x] Slot rename (`designer:list-*` → `template_list:*`) with backward-compat forwarding — **DONE 2026-07-21 via v1.0-prep track**: `SlotRegistry::alias()` method + `App::registerLegacySlotAliases()` bootstrap-time registration. Zero breaking change (transparent forwarding)
 - [ ] `docs/VIEWS.md` — deferred (existing docs sufficient for current include pattern)
 
 **Non-goals**:
