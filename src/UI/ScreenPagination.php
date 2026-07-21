@@ -225,6 +225,68 @@ CSS;
         return s;
     }
 
+    /**
+     * Create `<tr>` spacer untuk inject di dalam table. Valid HTML: tr dgn
+     * single td colspan yg cover semua columns. Height set inline.
+     *
+     * Pattern: instead of splitting table into multiple tables (which needs
+     * thead cloning + complex bookkeeping), insert spacer TR inside table.
+     * Content flow across papers, rows tetap in original order.
+     */
+    function createRowSpacer(colspan, heightPx) {
+        var tr = document.createElement('tr');
+        tr.className = 'ezdoc-page-spacer';
+        tr.setAttribute('contenteditable', 'false');
+        var td = document.createElement('td');
+        td.setAttribute('colspan', String(Math.max(1, colspan)));
+        td.style.cssText = 'padding: 0 !important; border: 0 !important; height: ' + heightPx + 'px;';
+        tr.appendChild(td);
+        return tr;
+    }
+
+    /**
+     * Untuk tall tables: iterate rows, insert `<tr>` spacer sebelum row yg akan
+     * cross paper boundary. Pushes row to next paper's content-area top.
+     *
+     * Advantage vs splitTableAt:
+     * - No thead cloning overhead (no chain of continuations)
+     * - Table structure preserved (single `<table>` in DOM)
+     * - Rows in original order, semua visible on correct paper
+     * - Form submission tidak terganggu (no ID duplication)
+     */
+    function insertTableRowSpacers(tableEl, pageTop) {
+        var tbody = tableEl.querySelector('tbody') || tableEl;
+        var rows = Array.from(tbody.children);
+        // Determine colspan dari first non-spacer row (assumes uniform columns).
+        var colspan = 1;
+        for (var k = 0; k < rows.length; k++) {
+            if (rows[k].classList && rows[k].classList.contains('ezdoc-page-spacer')) continue;
+            colspan = rows[k].children.length || 1;
+            break;
+        }
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            if (row.classList && row.classList.contains('ezdoc-page-spacer')) continue;
+            var rect = row.getBoundingClientRect();
+            if (rect.height === 0) continue;
+            var rowTop = rect.top + window.scrollY - pageTop;
+            var rowBottom = rowTop + rect.height;
+            var paperIdx = paperIndexAt(rowTop);
+            var contentBottom = contentBottomOfPaper(paperIdx);
+            if (rowBottom <= contentBottom) continue;
+            // Row crosses paper boundary. Push to next paper's content-area top.
+            var nextPaperTop = (paperIdx + 1) * (PAPER_H_PX + GAP_PX) + PAD_TOP_PX;
+            var pushBy = nextPaperTop - rowTop;
+            if (pushBy < 5) continue; // negligible
+            if (pushBy > (PAPER_H_PX + GAP_PX) * 1.5) continue; // sanity
+            // Insert `<tr>` spacer BEFORE this row.
+            var spacer = createRowSpacer(colspan, pushBy);
+            tbody.insertBefore(spacer, row);
+            return true; // one insert, caller should restart loop
+        }
+        return false;
+    }
+
     // Shared MutationObserver reference — disconnect during spacer insertion
     // supaya mutation events tidak fire kembali dan re-trigger schedule.
     var _observer = null;
@@ -463,11 +525,22 @@ CSS;
                         break;
                     }
 
-                    // Case B: element too big for one paper — try container split.
-                    if (tryContainerSplit(child, contentEl, contentBottom, nextPaperTop, pageTop)) {
-                        dbg('Case B split', child.tagName, 'top=' + Math.round(childTop), 'h=' + Math.round(rect.height));
-                        inserted = true;
-                        break;
+                    // Case B: element too big for one paper — try container handling.
+                    // - Lists (OL/UL): split at li boundary (proven to work).
+                    // - Tables: insert `<tr>` spacer BEFORE crossing row (avoids
+                    //   thead-cloning chain issue of splitTableAt).
+                    if (child.tagName === 'UL' || child.tagName === 'OL') {
+                        if (tryContainerSplit(child, contentEl, contentBottom, nextPaperTop, pageTop)) {
+                            dbg('Case B split', child.tagName, 'top=' + Math.round(childTop), 'h=' + Math.round(rect.height));
+                            inserted = true;
+                            break;
+                        }
+                    } else if (child.tagName === 'TABLE') {
+                        if (insertTableRowSpacers(child, pageTop)) {
+                            dbg('Case B row-spacer', child.tagName, 'top=' + Math.round(childTop), 'h=' + Math.round(rect.height));
+                            inserted = true;
+                            break;
+                        }
                     }
 
                     // Case B fallback: split failed AND element too big for paper.
@@ -488,17 +561,14 @@ CSS;
 
                     // Case D: child is a wrapper (div, section, etc.) yg terlalu
                     // besar dan bukan table/list sendiri. Cari nested table/list
-                    // di dalam yg cross boundary, split them in place.
+                    // di dalam yg cross boundary, handle them in place.
                     var nested = child.querySelectorAll('table, ol, ul');
-                    var nestedSplit = false;
+                    var nestedHandled = false;
                     for (var n = 0; n < nested.length; n++) {
                         var nest = nested[n];
-                        // Skip nested yg jadi hasil split kita sendiri (marker).
                         if (nest.hasAttribute('data-ezdoc-split-continues')) continue;
                         var nRect = nest.getBoundingClientRect();
                         if (nRect.height === 0) continue;
-                        // Skip kalau nested juga kecil (fits in one paper) — kita
-                        // fokus split hanya yg besar (untuk fix wrapper overflow).
                         if (nRect.height <= paperCapacityPx * 0.98) continue;
 
                         var nTop = nRect.top + window.scrollY - pageTop;
@@ -508,12 +578,18 @@ CSS;
                         if (nBottom <= nContentBottom) continue;
 
                         var nNextPaperTop = (nPaperIdx + 1) * (PAPER_H_PX + GAP_PX) + PAD_TOP_PX;
-                        if (tryContainerSplit(nest, nest.parentNode, nContentBottom, nNextPaperTop, pageTop)) {
-                            nestedSplit = true;
+                        var handled = false;
+                        if (nest.tagName === 'TABLE') {
+                            handled = insertTableRowSpacers(nest, pageTop);
+                        } else {
+                            handled = tryContainerSplit(nest, nest.parentNode, nContentBottom, nNextPaperTop, pageTop);
+                        }
+                        if (handled) {
+                            nestedHandled = true;
                             break;
                         }
                     }
-                    if (nestedSplit) {
+                    if (nestedHandled) {
                         inserted = true;
                         break;
                     }
