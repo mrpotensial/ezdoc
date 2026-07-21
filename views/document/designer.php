@@ -26,7 +26,7 @@
 // (kalau consumer wire manual, $ctx sudah ter-inject sebelum include ini)
 // ═══════════════════════════════════════════════════════════════
 if (!isset($ctx) || !($ctx instanceof \Ezdoc\Context)) {
-    // Legacy monolith path: bootstrap + koneksi.php sudah loaded upstream.
+    // Legacy monolith path: bootstrap + consumer db file sudah loaded upstream.
     if (!class_exists(\Ezdoc\Context::class)) {
         // Try relative bootstrap (page/ → ../ezdoc/bootstrap.php equivalent)
         $__bootstrapCandidates = [
@@ -4539,7 +4539,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         // Simulasi ezdoc_can_on_template() di JS supaya user langsung tahu implikasinya.
         // Logic MIRRORS PHP version — kalau kedua-duanya (roles + users) empty → allow.
 
-        // Current user data (dari koneksi.php PHP globals)
+        // Current user data (dari consumer bootstrap PHP globals)
         const CURRENT_USER_ID = <?= (int)($author_id ?? 0) ?>;
         const CURRENT_USER_ROLES = <?= json_encode(is_array($author_role_array ?? null) ? $author_role_array : []) ?>;
         const CURRENT_IS_SUPERADMIN = CURRENT_USER_ROLES.includes('superadmin');

@@ -18,7 +18,7 @@ use mysqli;
  *
  * Sebelumnya hard-coupled `mysqli`. Sekarang accepts `Ezdoc\Db\Connection`
  * (interface). Constructor tetap backward-compat: kalau consumer lempar
- * `mysqli` global (koneksi.php pattern), otomatis di-wrap ke MysqliConnection.
+ * `mysqli` global (consumer bootstrap pattern), otomatis di-wrap ke MysqliConnection.
  *
  * ## Versioning
  *

@@ -138,11 +138,12 @@ final class App
 
     /**
      * Zero-config demo mode. Priority:
-     *   1. Consumer app dengan bootstrap file (mis. koneksi.php) mysqli — full features
+     *   1. Consumer app dengan bootstrap file (e.g., bootstrap.php/db.php)
+     *      exposing `$conn` mysqli global — full features
      *   2. SQLite fallback (PDO) — list view only (views hard-coded mysqli, v0.9.9 fix)
      *   3. UI-only demo kalau semua gagal
      *
-     * Kalau consumer punya real MySQL via koneksi.php, itu di-prefer supaya
+     * Kalau consumer punya real MySQL via bootstrap file, itu di-prefer supaya
      * designer + generator + PDF end-to-end works. SQLite mode limited karena
      * library views masih pakai mysqli_query() langsung (deprecated di v0.9.9
      * dengan DB abstraction layer).
@@ -175,16 +176,21 @@ final class App
 
         // Priority 1: Try consumer's monolith bootstrap file.
         // Convention: plain-PHP consumer apps often ship a bootstrap file yang
-        // set `$conn = mysqli_connect(...)` (nama umum: koneksi.php, db.php, dll).
-        // Require via helper (yang `global $conn` sehingga assignment write ke
-        // global scope, bukan local method scope).
-        // Consumer boleh override lewat 'app.bootstrap_file' config kalau path beda.
+        // set `$conn = mysqli_connect(...)` — common filenames: bootstrap.php,
+        // db.php, config.php, koneksi.php, dll. Require via helper (yang
+        // `global $conn` sehingga assignment write ke global scope, bukan
+        // local method scope).
+        // Consumer boleh override lewat 'app.bootstrap_file' atau
+        // 'app.bootstrap_candidates' config kalau path/filename beda.
         $bootstrapCandidates = (isset($merged['app.bootstrap_candidates']) && is_array($merged['app.bootstrap_candidates']))
             ? $merged['app.bootstrap_candidates']
             : [
-                dirname(__DIR__, 2) . '/koneksi.php',  // ../consumer-app/koneksi.php
                 dirname(__DIR__, 2) . '/bootstrap.php',
                 dirname(__DIR__, 2) . '/db.php',
+                dirname(__DIR__, 2) . '/config.php',
+                dirname(__DIR__, 2) . '/koneksi.php',
+                dirname(__DIR__, 3) . '/bootstrap.php',
+                dirname(__DIR__, 3) . '/db.php',
                 dirname(__DIR__, 3) . '/koneksi.php',
             ];
         if (isset($merged['app.bootstrap_file']) && is_string($merged['app.bootstrap_file'])) {
@@ -216,7 +222,7 @@ final class App
                 $merged['runtime.demo_error'] = $e->getMessage();
             }
         } elseif (!isset($merged['app.db'])) {
-            $merged['runtime.demo_error'] = 'No koneksi.php mysqli found + pdo_sqlite extension not loaded.';
+            $merged['runtime.demo_error'] = 'No consumer bootstrap mysqli found (searched bootstrap.php/db.php/config.php/koneksi.php) + pdo_sqlite extension not loaded.';
         }
 
         return self::run($merged);
@@ -354,8 +360,8 @@ final class App
     }
 
     /**
-     * Require consumer's monolith bootstrap file (mis. koneksi.php / db.php /
-     * bootstrap.php) and lift its `$conn` (+ friends) ke $GLOBALS.
+     * Require consumer's monolith bootstrap file (e.g., bootstrap.php / db.php /
+     * config.php) and lift its `$conn` (+ friends) ke $GLOBALS.
      *
      * The `global` declaration aliases scope-local $conn ke $GLOBALS['conn'],
      * jadi kalau bootstrap file do plain `$conn = mysqli_connect(...)`, the
@@ -366,7 +372,7 @@ final class App
      */
     private static function loadConsumerBootstrap(string $path): ?\mysqli
     {
-        // Import globals BEFORE require so koneksi.php's assignments write to global scope.
+        // Import globals BEFORE require so bootstrap file's assignments write to global scope.
         global $conn, $author_id, $author_role_array;
         /** @psalm-suppress UnresolvableInclude */
         require_once $path;

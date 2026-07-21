@@ -4,7 +4,7 @@
  * Return JSON { success: true, qr: 'data:image/png;base64,...' } untuk client
  * render QR di HTML preview.
  *
- * Auth: any authenticated user (default koneksi.php sudah gate).
+ * Auth: any authenticated user (default: consumer's bootstrap sudah gate).
  *
  * Dependencies (dari main page scope):
  *   - $conn (mysqli)

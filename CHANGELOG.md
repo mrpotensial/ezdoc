@@ -329,6 +329,23 @@ precedent (Symfony transports, Carbon locale tables, Filament driver pattern).
 - Context.php, HasRoleProvider.php, role_provider.php docblocks — generic
  wording dgn Symfony/Carbon/Filament precedent citations
 
+**Library neutrality sweep** (v0.9.10 track A completion — 2026-07-21)
+
+- `App.php` bootstrap auto-detect: reordered candidate list untuk not privilege
+ SIMpel/RSIA-specific `koneksi.php` filename. New search order: `bootstrap.php`,
+ `db.php`, `config.php`, `koneksi.php` (last, legacy support). Docblock +
+ error message updated to list all supported filenames generically
+- `Db/Mysqli/MysqliConnection.php`, `Db/Connection.php`, `Document/DocumentRepository.php`,
+ `Template/TemplateRepository.php` docblocks: replace `koneksi.php pattern`
+ dgn `consumer bootstrap pattern`
+- `lib/authorization.php` + `lib/db_helpers.php` + `lib/list_helpers.php`
+ docblocks: neutralize koneksi.php refs
+- `actions/document/generate_qr.php` + `views/document/designer.php` +
+ `views/document/generate.php` comments: same treatment
+- Remaining refs (6 total) semua legit — either multi-name bootstrap
+ candidate list atau Indonesian word "koneksi" (= "connection", di
+ `ConnectionException.php` yg gunakan Bahasa Indonesia untuk error text)
+
 ## [0.9.9] - 2026-07-15 — "DB abstraction + Blueprint DSL + spec-first bootstrap + UX polish"
 
 ### Added — DB abstraction layer (in-house, zero external dep)

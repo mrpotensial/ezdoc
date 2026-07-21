@@ -20,9 +20,9 @@ use mysqli;
  * Ezdoc\Db\Mysqli\MysqliConnection — Connection adapter untuk raw mysqli.
  *
  * Adapter default zero-dep untuk consumer yang sudah punya `mysqli` instance
- * (contoh: konvensi `koneksi.php` global `$conn`). Adapter ini bridge existing
- * runtime ke Connection interface — Repository bisa refactor tanpa breaking
- * consumer bootstrap.
+ * (contoh: consumer bootstrap file yg expose global `$conn`). Adapter ini
+ * bridge existing runtime ke Connection interface — Repository bisa refactor
+ * tanpa breaking consumer bootstrap.
  *
  * ## Grammar detection
  *
@@ -33,7 +33,7 @@ use mysqli;
  *
  * ## Backward compatibility guarantee
  *
- * Consumer yang punya `$conn` global dari `koneksi.php`:
+ * Consumer yang punya `$conn` global dari bootstrap file:
  *   $ezdocDb = new MysqliConnection($conn);
  * Semua behavior existing tetap works — mysqli global tidak dimodifikasi,
  * charset/collation/timezone yg sudah di-set consumer preserved.

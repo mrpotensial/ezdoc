@@ -1496,13 +1496,14 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - [x] Context extended with `$pdf` property + `withPdf()` immutable wither
 - [x] `generate.php` uses library-native renderer (removed `function_exists('generatePDF')` fallback)
 - [x] `resolveDefault()` uses `DateFormatter::localize()` (with `ubahTanggalKeIndonesia()` backward-compat shim)
-- [ ] `Ezdoc\Db\Connection` abstraction usage sweep — replace `query()` global calls di actions/, views/
-- [ ] `Ezdoc\Auth\RoleProvider` usage sweep — replace `hasRole()` global calls
-- [ ] Audit consumer-specific constants (`RSIA_*`, `SIMPEL_*`) — remove or route via config
-- [ ] Update `docs/QUICKSTART.md`, `docs/UI-CUSTOMIZATION.md`, `README.md` — remove `koneksi.php` references (say "consumer bootstrap" generically)
-- [ ] Add `docs/PDF-RENDERING.md` — PdfRenderer contract + DompdfRenderer + custom backend guide
-- [ ] Add `docs/LOCALIZATION.md` — DateFormatter API + locale registration
-- [ ] Add integration test: run designer + generate + PDF export dengan pure ezdoc bootstrap (no `koneksi.php` required)
+- [x] `Ezdoc\Db\Connection` abstraction usage sweep — done via v0.9.9 Repository sweep + actions/ migrated ke `Context::default()->db`
+- [x] `Ezdoc\Auth\RoleProvider` usage sweep — done, `hasRole()` calls semua route via `$ctx->roleProvider->hasRole()`, tidak ada global calls
+- [x] Audit consumer-specific constants (`RSIA_*`, `SIMPEL_*`) — zero runtime constants found; hanya 1 comment ref di `lib/schema.php` (deprecated file yg describes SIMpel/RSIA legacy tables)
+- [x] Update `docs/QUICKSTART.md`, `docs/UI-CUSTOMIZATION.md`, `README.md` — koneksi.php refs neutralized ke generic "consumer bootstrap"
+- [x] Add `docs/PDF-RENDERING.md` — PdfRenderer contract + DompdfRenderer + custom backend guide
+- [x] Add `docs/LOCALIZATION.md` — DateFormatter API + locale registration
+- [x] Library neutrality sweep — App.php bootstrap candidates reordered (generic first, koneksi.php last), all library source docblocks + comments neutralized to "consumer bootstrap file" wording (2026-07-21)
+- [ ] Add integration test: run designer + generate + PDF export dengan pure ezdoc bootstrap (no `koneksi.php` required) — deferred to v0.9.10-track-B / v1.0 prep
 
 **Definition of Done**:
 - `grep -r "koneksi.php\|generatePDF\|ubahTanggalKeIndonesia\|hasRole\|\$conn" ezdoc/src ezdoc/lib ezdoc/actions ezdoc/views` → zero runtime call sites (only comments/docs referencing consumer pattern as example)

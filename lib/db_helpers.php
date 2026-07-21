@@ -3,7 +3,8 @@
  * ezdoc DB helpers — portable query wrappers.
  *
  * Purpose: provide industry-standard prepared-statement API sambil tetap
- * backward-compatible dengan legacy `query()` global function (dari koneksi.php).
+ * backward-compatible dengan legacy `query()` global function (yg mungkin
+ * di-define consumer di bootstrap file).
  *
  * Preference order (best → worst):
  *   1. Repository classes (Ezdoc\Document\DocumentRepository, dll) — v0.4+
@@ -108,7 +109,7 @@ if (!function_exists('ezdoc_query_prepared')) {
 
 /**
  * Legacy-compatible query wrapper. Deteksi:
- *   1. Kalau `query()` global function ada (koneksi.php loaded) → gunakan itu (backward compat)
+ *   1. Kalau `query()` global function ada (consumer bootstrap defined it) → gunakan itu (backward compat)
  *   2. Fallback → wraps mysqli_query() dengan Context connection
  *
  * DEPRECATED for new code — pakai ezdoc_query_prepared() atau Repository class.
@@ -164,7 +165,7 @@ if (!function_exists('ezdoc_get_db_connection')) {
             }
         }
 
-        // Priority 2: legacy koneksi.php $conn global
+        // Priority 2: legacy consumer bootstrap $conn global
         if (isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof \mysqli) {
             return $GLOBALS['conn'];
         }

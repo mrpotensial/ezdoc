@@ -14,7 +14,7 @@ use Ezdoc\Db\Schema\SchemaManager;
  *
  * Adapter yang di-ship out-of-the-box:
  *   - `Ezdoc\Db\Mysqli\MysqliConnection` — default, zero-dep, wrap raw mysqli.
- *     Consumer koneksi.php pattern tetap works (backward compat).
+ *     Consumer bootstrap-file pattern tetap works (backward compat).
  *   - `Ezdoc\Db\Pdo\PdoConnection` — PDO wrapper. Support mysql/mariadb/sqlite/
  *     pgsql/sqlsrv driver via DSN. Untuk consumer yang tidak pakai mysql daemon
  *     (contoh: `App::demo()` mode SQLite).

@@ -1485,7 +1485,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
     //      package tersedia — most common case)
     //   3. Error page (no PDF backend available)
     //
-    // Zero dependency ke consumer's local functions (generatePDF, koneksi.php).
+    // Zero dependency ke consumer's local functions (generatePDF or bootstrap-specific helpers).
     // spec: docs/PDF-RENDERING.md
     $paperMm     = [$paperDim['width'], $paperDim['height']];
     // $orientation already set at header parsing (line ~339) from configHeader.

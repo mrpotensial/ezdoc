@@ -132,7 +132,7 @@ Ezdoc\App::run([
 require_once __DIR__ . '/ezdoc/bootstrap.php';
 
 // Auto-picks up $conn mysqli global from consumer's own bootstrap file
-// (whatever the consumer app calls it — koneksi.php, db.php, config.php, etc.).
+// (whatever the consumer app calls it — db.php, config.php, koneksi.php, etc.).
 // Global helpers ready to use
 ezdoc_audit_log('doc.created', ['doc_id' => 42]);
 

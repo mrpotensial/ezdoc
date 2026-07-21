@@ -11,7 +11,7 @@ if (defined('EZDOC_LIST_HELPERS_LOADED')) return;
 define('EZDOC_LIST_HELPERS_LOADED', true);
 
 /**
- * HTML escape helper — koneksi.php-safe wrapper.
+ * HTML escape helper — consumer-safe wrapper.
  * Guarded dengan function_exists karena file lain juga define h_list().
  */
 if (!function_exists('h_list')) {

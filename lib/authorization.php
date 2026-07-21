@@ -2,8 +2,9 @@
 /**
  * ezdoc authorization — RBAC + per-user permission helpers.
  *
- * Reuse `hasRole()` yang sudah ada di koneksi.php, tapi wrap dengan semantic
- * yang lebih jelas dan tambah per-user check (untuk kasus permission spesifik).
+ * Reuse consumer's `hasRole()` global (kalau ada) via role provider abstraction,
+ * wrap dengan semantic yang lebih jelas dan tambah per-user check (untuk kasus
+ * permission spesifik).
  *
  * Config format untuk `ezdoc_can()` / `ezdoc_require()`:
  *   [
@@ -19,7 +20,7 @@ define('EZDOC_AUTHORIZATION_LOADED', true);
 
 /**
  * Cek apakah user sekarang punya role tertentu.
- * Route via role provider (default: koneksi.php hasRole()).
+ * Route via role provider (default: consumer's global `hasRole()` if present, else HasRoleProvider).
  * @param string|array<string> $roles Single role atau list (OR logic).
  */
 function ezdoc_has_role($roles): bool

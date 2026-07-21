@@ -20,7 +20,7 @@ use mysqli;
  * Sebelumnya hard-coupled `mysqli`. Sekarang accepts `Ezdoc\Db\Connection`
  * (interface) — semua query goes lewat `fetchOne`/`fetchAll`/`execute`.
  * Constructor tetap backward-compat: kalau consumer lempar `mysqli` global
- * (koneksi.php pattern), otomatis di-wrap ke `MysqliConnection`.
+ * (consumer bootstrap pattern), otomatis di-wrap ke `MysqliConnection`.
  *
  * ## Behavior
  *
