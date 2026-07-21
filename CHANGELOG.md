@@ -6,6 +6,116 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v0.9.13 track — "Screen pagination + layout modes + Paged.js removal"
+
+Visual multi-paper cards di generate view (screen), inspired by CKEditor 5
+Pagination Premium + Google Docs approach. Editing preserved (single DOM
+container, no restructure). Adopted patterns dari Paged.js chunker (overflow
+detection + break-point search) tapi ditulis native tanpa external CDN.
+
+**Added — `Ezdoc\UI\ScreenPagination`** (new helper class)
+
+- **`renderCss(paperW, paperH, padT, padR, padB, padL, gap, mode)`** — CSS
+  string ready-to-embed di `<style>` tag:
+  - **`mode='paged'`** (default): CSS `mask-image` linear-gradient cutout gap
+    regions per paperH tile → visual paper cards. `filter: drop-shadow`
+    (mask-aware) → per-paper shadow effect
+  - **`mode='continuous'`**: minimal reset (no mask, no filter) → single flow
+    container tanpa page breaks
+- **`renderJs(paperH, padT, padB, gap, mode)`** — JS string dgn IIFE:
+  - Paged mode: iterative main loop (max 300 iters) yg detects overflowing
+    elements + insert appropriate spacer:
+    - **Case A** — element fits paper → `<div class="ezdoc-page-spacer">`
+      spacer sebelum element (push whole to next paper)
+    - **Case B (list)** — OL/UL splits at `<li>` boundary via `splitListAt`,
+      insert div spacer between original + continuation. `<ol>` continuation
+      preserves numbering via `start` attribute
+    - **Case B (table)** — insert `<tr class="ezdoc-page-spacer">` with
+      `<td colspan="N">` spacer sebelum crossing row (avoids thead-cloning
+      chain issue of table split)
+    - **Case D** — nested tables/lists inside wrapper divs → drill down +
+      handle in place
+    - **Case C** — accept overflow untuk element yg > paper capacity dan not
+      splittable (mask hides parts in gap area)
+  - `mergeSplitContinuations()` — cleanup phase idempotent across re-runs
+  - `MutationObserver` re-runs debounced 500ms setelah `.f` field changes
+  - `_isRunning` guard + observer disconnect during insertion → prevents
+    infinite loop
+  - `pushedOnce` WeakSet → guards against push loop untuk elements yg tetap
+    overflow after push
+  - `document.fonts.ready` await → first paginate after font layout stable
+  - Continuous mode: returns no-op comment (zero JS overhead)
+
+**Added — `configHeader.layoutMode` config**
+
+- **Values**: `'paged'` (default, multi-page cards) atau `'continuous'`
+  (single flow, no page breaks). Stored di `ezdoc_templates.layout_config` JSON
+- **Designer UI**: new "Layout Mode" dropdown di Page settings panel.
+  Continuous mode adds `body.layout-continuous` class → CSS hides dashed
+  page-break preview + relaxes `min-height` constraint
+- **Generate view**: reads `$layoutMode` from configHeader, passes ke
+  `ScreenPagination::renderCss/renderJs`. Continuous mode: `.page`
+  `min-height: 0` + no mask/JS
+- **Persistence**: `savedHeader.layoutMode` di designer save/load flow;
+  `syncPageSettings()` writes ke configHeader before save
+
+**Changed — Print CSS approach (Paged.js removed)**
+
+- Print button back to native `onclick="window.print()"` (previously opened
+  new window dgn Paged.js CDN). Zero external dependency
+- `@media print` uses **`@page margin: padT padR padB padL`** per-physical-page
+  (CSS Paged Media Level 3 spec) — browser reserves margin di setiap physical
+  page yg dipaginasi. Consistent dgn dompdf PDF Raw approach
+- `.page { width: auto; padding: 0 3mm 0 0 }` — 3mm right-safety padding
+  supaya text tidak nempel di right edge
+- `.page { mask-image: none; filter: none; background-image: none }` !important —
+  turns off screen-pagination artifacts untuk print output
+- Floating elements `transform: translate(-padL, -padT)` compensation untuk
+  `@page margin` origin shift
+- `.ezdoc-page-spacer { display: none }` — spacers pure-visual, hidden print
+
+**Precedent**
+
+- **CKEditor 5 Pagination Premium** — commercial plugin ($1500/year) dgn
+  same approach: single container + CSS visual paper cards + JS spacer.
+  No DOM restructure to preserve editing UX
+- **Google Docs** — visual multi-paper pattern (their JS-heavy impl too
+  complex to port, adopted visual approach only)
+- **Word Online** — similar single-container-visual-paginated pattern
+- **Paged.js chunker** — inspiration untuk overflow detection algorithm
+  (traverse block children, measure position, decide break point). Study
+  only, no vendored code
+
+**Removed — Paged.js integration**
+
+- `?view=print` PHP branch di generate.php
+- `pagedPrint()` JS function
+- Paged.js CDN reference (`unpkg.com/pagedjs@0.4.3/dist/paged.polyfill.js`)
+- `PrintHandler` auto-trigger class
+
+**Docs**
+
+- `docs/PRD.md` — v0.9.13 milestone entry (§6.19; renumber cascade downstream)
+- New `docs/SCREEN-PAGINATION.md` (spec ref di `ScreenPagination.php`
+  docblock) — algorithm phases, case matrix, known limitations, migration
+  path untuk consumer apps
+
+**Known limitations (accepted trade-offs)**
+
+- **Line-level split tidak ada** — paragraph super-panjang yg tidak fit
+  paper akan visually flow ke gap area (not moved to next paper). Untuk
+  most template dokumen (form-filled), rare
+- **Table single-row too tall** — table dgn ONE row taller than paper
+  capacity kena Case C accept overflow (mask hides parts). Proper fix
+  (descend into `<td>` + paragraph-level split) deferred
+- **Table split-with-thead-clone approach abandoned** — sebelumnya splitTableAt
+  clone thead per continuation, tapi thead height overhead menyebabkan chain
+  of splits (21 pieces observed) yg semuanya still > paper capacity. New
+  row-spacer approach avoids this entirely
+- **Print vertical margin** — browser native window.print() apply
+  padT/padB via @page margin. Some browsers (older Firefox) mungkin ignore
+  @page margin — user harus set "Default margins" di print dialog
+
 ### v0.9.12 track — "Sidecar metadata for floating elements"
 
 Sidecar JSON metadata pattern untuk floating positioned elements (logo/TTD/QR/

@@ -1655,9 +1655,93 @@ Add `floating_elements JSON NULL` column to `ezdoc_templates`:
 - Migrating INLINE elements (logo/TTD/QR inline variants) — mereka semantically fit text flow, stay in editor
 - Changing floating element PDF export (still same rendered output)
 
-### 6.18 Milestone v1.0 — "PHP library extraction (Packagist)" ~1 week
+### 6.18 Milestone v0.9.13 — "Screen pagination + layout modes + Paged.js removal" ~1-2 weeks
 
-**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Depends on v0.9.7 (full views) + v0.9.8 (App orchestrator) + v0.9.9 (DB abstraction) + v0.9.10 (standalone hardening — no consumer-app runtime deps) + v0.9.11 (view separation + generate polish)** completed.
+**Goal**: visual multi-paper cards di generate view (screen) matching Google
+Docs / Word Online UX. Editing preserved via CSS mask + JS spacer approach
+(single DOM container, no restructure). Adopted patterns dari Paged.js
+chunker tapi native implementation tanpa external CDN dependency. Layout
+mode toggle (paged/continuous) untuk different rendering needs.
+
+**Motivation**: Sebelumnya generate view render content di single tall
+`.page` container. Content overflowed paperH tanpa visual page break —
+text bleed continuously dari "paper 1" area ke "paper 2" area tanpa gap.
+User request: match Google Docs / Word Online visual (paper cards with
+gap between) tapi tanpa breaking editing UX (contenteditable `.f` fields
++ TTD signing modal + floating positioning).
+
+**Precedent (industry-standard proven)**:
+- **CKEditor 5 Pagination Premium** — commercial plugin ($1500/year) dgn
+  same approach: single container + CSS visual paper cards + JS spacer.
+  No DOM restructure to preserve editing UX
+- **Google Docs** — visual multi-paper pattern (JS-heavy impl too complex
+  to port; adopted visual approach only)
+- **Word Online** — similar single-container-visual-paginated pattern
+- **Paged.js chunker** — inspiration untuk overflow detection algorithm
+  (traverse block children, measure position, decide break point). Study
+  only, no vendored code
+
+**Deliverables**:
+
+- **`Ezdoc\UI\ScreenPagination`** helper class (new):
+  - `renderCss(paperW, paperH, padT, padR, padB, padL, gap, mode)` — CSS
+    dgn mask-image cutout + drop-shadow filter (paged mode) atau minimal
+    reset (continuous mode)
+  - `renderJs(paperH, padT, padB, gap, mode)` — JS IIFE dgn iterative main
+    loop (max 300 iters) + case matrix (A push-whole, B split OL/UL, B
+    row-spacer TABLE, C accept overflow, D nested drill-down)
+  - Cleanup phase idempotent (`mergeSplitContinuations`) untuk re-runs
+  - MutationObserver debounced 500ms + `_isRunning` guard + `pushedOnce`
+    WeakSet untuk stability
+
+- **`configHeader.layoutMode`** config:
+  - Values: `'paged'` (default) atau `'continuous'`
+  - Designer UI: "Layout Mode" dropdown di Page settings panel
+  - Persisted di `ezdoc_templates.layout_config` JSON
+  - Continuous mode: single flow container, no mask, no dashed line preview
+
+- **Print CSS simplification (Paged.js removal)**:
+  - Native `window.print()` (no CDN dependency)
+  - `@page margin: padT padR padB padL` per-physical-page (CSS Paged Media
+    Level 3 spec)
+  - `.page` shrunk ke printable area
+  - Floating elements `transform: translate(-padL, -padT)` compensation
+  - Screen pagination artifacts turned off untuk print (mask, filter,
+    spacers)
+
+- **Row-spacer approach untuk tables** (superseded splitTableAt):
+  - Insert `<tr class="ezdoc-page-spacer">` with `<td colspan="N">`
+    sebelum crossing row → row pushed to next paper padT
+  - Preserves single `<table>` structure (no thead cloning chain issue)
+  - Zero ID duplication risk
+
+**Definition of Done**:
+- Generate view shows content sebagai visual paper cards (paged mode)
+  atau single flow (continuous mode)
+- `.f` fields tetap editable (contenteditable preserved)
+- Table splits properly di row boundary tanpa chain of 20+ pieces
+- OL/UL splits preserve numbering (start attribute)
+- Print output consistent dgn dompdf PDF Raw (same @page margin approach)
+- Zero external CDN dependency
+- MutationObserver stable (no infinite loops via re-entry guard)
+
+**Non-goals**:
+- Line-level split dalam paragraphs (accepted as trade-off)
+- Descend into `<td>` content untuk split paragraphs inside (deferred)
+- Word-online-style live pagination di designer editor (out of scope,
+  editor pakai TinyMCE which paginated di iframe body sizing pattern)
+
+**Known limitations (accepted)**:
+- Paragraphs terlalu panjang untuk fit paper bleed ke gap area (rare untuk
+  form-filled templates)
+- Single-row tables dgn row taller than paper capacity accept overflow
+  (mask hides parts in gap area)
+- Firefox older versions mungkin ignore `@page margin` — user harus set
+  "Default margins" di print dialog
+
+### 6.19 Milestone v1.0 — "PHP library extraction (Packagist)" ~1 week
+
+**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Depends on v0.9.7 (full views) + v0.9.8 (App orchestrator) + v0.9.9 (DB abstraction) + v0.9.10 (standalone hardening — no consumer-app runtime deps) + v0.9.11 (view separation + generate polish) + v0.9.12 (sidecar floating elements) + v0.9.13 (screen pagination + layout modes)** completed.
 
 - [ ] Move `ezdoc/` folder ke repo baru `mrpotensial/ezdoc`
 - [ ] Setup GitHub Actions CI (phpunit + phpstan level 6 + PHP matrix 7.4-8.3)
@@ -1673,7 +1757,7 @@ Add `floating_elements JSON NULL` column to `ezdoc_templates`:
 - **`Ezdoc\App::run()` 1-line mount + `Ezdoc\App::demo()` zero-config SQLite mode** (from v0.9.8) — consumer install verification tanpa DB config
 - Fresh consumer test: install → `Ezdoc\App::demo()` → save template → generate doc → sign → verify (semua works out-of-box, tanpa manual wiring)
 
-### 6.19 Milestone v1.1 — "Spec extraction (repo split + conformance vectors)" ~1-2 weeks
+### 6.20 Milestone v1.1 — "Spec extraction (repo split + conformance vectors)" ~1-2 weeks
 
 **Goal**: split `ezdoc-spec/` subfolder (seeded di v0.9.9) → standalone repo publik `mrpotensial/ezdoc-spec`; enrich dengan conformance test vectors untuk native ports.
 
@@ -1693,7 +1777,7 @@ Add `floating_elements JSON NULL` column to `ezdoc_templates`:
 - Repo has: schemas/, ddl/, protocol/, conformance/, docs/
 - Docs: "How to write a new port" guide dgn Go + Rust + TS starter examples
 
-### 6.20 Milestone v1.5 — "Go port" ~4-6 weeks
+### 6.21 Milestone v1.5 — "Go port" ~4-6 weeks
 
 **Goal**: `ezdoc-go` — native Go implementation, container-friendly.
 
@@ -1711,7 +1795,7 @@ Add `floating_elements JSON NULL` column to `ezdoc_templates`:
 - Conformance test pass (signature dari PHP di-verify oleh Go = same result)
 - Docker image jalan di Kubernetes cluster
 
-### 6.21 Milestone v2.0 — "TypeScript port + full ecosystem" ~6-8 weeks
+### 6.22 Milestone v2.0 — "TypeScript port + full ecosystem" ~6-8 weeks
 
 **Goal**: `@mrpotensial/ezdoc` — TypeScript native untuk Next.js / Node / browser.
 
