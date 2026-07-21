@@ -216,6 +216,17 @@ materai floating variants). Industry-standard document object model separation
  layer, CKEditor 5 Widget, Slate.js void nodes, Prosemirror NodeView),
  schema, save/load flow diagrams, migration path
 
+**Added — test coverage** (2026-07-21)
+
+- `tests/Template/FloatingElementTest.php` — value object + validation +
+ immutable withPosition() + toArray/fromArray roundtrip
+- `tests/Template/FloatingExtractorTest.php` — HTML markers → FloatingElement[]
+ extraction, JSON serialization roundtrip, extract+inject roundtrip
+- `tests/Template/FloatingInjectorTest.php` **(new)** — dedicated FloatingInjector
+ test suite covering per-type marker structure (LOGO/QR/TTD/MATERAI), widget
+ wrapper enforcement, XSS protection (htmlspecialchars), multi-element append
+ order preservation, and full round-trip data preservation dgn Extractor
+
 ### v0.9.11 track — "View separation + generate UX polish"
 
 Split overloaded views ke industry-standard MVC one-view-per-action structure
