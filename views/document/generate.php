@@ -2641,7 +2641,10 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 max-width: none !important;
                 min-height: 0 !important;
                 margin: 0 !important;
-                padding: 0 !important;
+                /* 3mm right-safety padding — small breathing room supaya text
+                   tidak nempel di right edge. Only right side; other sides = 0
+                   karena @page margin sudah handle. */
+                padding: 0 3mm 0 0 !important;
                 box-shadow: none !important;
                 position: relative;
                 /* Screen pagination artifacts: mask + drop-shadow off untuk print. */
