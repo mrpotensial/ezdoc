@@ -464,6 +464,15 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                                 </div>
                             </div>
 
+                            <!-- Subsection: Layout Mode -->
+                            <div class="space-y-1.5">
+                                <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400"><?= h(t('page.layout_mode_label', [], 'Layout Mode')) ?></div>
+                                <select class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-400 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1" id="layoutMode" onchange="updatePageSize()">
+                                    <option value="paged"><?= h(t('page.layout_paged', [], 'Paged (multi-page cards)')) ?></option>
+                                    <option value="continuous"><?= h(t('page.layout_continuous', [], 'Continuous (no page breaks)')) ?></option>
+                                </select>
+                            </div>
+
                             <!-- Subsection: Margin -->
                             <div class="space-y-1.5">
                                 <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400"><?= h(t('page.margin_label', [], 'Margin (mm)')) ?></div>
@@ -1171,6 +1180,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             if (savedHeader.customWidth) configHeader.customWidth = savedHeader.customWidth;
             if (savedHeader.customHeight) configHeader.customHeight = savedHeader.customHeight;
             if (savedHeader.padding) configHeader.padding = savedHeader.padding;
+            if (savedHeader.layoutMode) configHeader.layoutMode = savedHeader.layoutMode;
             // Legacy: configHeader.dynamicTables removed; old data ignored
             if (savedHeader.tableDbQueries) configHeader.tableDbQueries = savedHeader.tableDbQueries;
             // Migrate old format
@@ -1511,6 +1521,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             configHeader.paperSize = paperSize;
             configHeader.orientation = orientation;
             configHeader.padding = { top: padTop, right: padRight, bottom: padBottom, left: padLeft };
+            const layoutMode = document.getElementById('layoutMode')?.value || 'paged';
+            configHeader.layoutMode = layoutMode;
 
             // editorContainer: simplified — TinyMCE widget fills wrapper.
             // Paper visualization diberikan oleh iframe body CSS (Google Docs pattern).
@@ -1547,6 +1559,14 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     // background-image di content_style. Line muncul di setiap
                     // paperHeight (bukan content area) sesuai actual print page.
                     body.style.setProperty('--ezdoc-page-h', paperHeight + 'mm');
+
+                    // Layout mode toggle — continuous mode hides page break preview
+                    // (dashed line pattern rendered via content_style bg-image).
+                    if (layoutMode === 'continuous') {
+                        body.classList.add('layout-continuous');
+                    } else {
+                        body.classList.remove('layout-continuous');
+                    }
                 }
 
                 // TinyMCE widget height = viewport-fill (getEditorHeight).
@@ -1589,6 +1609,9 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             if (pb) pb.value = configHeader.padding?.bottom ?? 20;
             if (pl) pl.value = configHeader.padding?.left ?? 20;
 
+            const lm = document.getElementById('layoutMode');
+            if (lm) lm.value = configHeader.layoutMode || 'paged';
+
             updatePageSize();
         }
 
@@ -1613,6 +1636,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 bottom: padBottom,
                 left: padLeft
             };
+            configHeader.layoutMode = document.getElementById('layoutMode')?.value || 'paged';
 
             console.log('Synced configHeader:', configHeader); // Debug
         }
@@ -2239,6 +2263,12 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     background-position: 0 0, 0 0;
                     background-repeat: repeat-x, repeat-y;
                     background-attachment: local; /* scroll dgn content */
+                }
+                /* Continuous layout mode — hide page break preview + relax
+                   min-height constraint. Body flows as single container. */
+                body.layout-continuous {
+                    background-image: none !important;
+                    min-height: 0 !important;
                 }
                 /* "Page N" label di setiap page-break line — subtle floating
                    indicator, tidak affect content flow. Positioned via same

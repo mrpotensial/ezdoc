@@ -307,6 +307,12 @@ $padding = $configHeader['padding'] ?? ['top' => 20, 'right' => 20, 'bottom' => 
 $padTop = (int)($padding['top'] ?? 20);
 $padRight = (int)($padding['right'] ?? 20);
 $padBottom = (int)($padding['bottom'] ?? 20);
+
+// Layout mode: 'paged' (default, multi-page cards with mask/spacer) atau
+// 'continuous' (single scrollable container, no page breaks). Padding rules
+// tetap apply di both modes.
+$layoutMode = $configHeader['layoutMode'] ?? 'paged';
+if (!in_array($layoutMode, ['paged', 'continuous'], true)) $layoutMode = 'paged';
 $padLeft = (int)($padding['left'] ?? 20);
 
 // Load document
@@ -1986,7 +1992,8 @@ function renderFieldForPdf($name, $type, $val, $label) {
         <?= \Ezdoc\UI\ContentCss::render() ?>
 
         /* Screen pagination — visual multi-paper cards + JS spacer boundary.
-           Adopted patterns dari Paged.js chunker (overflow detection algo). */
+           Adopted patterns dari Paged.js chunker (overflow detection algo).
+           layoutMode = 'paged' (multi-page cards) atau 'continuous' (single flow). */
         <?= \Ezdoc\UI\ScreenPagination::renderCss(
             (float)$paperDim['width'],
             (float)$paperDim['height'],
@@ -1994,8 +2001,17 @@ function renderFieldForPdf($name, $type, $val, $label) {
             (float)$padRight,
             (float)$padBottom,
             (float)$padLeft,
-            12.0
+            12.0,
+            $layoutMode
         ) ?>
+
+        <?php if ($layoutMode === 'continuous'): ?>
+        /* Continuous mode — remove .page min-height constraint so body flows
+           as single container tanpa fixed paper height. */
+        .page {
+            min-height: 0 !important;
+        }
+        <?php endif; ?>
 
         /* Field (contenteditable) - auto-adjusts for 1 or multi line */
         .f-wrap { display: inline; }
@@ -4753,7 +4769,8 @@ function renderFieldForPdf($name, $type, $val, $label) {
             (float)$paperDim['height'],
             (float)$padTop,
             (float)$padBottom,
-            12.0
+            12.0,
+            $layoutMode
         ) ?>
     </script>
 

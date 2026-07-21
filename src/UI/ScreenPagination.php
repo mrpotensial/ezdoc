@@ -76,8 +76,26 @@ final class ScreenPagination
         float $padRight,
         float $padBottom,
         float $padLeft,
-        float $gap = 12.0
+        float $gap = 12.0,
+        string $mode = 'paged'
     ): string {
+        // Continuous mode — no mask, no page cards, no gap. Body just single
+        // scroll container. Keep existing shadow + white paper look, tapi tanpa
+        // multi-page cutout.
+        if ($mode === 'continuous') {
+            return <<<CSS
+/* ─── Screen Pagination (Continuous mode) ─── */
+.page {
+    background-color: #ffffff;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    background-image: none !important; /* remove dashed page break preview */
+    -webkit-mask-image: none;
+    mask-image: none;
+    filter: none;
+}
+.ezdoc-page-spacer { display: none !important; }
+CSS;
+        }
         $tileH = $paperH + $gap;
         return <<<CSS
 /* ─── Screen Pagination — visual multi-paper cards ─── */
@@ -166,8 +184,13 @@ CSS;
         float $paperH,
         float $padTop,
         float $padBottom,
-        float $gap = 12.0
+        float $gap = 12.0,
+        string $mode = 'paged'
     ): string {
+        // Continuous mode — no JS needed (no spacer, no split). Return no-op.
+        if ($mode === 'continuous') {
+            return "/* ScreenPagination continuous mode — no-op */";
+        }
         $paperHJs = json_encode($paperH);
         $padTopJs = json_encode($padTop);
         $padBottomJs = json_encode($padBottom);
