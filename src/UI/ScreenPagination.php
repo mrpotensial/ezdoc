@@ -487,210 +487,244 @@ CSS;
     }
 
     /**
-     * Main algorithm — iterative (NOT recursive supaya no stack overflow).
-     * Traverse .page block children. For each crossing element:
-     * - Kalau fits di one paper → insert div spacer sebelum element (push whole)
-     * - Kalau lebih besar dari paper capacity dan tabel/list → split at sub-child
-     * - Lainnya → accept overflow
+     * Do ONE iteration of pagination work — find first crossing element,
+     * insert appropriate spacer. Returns true kalau something inserted.
+     * Extracted supaya main insertSpacers bisa chunk work async.
+     */
+    function paginateOnePass(pageEl, contentEl, paperCapacityPx, pushedOnce) {
+        var pageRect = pageEl.getBoundingClientRect();
+        var pageTop = pageRect.top + window.scrollY;
+        var children = Array.from(contentEl.children);
+
+        // Selectors untuk skip — element yg positioned:absolute atau tidak
+        // affect content flow. Kalau tidak di-skip, algo might process wrapper
+        // paragraphs containing floating elements, causing weird spacer insertion.
+        var CHILD_SKIP_SELECTOR = '.ezdoc-page-spacer, .floating-only, ' +
+            '.logo-floating, .ttd-item-floating, .qr-item-floating, .materai-floating, ' +
+            '.logo-placeholder, .ttd-placeholder, .qr-placeholder, .materai-placeholder';
+
+        for (var i = 0; i < children.length; i++) {
+            var child = children[i];
+            if (child.matches && child.matches(CHILD_SKIP_SELECTOR)) continue;
+            // Also skip kalau child CONTAINS only floating (e.g., <p><span class="logo-placeholder"></span></p>)
+            if (child.firstElementChild && child.firstElementChild.matches && child.firstElementChild.matches(CHILD_SKIP_SELECTOR) && !child.textContent.trim()) continue;
+
+            var rect = child.getBoundingClientRect();
+            if (rect.height === 0) continue;
+
+            var childTop = rect.top + window.scrollY - pageTop;
+            var childBottom = childTop + rect.height;
+            var paperIdx = paperIndexAt(childTop);
+            var contentBottom = contentBottomOfPaper(paperIdx);
+
+            if (childBottom <= contentBottom) continue;
+
+            var nextPaperTop = (paperIdx + 1) * (PAPER_H_PX + GAP_PX) + PAD_TOP_PX;
+            var pushBy = nextPaperTop - childTop;
+            if (pushBy < 5) continue;
+
+            // Case A: element fits in one paper — push whole to next.
+            if (rect.height <= paperCapacityPx * 0.98) {
+                if (pushBy > (PAPER_H_PX + GAP_PX) * 1.5) {
+                    console.warn('[ScreenPagination] Skip huge pushBy=' + pushBy + 'px', child);
+                    continue;
+                }
+                dbg('Case A push-whole', child.tagName, 'top=' + Math.round(childTop), 'h=' + Math.round(rect.height), 'pushBy=' + Math.round(pushBy));
+                var spacer = createSpacer(pushBy);
+                contentEl.insertBefore(spacer, child);
+                return true;
+            }
+
+            // Case B: element too big — try container handling.
+            if (child.tagName === 'UL' || child.tagName === 'OL') {
+                if (tryContainerSplit(child, contentEl, contentBottom, nextPaperTop, pageTop)) {
+                    dbg('Case B split', child.tagName, 'top=' + Math.round(childTop), 'h=' + Math.round(rect.height));
+                    return true;
+                }
+            } else if (child.tagName === 'TABLE') {
+                if (insertTableRowSpacers(child, pageTop)) {
+                    dbg('Case B row-spacer', child.tagName, 'top=' + Math.round(childTop), 'h=' + Math.round(rect.height));
+                    return true;
+                }
+            }
+
+            // Case B fallback: unsplittable table/list — accept overflow.
+            if (child.tagName === 'TABLE' || child.tagName === 'UL' || child.tagName === 'OL') {
+                dbg('Case C accept overflow (too big, unsplittable)', child.tagName, 'top=' + Math.round(childTop), 'h=' + Math.round(rect.height));
+                pushedOnce.add(child);
+                continue;
+            }
+
+            // Case D: nested table/list inside wrapper div.
+            var nested = child.querySelectorAll('table, ol, ul');
+            for (var n = 0; n < nested.length; n++) {
+                var nest = nested[n];
+                if (nest.hasAttribute('data-ezdoc-split-continues')) continue;
+                var nRect = nest.getBoundingClientRect();
+                if (nRect.height === 0) continue;
+                if (nRect.height <= paperCapacityPx * 0.98) continue;
+
+                var nTop = nRect.top + window.scrollY - pageTop;
+                var nBottom = nTop + nRect.height;
+                var nPaperIdx = paperIndexAt(nTop);
+                var nContentBottom = contentBottomOfPaper(nPaperIdx);
+                if (nBottom <= nContentBottom) continue;
+
+                var nNextPaperTop = (nPaperIdx + 1) * (PAPER_H_PX + GAP_PX) + PAD_TOP_PX;
+                var handled = false;
+                if (nest.tagName === 'TABLE') {
+                    handled = insertTableRowSpacers(nest, pageTop);
+                } else {
+                    handled = tryContainerSplit(nest, nest.parentNode, nContentBottom, nNextPaperTop, pageTop);
+                }
+                if (handled) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Main algorithm — CHUNKED async supaya tidak block browser.
+     * Each iteration yields ke browser via setTimeout(0) before next iteration.
+     * Browser bisa render + handle input events between chunks.
      */
     function insertSpacers(pageEl) {
-        if (_isRunning) return; // guard against re-entry
+        if (_isRunning) return;
         _isRunning = true;
         if (_observer) _observer.disconnect();
 
-        try {
-            // Cleanup previous state — remove spacers, merge split continuations.
-            pageEl.querySelectorAll('.ezdoc-page-spacer').forEach(function(s) { s.remove(); });
-            mergeSplitContinuations(pageEl);
+        // Cleanup previous state — remove spacers, merge split continuations.
+        pageEl.querySelectorAll('.ezdoc-page-spacer').forEach(function(s) { s.remove(); });
+        mergeSplitContinuations(pageEl);
 
-            var contentEl = pageEl.querySelector('.content') || pageEl;
-            var paperCapacityPx = PAPER_H_PX - PAD_TOP_PX - PAD_BOTTOM_PX;
-            var maxIterations = 300;
-            // Track elements yg sudah di-push. Prevents infinite push loop untuk
-            // element yg terlalu besar untuk fit (e.g., single-row table dgn row
-            // taller than paper capacity — no split possible, push doesn't help).
-            var pushedOnce = new WeakSet();
+        var contentEl = pageEl.querySelector('.content') || pageEl;
+        var paperCapacityPx = PAPER_H_PX - PAD_TOP_PX - PAD_BOTTOM_PX;
+        var maxIterations = 100;
+        var startTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        var timeoutMs = 3000;
+        var pushedOnce = new WeakSet();
+        var iteration = 0;
 
-            while (maxIterations-- > 0) {
-                var pageRect = pageEl.getBoundingClientRect();
-                var pageTop = pageRect.top + window.scrollY;
-                var children = Array.from(contentEl.children);
-                var inserted = false;
-
-                for (var i = 0; i < children.length; i++) {
-                    var child = children[i];
-                    if (child.classList && child.classList.contains('ezdoc-page-spacer')) continue;
-
-                    var rect = child.getBoundingClientRect();
-                    if (rect.height === 0) continue;
-
-                    var childTop = rect.top + window.scrollY - pageTop;
-                    var childBottom = childTop + rect.height;
-                    var paperIdx = paperIndexAt(childTop);
-                    var contentBottom = contentBottomOfPaper(paperIdx);
-
-                    if (childBottom <= contentBottom) continue;
-
-                    var nextPaperTop = (paperIdx + 1) * (PAPER_H_PX + GAP_PX) + PAD_TOP_PX;
-                    var pushBy = nextPaperTop - childTop;
-                    if (pushBy < 5) continue;
-
-                    // Case A: element fits in one paper — push whole to next.
-                    if (rect.height <= paperCapacityPx * 0.98) {
-                        if (pushBy > (PAPER_H_PX + GAP_PX) * 1.5) {
-                            console.warn('[ScreenPagination] Skip huge pushBy=' + pushBy + 'px', child);
-                            continue;
-                        }
-                        dbg('Case A push-whole', child.tagName, 'top=' + Math.round(childTop), 'h=' + Math.round(rect.height), 'pushBy=' + Math.round(pushBy));
-                        var spacer = createSpacer(pushBy);
-                        contentEl.insertBefore(spacer, child);
-                        inserted = true;
-                        break;
-                    }
-
-                    // Case B: element too big for one paper — try container handling.
-                    // - Lists (OL/UL): split at li boundary (proven to work).
-                    // - Tables: insert `<tr>` spacer BEFORE crossing row (avoids
-                    //   thead-cloning chain issue of splitTableAt).
-                    if (child.tagName === 'UL' || child.tagName === 'OL') {
-                        if (tryContainerSplit(child, contentEl, contentBottom, nextPaperTop, pageTop)) {
-                            dbg('Case B split', child.tagName, 'top=' + Math.round(childTop), 'h=' + Math.round(rect.height));
-                            inserted = true;
-                            break;
-                        }
-                    } else if (child.tagName === 'TABLE') {
-                        if (insertTableRowSpacers(child, pageTop)) {
-                            dbg('Case B row-spacer', child.tagName, 'top=' + Math.round(childTop), 'h=' + Math.round(rect.height));
-                            inserted = true;
-                            break;
-                        }
-                    }
-
-                    // Case B fallback: split failed AND element too big for paper.
-                    // NO PUSH — pushing would waste 1 full paper of remaining
-                    // space on current paper. Accept overflow at current position:
-                    // element bleeds through gap area (mask hides those parts),
-                    // reappears on next paper. Less wasted paper space.
-                    //
-                    // Root cause bagi table yg fail: single row taller than paper
-                    // capacity (e.g., td dgn banyak paragraphs). Proper fix perlu
-                    // descend into td content + paragraph-level split — significant
-                    // complexity, deferred untuk sekarang.
-                    if (child.tagName === 'TABLE' || child.tagName === 'UL' || child.tagName === 'OL') {
-                        dbg('Case C accept overflow (too big, unsplittable)', child.tagName, 'top=' + Math.round(childTop), 'h=' + Math.round(rect.height));
-                        pushedOnce.add(child);
-                        continue;
-                    }
-
-                    // Case D: child is a wrapper (div, section, etc.) yg terlalu
-                    // besar dan bukan table/list sendiri. Cari nested table/list
-                    // di dalam yg cross boundary, handle them in place.
-                    var nested = child.querySelectorAll('table, ol, ul');
-                    var nestedHandled = false;
-                    for (var n = 0; n < nested.length; n++) {
-                        var nest = nested[n];
-                        if (nest.hasAttribute('data-ezdoc-split-continues')) continue;
-                        var nRect = nest.getBoundingClientRect();
-                        if (nRect.height === 0) continue;
-                        if (nRect.height <= paperCapacityPx * 0.98) continue;
-
-                        var nTop = nRect.top + window.scrollY - pageTop;
-                        var nBottom = nTop + nRect.height;
-                        var nPaperIdx = paperIndexAt(nTop);
-                        var nContentBottom = contentBottomOfPaper(nPaperIdx);
-                        if (nBottom <= nContentBottom) continue;
-
-                        var nNextPaperTop = (nPaperIdx + 1) * (PAPER_H_PX + GAP_PX) + PAD_TOP_PX;
-                        var handled = false;
-                        if (nest.tagName === 'TABLE') {
-                            handled = insertTableRowSpacers(nest, pageTop);
-                        } else {
-                            handled = tryContainerSplit(nest, nest.parentNode, nContentBottom, nNextPaperTop, pageTop);
-                        }
-                        if (handled) {
-                            nestedHandled = true;
-                            break;
-                        }
-                    }
-                    if (nestedHandled) {
-                        inserted = true;
-                        break;
-                    }
-
-                    // Case C: can't do anything, accept overflow (rare).
-                }
-
-                if (!inserted) break;
-            }
-
-            if (maxIterations <= 0) {
-                console.warn('[ScreenPagination] Max iterations hit');
-            }
-        } finally {
+        function finish(reason) {
             _isRunning = false;
-            if (_observer) {
-                setTimeout(function() {
-                    _observer.observe(pageEl, {
-                        characterData: true,
-                        childList: true,
-                        subtree: true
-                    });
-                }, 0);
-            }
+            if (reason) dbg('Pagination finished:', reason, 'iterations=' + iteration);
+            // NO observer reconnect — one-shot pagination only (v0.9.13 hang fix).
         }
+
+        function step() {
+            // Wall-clock safety abort.
+            var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            if ((now - startTime) > timeoutMs) {
+                console.warn('[ScreenPagination] Timeout (' + timeoutMs + 'ms) hit — aborting.');
+                finish('timeout');
+                return;
+            }
+            if (iteration++ >= maxIterations) {
+                console.warn('[ScreenPagination] Max iterations hit');
+                finish('max-iter');
+                return;
+            }
+
+            var inserted;
+            try {
+                inserted = paginateOnePass(pageEl, contentEl, paperCapacityPx, pushedOnce);
+            } catch (e) {
+                console.error('[ScreenPagination] Error in pass:', e);
+                finish('error');
+                return;
+            }
+
+            if (!inserted) {
+                finish('converged');
+                return;
+            }
+
+            // Yield to browser via setTimeout(0) — CRITICAL untuk prevent hang.
+            // Browser handles input + rendering between iterations.
+            setTimeout(step, 0);
+        }
+
+        // Start first iteration
+        step();
+    }
+
+    /**
+     * Get observer target — .content jika ada, else .page. Extracted supaya
+     * finish() bisa re-observe same target.
+     */
+    function observeTargetForPage(pageEl) {
+        return pageEl.querySelector('.content') || pageEl;
     }
 
     /**
      * Debounced trigger — recompute spacers after content changes settle.
+     * Uses requestIdleCallback (fallback setTimeout) supaya pagination run
+     * di idle time, tidak block user interactions. Prevents browser hang on
+     * complex docs.
      */
     var debounceTimer = null;
     function schedule(pageEl, delay) {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(function() {
-            insertSpacers(pageEl);
+            // Defer ke idle time. Browser prioritizes user input + rendering
+            // dulu, run pagination when spare CPU. Timeout 3000ms = force-run
+            // kalau browser never idle (heavy JS activity).
+            if (typeof window.requestIdleCallback === 'function') {
+                window.requestIdleCallback(function() {
+                    insertSpacers(pageEl);
+                }, { timeout: 3000 });
+            } else {
+                // Safari doesn't support requestIdleCallback yet.
+                setTimeout(function() { insertSpacers(pageEl); }, 0);
+            }
         }, delay || 300);
     }
 
     // ─── Boot ───
     document.addEventListener('DOMContentLoaded', function() {
+        // KILL SWITCH — disable via URL param `?ezdoc_pagination=off` (safety
+        // valve untuk emergency). Add ke bookmark kalau perf issue on specific doc.
+        if (/[?&]ezdoc_pagination=off/.test(window.location.search)) {
+            console.log('[ScreenPagination] disabled via URL kill switch');
+            return;
+        }
         var pageEl = document.querySelector('.page');
         if (!pageEl) return;
 
         // Add marker class so CSS knows pagination is active.
         document.body.classList.add('ezdoc-paginated');
 
-        // Initial run — wait for fonts/images to load (affects height).
+        // Initial run — wait for fonts, then defer to idle time.
+        // Ensures browser finishes rendering + Alpine hydration + TinyMCE
+        // init sebelum pagination starts. Prevents initial-load hang.
+        var runInitial = function() {
+            if (typeof window.requestIdleCallback === 'function') {
+                window.requestIdleCallback(function() {
+                    insertSpacers(pageEl);
+                }, { timeout: 3000 });
+            } else {
+                setTimeout(function() { insertSpacers(pageEl); }, 100);
+            }
+        };
         if (document.fonts && document.fonts.ready) {
-            document.fonts.ready.then(function() { insertSpacers(pageEl); });
+            document.fonts.ready.then(runInitial);
         } else {
-            setTimeout(function() { insertSpacers(pageEl); }, 100);
+            setTimeout(runInitial, 100);
         }
 
-        // Re-run on window resize (rare, but paperH-related media queries may
-        // change layout).
-        window.addEventListener('resize', function() { schedule(pageEl, 500); });
-
-        // Re-run on content changes to .f fields (debounced).
-        // Use MutationObserver on characterData + subtree — fires on any text
-        // change dalam contenteditable spans.
-        _observer = new MutationObserver(function(mutations) {
-            if (_isRunning) return; // ignore mutations WE created
-            var relevant = false;
-            for (var i = 0; i < mutations.length; i++) {
-                var m = mutations[i];
-                // Ignore mutations on spacers themselves (avoid loop).
-                if (m.target.classList && m.target.classList.contains('ezdoc-page-spacer')) continue;
-                if (m.target.closest && m.target.closest('.ezdoc-page-spacer')) continue;
-                relevant = true;
-                break;
+        // NO MutationObserver — proven to cause infinite loops with Alpine.js
+        // reactive bindings + TTD/materai updates + TinyMCE etc. User must
+        // reload page kalau content structure changes and pagination needs
+        // re-run. Trade-off worth it — no more browser hang.
+        //
+        // Manual re-paginate trigger via console: `EzdocPagination.repaginate()`
+        // exposed globally untuk debug/manual use.
+        window.EzdocPagination = {
+            repaginate: function() {
+                _isRunning = false; // force allow re-run
+                insertSpacers(pageEl);
             }
-            if (relevant) schedule(pageEl, 500);
-        });
-        _observer.observe(pageEl, {
-            characterData: true,
-            childList: true,
-            subtree: true
-        });
+        };
     });
 })();
 JS;
