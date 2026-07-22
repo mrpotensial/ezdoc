@@ -74,6 +74,14 @@
 
         let configTtd = [];
         let configMateraiList = []; // list of materai placeholders {id, label, mode (upload/kosong), posMode, posX, posY}
+
+        // v0.9.12 Phase 2 — sidecar-native floating elements.
+        // Array of { id, type, positionX, positionY, zIndex ('front'|'behind'), width, data }
+        // Loaded dari server (window.__EZDOC_FLOATING_INIT). Persisted via floating_elements_json.
+        // Editor DOM NEVER contains floating markers.
+        let floatingElements = (typeof window.__EZDOC_FLOATING_INIT !== 'undefined')
+            ? JSON.parse(JSON.stringify(window.__EZDOC_FLOATING_INIT))
+            : [];
         // Verify config: { show_patient: bool, custom_fields: [{key,label}...] }
         let verifyConfig = {
             show_patient: true,   // default ON (kalau doc_scope=patient, ini yg menang)
@@ -188,6 +196,148 @@
             container.appendChild(toast);
             // Error toast stays 8s (longer so user notices); success 3s.
             setTimeout(() => toast.remove(), isErr ? 8000 : 3000);
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // ── Floating Elements (v0.9.12 Phase 2 — sidecar-native) ──
+        // ═══════════════════════════════════════════════════════════════
+        //
+        // State store `floatingElements` (declared di top) holds sidebar floating
+        // elements. Editor DOM NEVER contains floating markers — semantic
+        // separation antara text flow (editor) dan positioned overlays (sidebar).
+        //
+        // Industry precedent (docs/FLOATING-ELEMENTS.md):
+        //   • Google Docs — <a:drawing> XML nodes separate dari <w:t> text runs
+        //   • MS Word — <w:drawing> element in OOXML terpisah dari text runs
+        //   • Figma / Sketch — Layer panel model, each object standalone
+        //   • CKEditor 5 Widgets — atomic non-editable widget units w/ sidebar
+        //   • Slate.js `void` nodes — JSON structures separate from text
+        //   • Prosemirror NodeView — custom view for embedded content
+        //   • Notion Callout — sidebar/toolbar untuk non-inline content
+        //
+        // Data model per element:
+        //   { id, type, positionX, positionY, zIndex ('front'|'behind'), width, data }
+        //
+        // Mutations: helper fns yg trigger re-render + markDirty.
+        // Serialization: JSON stringify saat save (append ke formData).
+
+        function renderFloatingList() {
+            const container = document.getElementById('floatingList');
+            const emptyEl = document.getElementById('floatingEmpty');
+            const countEl = document.getElementById('floatingCount');
+            if (!container) return;
+
+            countEl.textContent = String(floatingElements.length);
+            if (floatingElements.length === 0) {
+                container.innerHTML = '';
+                if (emptyEl) emptyEl.style.display = '';
+                return;
+            }
+            if (emptyEl) emptyEl.style.display = 'none';
+
+            // Type icon lookup (Bootstrap Icons)
+            const TYPE_ICON = {
+                logo:    'bi-image',
+                qr:      'bi-qr-code',
+                ttd:     'bi-pen',
+                materai: 'bi-stamp'
+            };
+            const TYPE_LABEL = {
+                logo:    'Logo',
+                qr:      'QR',
+                ttd:     t('fallback.signature', {}, 'Signature'),
+                materai: 'Materai'
+            };
+
+            const rowsHtml = floatingElements.map((el, idx) => {
+                const iconClass = TYPE_ICON[el.type] || 'bi-square';
+                const typeLabel = TYPE_LABEL[el.type] || el.type;
+                const zLabel = el.zIndex === 'behind' ? 'behind' : 'front';
+                return `
+                    <div class="border border-gray-200 rounded p-2 mb-1.5 text-xs bg-white" data-floating-idx="${idx}">
+                        <div class="flex items-center gap-1.5 mb-1.5">
+                            <i class="bi ${iconClass} text-gray-600"></i>
+                            <span class="font-medium text-gray-700 truncate flex-1" title="${escapeHtml(el.id)}">${escapeHtml(el.id)}</span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">${typeLabel}</span>
+                            <button type="button" class="border-0 bg-transparent text-red-500 hover:text-red-700 leading-none" title="${escapeHtml(t('actions.delete', {}, 'Delete'))}" onclick="removeFloatingElement(${idx})">×</button>
+                        </div>
+                        <div class="grid grid-cols-3 gap-1">
+                            <div>
+                                <label class="block text-[9px] text-gray-500 mb-0.5">X (px)</label>
+                                <input type="number" class="w-full rounded border-gray-300 text-[11px] px-1.5 py-0.5" value="${el.positionX}" min="0" oninput="updateFloatingPosition(${idx}, 'x', this.value)">
+                            </div>
+                            <div>
+                                <label class="block text-[9px] text-gray-500 mb-0.5">Y (px)</label>
+                                <input type="number" class="w-full rounded border-gray-300 text-[11px] px-1.5 py-0.5" value="${el.positionY}" min="0" oninput="updateFloatingPosition(${idx}, 'y', this.value)">
+                            </div>
+                            <div>
+                                <label class="block text-[9px] text-gray-500 mb-0.5">Z</label>
+                                <select class="w-full rounded border-gray-300 text-[11px] px-1.5 py-0.5" onchange="updateFloatingZIndex(${idx}, this.value)">
+                                    <option value="front" ${el.zIndex === 'front' ? 'selected' : ''}>front</option>
+                                    <option value="behind" ${el.zIndex === 'behind' ? 'selected' : ''}>behind</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = rowsHtml;
+        }
+
+        // Escape HTML for safe attr injection (defensive against XSS).
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // Add new floating element (called dari insertXxxPrompt untuk floating modes).
+        // Returns index of added element.
+        function addFloatingElement(spec) {
+            const el = {
+                id: String(spec.id || '').trim(),
+                type: String(spec.type || '').trim(),
+                positionX: parseInt(spec.positionX, 10) || 20,
+                positionY: parseInt(spec.positionY, 10) || 20,
+                zIndex: spec.zIndex === 'behind' ? 'behind' : 'front',
+                width: String(spec.width || '80px'),
+                data: (typeof spec.data === 'object' && spec.data !== null) ? spec.data : {}
+            };
+            if (!el.id || !el.type) return -1;
+            floatingElements.push(el);
+            renderFloatingList();
+            if (typeof markDirty === 'function') markDirty();
+            return floatingElements.length - 1;
+        }
+
+        // Remove floating element by index.
+        function removeFloatingElement(idx) {
+            if (idx < 0 || idx >= floatingElements.length) return;
+            floatingElements.splice(idx, 1);
+            renderFloatingList();
+            if (typeof markDirty === 'function') markDirty();
+        }
+
+        // Update position (x or y) via sidebar input.
+        function updateFloatingPosition(idx, axis, value) {
+            if (idx < 0 || idx >= floatingElements.length) return;
+            const v = parseInt(value, 10);
+            if (isNaN(v) || v < 0) return;
+            if (axis === 'x') floatingElements[idx].positionX = v;
+            else if (axis === 'y') floatingElements[idx].positionY = v;
+            if (typeof markDirty === 'function') markDirty();
+        }
+
+        // Update z-index (front/behind) via sidebar select.
+        function updateFloatingZIndex(idx, value) {
+            if (idx < 0 || idx >= floatingElements.length) return;
+            floatingElements[idx].zIndex = value === 'behind' ? 'behind' : 'front';
+            renderFloatingList();
+            if (typeof markDirty === 'function') markDirty();
         }
 
         // ================== QUERY DB (Tabledb) Manager ==================
@@ -663,6 +813,8 @@
             formData.append('template_html', getCleanContentForSave()); // Use clean content
             formData.append('config_ttd', JSON.stringify(configTtd));
             formData.append('config_header', JSON.stringify(configHeader));
+            // v0.9.12 Phase 2 — sidecar-native floating serialization
+            formData.append('floating_elements_json', JSON.stringify(floatingElements || []));
 
             // Consumer-extensible: pre-save hook — allow consumers to mutate formData or cancel
             const beforeEvt = new CustomEvent('ezdoc:before-save', { detail: { formData, cancel: false }, cancelable: true });
@@ -1486,37 +1638,25 @@
                         const width = prompt(t('toolbar_insert.logo_width_prompt', {}, 'Logo width (example: 80px, 100px):'), '80px') || '80px';
                         configHeader.logoSizes[cleanName] = width;
 
-                        let classes = 'logo-placeholder';
-                        let style = '';
-                        let posAttrs = '';
-
+                        // v0.9.12 Phase 2 — floating goes to sidecar state, NOT editor DOM
                         if (mode === 'front' || mode === 'behind') {
-                            classes += ' floating ' + mode;
-                            style = ` style="top: 20px; left: 20px;"`;
-                            posAttrs = ` data-pos-mode="${mode}" data-pos-x="20" data-pos-y="20"`;
+                            addFloatingElement({
+                                id: cleanName,
+                                type: 'logo',
+                                positionX: 20,
+                                positionY: 20,
+                                zIndex: mode,
+                                width: width,
+                                data: {}
+                            });
+                            setTimeout(scanLogos, 100);
+                            return;
                         }
 
-                        // Widget-wrapper pattern (CKEditor 5 non-editable atomic
-                        // block precedent) untuk floating variants: wrap span dalam
-                        // <p class="floating-only" contenteditable="false"> supaya:
-                        // - .floating-only CSS collapse ke 0 height (no empty line)
-                        // - contenteditable="false" wrapper = cursor can't accidentally
-                        //   enter, protect dari accidental deletion via typing
-                        // - explicit wrapper skip TinyMCE auto-paragraph creation
-                        //   yg might not get .floating-only class in time.
-                        const logoSpan = `<span class="${classes}" data-logo="${cleanName}" data-width="${width}"${posAttrs}${style} contenteditable="false">[Logo: ${cleanName}]</span>`;
-                        if (mode === 'inline') {
-                            editor.insertContent(logoSpan + '&nbsp;');
-                        } else {
-                            editor.insertContent(`<p class="floating-only" contenteditable="false">${logoSpan}</p>`);
-                        }
+                        // Inline mode — stays in editor content (semantically correct)
+                        const logoSpan = `<span class="logo-placeholder" data-logo="${cleanName}" data-width="${width}" contenteditable="false">[Logo: ${cleanName}]</span>`;
+                        editor.insertContent(logoSpan + '&nbsp;');
                         setTimeout(scanLogos, 100);
-                        if (mode !== 'inline') applyFloatingOnlyClasses();
-
-                        // Initialize drag for floating logos
-                        if (mode !== 'inline') {
-                            setTimeout(initLogoDrag, 200);
-                        }
                     }
                 }
 
@@ -1540,33 +1680,23 @@
                         const cleanName = fieldName.trim().replace(/\s+/g, '_').toLowerCase();
                         const width = prompt(t('toolbar_insert.qr_size_prompt', {}, 'QR size (example: 80px, 100px):'), '80px') || '80px';
 
-                        let classes = 'qr-placeholder';
-                        let style = '';
-                        let posAttrs = '';
-
+                        // v0.9.12 Phase 2 — floating goes to sidecar state, NOT editor DOM
                         if (mode === 'front' || mode === 'behind') {
-                            classes += ' floating ' + mode;
-                            style = ` style="top: 20px; left: 20px;"`;
-                            posAttrs = ` data-pos-mode="${mode}" data-pos-x="20" data-pos-y="20"`;
+                            addFloatingElement({
+                                id: cleanName,
+                                type: 'qr',
+                                positionX: 20,
+                                positionY: 20,
+                                zIndex: mode,
+                                width: width,
+                                data: {}
+                            });
+                            return;
                         }
 
-                        // Widget-wrapper pattern (see logo insert). Floating variant
-                        // wrapped in <p.floating-only contenteditable=false>.
-                        const qrSpan = `<span class="${classes}" data-qr="${cleanName}" data-width="${width}"${posAttrs}${style} contenteditable="false">[QR: ${cleanName}]</span>`;
-                        if (mode === 'inline') {
-                            editor.insertContent(qrSpan + '&nbsp;');
-                        } else {
-                            editor.insertContent(`<p class="floating-only" contenteditable="false">${qrSpan}</p>`);
-                        }
-                        if (mode !== 'inline') applyFloatingOnlyClasses();
-
-                        // Initialize drag for floating QR
-                        if (mode !== 'inline') {
-                            setTimeout(() => {
-                                setupDragDelegation();
-                                restoreFloatingPositions();
-                            }, 200);
-                        }
+                        // Inline mode — stays in editor content
+                        const qrSpan = `<span class="qr-placeholder" data-qr="${cleanName}" data-width="${width}" contenteditable="false">[QR: ${cleanName}]</span>`;
+                        editor.insertContent(qrSpan + '&nbsp;');
                     }
                 }
 
@@ -1666,7 +1796,7 @@
                         if (qrData) extraAttrs += ` data-ttd-qr-data="${qrData.replace(/"/g, '&quot;')}"`;
                         if (defaultNama) extraAttrs += ` data-default-nama="${defaultNama.replace(/"/g, '&quot;')}"`;
 
-                        // Add to configTtd
+                        // Add to configTtd (universal — needed untuk both inline + floating)
                         configTtd.push({
                             id: ttdId,
                             label: label.trim(),
@@ -1677,34 +1807,42 @@
                             defaultNama: defaultNama
                         });
 
-                        // Preview text di editor: kalau ada default nama, tampilkan, kalau tidak dots
+                        // v0.9.12 Phase 2 — floating goes to sidecar state, NOT editor DOM
+                        if (mode === 'front' || mode === 'behind') {
+                            addFloatingElement({
+                                id: ttdId,
+                                type: 'ttd',
+                                positionX: 50,
+                                positionY: 100,
+                                zIndex: mode,
+                                width: '120px',
+                                data: {
+                                    label: label.trim(),
+                                    nama_field: namaField || 'nama_' + ttdId,
+                                    ttd_modes: ttdModes,
+                                    ttd_qr_data: qrData,
+                                    default_nama: defaultNama
+                                }
+                            });
+                            renderTtd();
+                            return;
+                        }
+
+                        // Inline mode — editor content dgn preview box
                         const previewNama = defaultNama || '..................';
-                        // Dimensions match generate .ttd-item-inline structure exactly:
-                        // - label: font-size 12pt (was 10px) → matches .ttd-label
-                        // - canvas box: 100×50 dashed border → matches .ttd-canvas-placeholder
-                        // - name: font-size 11pt (was 10px) → matches .ttd-name
-                        // Total height ~107px, width ≥120px → identical footprint to
-                        // generate rendered TTD box. Regex-safe (3 flat sibling divs).
+                        let extraAttrsInline = '';
+                        if (ttdModes !== 'image') extraAttrsInline += ` data-ttd-modes="${ttdModes}"`;
+                        if (qrData) extraAttrsInline += ` data-ttd-qr-data="${qrData.replace(/"/g, '&quot;')}"`;
+                        if (defaultNama) extraAttrsInline += ` data-default-nama="${defaultNama.replace(/"/g, '&quot;')}"`;
                         const content = `
-                            <div class="${classes}" data-ttd="${ttdId}" data-label="${label.trim()}" data-nama-field="${namaField}"${posAttrs}${extraAttrs}${style} contenteditable="false">
+                            <div class="ttd-placeholder" data-ttd="${ttdId}" data-label="${label.trim()}" data-nama-field="${namaField}"${extraAttrsInline} contenteditable="false">
                                 <div style="font-size:12pt;margin-bottom:5px;">${label.trim()}</div>
                                 <div style="width:100px;height:50px;border:1px dashed #10b981;background:#ecfdf5;margin:0 auto;"></div>
                                 <div style="font-size:11pt;margin-top:3px;">(${previewNama})</div>
                             </div>
                         `;
-                        // Widget-wrapper pattern (see logo insert).
-                        if (mode === 'inline') {
-                            editor.insertContent(content + '&nbsp;');
-                        } else {
-                            editor.insertContent(`<p class="floating-only" contenteditable="false">${content}</p>`);
-                        }
-                        if (mode !== 'inline') applyFloatingOnlyClasses();
-
-                        setTimeout(() => {
-                            scanTtdPlaceholders();
-                            if (mode !== 'inline') initTtdDrag();
-                        }, 100);
-
+                        editor.insertContent(content + '&nbsp;');
+                        setTimeout(scanTtdPlaceholders, 100);
                         renderTtd();
                     }
                 }
@@ -1742,38 +1880,39 @@
                     const matH = Math.max(20, parseInt(heightInput) || 140);
 
                     const materaiId = 'materai_' + Date.now();
-                    let classes = 'materai-placeholder';
-                    let style = '';
-                    let posAttrs = '';
+
+                    // v0.9.12 Phase 2 — floating goes to sidecar state, NOT editor DOM
                     if (mode === 'front' || mode === 'behind') {
-                        classes += ' floating ' + mode;
-                        style = ` style="top: 500px; left: 350px;"`;
-                        posAttrs = ` data-pos-mode="${mode}" data-pos-x="350" data-pos-y="500"`;
+                        addFloatingElement({
+                            id: materaiId,
+                            type: 'materai',
+                            positionX: 350,
+                            positionY: 500,
+                            zIndex: mode,
+                            width: matW + 'px',
+                            data: {
+                                label: label,
+                                mode: matMode,
+                                width: matW,
+                                height: matH
+                            }
+                        });
+                        renderMaterai();
+                        return;
                     }
 
+                    // Inline mode — editor content
                     const visualLabel = (matMode === 'kosong') ? t('materai.mode_empty_paren', {}, '(empty)') : t('materai.mode_upload_paren', {}, '(upload)');
                     const escLabel = label.replace(/"/g, '&quot;');
-
                     const content = `
-                        <div class="${classes}" data-materai="${materaiId}" data-label="${escLabel}" data-mode="${matMode}" data-width="${matW}" data-height="${matH}"${posAttrs}${style} contenteditable="false">
+                        <div class="materai-placeholder" data-materai="${materaiId}" data-label="${escLabel}" data-mode="${matMode}" data-width="${matW}" data-height="${matH}" contenteditable="false">
                             <div style="border:1px dashed #c2410c; width:${matW}px; height:${matH}px; background:#fff7ed; color:#c2410c; text-align:center; font-size:10px; padding:6px; line-height:1.3;">
                                 <strong>MATERAI</strong><br>10000<br>${visualLabel}
                             </div>
                         </div>
                     `;
-                    // Widget-wrapper pattern (see logo insert).
-                    if (mode === 'inline') {
-                        editor.insertContent(content + '&nbsp;');
-                    } else {
-                        editor.insertContent(`<p class="floating-only" contenteditable="false">${content}</p>`);
-                    }
-                    if (mode !== 'inline') applyFloatingOnlyClasses();
-
-                    setTimeout(() => {
-                        scanMateraiPlaceholders();
-                        if (mode !== 'inline') initTtdDrag();
-                    }, 100);
-
+                    editor.insertContent(content + '&nbsp;');
+                    setTimeout(scanMateraiPlaceholders, 100);
                     renderMaterai();
                 }
 
@@ -1927,6 +2066,7 @@
                     // Wait for iframe to be fully ready
                     setTimeout(function() {
                         loadPageSettings();
+                        renderFloatingList(); // v0.9.12 Phase 2 — populate sidebar dari state
                         scanLogos();
                         scanTtdPlaceholders();
                         scanMateraiPlaceholders();
