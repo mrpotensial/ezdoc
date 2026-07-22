@@ -47,6 +47,17 @@ mechanism (parity antara SlotRegistry dan Router).
  alias forwarding (match + register), alias chain resolution, cycle protection,
  empty name handling
 
+**Added — docs**
+
+- **`docs/VIEWS.md`** (new) — comprehensive view + routing docs:
+ - View files table (template_list, designer, generate_list, generate, list)
+ - Canonical routes table (v1.0) vs legacy routes table
+ - Custom route registration guide + config example
+ - Route aliases mechanism
+ - Slot naming convention (canonical + legacy alias mapping tables)
+ - Publishing/customization workflow
+ - Contributor guide untuk add new routes + rename existing
+
 ### v1.0-prep track — "Slot rename + backward-compat aliases"
 
 Foundational rename untuk v1.0 slot naming convention. Slots di-namespace
