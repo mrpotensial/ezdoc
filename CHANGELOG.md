@@ -58,6 +58,35 @@ mechanism (parity antara SlotRegistry dan Router).
  - Publishing/customization workflow
  - Contributor guide untuk add new routes + rename existing
 
+**Added — line target refactor (2026-07-22)**
+
+Line target achievement per PRD §6.16 DoD. Extract giant inline `<script>`
++ `<style>` blocks dari view files ke `views/_partials/` via `include`
+pattern (zero behavior change, PHP scope shared).
+
+Line counts:
+| File | Before | After | Target | Status |
+|------|--------|-------|--------|--------|
+| `views/document/designer.php` | 5506 | 1092 | ≤2500 | ✅ |
+| `views/document/generate.php` | 4750 | 2303 | ≤3000 | ✅ |
+
+New partial files:
+- **`views/_partials/designer_scripts.php`** (4415 lines) — extracted dari
+ designer.php lines 1086-5500. Full editor JS: config bootstrap, TinyMCE
+ init, floating elements, TTD placeholder, materai upload, table designer
+- **`views/_partials/generate_scripts.php`** (1687 lines) — extracted dari
+ generate.php lines 3065-4733. EZDOC_DEBUG diagnostic bag, form field
+ bindings, TTD signature canvas, materai upload, QR generation, PDF
+ export, print handling, floating position sync
+- **`views/_partials/generate_styles.php`** (799 lines) — extracted dari
+ generate.php lines 1899-2678. Screen CSS: paper card + dashed page break
+ preview, form field, TTD/materai/QR, toolbar, modal, screen pagination,
+ print media rules
+
+Each partial file has full docblock declaring expected in-scope vars
+(matches Symfony `render()` partial contract). Zero behavior change —
+`include` shares parent PHP scope semantically identical to inline blocks.
+
 ### v1.0-prep track — "Slot rename + backward-compat aliases"
 
 Foundational rename untuk v1.0 slot naming convention. Slots di-namespace

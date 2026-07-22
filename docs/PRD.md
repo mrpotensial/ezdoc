@@ -1560,7 +1560,7 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - [x] `generate.php` picker section extracted (4666 → 4639 lines, −27)
 - [x] Page break dashed line visible di generate edit-on view
 - [x] Include pattern preserves backward-compat (no routing change needed)
-- [ ] Full ≤2500 designer + ≤3000 generate line targets — deferred to v1.0 prep (needs bigger refactor of shared JS blocks; scope too big for v0.9.11 without breaking dispatch)
+- [x] Full ≤2500 designer + ≤3000 generate line targets — **DONE 2026-07-22 via v1.0-prep track**: extract inline `<script>` + `<style>` blocks ke `views/_partials/` via `include`. designer.php 5506→1092 lines, generate.php 4750→2303. Zero behavior change (PHP scope shared)
 - [x] Router direct routing ke sub-view identifiers — **DONE 2026-07-22 via v1.0-prep track**: `template_list`/`template_designer`/`generate_list`/`document_generate` handlers registered dgn `Router::alias()` mechanism. Legacy names (`designer`/`generate`) retain via alias forwarding. Zero breaking change untuk existing consumer URLs
 - [x] Slot rename (`designer:list-*` → `template_list:*`) with backward-compat forwarding — **DONE 2026-07-21 via v1.0-prep track**: `SlotRegistry::alias()` method + `App::registerLegacySlotAliases()` bootstrap-time registration. Zero breaking change (transparent forwarding)
 - [x] `docs/VIEWS.md` — **DONE 2026-07-22 via v1.0-prep track**: comprehensive view + routing docs (view files table, canonical + legacy routes, slot naming convention, alias mapping tables, publishing customization, contributor guide untuk add new routes)
