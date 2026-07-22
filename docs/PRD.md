@@ -1561,14 +1561,14 @@ Designer + generator views di v0.9.7 WAJIB di-arsitektur supaya native ports (La
 - [x] Page break dashed line visible di generate edit-on view
 - [x] Include pattern preserves backward-compat (no routing change needed)
 - [ ] Full ≤2500 designer + ≤3000 generate line targets — deferred to v1.0 prep (needs bigger refactor of shared JS blocks; scope too big for v0.9.11 without breaking dispatch)
-- [ ] Router direct routing ke sub-view identifiers — deferred to v1.0 (breaking change)
+- [x] Router direct routing ke sub-view identifiers — **DONE 2026-07-22 via v1.0-prep track**: `template_list`/`template_designer`/`generate_list`/`document_generate` handlers registered dgn `Router::alias()` mechanism. Legacy names (`designer`/`generate`) retain via alias forwarding. Zero breaking change untuk existing consumer URLs
 - [x] Slot rename (`designer:list-*` → `template_list:*`) with backward-compat forwarding — **DONE 2026-07-21 via v1.0-prep track**: `SlotRegistry::alias()` method + `App::registerLegacySlotAliases()` bootstrap-time registration. Zero breaking change (transparent forwarding)
 - [ ] `docs/VIEWS.md` — deferred (existing docs sufficient for current include pattern)
 
 **Non-goals**:
 - Rewriting to Blade template syntax (still plain PHP for library-standalone)
 - Introducing new component framework (staying compatible with v0.9.9 slot system)
-- Router refactor to direct sub-view routing (breaking change — deferred to v1.0 prep)
+- Router refactor to direct sub-view routing — DONE via v1.0-prep track (delegation pattern preserves backward-compat, non-breaking)
 
 ### 6.17 Milestone v0.9.12 — "Sidecar metadata for floating elements" ~1-2 weeks
 

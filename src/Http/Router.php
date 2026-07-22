@@ -42,11 +42,34 @@ final class Router
     /** @var array<string,callable> route-name → handler(RequestContext, ResponseWriter): string|null */
     private $handlers = [];
 
-    /** @var array<int,string> Whitelisted page names (protects against arbitrary include). */
+    /** @var array<int,string> Whitelisted page names (protects against arbitrary include).
+     *
+     * v1.0-prep: added direct sub-view route names (template_list, template_designer,
+     * generate_list, document_generate) yg mirror the extracted view files structure
+     * (v0.9.11 view separation). Legacy names (designer, generate) retained via
+     * alias forwarding for backward-compat.
+     */
     private static $PAGE_WHITELIST = [
-        'list', 'designer', 'generate', 'view', 'download', 'action', 'new_document',
-        'admin_migrate',
+        // Core routes
+        'list', 'view', 'download', 'action', 'admin_migrate',
+        // Legacy sub-view dispatch (backward-compat, forward via alias ke direct names)
+        'designer', 'generate', 'new_document',
+        // Direct sub-view routes (v1.0-prep)
+        'template_list', 'template_designer',
+        'generate_list', 'document_generate',
     ];
+
+    /**
+     * Route alias map: [oldName => canonicalName]. v1.0-prep — direct sub-view
+     * routing dgn backward-compat forwarding.
+     *
+     * Pattern parity: same alias mechanism sebagai SlotRegistry::alias().
+     * Existing consumer URLs (`?ezdoc_page=designer&action=list`) still work
+     * via alias forwarding.
+     *
+     * @var array<string,string>
+     */
+    private $routeAliases = [];
 
     /**
      * @param mixed $db mysqli or PDO or null (demo may pass PDO).
@@ -67,7 +90,41 @@ final class Router
      */
     public function register(string $name, callable $handler): void
     {
-        $this->handlers[$name] = $handler;
+        // Resolve alias so both old + new names map ke same handler storage.
+        $this->handlers[$this->resolveRoute($name)] = $handler;
+    }
+
+    /**
+     * Register alias mapping: when $oldName di-refer, resolve ke $canonicalName.
+     *
+     * v1.0-prep — backward-compat forwarding untuk legacy route names.
+     * Example: `alias('designer', 'template_designer')` — old URLs dgn
+     * `?ezdoc_page=designer` route ke `template_designer` handler.
+     *
+     * Depth-capped cycle detection (max 8 hops).
+     */
+    public function alias(string $oldName, string $canonicalName): void
+    {
+        if ($oldName === '' || $canonicalName === '') {
+            return;
+        }
+        $this->routeAliases[$oldName] = $canonicalName;
+    }
+
+    /**
+     * Resolve alias chain ke canonical route name. Depth-capped defensive.
+     */
+    private function resolveRoute(string $name): string
+    {
+        $seen = [];
+        $cur  = $name;
+        for ($i = 0; $i < 8; $i++) {
+            if (!isset($this->routeAliases[$cur])) return $cur;
+            if (isset($seen[$cur])) return $name; // cycle
+            $seen[$cur] = true;
+            $cur = $this->routeAliases[$cur];
+        }
+        return $cur;
     }
 
     /**
@@ -87,7 +144,8 @@ final class Router
         // 2. Explicit page query.
         $page = (string) $req->query($qk, '');
         if ($page !== '' && in_array($page, self::$PAGE_WHITELIST, true)) {
-            return $page;
+            // Resolve alias — legacy names forward ke canonical handler.
+            return $this->resolveRoute($page);
         }
 
         // 3. Legacy action-dispatch signals (backward compat).
@@ -168,15 +226,81 @@ final class Router
      */
     private function registerDefaults(): void
     {
-        $this->handlers['list']         = [$this, 'handleList'];
+        // Core routes
+        $this->handlers['list']          = [$this, 'handleList'];
+        $this->handlers['view']          = [$this, 'handleView'];
+        $this->handlers['download']      = [$this, 'handleDownload'];
+        $this->handlers['asset']         = [$this, 'handleAsset'];
+        $this->handlers['action']        = [$this, 'handleAction'];
+        $this->handlers['admin_migrate'] = [$this, 'handleAdminMigrate'];
+
+        // Direct sub-view routes (v1.0-prep) — canonical names matching
+        // extracted view files (v0.9.11 view separation).
+        $this->handlers['template_list']     = [$this, 'handleTemplateList'];
+        $this->handlers['template_designer'] = [$this, 'handleTemplateDesigner'];
+        $this->handlers['generate_list']     = [$this, 'handleGenerateList'];
+        $this->handlers['document_generate'] = [$this, 'handleDocumentGenerate'];
+
+        // Legacy alias forwarding — old sub-view dispatch entry points route
+        // ke canonical handlers. Consumer URLs `?ezdoc_page=designer&action=list`
+        // TETAP works (designer handler internally checks action query).
         $this->handlers['designer']     = [$this, 'handleDesigner'];
         $this->handlers['generate']     = [$this, 'handleGenerate'];
         $this->handlers['new_document'] = [$this, 'handleNewDocument'];
-        $this->handlers['view']         = [$this, 'handleView'];
-        $this->handlers['download']     = [$this, 'handleDownload'];
-        $this->handlers['asset']        = [$this, 'handleAsset'];
-        $this->handlers['action']       = [$this, 'handleAction'];
-        $this->handlers['admin_migrate'] = [$this, 'handleAdminMigrate'];
+    }
+
+    /**
+     * Direct route: `?ezdoc_page=template_list` — template list view (extracted
+     * dari designer.php di v0.9.11). Semantically equivalent dgn
+     * `?ezdoc_page=designer&action=list`.
+     *
+     * Currently delegates ke handleDesigner dgn forced action=list. Ke depan
+     * bisa short-circuit langsung ke template_list.php + data prep tanpa
+     * designer.php dispatcher overhead.
+     */
+    public function handleTemplateList(RequestContext $req, ResponseWriter $res): ?string
+    {
+        // Force action=list untuk designer.php internal dispatcher
+        $_GET['action'] = 'list';
+        return $this->handleDesigner($req, $res);
+    }
+
+    /**
+     * Direct route: `?ezdoc_page=template_designer&id={N}` — template editor
+     * (edit or create). Semantically equivalent dgn
+     * `?ezdoc_page=designer&action=edit&id={N}` (or action=create).
+     */
+    public function handleTemplateDesigner(RequestContext $req, ResponseWriter $res): ?string
+    {
+        $action = (string) $req->query('action', '');
+        if (!in_array($action, ['edit', 'create'], true)) {
+            $action = 'edit';
+        }
+        $_GET['action'] = $action;
+        return $this->handleDesigner($req, $res);
+    }
+
+    /**
+     * Direct route: `?ezdoc_page=generate_list` — template picker (extracted
+     * dari generate.php di v0.9.11). Semantically equivalent dgn
+     * `?ezdoc_page=generate` (tanpa template_id).
+     */
+    public function handleGenerateList(RequestContext $req, ResponseWriter $res): ?string
+    {
+        // Force template_id=0 supaya picker branch aktif di generate.php
+        $_GET['template_id'] = 0;
+        return $this->handleGenerate($req, $res);
+    }
+
+    /**
+     * Direct route: `?ezdoc_page=document_generate&template_id={N}` — actual
+     * generate view. Semantically equivalent dgn
+     * `?ezdoc_page=generate&template_id={N}`.
+     */
+    public function handleDocumentGenerate(RequestContext $req, ResponseWriter $res): ?string
+    {
+        // template_id must be provided; delegate ke generate handler
+        return $this->handleGenerate($req, $res);
     }
 
     /**

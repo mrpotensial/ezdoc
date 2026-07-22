@@ -6,6 +6,47 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v1.0-prep track — "Router direct sub-view routing + Slot rename"
+
+Foundational rename untuk v1.0 naming convention. Slots + routes di-namespace
+by VIEW file (bukan by originating monolith view) supaya consistent dgn
+v0.9.11 view separation refactor. Backward-compat forwarding via alias
+mechanism (parity antara SlotRegistry dan Router).
+
+**Added — Router direct sub-view routing (2026-07-22)**
+
+- **New route names** matching extracted view files (v0.9.11):
+ - `template_list` → template list view (was `?ezdoc_page=designer&action=list`)
+ - `template_designer` → template editor (was `?ezdoc_page=designer&action=edit|create`)
+ - `generate_list` → template picker (was `?ezdoc_page=generate` without template_id)
+ - `document_generate` → generate view (was `?ezdoc_page=generate&template_id={N}`)
+- **New handlers** di `Router::registerDefaults()`:
+ - `handleTemplateList()` — delegates ke `handleDesigner()` dgn forced `action=list`
+ - `handleTemplateDesigner()` — delegates ke `handleDesigner()` dgn `action=edit|create`
+ - `handleGenerateList()` — delegates ke `handleGenerate()` dgn forced `template_id=0`
+ - `handleDocumentGenerate()` — delegates ke `handleGenerate()`
+- **`Router::alias($oldName, $canonicalName)`** — same alias mechanism sebagai
+ SlotRegistry. Depth-capped cycle detection. Used untuk backward-compat kalau
+ legacy handlers dihapus di future release
+- **`Router::resolveRoute()`** private — resolves alias chain (max 8 hops) di
+ `register()` + `match()` code paths
+- **`$PAGE_WHITELIST` extended** — includes both new canonical + legacy names
+
+**Legacy routes (backward-compat)**:
+
+- `?ezdoc_page=designer&action=list` STILL works — handleDesigner internal dispatch
+- `?ezdoc_page=generate` STILL works — handleGenerate internal dispatch
+- `?ezdoc_page=new_document` STILL works — alias of generate
+- No breaking change untuk existing consumer URLs atau bookmarks
+
+**Added — test coverage**
+
+- **`tests/Http/RouterTest.php`** (new) — 17 tests covering: match() basics
+ (whitelist, asset short-circuit, legacy action dispatch), all direct sub-view
+ route whitelisted, legacy names still whitelisted, custom handler dispatch,
+ alias forwarding (match + register), alias chain resolution, cycle protection,
+ empty name handling
+
 ### v1.0-prep track — "Slot rename + backward-compat aliases"
 
 Foundational rename untuk v1.0 slot naming convention. Slots di-namespace
