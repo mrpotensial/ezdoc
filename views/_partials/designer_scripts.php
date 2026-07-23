@@ -3919,7 +3919,7 @@
                         <span class="inline-flex items-center justify-center w-5 h-5 rounded ring-1 ring-inset ${m.badgeCls} shrink-0"><i class="bi bi-image text-[10px]"></i></span>
                         <code class="text-xs font-mono text-gray-900 truncate flex-1 min-w-0">${eName}</code>
                         <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium text-gray-600 bg-white/80 ring-1 ring-inset ring-gray-200 shrink-0">${m.label}</span>
-                        ${src ? `<button type="button" class="inline-flex items-center p-0.5 rounded text-gray-400 hover:bg-red-50 hover:text-red-600 shrink-0" onclick="removeLogo('${eName}')" title="${t('actions.delete', {}, 'Delete')}"><i class="bi bi-trash text-xs"></i></button>` : ''}
+                        <button type="button" class="inline-flex items-center p-0.5 rounded text-gray-400 hover:bg-red-50 hover:text-red-600 shrink-0" onclick="removeLogo('${eName}')" title="${t('actions.delete', {}, 'Delete')}"><i class="bi bi-trash text-xs"></i></button>
                     </div>
                     <!-- Card Body -->
                     <div class="pl-3 pr-2 py-2 space-y-1.5 bg-gradient-to-b from-white to-gray-50/30">
@@ -3975,10 +3975,30 @@
             reader.readAsDataURL(file);
         }
 
-        function removeLogo(name) {
+        async function removeLogo(name) {
+            if (!(await ezdocConfirm(t('confirm.delete_logo', {name: name}, 'Delete logo "{name}"?'), { title: 'Delete Logo', variant: 'danger', confirmText: 'Delete' }))) return;
+
+            // Delete uploaded image data + size config
             delete configHeader.logos[name];
-            updateLogoInEditor(name); // Update logo in editor (show placeholder)
+            delete configHeader.logoSizes[name];
+
+            // Remove <span class="logo-placeholder" data-logo="{name}">...</span>
+            // from editor content (both inline + floating variants). Strip trailing
+            // &nbsp; supaya no whitespace remnant, and strip empty widget wrapper
+            // <p class="floating-only"> yang tersisa.
+            const editor = tinymce.get('editor');
+            if (editor) {
+                let content = editor.getContent();
+                // Remove span (with any attrs)
+                const spanRegex = new RegExp(`<span[^>]*class="[^"]*logo-placeholder[^"]*"[^>]*data-logo="${name}"[^>]*>.*?<\\/span>(&nbsp;)?`, 'g');
+                content = content.replace(spanRegex, '');
+                // Cleanup empty floating-only wrapper yg tersisa (kalau tadinya wrap floating)
+                content = content.replace(/<p[^>]*class="[^"]*floating-only[^"]*"[^>]*>\s*(?:&nbsp;|<br\s*\/?>)*\s*<\/p>/gi, '');
+                editor.setContent(content);
+            }
+
             scanLogos();
+            if (typeof markDirty === 'function') markDirty();
         }
 
         // Update logo display in editor (show image or placeholder text)
