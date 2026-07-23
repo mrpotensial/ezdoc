@@ -1030,7 +1030,7 @@
             //   directionality: LTR/RTL toggle untuk multi-lang templates
             //   importcss    : import consumer app CSS (brand consistency)
             //   quickbars    : floating selection toolbar (Notion pattern)
-            plugins: 'advlist anchor autolink autosave charmap code directionality fullscreen help hr image importcss insertdatetime lists link nonbreaking pagebreak preview quickbars searchreplace table visualblocks visualchars wordcount',
+            plugins: 'advlist anchor autolink autosave charmap code directionality fullscreen help image importcss insertdatetime lists link nonbreaking pagebreak preview quickbars searchreplace table visualblocks visualchars wordcount',
             // Autosave — critical UX (recovers content kalau browser crash/close).
             // Prefix pakai template ID supaya per-template autosave.
             // NOTE: `autosave_ask_before_unload` sengaja OFF — TinyMCE builtin
@@ -2033,12 +2033,36 @@
                     if (!iframeDoc || iframeDoc._dragSetup) return;
                     iframeDoc._dragSetup = true;
 
+                    // Helper: type + id lookup for placeholder → sidebar focus
+                    const _floatingTypeId = (target) => {
+                        if (target.classList.contains('logo-placeholder'))    return ['logo',    target.getAttribute('data-logo')];
+                        if (target.classList.contains('qr-placeholder'))      return ['qr',      target.getAttribute('data-qr')];
+                        if (target.classList.contains('ttd-placeholder'))     return ['ttd',     target.getAttribute('data-ttd')];
+                        if (target.classList.contains('materai-placeholder')) return ['materai', target.getAttribute('data-materai')];
+                        return [null, null];
+                    };
+
+                    // Select + focus helper (called dari both mousedown + click)
+                    const _selectFloating = (target) => {
+                        const wrapper = target.closest('p.floating-only') || target;
+                        try {
+                            editor.selection.select(wrapper);
+                            editor.focus();
+                        } catch (err) { /* non-fatal */ }
+                        if (window.ezdocFocusSidebarCard) {
+                            const [type, id] = _floatingTypeId(target);
+                            if (type && id) window.ezdocFocusSidebarCard(type, id);
+                        }
+                    };
+
                     iframeDoc.addEventListener('mousedown', function(e) {
                         const target = e.target.closest('.logo-placeholder.floating, .ttd-placeholder.floating, .qr-placeholder.floating, .materai-placeholder.floating');
                         if (!target || e.button !== 0) return;
 
                         e.preventDefault();
                         e.stopPropagation();
+
+                        _selectFloating(target);
 
                         dragState.active = true;
                         dragState.element = target;
@@ -2048,6 +2072,130 @@
                         dragState.startTop = parseInt(target.style.top) || 0;
                         target.style.opacity = '0.8';
                     });
+
+                    // ALSO listen click event — TinyMCE post-processes click,
+                    // may move selection away. Re-select via setTimeout(0) yield
+                    // supaya TinyMCE processing done dulu.
+                    iframeDoc.addEventListener('click', function(e) {
+                        const target = e.target.closest('.logo-placeholder.floating, .ttd-placeholder.floating, .qr-placeholder.floating, .materai-placeholder.floating');
+                        if (!target) return;
+                        setTimeout(() => _selectFloating(target), 0);
+                    });
+
+                    // ═══ LOGO LIVE RESIZE ═══
+                    // Show resize handle on hover atas logo image. Drag handle →
+                    // width changes proportionally (aspect ratio preserved).
+                    // Save width ke configHeader.logoSizes on release.
+                    //
+                    // Precedent: TinyMCE object_resizing (native for editable
+                    // images), Google Docs image resize handles, Figma/Sketch
+                    // scale handles pattern.
+                    const resizeState = { active: false, img: null, logoEl: null, startX: 0, startWidth: 0, aspect: 1 };
+
+                    // Inject resize-handle CSS ke iframe head (one-time)
+                    if (!iframeDoc._ezdocResizeCss) {
+                        const style = iframeDoc.createElement('style');
+                        style.textContent = `
+                            .logo-placeholder { position: relative; }
+                            .logo-placeholder img { display: block; }
+                            .logo-placeholder:hover .ezdoc-resize-handle,
+                            .logo-placeholder.ezdoc-resizing .ezdoc-resize-handle {
+                                opacity: 1;
+                            }
+                            .ezdoc-resize-handle {
+                                position: absolute;
+                                right: -6px;
+                                bottom: -6px;
+                                width: 12px;
+                                height: 12px;
+                                background: #6366f1;
+                                border: 2px solid white;
+                                border-radius: 2px;
+                                box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+                                cursor: nwse-resize;
+                                opacity: 0;
+                                transition: opacity 120ms;
+                                z-index: 100;
+                                pointer-events: auto;
+                            }
+                        `;
+                        iframeDoc.head.appendChild(style);
+                        iframeDoc._ezdocResizeCss = true;
+                    }
+
+                    // Attach resize handle ke logo containers on-demand
+                    // data-mce-bogus="1" → TinyMCE strips this element saat
+                    // getContent() called (industri standar TinyMCE bogus pattern
+                    // untuk UI overlays yg tidak boleh masuk saved content).
+                    const attachResizeHandle = (logoEl) => {
+                        if (!logoEl || logoEl.querySelector('.ezdoc-resize-handle')) return;
+                        const img = logoEl.querySelector('img');
+                        if (!img) return; // no image uploaded yet — nothing to resize
+                        const handle = iframeDoc.createElement('span');
+                        handle.className = 'ezdoc-resize-handle';
+                        handle.contentEditable = 'false';
+                        handle.setAttribute('data-mce-bogus', '1');
+                        handle.setAttribute('data-ezdoc-resize', '1');
+                        logoEl.appendChild(handle);
+                    };
+
+                    // Scan + attach existing logos (called after setContent + on init)
+                    iframeDoc._attachAllResizeHandles = () => {
+                        iframeDoc.querySelectorAll('.logo-placeholder').forEach(attachResizeHandle);
+                    };
+                    iframeDoc._attachAllResizeHandles();
+
+                    iframeDoc.addEventListener('mousedown', function(e) {
+                        if (!e.target.classList || !e.target.classList.contains('ezdoc-resize-handle')) return;
+                        const logoEl = e.target.closest('.logo-placeholder');
+                        const img = logoEl && logoEl.querySelector('img');
+                        if (!logoEl || !img) return;
+
+                        e.preventDefault();
+                        e.stopPropagation();
+
+                        resizeState.active = true;
+                        resizeState.img = img;
+                        resizeState.logoEl = logoEl;
+                        resizeState.startX = e.clientX;
+                        resizeState.startWidth = img.offsetWidth;
+                        // Aspect ratio (preserved during resize)
+                        resizeState.aspect = img.naturalHeight > 0
+                            ? (img.naturalWidth / img.naturalHeight)
+                            : (img.offsetWidth / Math.max(1, img.offsetHeight));
+                        logoEl.classList.add('ezdoc-resizing');
+                    }, true); // capture phase supaya fires sebelum drag mousedown
+
+                    iframeDoc.addEventListener('mousemove', function(e) {
+                        if (!resizeState.active) return;
+                        e.preventDefault();
+                        const dx = e.clientX - resizeState.startX;
+                        const newWidth = Math.max(20, resizeState.startWidth + dx);
+                        resizeState.img.style.width = newWidth + 'px';
+                        resizeState.img.style.height = 'auto';
+                    }, true);
+
+                    iframeDoc.addEventListener('mouseup', function() {
+                        if (!resizeState.active) return;
+                        const img = resizeState.img;
+                        const logoEl = resizeState.logoEl;
+                        const finalWidth = Math.round(img.offsetWidth);
+                        const name = logoEl.getAttribute('data-logo');
+                        // Save ke configHeader.logoSizes + data-width attribute
+                        if (name) {
+                            configHeader.logoSizes[name] = finalWidth + 'px';
+                            logoEl.setAttribute('data-width', finalWidth + 'px');
+                        }
+                        logoEl.classList.remove('ezdoc-resizing');
+                        resizeState.active = false;
+                        resizeState.img = null;
+                        resizeState.logoEl = null;
+                        editor.setDirty(true);
+                        if (typeof markDirty === 'function') markDirty();
+                        // Refresh sidebar Width input
+                        setTimeout(scanLogos, 50);
+                    }, true);
+                    // ═══ END LOGO LIVE RESIZE ═══
 
                     iframeDoc.addEventListener('mousemove', function(e) {
                         if (!dragState.active || !dragState.element) return;
@@ -2134,7 +2282,14 @@
                         applyFloatingOnlyClasses();
                         // updateAllLogosInEditor tetap async supaya lookup logo dari sidebar
                         // tidak blocking (misal lookup image src by name)
-                        setTimeout(updateAllLogosInEditor, 50);
+                        setTimeout(() => {
+                            updateAllLogosInEditor();
+                            // Re-attach resize handles setelah logo images updated
+                            const iframeDoc = editor.getDoc();
+                            if (iframeDoc && iframeDoc._attachAllResizeHandles) {
+                                iframeDoc._attachAllResizeHandles();
+                            }
+                        }, 50);
                     } catch (e) { console.warn('SetContent restore failed:', e); }
                 });
             }
@@ -3971,6 +4126,12 @@
                 configHeader.logos[name] = e.target.result;
                 updateLogoInEditor(name); // Update logo in editor
                 scanLogos();
+                // Re-attach resize handles (baru upload berarti img ada)
+                const editor = tinymce.get('editor');
+                const iframeDoc = editor && editor.getDoc();
+                if (iframeDoc && iframeDoc._attachAllResizeHandles) {
+                    setTimeout(() => iframeDoc._attachAllResizeHandles(), 50);
+                }
             };
             reader.readAsDataURL(file);
         }

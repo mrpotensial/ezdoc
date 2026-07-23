@@ -1035,19 +1035,24 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
     <?= \Ezdoc\UI\Slot::render('designer:modals-extra', ['template' => $template ?? null]) ?>
 
     <!-- JS-triggered slots (Alpine event bridges) -->
-    <div x-data @ezdoc:before-save.window="/* consumer hook: see designer:save-hook-pre */">
+    <!-- consumer hook: see designer:save-hook-pre -->
+    <div x-data @ezdoc:before-save.window="void 0">
         <?= \Ezdoc\UI\Slot::render('designer:save-hook-pre', ['template' => $template ?? null]) ?>
     </div>
-    <div x-data @ezdoc:after-save.window="/* consumer hook: see designer:save-hook-post */">
+    <!-- consumer hook: see designer:save-hook-post -->
+    <div x-data @ezdoc:after-save.window="void 0">
         <?= \Ezdoc\UI\Slot::render('designer:save-hook-post', ['template' => $template ?? null]) ?>
     </div>
-    <div x-data @ezdoc:field-context.window="/* consumer right-click field */">
+    <!-- consumer right-click field -->
+    <div x-data @ezdoc:field-context.window="void 0">
         <?= \Ezdoc\UI\Slot::render('designer:field-context-menu', ['template' => $template ?? null]) ?>
     </div>
-    <div x-data @ezdoc:ttd-context.window="/* consumer right-click ttd */">
+    <!-- consumer right-click ttd -->
+    <div x-data @ezdoc:ttd-context.window="void 0">
         <?= \Ezdoc\UI\Slot::render('designer:ttd-context-menu', ['template' => $template ?? null]) ?>
     </div>
-    <div x-data @ezdoc:materai-context.window="/* consumer right-click materai */">
+    <!-- consumer right-click materai -->
+    <div x-data @ezdoc:materai-context.window="void 0">
         <?= \Ezdoc\UI\Slot::render('designer:materai-context-menu', ['template' => $template ?? null]) ?>
     </div>
 
