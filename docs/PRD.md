@@ -1626,10 +1626,10 @@ Add `floating_elements JSON NULL` column to `ezdoc_templates`:
 
 - **Designer refactor**:
  - [x] Extract floating elements from HTML on template load → populate JS state (via `FloatingExtractor::fromJson()` di designer.php:190-193)
- - [x] Remove floating markers dari TinyMCE editor content — **DONE 2026-07-22 via Phase 2 (sidecar-native)**: editor HTML strip via FloatingExtractor pada load, floating state di JS array `floatingElements`, editor DOM NEVER contains floating markers. Insert functions (insertLogoPrompt/insertQrPrompt/insertTtdPrompt/insertMateraiPrompt) untuk floating modes langsung ke sidebar state, skip `editor.insertContent()`
- - [x] Show floating elements in dedicated "Floating Elements" sidebar panel — **DONE 2026-07-22**: collapsible panel di sidebar dgn per-element card (icon + id + type badge + X/Y inputs + z-index select + delete button). Live edits via input change → mutate state + markDirty
- - [ ] Overlay layer di atas editor iframe untuk visual position editing — DEFERRED to v0.9.13+ (drag-to-reposition dgn transparent overlay is complex UX, sidebar inputs cover MVP position editing)
- - [x] Serialize floating state on save → JSON metadata (`floatingElements` array → JSON.stringify → `floating_elements_json` formData field)
+ - [~] Remove floating markers dari TinyMCE editor content — currently DUAL-WRITE (backward-compat retained: cleaned HTML + JSON both stored; editor still shows markers). Full transition deferred untuk avoid breaking user workflow
+ - [ ] Show floating elements in dedicated "Floating Elements" sidebar panel dgn drag-to-reposition — DEFERRED (UX design work, out of v0.9.12 scope)
+ - [ ] Overlay layer di atas editor iframe untuk visual position editing — DEFERRED (same reason)
+ - [x] Serialize floating state on save → JSON metadata (dual-write via save_template.php + save_document.php)
 
 - **Generate refactor**:
  - [x] Load HTML + floating_elements JSON (generate.php reads both columns)

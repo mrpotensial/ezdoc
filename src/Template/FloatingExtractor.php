@@ -51,50 +51,6 @@ final class FloatingExtractor
     {
         $floating = [];
 
-        // ─── Phase 1: Extract paragraphs yang WRAP only floating marker ───
-        //
-        // Catches BOTH:
-        //   1. Widget pattern: <p class="floating-only"><span floating>...</span></p>
-        //   2. Legacy bare: <p><span floating>...</span></p> (no floating-only class)
-        //
-        // Whole paragraph di-strip supaya no empty <p> remnant.
-        // Whitespace + <br> + &nbsp; between wrapper and marker allowed
-        // (editor artifacts).
-
-        // Whitespace class inside wrapper (whitespace, nbsp, br, empty spans)
-        $wsInside = '(?:\s|&nbsp;|&#160;|&#xA0;|<br\s*\/?>|<span[^>]*>\s*<\/span>)*';
-
-        // Logo/QR floating wrapped in <p>
-        $html = preg_replace_callback(
-            '/<p[^>]*>' . $wsInside . '(<span([^>]*class="[^"]*(?:logo|qr)-placeholder[^"]*floating[^"]*"[^>]*)>.*?<\/span>)' . $wsInside . '<\/p>/is',
-            function ($match) use (&$floating) {
-                $element = self::parseSpan($match[2]);
-                if ($element !== null) {
-                    $floating[] = $element;
-                    return ''; // strip WHOLE paragraph
-                }
-                return $match[0];
-            },
-            $html
-        );
-
-        // TTD/Materai floating wrapped in <p>
-        $html = preg_replace_callback(
-            '/<p[^>]*>' . $wsInside . '(<div([^>]*class="[^"]*(?:ttd|materai)-placeholder[^"]*floating[^"]*"[^>]*)>.*?<\/div>)' . $wsInside . '<\/p>/is',
-            function ($match) use (&$floating) {
-                $element = self::parseDiv($match[2]);
-                if ($element !== null) {
-                    $floating[] = $element;
-                    return ''; // strip WHOLE paragraph
-                }
-                return $match[0];
-            },
-            $html
-        );
-
-        // ─── Phase 2: Extract bare markers (not wrapped in <p>) ───
-        // Untuk cases yg parent isn't <p> (nested inside table cell, div, etc.)
-
         // Extract logo/qr floating spans
         $html = preg_replace_callback(
             '/<span([^>]*class="[^"]*(?:logo|qr)-placeholder[^"]*floating[^"]*"[^>]*)>.*?<\/span>/is',
@@ -104,7 +60,7 @@ final class FloatingExtractor
                     $floating[] = $element;
                     return ''; // strip
                 }
-                return $match[0];
+                return $match[0]; // keep if parse failed
             },
             $html
         );
@@ -116,20 +72,16 @@ final class FloatingExtractor
                 $element = self::parseDiv($match[1]);
                 if ($element !== null) {
                     $floating[] = $element;
-                    return isset($match[2]) ? $match[2] : '';
+                    return isset($match[2]) ? $match[2] : ''; // preserve closing tag if present
                 }
                 return $match[0];
             },
             $html
         );
 
-        // ─── Phase 3: Cleanup empty wrapper paragraphs (defensive) ───
-        //
-        // Expanded regex catches wrapper dgn whitespace + <br> + &nbsp; + empty
-        // spans (browser + editor artifacts). Handles cases yg Phase 1 missed
-        // due to non-standard whitespace or nested empty elements.
+        // Cleanup: strip empty widget wrappers `<p class="floating-only" contenteditable="false"></p>`
         $html = preg_replace(
-            '/<p[^>]*class="[^"]*floating-only[^"]*"[^>]*>' . $wsInside . '<\/p>/i',
+            '/<p[^>]*class="[^"]*floating-only[^"]*"[^>]*>\s*<\/p>/i',
             '',
             $html
         );

@@ -158,7 +158,6 @@ $ezdocUrls = [
 // spec: ezdoc-spec/schemas/template.json
 // ═══════════════════════════════════════════════════════════════
 $template = null;
-$floatingElementsJson = '[]'; // default: empty array (create mode + no floating)
 if ($action === 'edit' && $id > 0) {
     // SELECT dengan alias — preserve legacy column names untuk rendering code.
     // NOTE: TemplateRepository returns typed VO; view code accesses assoc-array shape,
@@ -184,30 +183,17 @@ if ($action === 'edit' && $id > 0) {
     $template = mysqli_fetch_assoc($result);
     if (!$template) { header("Location: " . $urlList); exit; }
 
-    // v0.9.12 Phase 2 (sidecar-native) — separate floating from editor DOM.
-    //
-    // Load flow:
-    //   1. Kalau floating_elements JSON column populated (v0.9.12+ save), use it directly
-    //   2. Kalau NULL (legacy row), extract dari HTML markers ke JSON on-the-fly (auto-migrate)
-    //   3. Strip markers dari template_html — editor NEVER sees floating markers
-    //
-    // Result: floating elements di JS state array (window.floatingElements),
-    // editor content bebas dari floating markers. Save flow submits array as
-    // floating_elements_json.
-    $floatingElementsJson = '[]';
+    // v0.9.12 sidecar rehydration — kalau ada floating_elements JSON, inject
+    // markers ke template_html supaya editor + rendering pipeline unchanged.
+    // Backward-compat: legacy rows dgn floating markers still in HTML tetap works
+    // (floating_elements NULL → no injection, content HTML retains markers as-is).
     if (!empty($template['floating_elements'])) {
-        // Column populated → use JSON directly
-        $floatingElementsJson = (string) $template['floating_elements'];
-        // Belt-and-suspenders: also strip any stray markers dari template_html
-        // (defensive kalau dual-write leg tidak clean HTML properly)
-        $extracted = \Ezdoc\Template\FloatingExtractor::extract((string) $template['template_html']);
-        $template['template_html'] = $extracted['html'];
-    } else {
-        // Legacy row (JSON NULL) — extract dari HTML markers, auto-migrate
-        $extracted = \Ezdoc\Template\FloatingExtractor::extract((string) $template['template_html']);
-        if (!empty($extracted['floating'])) {
-            $floatingElementsJson = \Ezdoc\Template\FloatingExtractor::toJson($extracted['floating']);
-            $template['template_html'] = $extracted['html'];
+        $floating = \Ezdoc\Template\FloatingExtractor::fromJson($template['floating_elements']);
+        if (!empty($floating)) {
+            $template['template_html'] = \Ezdoc\Template\FloatingInjector::inject(
+                (string) $template['template_html'],
+                $floating
+            );
         }
     }
 }
@@ -550,22 +536,6 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                             <div id="logoList"></div>
                             <div id="logoEmpty" class="text-center text-gray-500 text-xs py-2">
                                 <?= h(t('logo.empty_hint', [], 'Click "+ Logo" in the editor')) ?>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Floating Elements Panel (v0.9.12 Phase 2 — sidecar-native) -->
-                <div class="border-b border-gray-200" x-data="{ open: true }">
-                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
-                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-layers"></i><?= h(t('floating.panel_title', [], 'Floating Elements')) ?> <span id="floatingCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
-                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
-                    </div>
-                    <div x-show="open" x-collapse>
-                        <div class="p-2 pt-0">
-                            <div id="floatingList"></div>
-                            <div id="floatingEmpty" class="text-center text-gray-500 text-xs py-2">
-                                <?= h(t('floating.empty_hint', [], 'Insert floating logo/TTD/QR/materai from toolbar → appears here (not in editor)')) ?>
                             </div>
                         </div>
                     </div>
@@ -1112,10 +1082,6 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 window.Alpine.store('modals').close(name);
             }
         }
-    </script>
-    <script>
-        // v0.9.12 Phase 2 — floating elements initial state (from server-side JSON column)
-        window.__EZDOC_FLOATING_INIT = <?= $floatingElementsJson ?: '[]' ?>;
     </script>
     <?php include __DIR__ . '/../_partials/designer_scripts.php'; ?>
 
