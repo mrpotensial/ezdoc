@@ -218,6 +218,32 @@ CSS;
     var SPACER_H_PX = PAD_BOTTOM_PX + GAP_PX + PAD_TOP_PX;
 
     /**
+     * Capture wrapper baseline Ys — call BEFORE any spacer insertion.
+     *
+     * For each `<p class="floating-only">` wrapper, record its current
+     * layout Y as `data-ezdoc-wrap-y` attribute. This snapshot represents
+     * the wrapper's CONTINUOUS-flow position (no spacers inserted yet).
+     *
+     * Later compensateFloatings() compares wrapper.currentY (post-paginate)
+     * against this baseline → exact shift measurement, no math needed.
+     *
+     * Re-captures on every insertSpacers run (called AFTER cleanup removes
+     * prior spacers → wrapper again at continuous position). Handles
+     * content edits between pagination runs.
+     */
+    function captureWrapperBaselines(pageEl) {
+        var wrappers = pageEl.querySelectorAll('.floating-only');
+        if (wrappers.length === 0) return;
+        var pageRect = pageEl.getBoundingClientRect();
+        var pageTop = pageRect.top;
+        for (var i = 0; i < wrappers.length; i++) {
+            var w = wrappers[i];
+            var y = w.getBoundingClientRect().top - pageTop;
+            w.setAttribute('data-ezdoc-wrap-y', String(y));
+        }
+    }
+
+    /**
      * Compensate floating element top positions untuk paged mode.
      *
      * ## Problem
@@ -226,40 +252,34 @@ CSS;
      * Y (from designer drag). Paged mode inserts spacers yg push text
      * content down, tapi floating tetap di absolute top:Ypx → mismatch.
      *
-     * ## Algorithm — DOM-order shift accumulation
+     * ## Algorithm — wrapper baseline delta (most accurate)
      *
-     * Prior attempt (spacer boundary math with padT/margin-collapse) drifted
-     * ~11px karena margin collapse antara paragraphs bikin spacer boundary
-     * dalam continuous-coord tidak straightforward hitung.
+     * Prior attempts (fixed formula, spacer-boundary math, spacer-height
+     * DOM-order sum) all drifted by 8-11px karena tidak fully account for:
+     * - CSS margin collapse antara sibling paragraphs (8px each)
+     * - Subpixel rounding (MM_TO_PX = 96/25.4)
+     * - Split continuation table/list additional margins
      *
-     * Better approach: piggyback on browser's actual layout via DOM order.
-     * Setiap floating punya wrapper `<p class="floating-only">` (height:0,
-     * inserted di DOM position matching visual Y via Phase B). Wrapper
-     * mengalami exact same shift as adjacent text karena wrapper IS in
-     * flow.
+     * Direct measurement approach: capture wrapper Y BEFORE any spacer
+     * inserted (baseline = continuous position), compare with wrapper.
+     * currentY (post-paginate). Delta = exact shift experienced by wrapper.
      *
-     * Untuk setiap floating:
-     * 1. Find wrapper via el.closest('.floating-only') (fallback: parent
-     *    <p> yg contains floating; last resort: floating itself)
-     * 2. Iterate all .ezdoc-page-spacer. For each, check if spacer PRECEDES
-     *    wrapper via compareDocumentPosition. Accumulate spacer heights of
-     *    all preceding spacers.
-     * 3. Apply cumulative shift: style.top = data-ezdoc-cont-top + shift
+     * Apply same delta ke floating (since floating.originalTop ≈ wrapper's
+     * continuous Y after Phase B DOM reorder aligns them).
      *
-     * DOM order correctly handles:
-     * - Div spacers between block-level siblings
-     * - Tr spacers inside tables (spacer inside earlier row's cell precedes
-     *   wrapper inside later row's cell)
-     * - Split continuations (each half maintains DOM order)
+     * Precedent:
+     * - Anchor-based positioning universal di WYSIWYG: measure anchor's
+     *   post-layout position, use as reference
+     * - No theoretical shift math yg vulnerable ke browser rendering quirks
      *
-     * ## Precedent
-     * - MS Word .docx <w:drawing> anchor tracks paragraph
-     * - Google Docs anchored positioning relative to nearest text run
-     * - CKEditor 5 image-inline widget anchor paragraph
+     * ## Fallback
+     * Kalau wrapper missing (edge case legacy), fallback ke old spacer-sum
+     * algorithm — imperfect tapi better than no compensation.
      *
      * ## Idempotency
-     * data-ezdoc-cont-top preserves ORIGINAL continuous top (first-run
-     * capture). Re-runs read from attribute, set fresh style.top each pass.
+     * - data-ezdoc-cont-top: floating baseline (first-run capture)
+     * - data-ezdoc-wrap-y: wrapper baseline (captured pre-pagination)
+     * Both survive re-runs; new pagination cycle re-captures wrap-y.
      */
     function compensateFloatings(pageEl) {
         var SELECTOR = '.logo-floating, .ttd-item-floating, .qr-item-floating, ' +
@@ -269,19 +289,18 @@ CSS;
         var floatings = pageEl.querySelectorAll(SELECTOR);
         if (floatings.length === 0) return;
 
-        // Enumerate spacers — array supaya bisa multiple pass tanpa re-query.
-        var spacerList = Array.prototype.slice.call(
-            pageEl.querySelectorAll('.ezdoc-page-spacer')
-        );
-        if (spacerList.length === 0) return; // no pagination happened yet
+        var pageRect = pageEl.getBoundingClientRect();
+        var pageTop = pageRect.top;
 
-        // DOCUMENT_POSITION_FOLLOWING = 4 (fallback jika Node constant missing).
+        // Spacer list untuk fallback path (wrapper missing).
+        var spacerList = null;
         var FOLLOWING_BIT = (typeof Node !== 'undefined' && Node.DOCUMENT_POSITION_FOLLOWING)
             ? Node.DOCUMENT_POSITION_FOLLOWING : 4;
 
         for (var i = 0; i < floatings.length; i++) {
             var el = floatings[i];
-            // Capture original continuous top (baseline) sekali di first run.
+
+            // Capture floating baseline (continuous top) sekali di first run.
             var origTop = el.getAttribute('data-ezdoc-cont-top');
             if (origTop === null) {
                 var currentTop = parseFloat(el.style.top) || 0;
@@ -291,28 +310,34 @@ CSS;
             var contY = parseFloat(origTop);
             if (!isFinite(contY) || contY < 0) continue;
 
-            // Anchor = wrapper `<p class="floating-only">` kalau ada. Wrapper
-            // adalah in-flow element (height:0) yg mengalami exact same shift
-            // as adjacent text. Fallback ke parent P, terakhir ke el itself.
-            var anchor = el.closest('.floating-only')
-                      || el.closest('p')
-                      || el;
-
-            // Sum spacer heights yg PRECEDES anchor dalam DOM order. Each
-            // preceding spacer contributes its height ke anchor's shift.
-            var shift = 0;
-            for (var k = 0; k < spacerList.length; k++) {
-                var s = spacerList[k];
-                // s.compareDocumentPosition(anchor) & FOLLOWING = anchor
-                // follows s = s precedes anchor.
-                var rel = s.compareDocumentPosition(anchor);
-                if (rel & FOLLOWING_BIT) {
-                    var sRect = s.getBoundingClientRect();
-                    if (sRect.height > 0) shift += sRect.height;
-                }
+            // ── Primary path: wrapper baseline delta ──
+            var wrapper = el.closest('.floating-only');
+            if (wrapper && wrapper.hasAttribute('data-ezdoc-wrap-y')) {
+                var baselineY = parseFloat(wrapper.getAttribute('data-ezdoc-wrap-y'));
+                var currentWrapY = wrapper.getBoundingClientRect().top - pageTop;
+                var shift = currentWrapY - baselineY;
+                el.style.top = (contY + shift) + 'px';
+                continue;
             }
 
-            el.style.top = (contY + shift) + 'px';
+            // ── Fallback path: spacer-sum DOM order ──
+            // (wrapper missing atau baseline tidak captured)
+            if (spacerList === null) {
+                spacerList = Array.prototype.slice.call(
+                    pageEl.querySelectorAll('.ezdoc-page-spacer')
+                );
+            }
+            if (spacerList.length === 0) continue;
+            var anchor = wrapper || el.closest('p') || el;
+            var fallbackShift = 0;
+            for (var k = 0; k < spacerList.length; k++) {
+                var s = spacerList[k];
+                if (s.compareDocumentPosition(anchor) & FOLLOWING_BIT) {
+                    var sh = s.getBoundingClientRect().height;
+                    if (sh > 0) fallbackShift += sh;
+                }
+            }
+            el.style.top = (contY + fallbackShift) + 'px';
         }
     }
 
@@ -695,6 +720,11 @@ CSS;
         // Cleanup previous state — remove spacers, merge split continuations.
         pageEl.querySelectorAll('.ezdoc-page-spacer').forEach(function(s) { s.remove(); });
         mergeSplitContinuations(pageEl);
+
+        // Capture floating wrapper baseline Ys — MUST be here (post-cleanup,
+        // pre-pagination) supaya wrapper positions reflect continuous flow.
+        // compensateFloatings later reads these as reference for shift calc.
+        captureWrapperBaselines(pageEl);
 
         var contentEl = pageEl.querySelector('.content') || pageEl;
         var paperCapacityPx = PAPER_H_PX - PAD_TOP_PX - PAD_BOTTOM_PX;
