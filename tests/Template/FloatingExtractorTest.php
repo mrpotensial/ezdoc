@@ -212,4 +212,101 @@ final class FloatingExtractorTest extends TestCase
         $this->assertStringContainsString('contenteditable="false"', $rehydrated);
         $this->assertStringContainsString('data-logo="test_logo"', $rehydrated);
     }
+
+    // ─── Empty-line remnant bug regression tests ───────────────────────
+    //
+    // User reported: extractor kadang leaves empty <p> after strip.
+    // Root cause: cleanup regex only matched exactly empty wrappers.
+    // Following tests cover the previously-broken cases.
+
+    public function testStripsLegacyBareParagraphWrappingFloating(): void
+    {
+        // Legacy: <p> WITHOUT floating-only class, wrapping ONLY floating marker
+        $html = 'Before<p><span class="logo-placeholder floating front" data-logo="h" data-pos-x="0" data-pos-y="0" data-width="80px">[Logo: h]</span></p>After';
+        $result = FloatingExtractor::extract($html);
+
+        $this->assertCount(1, $result['floating']);
+        // Whole <p> harus stripped (not just span)
+        $this->assertStringNotContainsString('<p></p>', $result['html']);
+        $this->assertStringNotContainsString('<p>', $result['html']);
+        $this->assertSame('BeforeAfter', $result['html']);
+    }
+
+    public function testStripsWidgetWrapperContainingNbsp(): void
+    {
+        // Widget wrapper dgn nbsp inside (editor artifact)
+        $html = '<p class="floating-only" contenteditable="false">&nbsp;<span class="logo-placeholder floating front" data-logo="h" data-pos-x="0" data-pos-y="0" data-width="80px">[Logo: h]</span>&nbsp;</p>';
+        $result = FloatingExtractor::extract($html);
+
+        $this->assertCount(1, $result['floating']);
+        $this->assertSame('', trim($result['html']));
+    }
+
+    public function testStripsWidgetWrapperContainingBrTag(): void
+    {
+        // Widget wrapper dgn <br> inside (browser default in empty p)
+        $html = '<p class="floating-only" contenteditable="false"><span class="logo-placeholder floating front" data-logo="h" data-pos-x="0" data-pos-y="0" data-width="80px">[Logo: h]</span><br></p>';
+        $result = FloatingExtractor::extract($html);
+
+        $this->assertCount(1, $result['floating']);
+        $this->assertSame('', trim($result['html']));
+    }
+
+    public function testStripsEmptyWidgetWrapperOnlyBr(): void
+    {
+        // Phase 3 cleanup: wrapper dgn hanya <br> (no marker inside)
+        $html = 'Before<p class="floating-only" contenteditable="false"><br></p>After';
+        $result = FloatingExtractor::extract($html);
+
+        $this->assertSame('BeforeAfter', $result['html']);
+    }
+
+    public function testStripsEmptyWidgetWrapperOnlyNbsp(): void
+    {
+        // Phase 3 cleanup: wrapper dgn hanya &nbsp;
+        $html = 'Before<p class="floating-only" contenteditable="false">&nbsp;</p>After';
+        $result = FloatingExtractor::extract($html);
+
+        $this->assertSame('BeforeAfter', $result['html']);
+    }
+
+    public function testPreservesRegularParagraphs(): void
+    {
+        // Guard: regular paragraphs (not floating-only, not wrapping floating)
+        // harus NOT stripped
+        $html = '<p>Real text content</p><p>Another paragraph</p>';
+        $result = FloatingExtractor::extract($html);
+
+        $this->assertSame($html, $result['html']);
+        $this->assertSame([], $result['floating']);
+    }
+
+    public function testPreservesIntentionallyEmptyParagraphs(): void
+    {
+        // Guard: user-intentional empty <p> (spacer) tanpa floating-only class
+        // harus preserved
+        $html = '<p>Text</p><p></p><p>More text</p>';
+        $result = FloatingExtractor::extract($html);
+
+        $this->assertSame($html, $result['html']);
+    }
+
+    public function testStripsWholeWrapperInMixedContent(): void
+    {
+        // Multiple markers + regular content mixed
+        $html = '<p>Intro</p>' .
+                '<p class="floating-only" contenteditable="false"><span class="logo-placeholder floating front" data-logo="h" data-pos-x="0" data-pos-y="0" data-width="80px">[Logo: h]</span></p>' .
+                '<p>Middle text</p>' .
+                '<p><div class="ttd-placeholder floating front" data-ttd="t" data-pos-x="0" data-pos-y="0">TTD</div></p>' .
+                '<p>Ending</p>';
+        $result = FloatingExtractor::extract($html);
+
+        $this->assertCount(2, $result['floating']);
+        $this->assertStringContainsString('<p>Intro</p>', $result['html']);
+        $this->assertStringContainsString('<p>Middle text</p>', $result['html']);
+        $this->assertStringContainsString('<p>Ending</p>', $result['html']);
+        $this->assertStringNotContainsString('floating-only', $result['html']);
+        $this->assertStringNotContainsString('logo-placeholder', $result['html']);
+        $this->assertStringNotContainsString('ttd-placeholder', $result['html']);
+    }
 }
