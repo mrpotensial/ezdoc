@@ -220,38 +220,46 @@ CSS;
     /**
      * Compensate floating element top positions untuk paged mode.
      *
-     * Floating (position:absolute anchored ke .page) stored dgn continuous-
-     * flow Y (from designer drag). Paged mode inserts spacers yg push text
-     * content down, tapi floating tetap di absolute top:Ypx → mismatch: text
-     * yg dulu adjacent sekarang di paper berbeda.
+     * ## Problem
      *
-     * ## Dynamic algorithm (spacer-driven)
+     * Floating (position:absolute anchored ke .page) stored dgn continuous
+     * Y (from designer drag). Paged mode inserts spacers yg push text
+     * content down, tapi floating tetap di absolute top:Ypx → mismatch.
      *
-     * Instead of assuming each paper consumes exactly contentH (fixed-formula
-     * approach which fails when paragraph boundaries don't align w/ content-
-     * area edge), we READ actual `.ezdoc-page-spacer` positions + heights and
-     * accumulate shifts based on which spacers are ABOVE each floating's
-     * continuous position.
+     * ## Algorithm — DOM-order shift accumulation
      *
-     * Steps:
-     * 1. Enumerate spacers top-to-bottom → { boundary, height }
-     *    - boundary = spacer's insertion point in continuous coord
-     *              = spacer.border_top - padT - (cumulative shift above it)
-     *    - height = spacer's rendered height
-     * 2. For each floating:
-     *    - contY = data-ezdoc-cont-top (original continuous value)
-     *    - compensation = Σ spacer.height where contY >= spacer.boundary
-     *    - style.top = contY + compensation
+     * Prior attempt (spacer boundary math with padT/margin-collapse) drifted
+     * ~11px karena margin collapse antara paragraphs bikin spacer boundary
+     * dalam continuous-coord tidak straightforward hitung.
      *
-     * ## Precedent industri
-     * - MS Word .docx <w:drawing> position resolved per-anchor-paragraph
-     * - CKEditor 5 image-inline widget tracks anchor paragraph
+     * Better approach: piggyback on browser's actual layout via DOM order.
+     * Setiap floating punya wrapper `<p class="floating-only">` (height:0,
+     * inserted di DOM position matching visual Y via Phase B). Wrapper
+     * mengalami exact same shift as adjacent text karena wrapper IS in
+     * flow.
+     *
+     * Untuk setiap floating:
+     * 1. Find wrapper via el.closest('.floating-only') (fallback: parent
+     *    <p> yg contains floating; last resort: floating itself)
+     * 2. Iterate all .ezdoc-page-spacer. For each, check if spacer PRECEDES
+     *    wrapper via compareDocumentPosition. Accumulate spacer heights of
+     *    all preceding spacers.
+     * 3. Apply cumulative shift: style.top = data-ezdoc-cont-top + shift
+     *
+     * DOM order correctly handles:
+     * - Div spacers between block-level siblings
+     * - Tr spacers inside tables (spacer inside earlier row's cell precedes
+     *   wrapper inside later row's cell)
+     * - Split continuations (each half maintains DOM order)
+     *
+     * ## Precedent
+     * - MS Word .docx <w:drawing> anchor tracks paragraph
      * - Google Docs anchored positioning relative to nearest text run
+     * - CKEditor 5 image-inline widget anchor paragraph
      *
      * ## Idempotency
-     * data-ezdoc-cont-top preserves original continuous top value. Re-runs
-     * read from that + reset style.top fresh each pass, so pagination re-runs
-     * (e.g. TTD signature injected, content changed) tidak double-compensate.
+     * data-ezdoc-cont-top preserves ORIGINAL continuous top (first-run
+     * capture). Re-runs read from attribute, set fresh style.top each pass.
      */
     function compensateFloatings(pageEl) {
         var SELECTOR = '.logo-floating, .ttd-item-floating, .qr-item-floating, ' +
@@ -261,32 +269,19 @@ CSS;
         var floatings = pageEl.querySelectorAll(SELECTOR);
         if (floatings.length === 0) return;
 
-        var pageRect = pageEl.getBoundingClientRect();
-        var pageTop = pageRect.top + window.scrollY;
+        // Enumerate spacers — array supaya bisa multiple pass tanpa re-query.
+        var spacerList = Array.prototype.slice.call(
+            pageEl.querySelectorAll('.ezdoc-page-spacer')
+        );
+        if (spacerList.length === 0) return; // no pagination happened yet
 
-        // ─── Enumerate spacers → boundary + height ───
-        // querySelectorAll returns DOM order which matches top-to-bottom
-        // rendering (spacers can be div or tr — both handled uniformly via
-        // getBoundingClientRect).
-        var spacers = pageEl.querySelectorAll('.ezdoc-page-spacer');
-        var spacerBoundaries = []; // { boundary, height }
-        var cumulativeShift = 0;
-        for (var i = 0; i < spacers.length; i++) {
-            var s = spacers[i];
-            var sRect = s.getBoundingClientRect();
-            if (sRect.height === 0) continue; // hidden spacer, skip
-            var sBorderTop = sRect.top + window.scrollY - pageTop;
-            // Boundary = continuous-coord position where this spacer's shift
-            // begins to apply. Content ABOVE this boundary stays put, content
-            // AT-OR-BELOW gets shifted by spacer.height.
-            var boundary = sBorderTop - PAD_TOP_PX - cumulativeShift;
-            spacerBoundaries.push({ boundary: boundary, height: sRect.height });
-            cumulativeShift += sRect.height;
-        }
+        // DOCUMENT_POSITION_FOLLOWING = 4 (fallback jika Node constant missing).
+        var FOLLOWING_BIT = (typeof Node !== 'undefined' && Node.DOCUMENT_POSITION_FOLLOWING)
+            ? Node.DOCUMENT_POSITION_FOLLOWING : 4;
 
-        // ─── Apply compensation ke each floating ───
-        for (var j = 0; j < floatings.length; j++) {
-            var el = floatings[j];
+        for (var i = 0; i < floatings.length; i++) {
+            var el = floatings[i];
+            // Capture original continuous top (baseline) sekali di first run.
             var origTop = el.getAttribute('data-ezdoc-cont-top');
             if (origTop === null) {
                 var currentTop = parseFloat(el.style.top) || 0;
@@ -296,18 +291,28 @@ CSS;
             var contY = parseFloat(origTop);
             if (!isFinite(contY) || contY < 0) continue;
 
-            // Sum spacer heights whose boundary contY has crossed.
-            var compensation = 0;
-            for (var k = 0; k < spacerBoundaries.length; k++) {
-                if (contY >= spacerBoundaries[k].boundary) {
-                    compensation += spacerBoundaries[k].height;
-                } else {
-                    break; // boundaries sorted top-down; rest are below contY
+            // Anchor = wrapper `<p class="floating-only">` kalau ada. Wrapper
+            // adalah in-flow element (height:0) yg mengalami exact same shift
+            // as adjacent text. Fallback ke parent P, terakhir ke el itself.
+            var anchor = el.closest('.floating-only')
+                      || el.closest('p')
+                      || el;
+
+            // Sum spacer heights yg PRECEDES anchor dalam DOM order. Each
+            // preceding spacer contributes its height ke anchor's shift.
+            var shift = 0;
+            for (var k = 0; k < spacerList.length; k++) {
+                var s = spacerList[k];
+                // s.compareDocumentPosition(anchor) & FOLLOWING = anchor
+                // follows s = s precedes anchor.
+                var rel = s.compareDocumentPosition(anchor);
+                if (rel & FOLLOWING_BIT) {
+                    var sRect = s.getBoundingClientRect();
+                    if (sRect.height > 0) shift += sRect.height;
                 }
             }
-            // Always set (kalau compensation=0, reset ke original — handles
-            // case where mode/content changed dan floating perlu re-align).
-            el.style.top = (contY + compensation) + 'px';
+
+            el.style.top = (contY + shift) + 'px';
         }
     }
 
