@@ -1492,8 +1492,13 @@
 
                         if (mode === 'front' || mode === 'behind') {
                             classes += ' floating ' + mode;
-                            style = ` style="top: 20px; left: 20px;"`;
-                            posAttrs = ` data-pos-mode="${mode}" data-pos-x="20" data-pos-y="20"`;
+                            // Insert at caret position (Word/Google Docs anchor pattern).
+                            // Sebelumnya hardcoded (20,20) → ROI di long doc karena
+                            // user harus scroll up + drag ke posisi. Sekarang muncul
+                            // langsung di lokasi cursor.
+                            const pos = _getCaretPos();
+                            style = ` style="top: ${pos.y}px; left: ${pos.x}px;"`;
+                            posAttrs = ` data-pos-mode="${mode}" data-pos-x="${pos.x}" data-pos-y="${pos.y}"`;
                         }
 
                         // Widget-wrapper pattern (CKEditor 5 non-editable atomic
@@ -1546,8 +1551,10 @@
 
                         if (mode === 'front' || mode === 'behind') {
                             classes += ' floating ' + mode;
-                            style = ` style="top: 20px; left: 20px;"`;
-                            posAttrs = ` data-pos-mode="${mode}" data-pos-x="20" data-pos-y="20"`;
+                            // Insert at caret (see insertLogoPrompt Phase A comment)
+                            const pos = _getCaretPos();
+                            style = ` style="top: ${pos.y}px; left: ${pos.x}px;"`;
+                            posAttrs = ` data-pos-mode="${mode}" data-pos-x="${pos.x}" data-pos-y="${pos.y}"`;
                         }
 
                         // Widget-wrapper pattern (see logo insert). Floating variant
@@ -1657,8 +1664,10 @@
 
                         if (mode === 'front' || mode === 'behind') {
                             classes += ' floating ' + mode;
-                            style = ` style="top: 100px; left: 50px;"`;
-                            posAttrs = ` data-pos-mode="${mode}" data-pos-x="50" data-pos-y="100"`;
+                            // Insert at caret (see insertLogoPrompt Phase A comment)
+                            const pos = _getCaretPos();
+                            style = ` style="top: ${pos.y}px; left: ${pos.x}px;"`;
+                            posAttrs = ` data-pos-mode="${mode}" data-pos-x="${pos.x}" data-pos-y="${pos.y}"`;
                         }
 
                         let extraAttrs = '';
@@ -1747,8 +1756,10 @@
                     let posAttrs = '';
                     if (mode === 'front' || mode === 'behind') {
                         classes += ' floating ' + mode;
-                        style = ` style="top: 500px; left: 350px;"`;
-                        posAttrs = ` data-pos-mode="${mode}" data-pos-x="350" data-pos-y="500"`;
+                        // Insert at caret (see insertLogoPrompt Phase A comment)
+                        const pos = _getCaretPos();
+                        style = ` style="top: ${pos.y}px; left: ${pos.x}px;"`;
+                        posAttrs = ` data-pos-mode="${mode}" data-pos-x="${pos.x}" data-pos-y="${pos.y}"`;
                     }
 
                     const visualLabel = (matMode === 'kosong') ? t('materai.mode_empty_paren', {}, '(empty)') : t('materai.mode_upload_paren', {}, '(upload)');
@@ -1966,6 +1977,94 @@
                     startLeft: 0,
                     startTop: 0
                 };
+
+                // Reorder floating wrapper <p class="floating-only"> ke sibling
+                // terdekat matching visual Y position (Word/Google Docs anchor pattern).
+                //
+                // Wrap dalam undoManager.transact supaya:
+                //   - Move op ter-record di TinyMCE undo history
+                //   - User bisa Ctrl+Z untuk revert drag position
+                // Bookmark selection sebelum reorder, restore setelah → cursor safety.
+                //
+                // Wrapper height:0 !important dari ContentCss → moving tidak trigger
+                // visible reflow untuk paragraphs lain.
+                function _reorderFloatingWrapper(wrapper, targetY) {
+                    if (!wrapper) return;
+                    const editor = tinymce.get('editor');
+                    if (!editor) return;
+                    const body = editor.getBody();
+                    if (!body) return;
+                    // .content container preferred (matches generate view structure),
+                    // fallback ke body kalau tidak ada.
+                    const container = body.querySelector('.content') || body;
+                    try {
+                        editor.undoManager.transact(function() {
+                            let bookmark = null;
+                            try { bookmark = editor.selection.getBookmark(2); } catch (e) {}
+
+                            // Find sibling paragraph terdekat matching visual targetY.
+                            // Iterate direct children (exclude wrapper itself + other
+                            // floating-only wrappers — mereka height:0, tidak reliable).
+                            const siblings = Array.from(container.children).filter(function(s) {
+                                return s !== wrapper && !s.classList.contains('floating-only');
+                            });
+
+                            if (siblings.length === 0) {
+                                container.appendChild(wrapper);
+                            } else {
+                                const containerRect = container.getBoundingClientRect();
+                                let targetSibling = null;
+                                for (let i = 0; i < siblings.length; i++) {
+                                    const sRect = siblings[i].getBoundingClientRect();
+                                    const sTop = sRect.top - containerRect.top;
+                                    if (sTop > targetY) {
+                                        targetSibling = siblings[i];
+                                        break;
+                                    }
+                                }
+                                if (targetSibling) {
+                                    container.insertBefore(wrapper, targetSibling);
+                                } else {
+                                    container.appendChild(wrapper);
+                                }
+                            }
+
+                            if (bookmark) {
+                                try { editor.selection.moveToBookmark(bookmark); } catch (e) {}
+                            }
+                        });
+                    } catch (e) {
+                        console.warn('[floating] reorder failed:', e);
+                    }
+                }
+
+                // Get caret position dalam iframe body coords, untuk insert-at-caret
+                // pattern (Word/Google Docs anchor positioning). Fallback ke (20,20)
+                // kalau caret tidak tersedia atau di luar visible area.
+                //
+                // Returns { x, y } in px relative to iframe body's origin.
+                function _getCaretPos() {
+                    try {
+                        const rng = editor.selection.getRng();
+                        if (!rng) return { x: 20, y: 20 };
+                        let rect = rng.getBoundingClientRect();
+                        // Empty range → gunakan startContainer's parent element rect
+                        if (!rect || (rect.width === 0 && rect.height === 0)) {
+                            let node = rng.startContainer;
+                            if (node && node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+                            if (node && node.getBoundingClientRect) rect = node.getBoundingClientRect();
+                        }
+                        if (!rect) return { x: 20, y: 20 };
+                        const body = editor.getBody();
+                        if (!body) return { x: 20, y: 20 };
+                        const bodyRect = body.getBoundingClientRect();
+                        const x = Math.max(20, Math.round(rect.left - bodyRect.left));
+                        const y = Math.max(20, Math.round(rect.top - bodyRect.top));
+                        return { x, y };
+                    } catch (e) {
+                        return { x: 20, y: 20 };
+                    }
+                }
 
                 // Initialize drag for logos (wrapper function)
                 function initLogoDrag() {
@@ -2219,6 +2318,25 @@
                         const topVal = parseInt(el.style.top);
                         if (!isNaN(leftVal)) el.setAttribute('data-pos-x', leftVal);
                         if (!isNaN(topVal)) el.setAttribute('data-pos-y', topVal);
+
+                        // ═══ Phase B: DOM reorder wrapper matching visual Y ═══
+                        // Precedent: MS Word .docx <w:drawing> anchor-to-paragraph,
+                        //            Google Docs drawing anchor, LibreOffice text-anchor.
+                        // Move wrapper <p class="floating-only"> ke sibling terdekat
+                        // matching visual Y position → semantic DOM order (delete paragraph
+                        // near visual → floating ikut deleted, cut/paste flows work).
+                        //
+                        // Only reorder kalau actual drag (mouse moved > 5px) — pure click
+                        // (no move) tidak trigger reorder.
+                        const dx = Math.abs(leftVal - dragState.startLeft);
+                        const dy = Math.abs(topVal - dragState.startTop);
+                        if (dx > 5 || dy > 5) {
+                            const wrapper = el.closest('p.floating-only');
+                            if (wrapper) {
+                                _reorderFloatingWrapper(wrapper, topVal);
+                            }
+                        }
+                        // ═══ END Phase B ═══
 
                         // Check type and scan
                         if (el.classList.contains('logo-placeholder')) {
