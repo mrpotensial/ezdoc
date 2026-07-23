@@ -218,6 +218,100 @@ CSS;
     var SPACER_H_PX = PAD_BOTTOM_PX + GAP_PX + PAD_TOP_PX;
 
     /**
+     * Compensate floating element top positions untuk paged mode.
+     *
+     * Floating (position:absolute anchored ke .page) stored dgn continuous-
+     * flow Y (from designer drag). Paged mode inserts spacers yg push text
+     * content down, tapi floating tetap di absolute top:Ypx → mismatch: text
+     * yg dulu adjacent sekarang di paper berbeda.
+     *
+     * ## Dynamic algorithm (spacer-driven)
+     *
+     * Instead of assuming each paper consumes exactly contentH (fixed-formula
+     * approach which fails when paragraph boundaries don't align w/ content-
+     * area edge), we READ actual `.ezdoc-page-spacer` positions + heights and
+     * accumulate shifts based on which spacers are ABOVE each floating's
+     * continuous position.
+     *
+     * Steps:
+     * 1. Enumerate spacers top-to-bottom → { boundary, height }
+     *    - boundary = spacer's insertion point in continuous coord
+     *              = spacer.border_top - padT - (cumulative shift above it)
+     *    - height = spacer's rendered height
+     * 2. For each floating:
+     *    - contY = data-ezdoc-cont-top (original continuous value)
+     *    - compensation = Σ spacer.height where contY >= spacer.boundary
+     *    - style.top = contY + compensation
+     *
+     * ## Precedent industri
+     * - MS Word .docx <w:drawing> position resolved per-anchor-paragraph
+     * - CKEditor 5 image-inline widget tracks anchor paragraph
+     * - Google Docs anchored positioning relative to nearest text run
+     *
+     * ## Idempotency
+     * data-ezdoc-cont-top preserves original continuous top value. Re-runs
+     * read from that + reset style.top fresh each pass, so pagination re-runs
+     * (e.g. TTD signature injected, content changed) tidak double-compensate.
+     */
+    function compensateFloatings(pageEl) {
+        var SELECTOR = '.logo-floating, .ttd-item-floating, .qr-item-floating, ' +
+                       '.materai-floating, .materai-item-floating, ' +
+                       '.qr-behind, .qr-front, .logo-behind, .logo-front, ' +
+                       '.ttd-behind, .ttd-front, .materai-behind, .materai-front';
+        var floatings = pageEl.querySelectorAll(SELECTOR);
+        if (floatings.length === 0) return;
+
+        var pageRect = pageEl.getBoundingClientRect();
+        var pageTop = pageRect.top + window.scrollY;
+
+        // ─── Enumerate spacers → boundary + height ───
+        // querySelectorAll returns DOM order which matches top-to-bottom
+        // rendering (spacers can be div or tr — both handled uniformly via
+        // getBoundingClientRect).
+        var spacers = pageEl.querySelectorAll('.ezdoc-page-spacer');
+        var spacerBoundaries = []; // { boundary, height }
+        var cumulativeShift = 0;
+        for (var i = 0; i < spacers.length; i++) {
+            var s = spacers[i];
+            var sRect = s.getBoundingClientRect();
+            if (sRect.height === 0) continue; // hidden spacer, skip
+            var sBorderTop = sRect.top + window.scrollY - pageTop;
+            // Boundary = continuous-coord position where this spacer's shift
+            // begins to apply. Content ABOVE this boundary stays put, content
+            // AT-OR-BELOW gets shifted by spacer.height.
+            var boundary = sBorderTop - PAD_TOP_PX - cumulativeShift;
+            spacerBoundaries.push({ boundary: boundary, height: sRect.height });
+            cumulativeShift += sRect.height;
+        }
+
+        // ─── Apply compensation ke each floating ───
+        for (var j = 0; j < floatings.length; j++) {
+            var el = floatings[j];
+            var origTop = el.getAttribute('data-ezdoc-cont-top');
+            if (origTop === null) {
+                var currentTop = parseFloat(el.style.top) || 0;
+                origTop = String(currentTop);
+                el.setAttribute('data-ezdoc-cont-top', origTop);
+            }
+            var contY = parseFloat(origTop);
+            if (!isFinite(contY) || contY < 0) continue;
+
+            // Sum spacer heights whose boundary contY has crossed.
+            var compensation = 0;
+            for (var k = 0; k < spacerBoundaries.length; k++) {
+                if (contY >= spacerBoundaries[k].boundary) {
+                    compensation += spacerBoundaries[k].height;
+                } else {
+                    break; // boundaries sorted top-down; rest are below contY
+                }
+            }
+            // Always set (kalau compensation=0, reset ke original — handles
+            // case where mode/content changed dan floating perlu re-align).
+            el.style.top = (contY + compensation) + 'px';
+        }
+    }
+
+    /**
      * Compute how many complete "papers" a given position (from .page top) is
      * past. Position 0 = top of paper 1. Position paperH = start of gap after
      * paper 1. Position paperH+gap = top of paper 2.
@@ -608,6 +702,13 @@ CSS;
         function finish(reason) {
             _isRunning = false;
             if (reason) dbg('Pagination finished:', reason, 'iterations=' + iteration);
+            // Compensate floating element positions AFTER spacers settled.
+            // Wrapped in try — kalau error, tidak affect main pagination.
+            try {
+                compensateFloatings(pageEl);
+            } catch (e) {
+                console.warn('[ScreenPagination] compensateFloatings failed:', e);
+            }
             // NO observer reconnect — one-shot pagination only (v0.9.13 hang fix).
         }
 
