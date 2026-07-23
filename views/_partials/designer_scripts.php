@@ -1978,55 +1978,88 @@
                     startTop: 0
                 };
 
-                // Reorder floating wrapper <p class="floating-only"> ke sibling
-                // terdekat matching visual Y position (Word/Google Docs anchor pattern).
+                // Recursive descent — find insertion point untuk floating wrapper
+                // matching visual Y position. Handles paragraph siblings + nested
+                // containers (ul/ol/li, table/tbody/tr/td).
                 //
-                // Wrap dalam undoManager.transact supaya:
-                //   - Move op ter-record di TinyMCE undo history
-                //   - User bisa Ctrl+Z untuk revert drag position
-                // Bookmark selection sebelum reorder, restore setelah → cursor safety.
+                // Returns { parent, before } — parent element yg akan menerima
+                // insertBefore(wrapper, before). before=null → appendChild.
                 //
-                // Wrapper height:0 !important dari ContentCss → moving tidak trigger
-                // visible reflow untuk paragraphs lain.
-                function _reorderFloatingWrapper(wrapper, targetY) {
+                // Descent rules:
+                //   - Container = <ul> atau <ol>: descend ke <li> level (wrapper <p>
+                //     valid di dalam <li>)
+                //   - Container = <table>: descend ke <td> level via tbody/tr
+                //     (wrapper <p> valid di dalam <td>)
+                //   - Semua lain: place wrapper sebagai sibling
+                function _findInsertPoint(container, wrapper, targetYAbs) {
+                    const CONTAINER_TAGS = { 'UL': 1, 'OL': 1, 'TABLE': 1, 'TBODY': 1, 'TR': 1 };
+                    const siblings = Array.from(container.children).filter(function(s) {
+                        return s !== wrapper && !s.classList.contains('floating-only');
+                    });
+                    if (siblings.length === 0) {
+                        return { parent: container, before: null };
+                    }
+                    for (let i = 0; i < siblings.length; i++) {
+                        const s = siblings[i];
+                        const sRect = s.getBoundingClientRect();
+                        const sTopAbs = sRect.top + window.pageYOffset;
+                        const sBotAbs = sRect.bottom + window.pageYOffset;
+                        // Target Y jatuh di RANGE sibling ini → coba descend
+                        if (targetYAbs >= sTopAbs && targetYAbs < sBotAbs) {
+                            const tag = s.tagName;
+                            if (CONTAINER_TAGS[tag]) {
+                                // Descend deeper (recurse) untuk get finer position
+                                return _findInsertPoint(s, wrapper, targetYAbs);
+                            }
+                            // Leaf container — sibling is <p>, <div>, <li>, <td>, dsb.
+                            // targetY tepat di sini, insertBefore this sibling.
+                            return { parent: container, before: s };
+                        }
+                        // Target Y di ATAS sibling ini → insertBefore
+                        if (targetYAbs < sTopAbs) {
+                            return { parent: container, before: s };
+                        }
+                    }
+                    // Target Y di bawah semua siblings → append at end
+                    return { parent: container, before: null };
+                }
+
+                // Reorder floating wrapper <p class="floating-only"> ke posisi
+                // matching visual Y (Word/Google Docs anchor pattern).
+                //
+                // Recursive descent supaya:
+                //   - List: wrapper end up di dalam <li> specific
+                //   - Table: wrapper end up di dalam <td> specific
+                //   - Regular content: wrapper between paragraphs
+                //
+                // Wrapper CSS height:0 !important → tidak trigger visible reflow.
+                // Undo/redo preserved via undoManager.transact.
+                // Cursor safety via selection bookmark.
+                function _reorderFloatingWrapper(wrapper, targetYLocal) {
                     if (!wrapper) return;
                     const editor = tinymce.get('editor');
                     if (!editor) return;
                     const body = editor.getBody();
                     if (!body) return;
-                    // .content container preferred (matches generate view structure),
-                    // fallback ke body kalau tidak ada.
+                    // .content container preferred (matches generate view structure)
                     const container = body.querySelector('.content') || body;
+                    // Convert local Y (relative ke container's origin) → absolute page Y
+                    // supaya getBoundingClientRect + pageYOffset comparison consistent
+                    // across nested containers.
+                    const containerRect = container.getBoundingClientRect();
+                    const targetYAbs = containerRect.top + window.pageYOffset + targetYLocal;
                     try {
                         editor.undoManager.transact(function() {
                             let bookmark = null;
                             try { bookmark = editor.selection.getBookmark(2); } catch (e) {}
 
-                            // Find sibling paragraph terdekat matching visual targetY.
-                            // Iterate direct children (exclude wrapper itself + other
-                            // floating-only wrappers — mereka height:0, tidak reliable).
-                            const siblings = Array.from(container.children).filter(function(s) {
-                                return s !== wrapper && !s.classList.contains('floating-only');
-                            });
-
-                            if (siblings.length === 0) {
+                            const point = _findInsertPoint(container, wrapper, targetYAbs);
+                            if (!point) {
                                 container.appendChild(wrapper);
+                            } else if (point.before) {
+                                point.parent.insertBefore(wrapper, point.before);
                             } else {
-                                const containerRect = container.getBoundingClientRect();
-                                let targetSibling = null;
-                                for (let i = 0; i < siblings.length; i++) {
-                                    const sRect = siblings[i].getBoundingClientRect();
-                                    const sTop = sRect.top - containerRect.top;
-                                    if (sTop > targetY) {
-                                        targetSibling = siblings[i];
-                                        break;
-                                    }
-                                }
-                                if (targetSibling) {
-                                    container.insertBefore(wrapper, targetSibling);
-                                } else {
-                                    container.appendChild(wrapper);
-                                }
+                                point.parent.appendChild(wrapper);
                             }
 
                             if (bookmark) {
