@@ -263,12 +263,115 @@
         function renderTabledbColumns(ns, columns) {
             const colsList = document.getElementById('tabledbColumns');
             const safeNs = (ns || 'default').replace(/[^a-zA-Z0-9_]/g, '');
-            colsList.innerHTML = (columns || []).map(c => {
+
+            // ── Column list buttons (raw insert) ──
+            const columnButtons = (columns || []).map(c => {
                 const safeCol = String(c).replace(/[^a-zA-Z0-9_]/g, '');
                 if (!safeCol) return '';
                 const tag = '{{tabledb.' + safeNs + '.' + safeCol + '}}';
                 return `<button type="button" class="inline-flex items-center px-2 py-1 rounded text-xs border border-cyan-500 text-cyan-600 hover:bg-cyan-50" onclick="insertTabledbVar('${tag}')" title="${t('tabledb.insert_column_title', {}, 'Click to insert into editor')}">${escapeHtml(tag)}</button>`;
             }).join('');
+
+            // ── Format modifier helpers (v0.9.14b) ──
+            // Preset marker generators — user click column dulu, kemudian klik format
+            // untuk generate tag lengkap. Alternatif: user dropdown selection.
+            const formatHelpers = `
+                <div class="mt-3 p-2 bg-indigo-50 border border-indigo-200 rounded">
+                    <div class="text-xs font-bold text-indigo-900 mb-1"><i class="bi bi-magic mr-1"></i>Format / Formula / Aggregate (v0.9.14b)</div>
+                    <div class="text-xs text-gray-600 mb-2">Klik kolom + pilih format ATAU tulis formula custom. Marker langsung ter-insert di editor.</div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                        <div>
+                            <label class="block font-semibold text-gray-700 mb-1">Column + Format</label>
+                            <div class="flex gap-1">
+                                <select id="tabledbHelperColumn" class="rounded border-gray-300 text-xs px-1 py-0.5 flex-1">
+                                    ${(columns || []).map(c => {
+                                        const safeCol = String(c).replace(/[^a-zA-Z0-9_]/g, '');
+                                        return safeCol ? `<option value="${safeCol}">${escapeHtml(safeCol)}</option>` : '';
+                                    }).join('')}
+                                </select>
+                                <select id="tabledbHelperFormat" class="rounded border-gray-300 text-xs px-1 py-0.5">
+                                    <option value="">text (default)</option>
+                                    <option value="|currency">|currency</option>
+                                    <option value="|currency:USD">|currency:USD</option>
+                                    <option value="|number">|number</option>
+                                    <option value="|number:2">|number:2</option>
+                                    <option value="|percent">|percent</option>
+                                    <option value="|date">|date</option>
+                                    <option value="|datetime">|datetime</option>
+                                </select>
+                            </div>
+                            <button type="button" class="mt-1 w-full inline-flex items-center justify-center px-2 py-1 rounded text-xs bg-indigo-600 text-white hover:bg-indigo-700" onclick="insertTabledbHelperFormatted('${safeNs}')"><i class="bi bi-arrow-right-square mr-1"></i>Insert Marker</button>
+                        </div>
+
+                        <div>
+                            <label class="block font-semibold text-gray-700 mb-1">Formula per-row</label>
+                            <input type="text" id="tabledbHelperFormula" class="w-full rounded border-gray-300 text-xs px-1 py-0.5 font-mono" placeholder="qty * harga">
+                            <select id="tabledbHelperFormulaFormat" class="w-full rounded border-gray-300 text-xs px-1 py-0.5 mt-1">
+                                <option value="|currency">|currency</option>
+                                <option value="|number">|number</option>
+                                <option value="|number:2">|number:2</option>
+                                <option value="|percent">|percent</option>
+                                <option value="">text</option>
+                            </select>
+                            <button type="button" class="mt-1 w-full inline-flex items-center justify-center px-2 py-1 rounded text-xs bg-indigo-600 text-white hover:bg-indigo-700" onclick="insertTabledbHelperFormula('${safeNs}')"><i class="bi bi-calculator mr-1"></i>Insert Formula</button>
+                        </div>
+
+                        <div>
+                            <label class="block font-semibold text-gray-700 mb-1">Aggregate (footer)</label>
+                            <div class="flex gap-1">
+                                <select id="tabledbHelperAggVerb" class="rounded border-gray-300 text-xs px-1 py-0.5" style="width:70px;">
+                                    <option value="sum">sum</option>
+                                    <option value="avg">avg</option>
+                                    <option value="count">count</option>
+                                    <option value="min">min</option>
+                                    <option value="max">max</option>
+                                </select>
+                                <input type="text" id="tabledbHelperAggTarget" class="rounded border-gray-300 text-xs px-1 py-0.5 flex-1" placeholder="harga atau =qty*harga">
+                            </div>
+                            <select id="tabledbHelperAggFormat" class="w-full rounded border-gray-300 text-xs px-1 py-0.5 mt-1">
+                                <option value="|currency">|currency</option>
+                                <option value="|number">|number</option>
+                                <option value="|number:2">|number:2</option>
+                                <option value="|percent">|percent</option>
+                                <option value="">text</option>
+                            </select>
+                            <button type="button" class="mt-1 w-full inline-flex items-center justify-center px-2 py-1 rounded text-xs bg-indigo-600 text-white hover:bg-indigo-700" onclick="insertTabledbHelperAggregate('${safeNs}')"><i class="bi bi-sigma mr-1"></i>Insert Aggregate</button>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-xs text-gray-500">
+                        <strong>Tip</strong>: Insert marker di dalam <code>&lt;tr&gt;</code> tbody untuk row cloning, atau <code>&lt;tr&gt;</code> tfoot untuk aggregate render sekali.
+                    </div>
+                </div>`;
+
+            colsList.innerHTML = columnButtons + formatHelpers;
+        }
+
+        // Helper: Insert formatted column marker {{tabledb.ns.col|format}}
+        function insertTabledbHelperFormatted(ns) {
+            const col = document.getElementById('tabledbHelperColumn').value;
+            const format = document.getElementById('tabledbHelperFormat').value;
+            if (!col) { showToast('Pilih kolom dulu', 'error'); return; }
+            const tag = '{{tabledb.' + ns + '.' + col + format + '}}';
+            insertTabledbVar(tag);
+        }
+
+        // Helper: Insert formula marker {{tabledb.ns.=expression|format}}
+        function insertTabledbHelperFormula(ns) {
+            const formula = document.getElementById('tabledbHelperFormula').value.trim();
+            const format = document.getElementById('tabledbHelperFormulaFormat').value;
+            if (!formula) { showToast('Tulis formula (contoh: qty * harga)', 'error'); return; }
+            const tag = '{{tabledb.' + ns + '.=' + formula + format + '}}';
+            insertTabledbVar(tag);
+        }
+
+        // Helper: Insert aggregate marker {{tabledb.ns.verb:target|format}}
+        function insertTabledbHelperAggregate(ns) {
+            const verb = document.getElementById('tabledbHelperAggVerb').value;
+            const target = document.getElementById('tabledbHelperAggTarget').value.trim() || '*';
+            const format = document.getElementById('tabledbHelperAggFormat').value;
+            const tag = '{{tabledb.' + ns + '.' + verb + ':' + target + format + '}}';
+            insertTabledbVar(tag);
         }
 
         function insertTabledbVar(tag) {

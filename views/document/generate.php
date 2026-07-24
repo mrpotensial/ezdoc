@@ -573,15 +573,64 @@ function executeDynQuery($query, $param_norm, $param_nopen, $dbFields, $conn) {
 }
 
 /**
- * Process {{tabledb.<ns>.<col>}} or {{tabledb.<col>}} references inside <tr> rows.
- * For each <tr> that contains at least one such reference:
- *   1. Resolve namespace (default "default" if missing).
- *   2. Run the configured query (executeDynQuery) for that namespace.
- *   3. Clone the row N times (one per result), substituting placeholders with row values.
- *   4. If query returns 0 rows, keep ONE row with placeholders replaced by "—".
- *   5. Replace original <tr> with concatenated cloned rows.
+ * Process `{{tabledb.<ns>.<selector>[|<format>[:<args>]]}}` references inside <tr> rows.
  *
- * $tableDbQueries : assoc array, keyed by namespace, value: ['sql' => '...', 'columns' => [...]]
+ * Enhanced marker syntax (v0.9.14b) — user bebas design table di TinyMCE,
+ * marker mendukung format/formula/aggregate directly di cells:
+ *
+ * ## Selector variants
+ *
+ * - `col_name`              — raw column value dari row
+ * - `=<expression>`         — computed formula dgn bare column names, e.g. `=qty*harga`
+ * - `sum:<col_or_formula>`  — SUM aggregate across all rows
+ * - `avg:<col_or_formula>`  — AVG aggregate
+ * - `count:<col_or_star>`   — COUNT of non-null (use `*` untuk count all rows)
+ * - `min:<col_or_formula>`  — MIN
+ * - `max:<col_or_formula>`  — MAX
+ *
+ * ## Format modifiers (|)
+ *
+ * - `|text`                 — HTML escape (default)
+ * - `|number[:decimals]`    — 1500 → 1.500 (id) or 1,500 (en)
+ * - `|currency[:code]`      — 1500000 → Rp 1.500.000 (default IDR)
+ * - `|percent[:decimals]`   — 0.5 → 50,00% (as-ratio default)
+ * - `|date[:format]`        — 2026-07-24 → 24/07/2026 (default d/m/Y)
+ * - `|datetime[:format]`    — default d/m/Y H:i
+ *
+ * ## Row classification
+ *
+ * - Row dgn raw col OR formula → **cloned per data row** (existing behavior)
+ * - Row dgn HANYA aggregate markers → **rendered once** (footer-style)
+ * - Row mixed → treated as clone (aggregate evaluated with row context — rarely useful)
+ *
+ * ## Examples
+ *
+ * ```html
+ * <table>
+ *   <thead><tr><th>Item</th><th>Qty</th><th>Harga</th><th>Total</th></tr></thead>
+ *   <tbody>
+ *     <tr>
+ *       <td>{{tabledb.stok.nama}}</td>
+ *       <td>{{tabledb.stok.qty}}</td>
+ *       <td>{{tabledb.stok.harga|currency}}</td>
+ *       <td>{{tabledb.stok.=qty*harga|currency}}</td>
+ *     </tr>
+ *   </tbody>
+ *   <tfoot>
+ *     <tr>
+ *       <td colspan="3"><strong>Total</strong></td>
+ *       <td>{{tabledb.stok.sum:=qty*harga|currency}}</td>
+ *     </tr>
+ *   </tfoot>
+ * </table>
+ * ```
+ *
+ * ## Backward compatibility
+ *
+ * Old marker `{{tabledb.ns.col}}` (no format) tetap works — no format pipe =
+ * text (HTML escape). Same behavior as pre-v0.9.14b.
+ *
+ * spec: docs/DYNAMIC-TABLES.md
  */
 function processTabledbRows($html, $tableDbQueries, $param_norm, $param_nopen, $dbFields, $conn) {
     if (!is_array($tableDbQueries) || empty($tableDbQueries)) return $html;
@@ -589,20 +638,23 @@ function processTabledbRows($html, $tableDbQueries, $param_norm, $param_nopen, $
     // Cache: run each namespace's query at most once per template render
     $resultCache = [];
 
-    return preg_replace_callback('/<tr\b[^>]*>[\s\S]*?<\/tr>/i', function($m) use ($tableDbQueries, $param_norm, $param_nopen, $dbFields, $conn, &$resultCache) {
+    // Regex captures: (1) namespace optional, (2) selector, (3) format pipe optional
+    // Selector allows: word chars, `=`, `*`, `:` (for verb:field), operators inside formulas
+    // Selector allows spaces (untuk formulas seperti `=qty * harga`); trim di parser.
+    $markerRegex = '/\{\{tabledb(?:\.([a-zA-Z_]\w*))?\.([^|}]+?)(?:\|([^}]+))?\}\}/';
+
+    return preg_replace_callback('/<tr\b[^>]*>[\s\S]*?<\/tr>/i', function ($m) use ($tableDbQueries, $param_norm, $param_nopen, $dbFields, $conn, &$resultCache, $markerRegex) {
         $rowHtml = $m[0];
 
-        // Find all {{tabledb.<ns>.<col>}} or {{tabledb.<col>}} references in this row
-        if (!preg_match_all('/\{\{tabledb(?:\.([a-zA-Z_][a-zA-Z0-9_]*))?\.([a-zA-Z_][a-zA-Z0-9_]*)\}\}/', $rowHtml, $refs, PREG_SET_ORDER)) {
-            return $rowHtml; // no tabledb refs, leave untouched
+        if (!preg_match_all($markerRegex, $rowHtml, $refs, PREG_SET_ORDER)) {
+            return $rowHtml; // no tabledb markers
         }
 
-        // Determine namespace from first reference (assume all refs in one row share ns)
+        // Namespace dari first marker (assume all refs di 1 row share ns)
         $ns = $refs[0][1] !== '' ? $refs[0][1] : 'default';
         $cfg = $tableDbQueries[$ns] ?? null;
         if (!$cfg || empty($cfg['sql'])) {
-            // Unknown namespace — replace with em-dash to make missing config visible
-            return preg_replace('/\{\{tabledb(?:\.[a-zA-Z_]\w*)?\.[a-zA-Z_]\w*\}\}/', '—', $rowHtml);
+            return preg_replace($markerRegex, '—', $rowHtml);
         }
 
         // Execute query (cached per namespace)
@@ -611,23 +663,210 @@ function processTabledbRows($html, $tableDbQueries, $param_norm, $param_nopen, $
         }
         $rows = $resultCache[$ns];
 
-        // Empty result: keep 1 row with placeholders replaced by "—"
+        // Classify row: aggregate-only, clone (per-row), atau mixed
+        $rowType = _tabledbClassifyRow($refs);
+
+        // Empty result: kalau aggregate row → tetap render dgn aggregate=0 or —,
+        // kalau clone row → keep 1 row w/ placeholders replaced by —
         if (empty($rows)) {
-            return preg_replace('/\{\{tabledb(?:\.[a-zA-Z_]\w*)?\.[a-zA-Z_]\w*\}\}/', '—', $rowHtml);
+            if ($rowType === 'aggregate') {
+                return _tabledbRenderRow($rowHtml, $markerRegex, [], null, $rows);
+            }
+            return preg_replace($markerRegex, '—', $rowHtml);
         }
 
-        // Clone row per result, substituting each placeholder with its column value
+        // Aggregate row → render ONCE (footer-style)
+        if ($rowType === 'aggregate') {
+            return _tabledbRenderRow($rowHtml, $markerRegex, [], null, $rows);
+        }
+
+        // Clone-per-row: render each data row with its context
         $output = '';
         foreach ($rows as $dataRow) {
-            $clone = preg_replace_callback('/\{\{tabledb(?:\.[a-zA-Z_]\w*)?\.([a-zA-Z_]\w*)\}\}/', function($mm) use ($dataRow) {
-                $col = $mm[1];
-                $val = $dataRow[$col] ?? '';
-                return ($val === '' || $val === null) ? '—' : htmlspecialchars((string)$val, ENT_QUOTES, 'UTF-8');
-            }, $rowHtml);
-            $output .= $clone;
+            $output .= _tabledbRenderRow($rowHtml, $markerRegex, $dataRow, $dataRow, $rows);
         }
         return $output;
     }, $html);
+}
+
+/**
+ * Classify a row's markers: 'aggregate' (only sum/avg/count/min/max markers),
+ * 'clone' (has at least 1 raw col or formula), atau 'mixed' (treated as clone).
+ *
+ * @param array $refs preg_match_all matches (each: [full, ns, selector, format])
+ * @return string 'aggregate'|'clone'
+ */
+function _tabledbClassifyRow(array $refs): string {
+    $hasPerRow = false;
+    $hasAggregate = false;
+    foreach ($refs as $ref) {
+        $parsed = _tabledbParseSelector($ref[2]);
+        if ($parsed['type'] === 'aggregate') $hasAggregate = true;
+        elseif ($parsed['type'] === 'raw' || $parsed['type'] === 'formula') $hasPerRow = true;
+    }
+    if ($hasAggregate && !$hasPerRow) return 'aggregate';
+    return 'clone'; // includes mixed (aggregate + per-row — evaluated per-row)
+}
+
+/**
+ * Parse selector string. Returns ['type' => 'raw'|'formula'|'aggregate', ...].
+ *
+ * @param string $sel
+ * @return array
+ */
+function _tabledbParseSelector(string $sel): array {
+    $sel = trim($sel);
+    if ($sel === '') return ['type' => 'invalid'];
+    // Formula: starts with `=`
+    if ($sel[0] === '=') {
+        return ['type' => 'formula', 'formula' => trim(substr($sel, 1))];
+    }
+    // Aggregate: sum:field, avg:field, count:*, count:field, min:formula, max:formula
+    if (preg_match('/^(sum|avg|count|min|max):(.+)$/i', $sel, $m)) {
+        return ['type' => 'aggregate', 'verb' => strtolower($m[1]), 'target' => $m[2]];
+    }
+    // Raw column: plain identifier
+    if (preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $sel)) {
+        return ['type' => 'raw', 'field' => $sel];
+    }
+    return ['type' => 'invalid'];
+}
+
+/**
+ * Parse format pipe: 'currency' → ['type' => 'currency', 'args' => []],
+ * 'currency:USD:2' → ['type' => 'currency', 'args' => ['USD', '2']].
+ *
+ * @param string|null $fmt
+ * @return array
+ */
+function _tabledbParseFormat(?string $fmt): array {
+    if ($fmt === null || $fmt === '') {
+        return ['type' => 'text', 'args' => []];
+    }
+    $parts = explode(':', $fmt);
+    return ['type' => strtolower(trim($parts[0])), 'args' => array_slice($parts, 1)];
+}
+
+/**
+ * Render one row instance — substitute markers dgn computed/formatted values.
+ *
+ * @param string      $rowHtml     original <tr>...</tr> HTML w/ markers
+ * @param string      $markerRegex regex to match tabledb markers
+ * @param array       $rowContext  row data untuk per-row evaluation (empty untuk aggregate row)
+ * @param array|null  $rowRaw      raw row data (for direct field access without formula eval)
+ * @param array       $allRows     all rows (needed untuk aggregate computation)
+ * @return string
+ */
+function _tabledbRenderRow(string $rowHtml, string $markerRegex, array $rowContext, ?array $rowRaw, array $allRows): string {
+    return preg_replace_callback($markerRegex, function ($m) use ($rowContext, $rowRaw, $allRows) {
+        $selector = _tabledbParseSelector($m[2]);
+        $format = _tabledbParseFormat($m[3] ?? null);
+
+        // Compute raw value based on selector type
+        $rawValue = null;
+        if ($selector['type'] === 'raw') {
+            $rawValue = $rowRaw[$selector['field']] ?? null;
+        } elseif ($selector['type'] === 'formula') {
+            try {
+                $rawValue = \Ezdoc\Table\FormulaEvaluator::evaluateBare($selector['formula'], $rowContext);
+            } catch (\Ezdoc\Exceptions\ValidationException $e) {
+                return '<span style="color:#c00;" title="Formula error">' . htmlspecialchars($e->getMessage(), ENT_QUOTES) . '</span>';
+            }
+        } elseif ($selector['type'] === 'aggregate') {
+            $rawValue = _tabledbComputeAggregate($selector['verb'], $selector['target'], $allRows);
+        } else {
+            return '<span style="color:#c00;">invalid marker</span>';
+        }
+
+        // Format
+        if ($rawValue === null || $rawValue === '') {
+            return '—';
+        }
+        return _tabledbFormatValue($rawValue, $format);
+    }, $rowHtml);
+}
+
+/**
+ * Compute aggregate value across all rows.
+ *
+ * @param string $verb   'sum'|'avg'|'count'|'min'|'max'
+ * @param string $target column name OR '=formula' OR '*' (for count)
+ * @param array  $allRows
+ * @return float|int|null
+ */
+function _tabledbComputeAggregate(string $verb, string $target, array $allRows) {
+    // COUNT special case: '*' means count all rows
+    if ($verb === 'count' && $target === '*') {
+        return count($allRows);
+    }
+
+    // Extract numeric values per row
+    $isFormula = ($target !== '' && $target[0] === '=');
+    $expr = $isFormula ? substr($target, 1) : null;
+
+    $values = [];
+    foreach ($allRows as $row) {
+        if ($isFormula) {
+            try {
+                $val = \Ezdoc\Table\FormulaEvaluator::evaluateBare($expr, $row);
+            } catch (\Ezdoc\Exceptions\ValidationException $e) {
+                continue; // skip row on formula error
+            }
+        } else {
+            $val = $row[$target] ?? null;
+        }
+        if ($val === null || $val === '') continue;
+        if ($verb === 'count') {
+            $values[] = 1.0; // count non-null
+            continue;
+        }
+        if (!is_numeric($val)) continue;
+        $values[] = (float) $val;
+    }
+
+    if (empty($values)) return null;
+
+    switch ($verb) {
+        case 'sum':   return array_sum($values);
+        case 'count': return (float) count($values);
+        case 'avg':   return array_sum($values) / count($values);
+        case 'min':   return (float) min($values);
+        case 'max':   return (float) max($values);
+    }
+    return null;
+}
+
+/**
+ * Format value via Ezdoc\Table\Formatter based on parsed format spec.
+ *
+ * @param mixed $value
+ * @param array $format ['type' => string, 'args' => string[]]
+ * @return string
+ */
+function _tabledbFormatValue($value, array $format): string {
+    $type = $format['type'];
+    $args = $format['args'];
+    switch ($type) {
+        case 'currency':
+            $currency = $args[0] ?? 'IDR';
+            $decimals = isset($args[1]) && is_numeric($args[1]) ? (int) $args[1] : null;
+            return \Ezdoc\Table\Formatter::formatCurrency($value, $currency, $decimals);
+        case 'number':
+            $decimals = isset($args[0]) && is_numeric($args[0]) ? (int) $args[0] : 0;
+            return \Ezdoc\Table\Formatter::formatNumber($value, $decimals);
+        case 'percent':
+            $decimals = isset($args[0]) && is_numeric($args[0]) ? (int) $args[0] : 2;
+            return \Ezdoc\Table\Formatter::formatPercent($value, $decimals);
+        case 'date':
+            $fmt = $args[0] ?? 'd/m/Y';
+            return \Ezdoc\Table\Formatter::formatDate($value, $fmt);
+        case 'datetime':
+            $fmt = $args[0] ?? 'd/m/Y H:i';
+            return \Ezdoc\Table\Formatter::formatDate($value, $fmt);
+        case 'text':
+        default:
+            return \Ezdoc\Table\Formatter::escapeHtml((string) $value);
+    }
 }
 
 // renderDynTable() removed — replaced by processTabledbRows() (new {{tabledb.*}} system)

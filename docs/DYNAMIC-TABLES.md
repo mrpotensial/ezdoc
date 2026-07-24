@@ -1,13 +1,185 @@
 # Dynamic Tables (v0.9.14)
 
-Ezdoc menyediakan **2 sistem tabel dinamis** untuk template dokumen:
+Ezdoc menyediakan **2 sistem tabel dinamis** untuk template dokumen. **Enhanced tabledb** (v0.9.14b) adalah yg rekomended untuk mayoritas use case karena user bebas design table di editor.
 
 | System | Marker | Use case | Since |
 |--------|--------|----------|-------|
-| **Row-repeating** | `{{tabledb.<ns>.<col>}}` | Clone satu `<tr>` template per row hasil SQL | v0.9.7 |
-| **Report tables** | `{{report.<ns>}}` | Full `<table>` dgn typed columns, formula, aggregate, subtotal, grand total | **v0.9.14** |
+| **Enhanced tabledb** ⭐ | `{{tabledb.<ns>.<selector>[|<format>]}}` | Freeform table design di TinyMCE, drop markers di cells untuk format/formula/aggregate | v0.9.14b |
+| **Report tables** | `{{report.<ns>}}` | Prepackaged full `<table>` dari config Designer panel — advanced/declarative | v0.9.14 |
 
-Doc ini fokus ke **Report Tables** (v0.9.14). Untuk row-repeating pattern, lihat inline docs di `views/document/generate.php` (`processTabledbRows`).
+**Rekomendasi**: pakai **Enhanced tabledb** untuk 90% kasus. Report Tables cocok kalau kau butuh config-driven table (mis. banyak template pakai layout sama) — tapi kurang fleksibel untuk custom styling.
+
+---
+
+## Enhanced Tabledb (v0.9.14b) ⭐
+
+### Overview
+
+Marker syntax:
+```
+{{tabledb[.<namespace>].<selector>[|<format>[:<args>]]}}
+```
+
+User design `<table>` di TinyMCE bebas (border, colors, header, colspan, dst). Sisipkan markers di cells untuk:
+- **Raw column value**: `{{tabledb.stok.nama}}`
+- **Formula per-row**: `{{tabledb.stok.=qty*harga|currency}}`
+- **Aggregate footer**: `{{tabledb.stok.sum:harga|currency}}`
+- **Formatting**: pipe `|currency`, `|number`, `|percent`, `|date`, `|datetime`
+
+Row-level behavior auto-classified:
+- Row dgn raw col/formula → **cloned per data row**
+- Row dgn aggregate markers only → **rendered once** (footer style)
+
+### Quick start
+
+**1. Setup data source** (Designer sidebar → Query DB):
+- Namespace: `stok`
+- SQL: `SELECT nama, qty, harga, kategori FROM stok_keluar WHERE nopen={nopen} ORDER BY kategori`
+
+**2. Design table di editor** (TinyMCE):
+
+```html
+<table border="1">
+  <thead>
+    <tr>
+      <th>Item</th><th>Qty</th><th>Harga Satuan</th><th>Total</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>{{tabledb.stok.nama}}</td>
+      <td>{{tabledb.stok.qty}}</td>
+      <td>{{tabledb.stok.harga|currency}}</td>
+      <td>{{tabledb.stok.=qty*harga|currency}}</td>
+    </tr>
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="3"><strong>GRAND TOTAL</strong></td>
+      <td>{{tabledb.stok.sum:=qty*harga|currency}}</td>
+    </tr>
+  </tfoot>
+</table>
+```
+
+**3. Generate** → marker replaced:
+- tbody row cloned N kali (N = SQL rows)
+- Setiap row: nama/qty raw, harga formatted `Rp 500`, total = `Rp 50.000`
+- tfoot rendered SEKALI dgn SUM formula: `Rp 1.125.000`
+
+### Selector syntax
+
+| Selector | Type | Example | Notes |
+|----------|------|---------|-------|
+| `column_name` | Raw column | `{{tabledb.s.nama}}` | Field value dari SQL row |
+| `=<expression>` | Formula per-row | `{{tabledb.s.=qty*harga}}` | Bare column names, safe expression parser |
+| `sum:<col>` | Aggregate SUM | `{{tabledb.s.sum:harga}}` | Sum of numeric values |
+| `sum:=<formula>` | SUM of formula | `{{tabledb.s.sum:=qty*harga}}` | Compute formula per row then sum |
+| `avg:<col>` | AVG | `{{tabledb.s.avg:nilai}}` | Non-null count divisor |
+| `count:*` | COUNT all rows | `{{tabledb.s.count:*}}` | Total row count |
+| `count:<col>` | COUNT non-null | `{{tabledb.s.count:harga}}` | Count where field not null |
+| `min:<col>` / `max:<col>` | MIN/MAX | `{{tabledb.s.min:harga}}` | Numeric only |
+
+### Format pipes
+
+| Pipe | Default | Example |
+|------|---------|---------|
+| `\|text` | HTML escape (default when no pipe) | `<script>` → `&lt;script&gt;` |
+| `\|number[:decimals]` | 0 decimals | `1500000` → `1.500.000` |
+| `\|currency[:code]` | IDR | `1500000` → `Rp 1.500.000` |
+| `\|percent[:decimals]` | 2 decimals, as-ratio | `0.5` → `50,00%` |
+| `\|date[:format]` | `d/m/Y` | `2026-07-24` → `24/07/2026` |
+| `\|datetime[:format]` | `d/m/Y H:i` | Timestamp → `24/07/2026 14:30` |
+
+**Locale**: Indonesian default (dot thousands, comma decimals, Rabu weekday). Config global locale untuk override.
+
+### Formula grammar
+
+Same safe expression parser as `{{report.*}}`. Grammar:
+```
+expr    := term (('+' | '-') term)*
+term    := factor (('*' | '/') factor)*
+factor  := NUMBER | IDENTIFIER | '(' expr ')'
+```
+
+**Bare identifier** = column name from SQL row. `qty*harga` → looks up `qty` and `harga` columns.
+
+**Safety** (same guards as `{{report.*}}` FormulaEvaluator):
+- NO PHP `eval()`
+- NO function calls (`sum(x)` = field access `sum` + paren, evaluates as malformed if fields present)
+- NO string literals, semicolons, backticks
+- Missing field / non-numeric / division by zero → null (row skipped di aggregate; renders as `—` per-cell)
+
+### Row classification
+
+Setiap `<tr>` classified otomatis based on markers di dalamnya:
+
+| Row markers | Class | Behavior |
+|-------------|-------|----------|
+| Semua raw col OR formula | `clone` | tbody row cloned N kali (N = data rows) |
+| Semua aggregate | `aggregate` | tfoot row rendered SEKALI dgn aggregate values |
+| Mixed (raw + aggregate) | `clone` | Aggregate evaluated with row context (rarely useful) |
+| No markers | (unchanged) | Row rendered as-is (thead labels, statik cells) |
+
+Convention: aggregate markers di `<tfoot>` row.
+
+### Examples
+
+**Simple invoice**:
+```html
+<table>
+  <tbody>
+    <tr>
+      <td>{{tabledb.item.nama}}</td>
+      <td>{{tabledb.item.qty}}</td>
+      <td>{{tabledb.item.harga|currency}}</td>
+    </tr>
+  </tbody>
+  <tfoot>
+    <tr><td colspan="2">Total</td><td>{{tabledb.item.sum:harga|currency}}</td></tr>
+  </tfoot>
+</table>
+```
+
+**Discount calculation**:
+```html
+<tr>
+  <td>{{tabledb.p.nama}}</td>
+  <td>{{tabledb.p.harga|currency}}</td>
+  <td>{{tabledb.p.diskon|percent:0:false}}</td>
+  <td>{{tabledb.p.=harga*(1-diskon/100)|currency}}</td>
+</tr>
+```
+
+**Report dgn multiple metrics footer**:
+```html
+<tfoot>
+  <tr><td>Jumlah Item</td><td>{{tabledb.s.count:*}}</td></tr>
+  <tr><td>Rata-rata Harga</td><td>{{tabledb.s.avg:harga|currency}}</td></tr>
+  <tr><td>Termahal</td><td>{{tabledb.s.max:harga|currency}}</td></tr>
+  <tr><td>Termurah</td><td>{{tabledb.s.min:harga|currency}}</td></tr>
+  <tr><td><strong>Total</strong></td><td>{{tabledb.s.sum:harga|currency}}</td></tr>
+</tfoot>
+```
+
+### Formula error handling
+
+Kalau formula punya syntax error, renderer TIDAK crash — cell shows visible red error indicator:
+```html
+<span style="color:#c00;" title="Formula error">Validation failed for 'formula': ...</span>
+```
+
+Ini design decision — better fail-visible than silent-empty. User bisa langsung fix di designer.
+
+### Backward compatibility
+
+Old marker `{{tabledb.ns.col}}` (tanpa pipe) tetap works **identical** to pre-v0.9.14b behavior — cell HTML-escaped, no format changes. Zero migration effort untuk existing templates.
+
+---
+
+## Report Tables (v0.9.14) — Declarative alternative
+
+Doc lama untuk sistem `{{report.<ns>}}` — cocok kalau kau ingin config-driven table dgn dedicated Designer panel.
 
 ## Table of Contents
 
