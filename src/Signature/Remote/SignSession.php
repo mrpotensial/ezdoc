@@ -145,4 +145,73 @@ final class SignSession
             'metadata' => $this->metadata,
         ];
     }
+
+    /**
+     * Factory dari assoc array — PSrE providers biasanya return raw JSON
+     * dgn field names + status enums provider-specific. Factory ini
+     * normalize:
+     *   - Field name: `session_id`, `status`, `expires_at` mandatory;
+     *     `expires_at` accepts ISO 8601 string OR unix ts int.
+     *   - Status enum: provider variants (e.g. Peruri `AWAITING_OTP`,
+     *     `SIGNED`; Privy `AWAITING_APPROVAL`) mapped ke canonical
+     *     STATUS_* constants.
+     *   - Sisa field disimpan sebagai `metadata` untuk audit trail.
+     *
+     * @param array<string,mixed> $data
+     * @throws ValidationException
+     */
+    public static function fromArray(array $data): self
+    {
+        $sessionId = isset($data['session_id']) ? (string) $data['session_id'] : '';
+        $status = isset($data['status']) ? (string) $data['status'] : self::STATUS_PENDING;
+        $status = self::normalizeStatus($status);
+
+        $expiresAt = 0;
+        if (isset($data['expires_at'])) {
+            $raw = $data['expires_at'];
+            if (is_int($raw)) {
+                $expiresAt = $raw;
+            } elseif (is_string($raw) && $raw !== '') {
+                if (ctype_digit($raw)) {
+                    $expiresAt = (int) $raw;
+                } else {
+                    $t = strtotime($raw);
+                    if ($t !== false) $expiresAt = $t;
+                }
+            }
+        }
+
+        // Metadata = semua key selain 3 core fields, untuk audit trail.
+        $metadata = $data;
+        unset($metadata['session_id'], $metadata['status'], $metadata['expires_at']);
+
+        return new self($sessionId, $status, $expiresAt, $metadata);
+    }
+
+    /**
+     * Normalize provider-specific status enum ke canonical STATUS_* constants.
+     * Case-insensitive, handles hyphens/spaces/underscores.
+     */
+    private static function normalizeStatus(string $raw): string
+    {
+        $lc = strtolower(str_replace(['-', ' '], '_', $raw));
+        $mapping = [
+            'signed'             => self::STATUS_COMPLETED,
+            'success'            => self::STATUS_COMPLETED,
+            'success_signed'     => self::STATUS_COMPLETED,
+            'awaiting_otp'       => self::STATUS_OTP_REQUIRED,
+            'awaiting_approval'  => self::STATUS_OTP_REQUIRED,
+            'awaiting_signer'    => self::STATUS_OTP_REQUIRED,
+            'in_progress'        => self::STATUS_PROCESSING,
+            'processing_signing' => self::STATUS_PROCESSING,
+            'cancelled'          => self::STATUS_FAILED,
+            'canceled'           => self::STATUS_FAILED,
+            'rejected'           => self::STATUS_FAILED,
+            'timed_out'          => self::STATUS_EXPIRED,
+            'timeout'            => self::STATUS_EXPIRED,
+        ];
+        if (isset($mapping[$lc])) return $mapping[$lc];
+        if (in_array($lc, self::$ALLOWED_STATUSES, true)) return $lc;
+        return self::STATUS_PENDING; // safe default untuk unknown enum
+    }
 }

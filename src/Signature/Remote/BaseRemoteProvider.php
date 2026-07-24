@@ -729,4 +729,74 @@ abstract class BaseRemoteProvider implements SignatureProvider
             // audit silent-fail — jangan block business flow
         }
     }
+
+    // ---------------------------------------------------------------------
+    // Subclass helpers — protected utilities for concrete providers
+    // ---------------------------------------------------------------------
+
+    /**
+     * Assert semua key di `$keys` ADA di `$config` + non-empty string.
+     * Throws ValidationException dgn daftar key yg missing.
+     *
+     * @param array<string,mixed> $config
+     * @param array<string>       $keys
+     * @throws ValidationException
+     */
+    protected function assertRequired(array $config, array $keys): void
+    {
+        $missing = [];
+        foreach ($keys as $k) {
+            if (!array_key_exists($k, $config) || $config[$k] === null || $config[$k] === '') {
+                $missing[] = $k;
+            }
+        }
+        if (!empty($missing)) {
+            throw ValidationException::forField(
+                'config',
+                'missing required key(s): ' . implode(', ', $missing)
+            );
+        }
+    }
+
+    /**
+     * Decode response body sebagai JSON assoc array. Wraps
+     * {@see HttpResponse::getJsonBody()} dgn provider context untuk
+     * error message clarity.
+     *
+     * @return array<string|int,mixed>
+     * @throws ValidationException kalau body kosong atau bukan JSON valid
+     */
+    protected function decodeJsonBody(HttpResponse $res): array
+    {
+        try {
+            return $res->getJsonBody();
+        } catch (ValidationException $e) {
+            throw ValidationException::forField(
+                'response.body',
+                $this->getProviderName() . ' HTTP ' . $res->getStatusCode() . ': ' . $e->getMessage()
+            );
+        }
+    }
+
+    /**
+     * Generate unique request id untuk header X-Request-Id (idempotency
+     * key). Public wrapper untuk {@see makeRequestId()} yg private.
+     */
+    protected function generateRequestId(): string
+    {
+        return $this->makeRequestId('req');
+    }
+
+    /**
+     * Current UTC time in ISO 8601 with millisecond precision.
+     * Format: `2026-07-24T03:14:15.123Z`.
+     */
+    protected static function nowIso8601Ms(): string
+    {
+        $usec = microtime(true);
+        $sec = (int) $usec;
+        $ms = (int) round(($usec - $sec) * 1000);
+        if ($ms >= 1000) { $ms = 999; }
+        return gmdate('Y-m-d\TH:i:s', $sec) . '.' . str_pad((string) $ms, 3, '0', STR_PAD_LEFT) . 'Z';
+    }
 }

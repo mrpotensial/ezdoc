@@ -7,6 +7,12 @@ namespace Ezdoc\Signature\Providers;
 use Ezdoc\Exceptions\EzdocException;
 use Ezdoc\Exceptions\ValidationException;
 use Ezdoc\Signature\ProviderCapabilities;
+use Ezdoc\Signature\Remote\BaseRemoteProvider;
+use Ezdoc\Signature\Remote\CurlHttpClient;
+use Ezdoc\Signature\Remote\HttpClient;
+use Ezdoc\Signature\Remote\HttpResponse;
+use Ezdoc\Signature\Remote\OtpChallenge;
+use Ezdoc\Signature\Remote\SignSession;
 use Ezdoc\Signature\SignRequest;
 use Ezdoc\Signature\SignResult;
 
@@ -328,14 +334,17 @@ final class PrivyProvider extends BaseRemoteProvider
                 'PrivyProvider::parseSessionResponse missing session_id'
             );
         }
-        return new SignSession([
-            'session_id'    => $body['session_id'],
-            'provider'      => self::PROVIDER_NAME,
-            'document_ref'  => isset($body['document_ref']) ? (string) $body['document_ref'] : '',
-            'status'        => isset($body['status']) ? (string) $body['status'] : 'PENDING',
-            'created_at'    => self::nowIso8601Ms(),
-            'expires_at'    => isset($body['expires_at']) ? (string) $body['expires_at'] : null,
-            'callback_url'  => isset($this->config['callback_url'])
+        // Privy status enum (AWAITING_APPROVAL/SIGNED/CANCELLED/dst)
+        // di-normalize oleh SignSession::fromArray().
+        return SignSession::fromArray([
+            'session_id'   => $body['session_id'],
+            'status'       => isset($body['status']) ? (string) $body['status'] : 'PENDING',
+            'expires_at'   => isset($body['expires_at']) ? $body['expires_at'] : null,
+            // Metadata untuk audit trail:
+            'provider'     => self::PROVIDER_NAME,
+            'document_ref' => isset($body['document_ref']) ? (string) $body['document_ref'] : '',
+            'created_at'   => self::nowIso8601Ms(),
+            'callback_url' => isset($this->config['callback_url'])
                 ? $this->config['callback_url']
                 : null,
         ]);
@@ -355,15 +364,14 @@ final class PrivyProvider extends BaseRemoteProvider
     protected function parseOtpChallenge(HttpResponse $res): OtpChallenge
     {
         $body = $this->decodeJsonBody($res);
-        return new OtpChallenge([
-            'session_id'          => isset($body['session_id']) ? (string) $body['session_id'] : '',
-            'channel'             => isset($body['otp_channel']) ? (string) $body['otp_channel'] : 'PRIVY_APP',
-            'masked_target'       => isset($body['otp_masked_target'])
-                ? (string) $body['otp_masked_target']
-                : (isset($this->config['signer_email']) ? self::maskEmail((string) $this->config['signer_email']) : ''),
-            'attempts_remaining'  => isset($body['otp_attempts_remaining']) ? (int) $body['otp_attempts_remaining'] : 3,
-            'resend_available_at' => isset($body['otp_resend_available_at']) ? (string) $body['otp_resend_available_at'] : null,
-        ]);
+        // Inject masked_target fallback (dari signer_email) kalau Privy
+        // tidak sediakan — supaya UI punya display target.
+        if (!isset($body['masked_target']) && !isset($body['otp_masked_target']) && isset($this->config['signer_email'])) {
+            $body['masked_target'] = self::maskEmail((string) $this->config['signer_email']);
+        }
+        // OtpChallenge::fromArray handles field aliases + channel normalization
+        // (PRIVY_APP → app, dst).
+        return OtpChallenge::fromArray($body);
     }
 
     /**
@@ -403,8 +411,22 @@ final class PrivyProvider extends BaseRemoteProvider
      */
     protected function buildAccessToken(): string
     {
-        // TODO(v0.7-real): replace with real token acquisition + cache.
-        return 'STUB_PRIVY_TOKEN_PLACEHOLDER_DO_NOT_SHIP';
+        // v0.7 STUB: real token acquisition scheduled v0.7.1 (butuh Privy
+        // merchant sandbox creds + API contract). Fail-fast supaya consumer
+        // tidak accidentally kirim placeholder token ke Privy production.
+        // Consumer test flow yg butuh mock: inject own HttpClient + subclass
+        // + override buildAccessToken, atau tunggu v0.7.1.
+        throw new EzdocException(
+            'PrivyProvider is a SKELETON — buildAccessToken() belum implemented. '
+            . 'Real integration scheduled v0.7.1 (butuh Privy merchant sandbox creds). '
+            . 'See docs/PSRE-INTEGRATION.md untuk status + workaround (subclass + override).',
+            [
+                'provider' => self::PROVIDER_NAME,
+                'stub_since' => 'v0.7',
+                'planned_real' => 'v0.7.1',
+                'docs' => 'docs/PSRE-INTEGRATION.md',
+            ]
+        );
     }
 
     /**

@@ -131,4 +131,86 @@ final class OtpChallenge
             'attempts_remaining' => $this->attemptsRemaining,
         ];
     }
+
+    /**
+     * Factory dari assoc array — PSrE response variants normalized here:
+     *   - Field aliases: `channel` OR `otp_channel`; `masked_target` OR
+     *     `otp_masked_target`; `attempts_remaining` OR
+     *     `otp_attempts_remaining`.
+     *   - `expires_at` OR `resend_available_at` accepts ISO 8601 string
+     *     OR unix ts int.
+     *   - Channel enum: `SMS`/`EMAIL`/`WA`/`APP`/`PRIVY_APP` case-normalized;
+     *     unknown → default 'sms'.
+     *
+     * @param array<string,mixed> $data
+     * @throws ValidationException
+     */
+    public static function fromArray(array $data): self
+    {
+        $sessionId = isset($data['session_id']) ? (string) $data['session_id'] : '';
+
+        // Field aliases (Peruri uses `otp_channel`, Privy uses `otp_channel`
+        // atau `push_channel`, some use bare `channel`).
+        $channelRaw = '';
+        foreach (['channel', 'otp_channel', 'push_channel'] as $k) {
+            if (isset($data[$k]) && is_string($data[$k]) && $data[$k] !== '') {
+                $channelRaw = $data[$k];
+                break;
+            }
+        }
+        $channel = self::normalizeChannel($channelRaw);
+
+        $maskedTarget = '';
+        foreach (['masked_target', 'otp_masked_target', 'target_masked'] as $k) {
+            if (isset($data[$k]) && is_string($data[$k])) {
+                $maskedTarget = $data[$k];
+                break;
+            }
+        }
+
+        $expiresAt = 0;
+        foreach (['expires_at', 'resend_available_at', 'otp_expires_at'] as $k) {
+            if (!isset($data[$k])) continue;
+            $raw = $data[$k];
+            if (is_int($raw)) { $expiresAt = $raw; break; }
+            if (is_string($raw) && $raw !== '') {
+                if (ctype_digit($raw)) { $expiresAt = (int) $raw; break; }
+                $t = strtotime($raw);
+                if ($t !== false) { $expiresAt = $t; break; }
+            }
+        }
+
+        $attempts = 3; // sensible default
+        foreach (['attempts_remaining', 'otp_attempts_remaining'] as $k) {
+            if (isset($data[$k]) && is_numeric($data[$k])) {
+                $attempts = (int) $data[$k];
+                break;
+            }
+        }
+
+        return new self($sessionId, $channel, $maskedTarget, $expiresAt, $attempts);
+    }
+
+    /**
+     * Normalize channel string to canonical CHANNEL_* constant.
+     * Unknown values default to 'sms' (safest fallback — SMS is most
+     * universally supported PSrE OTP channel).
+     */
+    private static function normalizeChannel(string $raw): string
+    {
+        $lc = strtolower(str_replace(['-', ' ', '_'], '', $raw));
+        $mapping = [
+            'email'    => self::CHANNEL_EMAIL,
+            'mail'     => self::CHANNEL_EMAIL,
+            'sms'      => self::CHANNEL_SMS,
+            'text'     => self::CHANNEL_SMS,
+            'wa'       => self::CHANNEL_WA,
+            'whatsapp' => self::CHANNEL_WA,
+            'app'      => self::CHANNEL_APP,
+            'privyapp' => self::CHANNEL_APP,
+            'push'     => self::CHANNEL_APP,
+            'mobile'   => self::CHANNEL_APP,
+        ];
+        return isset($mapping[$lc]) ? $mapping[$lc] : self::CHANNEL_SMS;
+    }
 }

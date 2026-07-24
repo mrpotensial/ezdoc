@@ -7,6 +7,12 @@ namespace Ezdoc\Signature\Providers;
 use Ezdoc\Exceptions\EzdocException;
 use Ezdoc\Exceptions\ValidationException;
 use Ezdoc\Signature\ProviderCapabilities;
+use Ezdoc\Signature\Remote\BaseRemoteProvider;
+use Ezdoc\Signature\Remote\CurlHttpClient;
+use Ezdoc\Signature\Remote\HttpClient;
+use Ezdoc\Signature\Remote\HttpResponse;
+use Ezdoc\Signature\Remote\OtpChallenge;
+use Ezdoc\Signature\Remote\SignSession;
 use Ezdoc\Signature\SignRequest;
 use Ezdoc\Signature\SignResult;
 
@@ -336,15 +342,17 @@ final class PeruriProvider extends BaseRemoteProvider
                 'PeruriProvider::parseSessionResponse missing session_id'
             );
         }
-        // TODO(v0.7-real): map full status enum (PENDING|AWAITING_OTP|SIGNED|FAILED|EXPIRED).
-        return new SignSession([
-            'session_id'    => $body['session_id'],
-            'provider'      => self::PROVIDER_NAME,
-            'document_ref'  => isset($body['document_ref']) ? (string) $body['document_ref'] : '',
-            'status'        => isset($body['status']) ? (string) $body['status'] : 'PENDING',
-            'created_at'    => self::nowIso8601Ms(),
-            'expires_at'    => isset($body['expires_at']) ? (string) $body['expires_at'] : null,
-            'callback_url'  => isset($this->config['callback_url'])
+        // Peruri status enum di-normalize oleh SignSession::fromArray()
+        // (AWAITING_OTP → otp_required, SIGNED → completed, dst).
+        return SignSession::fromArray([
+            'session_id'   => $body['session_id'],
+            'status'       => isset($body['status']) ? (string) $body['status'] : 'PENDING',
+            'expires_at'   => isset($body['expires_at']) ? $body['expires_at'] : null,
+            // Sisanya masuk metadata untuk audit trail:
+            'provider'     => self::PROVIDER_NAME,
+            'document_ref' => isset($body['document_ref']) ? (string) $body['document_ref'] : '',
+            'created_at'   => self::nowIso8601Ms(),
+            'callback_url' => isset($this->config['callback_url'])
                 ? $this->config['callback_url']
                 : null,
         ]);
@@ -368,13 +376,8 @@ final class PeruriProvider extends BaseRemoteProvider
     protected function parseOtpChallenge(HttpResponse $res): OtpChallenge
     {
         $body = $this->decodeJsonBody($res);
-        return new OtpChallenge([
-            'session_id'          => isset($body['session_id']) ? (string) $body['session_id'] : '',
-            'channel'             => isset($body['otp_channel']) ? (string) $body['otp_channel'] : 'SMS',
-            'masked_target'       => isset($body['otp_masked_target']) ? (string) $body['otp_masked_target'] : '',
-            'attempts_remaining'  => isset($body['otp_attempts_remaining']) ? (int) $body['otp_attempts_remaining'] : 3,
-            'resend_available_at' => isset($body['otp_resend_available_at']) ? (string) $body['otp_resend_available_at'] : null,
-        ]);
+        // OtpChallenge::fromArray handles field aliases (otp_channel, otp_masked_target, etc.)
+        return OtpChallenge::fromArray($body);
     }
 
     /**
@@ -417,7 +420,21 @@ final class PeruriProvider extends BaseRemoteProvider
      */
     protected function buildAccessToken(): string
     {
-        // TODO(v0.7-real): replace with real token acquisition + memory cache.
-        return 'STUB_PERURI_TOKEN_PLACEHOLDER_DO_NOT_SHIP';
+        // v0.7 STUB: real token acquisition scheduled v0.7.1 (butuh Peruri
+        // sandbox credentials + API contract). Fail-fast di sini supaya
+        // consumer tidak accidentally kirim placeholder token ke Peruri
+        // production. Consumer test flow yg butuh mock: inject own HttpClient
+        // + override buildAccessToken via subclass, atau tunggu v0.7.1.
+        throw new EzdocException(
+            'PeruriProvider is a SKELETON — buildAccessToken() belum implemented. '
+            . 'Real integration scheduled v0.7.1 (butuh Peruri sandbox creds). '
+            . 'See docs/PSRE-INTEGRATION.md untuk status + workaround (subclass + override).',
+            [
+                'provider' => self::PROVIDER_NAME,
+                'stub_since' => 'v0.7',
+                'planned_real' => 'v0.7.1',
+                'docs' => 'docs/PSRE-INTEGRATION.md',
+            ]
+        );
     }
 }
