@@ -1745,9 +1745,146 @@ gap between) tapi tanpa breaking editing UX (contenteditable `.f` fields
 - Firefox older versions mungkin ignore `@page margin` — user harus set
   "Default margins" di print dialog
 
-### 6.19 Milestone v1.0 — "PHP library extraction (Packagist)" ~1 week
+### 6.19 Milestone v0.9.14 — "Report-style dynamic tables (aggregates + subtotals + formulas)" ~1-2 weeks
 
-**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Depends on v0.9.7 (full views) + v0.9.8 (App orchestrator) + v0.9.9 (DB abstraction) + v0.9.10 (standalone hardening — no consumer-app runtime deps) + v0.9.11 (view separation + generate polish) + v0.9.12 (sidecar floating elements) + v0.9.13 (screen pagination + layout modes)** completed.
+**Goal**: extend existing `dynamicTables` schema di `renderContent()` untuk
+support Excel/Jasper-style column aggregates (SUM/COUNT/AVG/MIN/MAX), typed
+column formatting (currency/number/date/percent), computed columns (formula
+per-row), optional `groupBy` dgn subtotal rows, dan `<tfoot>` grand-total.
+Semua computed server-side di PHP → deterministic HTML output → aman untuk
+PDF export (dompdf) dan print.
+
+**Motivation**: laporan RS/keuangan/inventori butuh tabel yg tidak sekadar
+list rows dari SQL — perlu SUM kolom harga di footer, subtotal per kategori,
+kolom `total = qty × harga` yg computed, format Rp/persentase yg konsisten.
+Saat ini template author harus tulis kolom hasil SUM manual di SQL (via
+UNION dgn totals row) atau pakai raw HTML — brittle dan inkonsisten.
+User request: "bisa sum kolom tertentu dll" seperti Excel/Jasper Report.
+
+**Precedent (industry-standard proven)**:
+- **HTML `<tfoot>` semantic** — browser + PDF renderer both honor natively;
+  page-break-inside logic sudah aware `<tfoot>` (repeated per page kalau perlu)
+- **DOCX Structured Document Tags** — Word's `<w:sdt>` + `<w:tblCellSum>`
+  native table calc pattern
+- **Docmosis** — template markers `<<sum:amount>>`, `<<group:region>>`
+- **Aspose.Words** — mail-merge tables dgn TableStart/TableEnd + built-in
+  aggregate expressions
+- **Jasper Reports `<summaryBand>` + `<groupHeader>/<groupFooter>`** — band-
+  based aggregate pattern (adopt konsep, tidak port XML band system yg heavy)
+- **Filament TableBuilder** — typed column definitions dgn `->money()`,
+  `->summarize([Sum::make(), Average::make()])` — pattern yg kita adopt
+  untuk PHP fluent API compatibility
+
+**Deliverables**:
+
+- **`Ezdoc\Table\ReportTable` class** (new):
+  - Constructor menerima schema: `columns[]`, `rows[]`, optional `groupBy`,
+    optional `showGrandTotal`
+  - `render(): string` — output complete `<table>` dgn `<thead>/<tbody>/<tfoot>`
+  - Aggregate computation: SUM/COUNT/AVG/MIN/MAX via PHP's `array_sum`,
+    `array_reduce`, dst — pure functions
+  - Formula evaluation: safe expression parser (no `eval`), whitelisted
+    operators (`+ - * / ( )`) + field references (`{qty}`, `{harga}`)
+  - Group-by: iterasi rows, insert subtotal row when group value changes
+
+- **`Ezdoc\Table\ColumnDef` value object** (new):
+  - Fields: `field` (SQL column), `label`, `type` ('text'|'number'|'currency'
+    |'percent'|'date'|'datetime'), `format` (optional Twig-style format
+    string), `align` ('left'|'right'|'center'), `aggregate`
+    ('sum'|'avg'|'count'|'min'|'max'|null), `formula` (optional expression),
+    `precision` (int, decimal places)
+  - Serializable to/from JSON via `fromArray/toArray`
+  - Immutable
+
+- **`Ezdoc\Table\Formatter` helper** (new):
+  - `formatCurrency(float $val, string $currency = 'IDR', int $decimals = 0): string`
+  - `formatNumber(float $val, int $decimals = 0): string`
+  - `formatPercent(float $val, int $decimals = 2): string`
+  - `formatDate(string|int $val, string $format = 'd/m/Y'): string`
+  - Locale-aware via `Ezdoc\Format\DateFormatter` (v0.9.10) — respect
+    `configHeader.locale`
+
+- **`Ezdoc\Table\FormulaEvaluator` helper** (new):
+  - Safe expression parser (shunting-yard algorithm)
+  - Support: `+ - * /`, parentheses, `{field_name}` references
+  - Type-coerce ke float; return null kalau field missing
+  - Whitelisted only — NO PHP eval, no function calls, no property access
+  - Precedent: TinyExpr (C library) + Symfony ExpressionLanguage yg
+    disabled functions
+
+- **Schema JSON contract** untuk template author:
+  ```json
+  {
+    "sql": "SELECT nama, qty, harga FROM ...",
+    "columns": [
+      {"field": "nama", "label": "Item", "type": "text"},
+      {"field": "qty", "label": "Qty", "type": "number", "align": "right"},
+      {"field": "harga", "label": "Harga", "type": "currency", "aggregate": "sum"},
+      {"field": "total", "label": "Total", "type": "currency",
+       "formula": "{qty} * {harga}", "aggregate": "sum"}
+    ],
+    "groupBy": {"field": "kategori", "showSubtotal": true, "aggregates": ["harga", "total"]},
+    "showGrandTotal": true,
+    "emptyMessage": "Belum ada data"
+  }
+  ```
+
+- **Designer UI updates** (`views/document/designer.php`):
+  - Extend "Dynamic Table" config panel dgn column editor (type/format/
+    aggregate picker per-column)
+  - Group-by config (dropdown pilih field + toggle showSubtotal)
+  - Live preview di designer sebelum save
+
+- **Integration ke `renderContent()`**:
+  - Detect `dynamicTables[$name]` yg pakai new schema (has `columns` array
+    with `type` field) vs legacy (raw SQL dump)
+  - Legacy schema → existing renderer (backward-compat)
+  - New schema → `ReportTable::render()`
+
+- **Docs**: `docs/DYNAMIC-TABLES.md` — schema reference + examples + safe
+  formula expression grammar
+
+- **Tests**: `tests/Table/{ReportTableTest, FormulaEvaluatorTest,
+  FormatterTest, ColumnDefTest}.php` — cover aggregate correctness,
+  formula edge cases (division by zero, missing field), group-by
+  boundary, empty rows, PDF-safe HTML output
+
+**Definition of Done**:
+- Template author bisa define column dgn `aggregate: 'sum'` → footer row
+  otomatis show total dgn currency formatting
+- Template author bisa define `formula: '{qty} * {harga}'` → computed
+  column render per-row, ikut aggregate
+- `groupBy` dgn `showSubtotal: true` → subtotal row muncul di setiap group
+  boundary
+- Grand total di `<tfoot>` — repeated per page saat table cross paper
+  boundary (via existing ScreenPagination `<tfoot>` handling)
+- Semua formatting locale-aware (Rp untuk IDR, `d/m/Y` untuk date)
+- Safe: formula parser TIDAK boleh execute arbitrary PHP (test:
+  `{system('rm -rf /')}` → parser reject, tidak run)
+- PDF export identical dgn screen HTML (deterministic server-side render)
+- Round-trip: schema JSON di database → render → PDF → verify aggregates
+  match SQL SUM(harga)
+
+**Non-goals**:
+- Interactive editing (Excel-like cell editing) — laporan adalah read-only
+- Chart/pivot table — separate milestone kalau demand
+- Cross-table references (VLOOKUP-style) — SQL JOIN sudah cover
+- Client-side JS sorting/filtering — table adalah snapshot, tidak reactive
+- Multi-level nested groupBy (level 2+) — v0.9.14 support 1 level only,
+  nested defer
+- Import/export Excel (.xlsx) — separate milestone
+
+**Known limitations (accepted)**:
+- Formula scope terbatas ke row-local variables — tidak ada `SUM(col above)`
+  atau cross-row referensi (use groupBy/aggregate instead)
+- Formatter locale support terbatas ke locale yg configHeader punya —
+  full ICU MessageFormat defer
+- Table dgn 10k+ rows berpotensi slow — recommendation: pre-aggregate di
+  SQL untuk kasus large dataset
+
+### 6.20 Milestone v1.0 — "PHP library extraction (Packagist)" ~1 week
+
+**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Depends on v0.9.7 (full views) + v0.9.8 (App orchestrator) + v0.9.9 (DB abstraction) + v0.9.10 (standalone hardening — no consumer-app runtime deps) + v0.9.11 (view separation + generate polish) + v0.9.12 (sidecar floating elements) + v0.9.13 (screen pagination + layout modes) + v0.9.14 (report-style dynamic tables)** completed.
 
 - [ ] Move `ezdoc/` folder ke repo baru `mrpotensial/ezdoc`
 - [ ] Setup GitHub Actions CI (phpunit + phpstan level 6 + PHP matrix 7.4-8.3)
@@ -1763,7 +1900,7 @@ gap between) tapi tanpa breaking editing UX (contenteditable `.f` fields
 - **`Ezdoc\App::run()` 1-line mount + `Ezdoc\App::demo()` zero-config SQLite mode** (from v0.9.8) — consumer install verification tanpa DB config
 - Fresh consumer test: install → `Ezdoc\App::demo()` → save template → generate doc → sign → verify (semua works out-of-box, tanpa manual wiring)
 
-### 6.20 Milestone v1.1 — "Spec extraction (repo split + conformance vectors)" ~1-2 weeks
+### 6.21 Milestone v1.1 — "Spec extraction (repo split + conformance vectors)" ~1-2 weeks
 
 **Goal**: split `ezdoc-spec/` subfolder (seeded di v0.9.9) → standalone repo publik `mrpotensial/ezdoc-spec`; enrich dengan conformance test vectors untuk native ports.
 
@@ -1783,7 +1920,7 @@ gap between) tapi tanpa breaking editing UX (contenteditable `.f` fields
 - Repo has: schemas/, ddl/, protocol/, conformance/, docs/
 - Docs: "How to write a new port" guide dgn Go + Rust + TS starter examples
 
-### 6.21 Milestone v1.5 — "Go port" ~4-6 weeks
+### 6.22 Milestone v1.5 — "Go port" ~4-6 weeks
 
 **Goal**: `ezdoc-go` — native Go implementation, container-friendly.
 
@@ -1801,7 +1938,7 @@ gap between) tapi tanpa breaking editing UX (contenteditable `.f` fields
 - Conformance test pass (signature dari PHP di-verify oleh Go = same result)
 - Docker image jalan di Kubernetes cluster
 
-### 6.22 Milestone v2.0 — "TypeScript port + full ecosystem" ~6-8 weeks
+### 6.23 Milestone v2.0 — "TypeScript port + full ecosystem" ~6-8 weeks
 
 **Goal**: `@mrpotensial/ezdoc` — TypeScript native untuk Next.js / Node / browser.
 
