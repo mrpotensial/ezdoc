@@ -507,14 +507,9 @@ function vRaw($name) {
 // resolveDefault() moved to ezdoc/lib/doc_template_helpers.php — reads $whitelistedVars via global.
 $whitelistedVars = ezdoc_load_whitelisted_vars($conn);
 
-// Dynamic Tables config (row-repeating {{tabledb.ns.col}} pattern — legacy)
+// Dynamic Tables config ({{tabledb.ns.selector|format}} enhanced markers)
+// See processTabledbRows() untuk full marker syntax.
 $tableDbQueries = $configHeader['tableDbQueries'] ?? [];
-
-// v0.9.14 Report Tables config ({{report.ns}} marker → full <table> HTML dgn
-// typed columns, aggregates, groupBy subtotals, grand total tfoot).
-// Schema per namespace: {sql, columns[], groupBy?, showGrandTotal?, emptyMessage?, locale?}
-// Handled by processReportTables() → Ezdoc\Table\ReportTable renderer.
-$reportTables = $configHeader['reportTables'] ?? [];
 
 /**
  * Execute a dynamic table query with parameter binding.
@@ -869,76 +864,7 @@ function _tabledbFormatValue($value, array $format): string {
     }
 }
 
-// renderDynTable() removed — replaced by processTabledbRows() (new {{tabledb.*}} system)
-
-/**
- * v0.9.14 — Process `{{report.<namespace>}}` markers.
- *
- * Untuk tiap marker, lookup config di `$reportTables[$ns]`, jalankan SQL
- * (via existing `executeDynQuery()` yg sudah punya SELECT-only guard +
- * prepared statement + {param} placeholder support), lalu render pakai
- * `Ezdoc\Table\ReportTable::fromArray()` yg produce full `<table>` HTML
- * dgn typed columns, aggregates, groupBy subtotals, dan grand-total tfoot.
- *
- * Marker forms:
- *   - `{{report.penjualan}}`  — render config namespace 'penjualan'
- *
- * Placed AFTER `processTabledbRows()` supaya kedua sistem tidak konflik.
- * Marker `{{report.*}}` distinct dari `{{tabledb.*}}` — no collision.
- *
- * Config namespace schema (di `configHeader.reportTables[<ns>]`):
- * ```
- * [
- *   'sql' => 'SELECT ...',        // {nopen}, {norm}, {field} placeholders OK
- *   'columns' => [<ColumnDef>],   // ColumnDef::fromArray schema
- *   'groupBy' => 'kategori',      // optional (string field atau {field, showSubtotal})
- *   'showGrandTotal' => true,     // optional, default true
- *   'emptyMessage' => 'No data',  // optional
- *   'locale' => 'id',             // optional
- * ]
- * ```
- *
- * spec: docs/DYNAMIC-TABLES.md
- */
-function processReportTables($html, $reportTables, $param_norm, $param_nopen, $dbFields, $conn) {
-    if (!is_array($reportTables) || empty($reportTables)) return $html;
-
-    return preg_replace_callback(
-        '/\{\{report\.([a-zA-Z_][a-zA-Z0-9_]*)\}\}/',
-        function ($m) use ($reportTables, $param_norm, $param_nopen, $dbFields, $conn) {
-            $ns = $m[1];
-            $cfg = $reportTables[$ns] ?? null;
-            if (!$cfg || empty($cfg['sql']) || empty($cfg['columns'])) {
-                // Missing config — show visible error di rendered doc supaya
-                // author sadar (not silent-fail seperti tabledb variant).
-                return '<div class="dyntable-empty" style="color:#c00;">'
-                     . 'Report table config missing: <code>' . htmlspecialchars($ns, ENT_QUOTES) . '</code>'
-                     . '</div>';
-            }
-
-            $rows = executeDynQuery($cfg['sql'], $param_norm, $param_nopen, $dbFields, $conn);
-
-            try {
-                $schema = [
-                    'columns' => $cfg['columns'],
-                    'rows' => $rows,
-                    'groupBy' => $cfg['groupBy'] ?? null,
-                    'showGrandTotal' => $cfg['showGrandTotal'] ?? true,
-                    'emptyMessage' => $cfg['emptyMessage'] ?? '',
-                    'locale' => $cfg['locale'] ?? 'id',
-                ];
-                $table = \Ezdoc\Table\ReportTable::fromArray($schema);
-                return $table->render();
-            } catch (\Throwable $e) {
-                return '<div class="dyntable-empty" style="color:#c00;">'
-                     . 'Report table error (' . htmlspecialchars($ns, ENT_QUOTES) . '): '
-                     . htmlspecialchars($e->getMessage(), ENT_QUOTES)
-                     . '</div>';
-            }
-        },
-        $html
-    );
-}
+// renderDynTable() removed — replaced by processTabledbRows() (v0.9.14b enhanced marker system).
 
 // Conditional section evaluators + processConditionalSections extracted to
 // ezdoc/lib/doc_template_helpers.php (evalCondExprPHP, evalSingleCondPHP,
@@ -1041,7 +967,7 @@ foreach ($configTtd as $ttd) {
 }
 
 // Render HTML: replace placeholders with inputs, logos with images, TTD with signature areas
-function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFields, $dynamicTables = [], $conn = null, $param_norm = '', $param_nopen = '', $param_is_locked = 0, $tableDbQueries = [], $doc_id = 0, $reportTables = []) {
+function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFields, $dynamicTables = [], $conn = null, $param_norm = '', $param_nopen = '', $param_is_locked = 0, $tableDbQueries = [], $doc_id = 0) {
     // Replace logo placeholders with actual images (handles inline and floating logos)
     $html = preg_replace_callback('/<span[^>]*class="([^"]*logo-placeholder[^"]*)"[^>]*data-logo="([^"]+)"(?:[^>]*data-width="([^"]+)")?(?:[^>]*data-pos-mode="([^"]+)")?(?:[^>]*data-pos-x="([^"]+)")?(?:[^>]*data-pos-y="([^"]+)")?(?:[^>]*style="([^"]*)")?[^>]*>.*?<\/span>/s', function($m) use ($logos, $logoSizes) {
         $classes = $m[1] ?? '';
@@ -1399,19 +1325,13 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         </div>';
     }, $html);
 
-    // ===== TABLEDB row repeating =====
-    // Process <tr> rows that contain {{tabledb.<ns>.<col>}} references.
-    // Must happen BEFORE field-placeholder replacement so cloned rows have placeholders intact.
+    // ===== TABLEDB (enhanced markers v0.9.14b) =====
+    // Process <tr> rows dgn {{tabledb.<ns>.<selector>[|format]}} markers.
+    // Supports: raw col, formula (=qty*harga), aggregate (sum:harga), format
+    // pipes (|currency|number|percent|date|datetime).
+    // Must happen BEFORE field-placeholder replacement.
     if (!empty($tableDbQueries) && is_array($tableDbQueries)) {
         $html = processTabledbRows($html, $tableDbQueries, $param_norm, $param_nopen, $dbFields, $conn);
-    }
-
-    // ===== REPORT TABLES (v0.9.14) =====
-    // Replace {{report.<namespace>}} markers dgn full <table> HTML via
-    // Ezdoc\Table\ReportTable. Handles typed columns, formulas, aggregates,
-    // groupBy subtotals, grand-total tfoot.
-    if (!empty($reportTables) && is_array($reportTables)) {
-        $html = processReportTables($html, $reportTables, $param_norm, $param_nopen, $dbFields, $conn);
     }
 
     // Replace field placeholders with appropriate input types
@@ -1746,7 +1666,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
     }
 
     // Render content for PDF (with filled values, no form elements)
-    $pdfContent = renderContentForPdf($templateHtml, $logos, $logoSizes, $configTtd, $ttdValues, $pdfFields, [], $conn, $param_norm, $param_nopen, $tableDbQueries, (int)$doc_id, $reportTables);
+    $pdfContent = renderContentForPdf($templateHtml, $logos, $logoSizes, $configTtd, $ttdValues, $pdfFields, [], $conn, $param_norm, $param_nopen, $tableDbQueries, (int)$doc_id);
     $pdfHtml .= $pdfContent;
 
     $pdfHtml .= '</div>';
@@ -1840,7 +1760,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
 }
 
 // Function to render content for PDF (no form elements, just values)
-function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFields, $dynamicTables = [], $conn = null, $param_norm = '', $param_nopen = '', $tableDbQueries = [], $doc_id = 0, $reportTables = []) {
+function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFields, $dynamicTables = [], $conn = null, $param_norm = '', $param_nopen = '', $tableDbQueries = [], $doc_id = 0) {
     // Position offset corrections to match generator/logo (same as HTML rendering)
     // Set to 0 = no adjustment (logo is reference)
     $posOffsetQR = 0;
@@ -2094,16 +2014,10 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
         return ''; // No QR if no data
     }, $html);
 
-    // ===== TABLEDB row repeating (PDF) =====
-    // Same logic as HTML render — process before field replacement
+    // ===== TABLEDB (enhanced markers v0.9.14b, PDF) =====
+    // Same processor as HTML render path.
     if (!empty($tableDbQueries) && is_array($tableDbQueries)) {
         $html = processTabledbRows($html, $tableDbQueries, $param_norm, $param_nopen, $dbFields, $conn);
-    }
-
-    // ===== REPORT TABLES (v0.9.14, PDF) =====
-    // Same {{report.<ns>}} → <table> renderer as HTML render path.
-    if (!empty($reportTables) && is_array($reportTables)) {
-        $html = processReportTables($html, $reportTables, $param_norm, $param_nopen, $dbFields, $conn);
     }
 
     // ===== CONDITIONAL SECTIONS (#7) =====
@@ -2270,7 +2184,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 'is_edit'     => (bool)$isEditMode,
             ]) ?>
             <div class="content">
-                <?= renderContent($templateHtml, $logos, $logoSizes, $configTtd, $ttdValues, $dbFields, $dynamicTables ?? [], $conn, $param_norm, $param_nopen, $param_is_locked, $tableDbQueries, (int)$doc_id, $reportTables) ?>
+                <?= renderContent($templateHtml, $logos, $logoSizes, $configTtd, $ttdValues, $dbFields, $dynamicTables ?? [], $conn, $param_norm, $param_nopen, $param_is_locked, $tableDbQueries, (int)$doc_id) ?>
             </div>
 
             <?php // Slot: before-signatures — closing phrase, place/date, witness list ahead of TTD wrap

@@ -7,8 +7,9 @@ namespace Ezdoc\Table;
 use Ezdoc\Exceptions\ValidationException;
 
 /**
- * Ezdoc\Table\FormulaEvaluator — safe expression evaluator untuk computed
- * columns di {@see ReportTable}.
+ * Ezdoc\Table\FormulaEvaluator — safe expression evaluator untuk enhanced
+ * tabledb marker formulas (`{{tabledb.ns.=qty*harga}}`) + aggregate
+ * targets (`{{tabledb.ns.sum:=qty*harga}}`).
  *
  * ## Grammar (whitelisted)
  *
@@ -41,8 +42,8 @@ use Ezdoc\Exceptions\ValidationException;
  * - Field value non-numeric
  * - Division by zero
  *
- * Null aware: aggregate functions (SUM/AVG di {@see ReportTable}) skip
- * rows yg formula-nya evaluate ke null.
+ * Null aware: aggregate functions (SUM/AVG via `_tabledbComputeAggregate`)
+ * skip rows yg formula-nya evaluate ke null.
  *
  * `ValidationException` throw hanya untuk PARSE error (formula syntax
  * salah) — bukan runtime. Parse error harusnya caught di designer save
@@ -52,9 +53,9 @@ use Ezdoc\Exceptions\ValidationException;
  *
  * - Unary minus (`-{qty}`) — user tulis `0 - {qty}` sebagai workaround
  * - Modulo, exponent — 4 operator dasar cukup untuk laporan keuangan
- * - Comparison operators — {@see ReportTable} handle conditional format
- *   di layer terpisah
- * - Function calls (SUM, IF, dst) — pakai aggregate di ColumnDef
+ * - Comparison operators — belum ada use case; defer
+ * - Function calls (SUM, IF, dst) — pakai aggregate selectors (`sum:`,
+ *   `avg:`, `min:`, `max:`, `count:`) di marker syntax
  *
  * PHP 7.4+ compatible.
  */

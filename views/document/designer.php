@@ -605,24 +605,6 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     </div>
                 </div>
 
-                <!-- Report Table Panel (v0.9.14 — Collapsible) -->
-                <div class="border-b border-gray-200" x-data="{ open: false }">
-                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
-                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-table"></i>Tabel Laporan <span id="reportTableCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
-                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
-                    </div>
-                    <div x-show="open" x-collapse>
-                        <div class="p-2 pt-0">
-                            <button type="button" class="w-full mb-2 inline-flex items-center justify-center px-2 py-1 rounded text-xs border border-indigo-500 text-indigo-600 hover:bg-indigo-50" onclick="openReportTableModal()"><i class="bi bi-plus-lg mr-1"></i>Buat Tabel Laporan</button>
-                            <div id="reportTableList"></div>
-                            <div id="reportTableEmpty" class="text-center text-gray-500 text-xs py-2">
-                                Belum ada tabel laporan.<br>
-                                <span class="text-xs">Tabel dgn kolom SUM/AVG/formula (mis. total = qty*harga). Marker <code>{{report.nama}}</code> dipakai di editor.</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- QR Panel (Collapsible) -->
                 <div class="border-b border-gray-200" x-data="{ open: false }">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
@@ -1017,128 +999,136 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     <div id="tabledbColumns" class="flex flex-wrap gap-1"></div>
                     <small class="text-gray-500 block mt-1 text-xs"><?= h(t('tabledb.columns_tip', [], 'Tip: insert a regular TinyMCE table, then paste/insert the {{tabledb.x.column}} variable in the row to be repeated. Header & footer rows (without variables) stay static.')) ?></small>
                 </div>
+
+                <!-- Cheatsheet: cara pakai + shortcut markers (v0.9.14b) -->
+                <div class="mt-3" x-data="{ open: false }">
+                    <button type="button" @click="open = !open" class="w-full flex items-center justify-between px-3 py-2 rounded border border-sky-200 bg-sky-50 hover:bg-sky-100 text-xs">
+                        <span class="font-semibold text-sky-900"><i class="bi bi-book mr-1"></i>Cara Pakai + Shortcut Markers</span>
+                        <i class="bi bi-chevron-down text-sky-700" :class="{'rotate-180': open}" style="transition: transform 200ms;"></i>
+                    </button>
+                    <div x-show="open" x-collapse class="mt-2 p-3 bg-gray-50 rounded border border-gray-200 text-xs">
+
+                        <div class="mb-3">
+                            <div class="font-bold text-gray-800 mb-1">1. Workflow (3 langkah)</div>
+                            <ol class="list-decimal ml-4 text-gray-700 space-y-1">
+                                <li>Setup <strong>SQL</strong> + <strong>namespace</strong> di modal ini (sekali per source).</li>
+                                <li>Klik <strong>Analyze</strong> → deteksi kolom + widget helper muncul.</li>
+                                <li>Di editor TinyMCE: insert <code>&lt;table&gt;</code> bebas → paste marker di cells.</li>
+                            </ol>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="font-bold text-gray-800 mb-1">2. Marker Anatomy</div>
+                            <pre class="bg-white border rounded p-2 text-[11px] leading-4 overflow-x-auto"><code>{{tabledb.<em>namespace</em>.<em>selector</em>|<em>format</em>:<em>args</em>}}</code></pre>
+                            <ul class="text-gray-600 mt-1 space-y-0.5">
+                                <li>• <strong>namespace</strong> — nama query (contoh: <code>stok</code>)</li>
+                                <li>• <strong>selector</strong> — kolom / formula / aggregate (lihat #3)</li>
+                                <li>• <strong>format</strong> — opsional (lihat #4)</li>
+                            </ul>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="font-bold text-gray-800 mb-1">3. Selectors (yg bisa dipilih)</div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-[11px] border-collapse">
+                                    <thead class="bg-gray-100">
+                                        <tr>
+                                            <th class="border px-1 py-0.5 text-left w-32">Selector</th>
+                                            <th class="border px-1 py-0.5 text-left">Kegunaan</th>
+                                            <th class="border px-1 py-0.5 text-left">Contoh</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td class="border px-1 py-0.5"><code>col_name</code></td><td class="border px-1 py-0.5">Nilai raw dari kolom</td><td class="border px-1 py-0.5"><code>{{tabledb.s.nama}}</code></td></tr>
+                                        <tr><td class="border px-1 py-0.5"><code>=<em>rumus</em></code></td><td class="border px-1 py-0.5">Hitung per-row</td><td class="border px-1 py-0.5"><code>{{tabledb.s.=qty*harga}}</code></td></tr>
+                                        <tr><td class="border px-1 py-0.5"><code>sum:<em>col</em></code></td><td class="border px-1 py-0.5">SUM kolom (footer)</td><td class="border px-1 py-0.5"><code>{{tabledb.s.sum:harga}}</code></td></tr>
+                                        <tr><td class="border px-1 py-0.5"><code>sum:=<em>rumus</em></code></td><td class="border px-1 py-0.5">SUM dari rumus</td><td class="border px-1 py-0.5"><code>{{tabledb.s.sum:=qty*harga}}</code></td></tr>
+                                        <tr><td class="border px-1 py-0.5"><code>avg:<em>col</em></code></td><td class="border px-1 py-0.5">Rata-rata</td><td class="border px-1 py-0.5"><code>{{tabledb.s.avg:nilai}}</code></td></tr>
+                                        <tr><td class="border px-1 py-0.5"><code>count:*</code></td><td class="border px-1 py-0.5">Jumlah baris</td><td class="border px-1 py-0.5"><code>{{tabledb.s.count:*}}</code></td></tr>
+                                        <tr><td class="border px-1 py-0.5"><code>min:<em>col</em> / max:<em>col</em></code></td><td class="border px-1 py-0.5">Nilai min/max</td><td class="border px-1 py-0.5"><code>{{tabledb.s.max:harga}}</code></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="font-bold text-gray-800 mb-1">4. Format Pipes (setelah <code>|</code>)</div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-[11px] border-collapse">
+                                    <thead class="bg-gray-100">
+                                        <tr>
+                                            <th class="border px-1 py-0.5 text-left w-32">Pipe</th>
+                                            <th class="border px-1 py-0.5 text-left">Output</th>
+                                            <th class="border px-1 py-0.5 text-left">Contoh</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td class="border px-1 py-0.5"><code>|text</code> (default)</td><td class="border px-1 py-0.5">HTML escape</td><td class="border px-1 py-0.5"><code>&lt;a&gt;</code> → <code>&amp;lt;a&amp;gt;</code></td></tr>
+                                        <tr><td class="border px-1 py-0.5"><code>|number[:decimals]</code></td><td class="border px-1 py-0.5">Angka lokal</td><td class="border px-1 py-0.5"><code>1500000</code> → <code>1.500.000</code></td></tr>
+                                        <tr><td class="border px-1 py-0.5"><code>|currency[:IDR]</code></td><td class="border px-1 py-0.5">Mata uang</td><td class="border px-1 py-0.5"><code>1500</code> → <code>Rp 1.500</code></td></tr>
+                                        <tr><td class="border px-1 py-0.5"><code>|percent[:decimals]</code></td><td class="border px-1 py-0.5">Persen (as-ratio)</td><td class="border px-1 py-0.5"><code>0.5</code> → <code>50,00%</code></td></tr>
+                                        <tr><td class="border px-1 py-0.5"><code>|date[:format]</code></td><td class="border px-1 py-0.5">Tanggal</td><td class="border px-1 py-0.5"><code>2026-07-24</code> → <code>24/07/2026</code></td></tr>
+                                        <tr><td class="border px-1 py-0.5"><code>|datetime</code></td><td class="border px-1 py-0.5">Tanggal + jam</td><td class="border px-1 py-0.5"><code>...</code> → <code>24/07/2026 14:30</code></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="text-gray-500 mt-1">Currency codes: <code>IDR</code>, <code>USD</code>, <code>EUR</code>, <code>SGD</code>, <code>MYR</code></div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="font-bold text-gray-800 mb-1">5. Row Behavior (otomatis)</div>
+                            <ul class="text-gray-700 space-y-0.5">
+                                <li>• Row punya <strong>raw col / formula</strong> → di-<strong>clone</strong> per data row</li>
+                                <li>• Row punya <strong>hanya aggregate</strong> → di-render <strong>SEKALI</strong> (biasanya di <code>&lt;tfoot&gt;</code>)</li>
+                                <li>• Row tanpa marker → di-biarkan (header, label statik)</li>
+                            </ul>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="font-bold text-gray-800 mb-1">6. Contoh Lengkap (invoice dgn PPN)</div>
+                            <pre class="bg-white border rounded p-2 text-[10px] leading-4 overflow-x-auto"><code>&lt;table border="1"&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;&lt;th&gt;Item&lt;/th&gt;&lt;th&gt;Qty&lt;/th&gt;&lt;th&gt;Harga&lt;/th&gt;&lt;th&gt;Subtotal&lt;/th&gt;&lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;{{tabledb.jual.nama}}&lt;/td&gt;
+      &lt;td&gt;{{tabledb.jual.qty}}&lt;/td&gt;
+      &lt;td&gt;{{tabledb.jual.harga|currency}}&lt;/td&gt;
+      &lt;td&gt;{{tabledb.jual.=qty*harga|currency}}&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+  &lt;tfoot&gt;
+    &lt;tr&gt;&lt;td colspan="3"&gt;Subtotal&lt;/td&gt;
+        &lt;td&gt;{{tabledb.jual.sum:=qty*harga|currency}}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td colspan="3"&gt;PPN 11%&lt;/td&gt;
+        &lt;td&gt;{{tabledb.jual.sum:=qty*harga*0.11|currency}}&lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td colspan="3"&gt;&lt;strong&gt;Total&lt;/strong&gt;&lt;/td&gt;
+        &lt;td&gt;{{tabledb.jual.sum:=qty*harga*1.11|currency}}&lt;/td&gt;&lt;/tr&gt;
+  &lt;/tfoot&gt;
+&lt;/table&gt;</code></pre>
+                        </div>
+
+                        <div class="mb-1">
+                            <div class="font-bold text-gray-800 mb-1">7. Formula Grammar</div>
+                            <ul class="text-gray-700 space-y-0.5">
+                                <li>• Operator: <code>+ - * /</code> + kurung <code>( )</code></li>
+                                <li>• Kolom pakai <strong>nama telanjang</strong>: <code>qty*harga</code></li>
+                                <li>• Contoh: <code>=harga*(1-diskon/100)</code>, <code>=subtotal*11/100</code>, <code>=(jual-beli)/beli</code></li>
+                                <li>• Missing field / non-numeric / div-by-zero → render <code>—</code></li>
+                                <li>• Syntax error → visible red error di cell</li>
+                            </ul>
+                        </div>
+
+                        <div class="text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-200">
+                            <i class="bi bi-info-circle"></i> Dokumentasi lengkap: <code>docs/DYNAMIC-TABLES.md</code>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="flex items-center justify-end px-4 py-3 border-t border-gray-200 gap-2">
                 <button type="button" class="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-500 text-white hover:bg-gray-600" @click="$store.modals.tabledb = false"><?= h(t('actions.cancel', [], 'Cancel')) ?></button>
                 <button type="button" class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-600 text-white hover:bg-blue-700" onclick="saveTabledbQuery()"><i class="bi bi-check-lg mr-1"></i><?= h(t('tabledb.save_query_button', [], 'Save Query')) ?></button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Report Table Modal (v0.9.14) — form-based editor untuk report-style tables -->
-    <div x-data x-show="$store.modals.reportTable" x-transition
-         class="fixed inset-0 flex items-center justify-center p-4 z-[100010]"
-         style="display:none;">
-        <div class="fixed inset-0 bg-black/50" @click="$store.modals.reportTable = false"></div>
-        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto" id="reportTableModal">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-indigo-50 rounded-t-lg">
-                <h6 class="text-base font-semibold text-indigo-900"><i class="bi bi-table mr-1"></i><span id="reportTableModalTitle">Buat Tabel Laporan</span></h6>
-                <button type="button" class="text-gray-500 opacity-80 hover:opacity-100 text-2xl leading-none" @click="$store.modals.reportTable = false">&times;</button>
-            </div>
-            <div class="p-4">
-                <input type="hidden" id="reportTableEditNs" value="">
-
-                <!-- Namespace + SQL -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-700 mb-1">Nama Tabel (namespace) *</label>
-                        <input type="text" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1" id="reportTableNs" placeholder="contoh: penjualan, stok, keuangan" maxlength="32">
-                        <small class="text-gray-500 text-xs">Huruf/angka/underscore. Marker: <code>{{report.namanya}}</code></small>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-700 mb-1">Locale</label>
-                        <select id="reportTableLocale" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1">
-                            <option value="id">Bahasa Indonesia</option>
-                            <option value="en">English</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-700 mb-1">Default Currency</label>
-                        <select id="reportTableCurrency" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1">
-                            <option value="IDR">IDR (Rp)</option>
-                            <option value="USD">USD ($)</option>
-                            <option value="EUR">EUR (€)</option>
-                            <option value="SGD">SGD (S$)</option>
-                            <option value="MYR">MYR (RM)</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="mb-2">
-                    <label class="block text-xs font-bold text-gray-700 mb-1">SQL SELECT *</label>
-                    <textarea class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1 font-mono" id="reportTableSql" rows="4" placeholder="SELECT kategori, nama, qty, harga FROM stok WHERE nopen={nopen} ORDER BY kategori"></textarea>
-                    <small class="text-gray-500 text-xs">Parameter <code>{nopen}</code>, <code>{norm}</code>, <code>{nama_field}</code> di-bind otomatis. Kalau pakai groupBy, wajib <code>ORDER BY</code> di SQL. Hanya SELECT/WITH allowed.</small>
-                </div>
-
-                <div class="flex mb-3 gap-2">
-                    <button type="button" class="inline-flex items-center px-2 py-1 rounded text-xs bg-indigo-600 text-white hover:bg-indigo-700" onclick="analyzeReportTableSql()"><i class="bi bi-search mr-1"></i>Deteksi Kolom dari SQL</button>
-                    <span id="reportTableAnalyzeStatus" class="text-xs self-center"></span>
-                </div>
-
-                <!-- Columns editor -->
-                <div class="mb-3" id="reportTableColumnsBox" style="display:none;">
-                    <div class="flex items-center justify-between mb-1">
-                        <label class="block text-xs font-bold text-gray-700">Kolom Tabel</label>
-                        <button type="button" class="inline-flex items-center px-2 py-0.5 rounded text-xs border border-indigo-500 text-indigo-600 hover:bg-indigo-50" onclick="addReportTableColumn()"><i class="bi bi-plus-lg mr-1"></i>Tambah Kolom</button>
-                    </div>
-                    <div class="overflow-x-auto border rounded">
-                        <table class="w-full text-xs" style="border-collapse: collapse;">
-                            <thead class="bg-gray-100">
-                                <tr>
-                                    <th class="px-2 py-1 text-left border-b" title="SQL column name atau nama unik untuk formula">Field*</th>
-                                    <th class="px-2 py-1 text-left border-b" title="Header text ditampilkan di tabel">Label</th>
-                                    <th class="px-2 py-1 text-left border-b" title="Tipe data → format otomatis">Type</th>
-                                    <th class="px-2 py-1 text-left border-b" title="Perataan text di kolom">Align</th>
-                                    <th class="px-2 py-1 text-left border-b" title="Aggregate function untuk footer + subtotal">Aggregate</th>
-                                    <th class="px-2 py-1 text-left border-b" title="Formula untuk computed column: {field}*{other}">Formula</th>
-                                    <th class="px-2 py-1 text-center border-b"></th>
-                                </tr>
-                            </thead>
-                            <tbody id="reportTableColumnsBody">
-                                <!-- rows added dynamically -->
-                            </tbody>
-                        </table>
-                    </div>
-                    <small class="text-gray-500 block mt-1 text-xs">
-                        <strong>Type</strong>: text/number/currency/percent/date/datetime.
-                        <strong>Aggregate</strong>: none/sum/avg/count/min/max (SUM/AVG/MIN/MAX hanya untuk kolom numeric).
-                        <strong>Formula</strong>: <code>{qty} * {harga}</code>, <code>{subtotal} * 11 / 100</code> (safe expression, tidak ada function call).
-                    </small>
-                </div>
-
-                <!-- GroupBy + options -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3" id="reportTableOptionsBox" style="display:none;">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-700 mb-1">Group By (opsional)</label>
-                        <select id="reportTableGroupBy" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1">
-                            <option value="">— Tidak group —</option>
-                        </select>
-                        <small class="text-gray-500 text-xs">Subtotal per group. Wajib <code>ORDER BY</code> di SQL.</small>
-                    </div>
-                    <div class="flex items-center pt-4">
-                        <input type="checkbox" id="reportTableShowGrandTotal" class="mr-2" checked>
-                        <label for="reportTableShowGrandTotal" class="text-xs">Tampilkan Grand Total (footer)</label>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-700 mb-1">Pesan Empty (kalau tidak ada data)</label>
-                        <input type="text" id="reportTableEmptyMessage" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1" placeholder="Belum ada data" value="Belum ada data">
-                    </div>
-                </div>
-
-                <!-- Preview -->
-                <div class="mb-2" id="reportTablePreviewBox" style="display:none;">
-                    <div class="flex items-center justify-between mb-1">
-                        <label class="block text-xs font-bold text-gray-700">Preview</label>
-                        <button type="button" class="inline-flex items-center px-2 py-0.5 rounded text-xs border border-gray-500 text-gray-700 hover:bg-gray-50" onclick="previewReportTable()"><i class="bi bi-eye mr-1"></i>Refresh Preview</button>
-                    </div>
-                    <div id="reportTablePreview" class="p-2 border rounded bg-white text-xs" style="min-height:60px;">
-                        <em class="text-gray-500">Klik "Refresh Preview" untuk lihat hasil dgn data sample dari SQL.</em>
-                    </div>
-                </div>
-            </div>
-            <div class="flex items-center justify-end px-4 py-3 border-t border-gray-200 gap-2">
-                <button type="button" class="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-500 text-white hover:bg-gray-600" @click="$store.modals.reportTable = false">Batal</button>
-                <button type="button" class="inline-flex items-center px-2 py-1 rounded text-xs bg-indigo-600 text-white hover:bg-indigo-700" onclick="saveReportTable()"><i class="bi bi-check-lg mr-1"></i>Simpan Tabel</button>
             </div>
         </div>
     </div>
@@ -1201,7 +1191,6 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 varManager: false,
                 fieldInspector: false,
                 tabledb: false,
-                reportTable: false,
                 params: false,
                 verifyPreview: false,
                 open(name) { this[name] = true; },

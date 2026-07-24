@@ -1745,142 +1745,150 @@ gap between) tapi tanpa breaking editing UX (contenteditable `.f` fields
 - Firefox older versions mungkin ignore `@page margin` — user harus set
   "Default margins" di print dialog
 
-### 6.19 Milestone v0.9.14 — "Report-style dynamic tables (aggregates + subtotals + formulas)" ~1-2 weeks
+### 6.19 Milestone v0.9.14 — "Enhanced tabledb markers (format + formula + aggregate)" ~1-2 weeks **SHIPPED 2026-07-24**
 
-**Goal**: extend existing `dynamicTables` schema di `renderContent()` untuk
-support Excel/Jasper-style column aggregates (SUM/COUNT/AVG/MIN/MAX), typed
-column formatting (currency/number/date/percent), computed columns (formula
-per-row), optional `groupBy` dgn subtotal rows, dan `<tfoot>` grand-total.
-Semua computed server-side di PHP → deterministic HTML output → aman untuk
-PDF export (dompdf) dan print.
+**Goal**: extend existing `{{tabledb.<ns>.<col>}}` marker system dgn typed
+formatting pipes, per-row formulas, dan aggregate markers — supaya user
+bebas design `<table>` di TinyMCE editor + drop markers untuk data,
+format, hitungan, dan agregat. Tidak butuh config panel terpisah untuk
+table structure — presentation inline di markers, data source sekali
+setup via existing Query DB panel.
 
 **Motivation**: laporan RS/keuangan/inventori butuh tabel yg tidak sekadar
-list rows dari SQL — perlu SUM kolom harga di footer, subtotal per kategori,
-kolom `total = qty × harga` yg computed, format Rp/persentase yg konsisten.
-Saat ini template author harus tulis kolom hasil SUM manual di SQL (via
-UNION dgn totals row) atau pakai raw HTML — brittle dan inkonsisten.
-User request: "bisa sum kolom tertentu dll" seperti Excel/Jasper Report.
+list rows dari SQL — perlu SUM kolom harga di footer, kolom `total = qty ×
+harga` yg computed, format Rp/persentase yg konsisten. Author juga butuh
+kebebasan design tabel (border, colspan, header custom) tanpa dipaksa
+schema config. User request awal: "bisa sum kolom tertentu dll" seperti
+Excel/Jasper Report. Iterasi feedback: "kok tidak fleksibel ya, harusnya
+bisa bebas rumus dimanapun dan tabel manapun" → pivot dari declarative
+`{{report.*}}` ke enhanced marker inline.
+
+**Design pivot**: Awalnya scope ke declarative `Ezdoc\Table\ReportTable`
+class dgn config panel. Pivot ke inline marker approach setelah user
+feedback: mirror Word Mail Merge / Docmosis pattern — table structure
+milik author, marker inject data + format.
 
 **Precedent (industry-standard proven)**:
 - **HTML `<tfoot>` semantic** — browser + PDF renderer both honor natively;
   page-break-inside logic sudah aware `<tfoot>` (repeated per page kalau perlu)
-- **DOCX Structured Document Tags** — Word's `<w:sdt>` + `<w:tblCellSum>`
-  native table calc pattern
-- **Docmosis** — template markers `<<sum:amount>>`, `<<group:region>>`
+- **Word Mail Merge** — `<< MERGEFIELD name \# "Rp #,##0" >>` — inline
+  format switches; author designs table freely
+- **Docmosis** — template markers `<<sum:amount>>`, `<<[qty * price]>>`
+  inline di doc author's own table
 - **Aspose.Words** — mail-merge tables dgn TableStart/TableEnd + built-in
-  aggregate expressions
-- **Jasper Reports `<summaryBand>` + `<groupHeader>/<groupFooter>`** — band-
-  based aggregate pattern (adopt konsep, tidak port XML band system yg heavy)
-- **Filament TableBuilder** — typed column definitions dgn `->money()`,
-  `->summarize([Sum::make(), Average::make()])` — pattern yg kita adopt
-  untuk PHP fluent API compatibility
+  aggregate expressions di sel individual
+- **Jinja/Twig** filter chain: `{{ value | currency | round(2) }}` — pipe
+  pattern yg kita adopt (`|currency`, `|number:2`)
+- **Django template filters** — same pipe convention
 
-**Deliverables**:
+**Deliverables** (yg SHIPPED):
 
-- **`Ezdoc\Table\ReportTable` class** (new):
-  - Constructor menerima schema: `columns[]`, `rows[]`, optional `groupBy`,
-    optional `showGrandTotal`
-  - `render(): string` — output complete `<table>` dgn `<thead>/<tbody>/<tfoot>`
-  - Aggregate computation: SUM/COUNT/AVG/MIN/MAX via PHP's `array_sum`,
-    `array_reduce`, dst — pure functions
-  - Formula evaluation: safe expression parser (no `eval`), whitelisted
-    operators (`+ - * / ( )`) + field references (`{qty}`, `{harga}`)
-  - Group-by: iterasi rows, insert subtotal row when group value changes
+- **`Ezdoc\Table\FormulaEvaluator`** (new class, 240 LOC):
+  - Safe expression parser via shunting-yard algorithm → RPN → stack eval
+  - Grammar: `+ - * /`, parentheses, `{field_name}` OR bare `field_name`
+  - `evaluate($formula, $context)` — strict `{name}` syntax
+  - `evaluateBare($formula, $context)` — bare identifier support via
+    preprocessing (auto-wrap bare identifiers dgn `{}`)
+  - Whitelisted only — NO PHP eval, NO function calls, NO property access,
+    NO string literals
+  - Null semantics: missing field / non-numeric / div-by-zero → null
 
-- **`Ezdoc\Table\ColumnDef` value object** (new):
-  - Fields: `field` (SQL column), `label`, `type` ('text'|'number'|'currency'
-    |'percent'|'date'|'datetime'), `format` (optional Twig-style format
-    string), `align` ('left'|'right'|'center'), `aggregate`
-    ('sum'|'avg'|'count'|'min'|'max'|null), `formula` (optional expression),
-    `precision` (int, decimal places)
-  - Serializable to/from JSON via `fromArray/toArray`
-  - Immutable
+- **`Ezdoc\Table\Formatter`** (new class, 195 LOC):
+  - `formatCurrency($val, $currency = 'IDR', $decimals = null)` — IDR/USD/
+    EUR/SGD/MYR dgn proper separators
+  - `formatNumber($val, $decimals = 0, $locale = 'id')`
+  - `formatPercent($val, $decimals = 2, $asRatio = true, $locale)`
+  - `formatDate($val, $format = 'd/m/Y', $locale = 'id')` — locale-aware
+    weekday/month via `Ezdoc\Format\DateFormatter`
+  - `escapeHtml($val)` — HTML escape (default untuk text)
+  - `format($val, $type, $opts)` — dispatch helper
 
-- **`Ezdoc\Table\Formatter` helper** (new):
-  - `formatCurrency(float $val, string $currency = 'IDR', int $decimals = 0): string`
-  - `formatNumber(float $val, int $decimals = 0): string`
-  - `formatPercent(float $val, int $decimals = 2): string`
-  - `formatDate(string|int $val, string $format = 'd/m/Y'): string`
-  - Locale-aware via `Ezdoc\Format\DateFormatter` (v0.9.10) — respect
-    `configHeader.locale`
+- **`processTabledbRows()` di `views/document/generate.php`** (rewritten,
+  ~200 LOC):
+  - Enhanced marker regex: `\{\{tabledb(?:\.<ns>)?\.<selector>(?:\|<format>)?\}\}`
+  - 6 helper functions: `_tabledbClassifyRow`, `_tabledbParseSelector`,
+    `_tabledbParseFormat`, `_tabledbRenderRow`, `_tabledbComputeAggregate`,
+    `_tabledbFormatValue`
+  - Row classifier: aggregate-only row → render ONCE, raw/formula row →
+    clone per data row
+  - Aggregate computation: SUM/AVG/COUNT/MIN/MAX (native + formula-based)
+  - Cached SQL execution per namespace
 
-- **`Ezdoc\Table\FormulaEvaluator` helper** (new):
-  - Safe expression parser (shunting-yard algorithm)
-  - Support: `+ - * /`, parentheses, `{field_name}` references
-  - Type-coerce ke float; return null kalau field missing
-  - Whitelisted only — NO PHP eval, no function calls, no property access
-  - Precedent: TinyExpr (C library) + Symfony ExpressionLanguage yg
-    disabled functions
-
-- **Schema JSON contract** untuk template author:
-  ```json
-  {
-    "sql": "SELECT nama, qty, harga FROM ...",
-    "columns": [
-      {"field": "nama", "label": "Item", "type": "text"},
-      {"field": "qty", "label": "Qty", "type": "number", "align": "right"},
-      {"field": "harga", "label": "Harga", "type": "currency", "aggregate": "sum"},
-      {"field": "total", "label": "Total", "type": "currency",
-       "formula": "{qty} * {harga}", "aggregate": "sum"}
-    ],
-    "groupBy": {"field": "kategori", "showSubtotal": true, "aggregates": ["harga", "total"]},
-    "showGrandTotal": true,
-    "emptyMessage": "Belum ada data"
-  }
+- **Enhanced marker syntax**:
   ```
+  {{tabledb.<ns>.<selector>[|<format>[:<args>]]}}
+  ```
+  - Selectors: `col_name`, `=formula`, `sum:col`, `sum:=formula`, `avg:col`,
+    `count:*`, `count:col`, `min:col`, `max:col`
+  - Format pipes: `text`, `number[:dec]`, `currency[:code]`, `percent[:dec]`,
+    `date[:fmt]`, `datetime[:fmt]`
 
-- **Designer UI updates** (`views/document/designer.php`):
-  - Extend "Dynamic Table" config panel dgn column editor (type/format/
-    aggregate picker per-column)
-  - Group-by config (dropdown pilih field + toggle showSubtotal)
-  - Live preview di designer sebelum save
+- **Designer UI shortcuts** (`views/_partials/designer_scripts.php`):
+  - Extended `renderTabledbColumns()` dgn 3 helper widgets:
+    - Column + Format dropdown → generate `{{tabledb.ns.col|currency}}`
+    - Formula input → generate `{{tabledb.ns.=qty*harga|currency}}`
+    - Aggregate builder (verb + target + format) → generate `{{tabledb.ns.sum:=qty*harga|currency}}`
+  - Insert marker langsung ke posisi cursor di editor
+  - Cheatsheet collapsible section di tabledb modal dgn cara pakai +
+    tables selector/format + contoh lengkap (invoice PPN)
 
-- **Integration ke `renderContent()`**:
-  - Detect `dynamicTables[$name]` yg pakai new schema (has `columns` array
-    with `type` field) vs legacy (raw SQL dump)
-  - Legacy schema → existing renderer (backward-compat)
-  - New schema → `ReportTable::render()`
+- **Docs**: `docs/DYNAMIC-TABLES.md` — comprehensive rewrite (Enhanced
+  tabledb only, ~250 LOC) — marker anatomy, selectors, format pipes,
+  formula grammar, row classification, real-world examples, safety
 
-- **Docs**: `docs/DYNAMIC-TABLES.md` — schema reference + examples + safe
-  formula expression grammar
+- **Tests**: `tests/Table/FormulaEvaluatorTest.php` — 32 unit tests
+  covering correctness, null semantics, injection guards, parse errors,
+  real-world formulas. Smoke tests: 37 (FormulaEvaluator) + 34 (Formatter)
+  + 24 (end-to-end enhanced tabledb) — 95 total PASS
 
-- **Tests**: `tests/Table/{ReportTableTest, FormulaEvaluatorTest,
-  FormatterTest, ColumnDefTest}.php` — cover aggregate correctness,
-  formula edge cases (division by zero, missing field), group-by
-  boundary, empty rows, PDF-safe HTML output
-
-**Definition of Done**:
-- Template author bisa define column dgn `aggregate: 'sum'` → footer row
-  otomatis show total dgn currency formatting
-- Template author bisa define `formula: '{qty} * {harga}'` → computed
-  column render per-row, ikut aggregate
-- `groupBy` dgn `showSubtotal: true` → subtotal row muncul di setiap group
-  boundary
-- Grand total di `<tfoot>` — repeated per page saat table cross paper
-  boundary (via existing ScreenPagination `<tfoot>` handling)
-- Semua formatting locale-aware (Rp untuk IDR, `d/m/Y` untuk date)
-- Safe: formula parser TIDAK boleh execute arbitrary PHP (test:
-  `{system('rm -rf /')}` → parser reject, tidak run)
-- PDF export identical dgn screen HTML (deterministic server-side render)
-- Round-trip: schema JSON di database → render → PDF → verify aggregates
-  match SQL SUM(harga)
+**Definition of Done** — SHIPPED:
+- ✅ Template author bisa insert marker `{{tabledb.ns.col|currency}}` di
+  cell manapun → cell tampil `Rp 1.500.000`
+- ✅ Formula per-row `{{tabledb.ns.=qty*harga|currency}}` → computed dari
+  kolom lain
+- ✅ Aggregate `{{tabledb.ns.sum:=qty*harga|currency}}` di `<tfoot>` →
+  rendered SEKALI dgn SUM across all rows
+- ✅ Row classifier otomatis (clone vs aggregate) berdasarkan markers
+- ✅ Grand total di `<tfoot>` — repeated per page saat table cross paper
+  boundary (existing ScreenPagination `<tfoot>` handling)
+- ✅ Locale-aware formatting (Rp untuk IDR, `d/m/Y` untuk date, Rabu untuk
+  Indonesian weekday)
+- ✅ Safe: formula parser reject `system(1)`, `{system('rm')}`, `;`,
+  backticks (verified di safety tests)
+- ✅ PDF export identical dgn screen HTML (both pakai `processTabledbRows`)
+- ✅ Backward compat: existing `{{tabledb.ns.col}}` (tanpa pipe) behavior
+  unchanged
+- ✅ Designer shortcuts: 3 helper widgets di tabledb modal untuk generate
+  marker complex dgn 3 klik
+- ✅ Cheatsheet collapsible section di modal — cara pakai lengkap accessible
+  dari UI
 
 **Non-goals**:
 - Interactive editing (Excel-like cell editing) — laporan adalah read-only
 - Chart/pivot table — separate milestone kalau demand
 - Cross-table references (VLOOKUP-style) — SQL JOIN sudah cover
 - Client-side JS sorting/filtering — table adalah snapshot, tidak reactive
-- Multi-level nested groupBy (level 2+) — v0.9.14 support 1 level only,
-  nested defer
+- Group-by dgn subtotal per group boundary — enhanced tabledb pattern
+  simple only; workaround via multiple queries WHERE per group
+- Date arithmetic (`tanggal_akhir - tanggal_mulai`) — defer, numeric only
 - Import/export Excel (.xlsx) — separate milestone
+- Multi-namespace per row — namespace assumed uniform per `<tr>`
 
 **Known limitations (accepted)**:
-- Formula scope terbatas ke row-local variables — tidak ada `SUM(col above)`
-  atau cross-row referensi (use groupBy/aggregate instead)
-- Formatter locale support terbatas ke locale yg configHeader punya —
-  full ICU MessageFormat defer
+- Formula scope terbatas ke row-local variables (no `SUM(col above)`)
+- Format pipe args tidak support colon-escape (misal date format `H:i:s`
+  bisa masuk `|datetime` default, tapi custom `|date:H:i:s` broken karena
+  colon parse conflict)
 - Table dgn 10k+ rows berpotensi slow — recommendation: pre-aggregate di
   SQL untuk kasus large dataset
+
+**What did NOT ship** (originally scoped, pivoted away):
+- `Ezdoc\Table\ReportTable` class + `ColumnDef` — DELETED after pivot to
+  enhanced tabledb (config panel approach too rigid)
+- `{{report.<ns>}}` marker system — DELETED (superseded by enhanced tabledb)
+- Report Tables Designer panel — DELETED
+- Group-by dgn subtotal per group — deferred (enhanced tabledb doesn't
+  support natively, workaround via multiple queries)
 
 ### 6.20 Milestone v1.0 — "PHP library extraction (Packagist)" ~1 week
 

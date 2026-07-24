@@ -7,8 +7,9 @@ namespace Ezdoc\Table;
 use Ezdoc\Format\DateFormatter;
 
 /**
- * Ezdoc\Table\Formatter — locale-aware value formatter untuk ReportTable
- * columns. Semua method static, pure, deterministic.
+ * Ezdoc\Table\Formatter — locale-aware value formatter untuk enhanced
+ * tabledb markers (`{{tabledb.ns.col|currency}}` etc.). Semua method
+ * static, pure, deterministic.
  *
  * ## Currency formatting
  *
@@ -188,8 +189,8 @@ final class Formatter
     }
 
     /**
-     * Format by column type shortcut. Convenient dispatch untuk ReportTable
-     * rendering loop.
+     * Format by column type shortcut. Convenient dispatch untuk enhanced
+     * tabledb rendering (`_tabledbFormatValue()`).
      *
      * @param mixed              $val
      * @param string             $type    'text'|'number'|'currency'|'percent'|'date'|'datetime'
