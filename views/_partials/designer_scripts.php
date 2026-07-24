@@ -99,7 +99,8 @@
             customWidth: 210,
             customHeight: 297,
             padding: { top: 20, right: 20, bottom: 20, left: 20 },
-            tableDbQueries: {} // namespace -> { sql, columns, params }
+            tableDbQueries: {}, // namespace -> { sql, columns, params }
+            reportTables: {}    // namespace -> { sql, columns[], groupBy, showGrandTotal, emptyMessage, locale, currency } (v0.9.14)
         };
 
         <?php if ($template): ?>
@@ -118,6 +119,7 @@
             if (savedHeader.layoutMode) configHeader.layoutMode = savedHeader.layoutMode;
             // Legacy: configHeader.dynamicTables removed; old data ignored
             if (savedHeader.tableDbQueries) configHeader.tableDbQueries = savedHeader.tableDbQueries;
+            if (savedHeader.reportTables && typeof savedHeader.reportTables === 'object') configHeader.reportTables = savedHeader.reportTables;
             // Migrate old format
             if (savedHeader.logoKiri) configHeader.logos['logo_kiri'] = savedHeader.logoKiri;
             if (savedHeader.logoKanan) configHeader.logos['logo_kanan'] = savedHeader.logoKanan;
@@ -347,6 +349,379 @@
                     <div class="flex flex-wrap gap-1">${colChips}${moreCount}</div>
                 </div>`;
             }).join('');
+        }
+
+        // ================== REPORT TABLES (v0.9.14) ==================
+        // Report-style dynamic tables dgn typed columns, formulas, aggregates,
+        // groupBy subtotals, dan grand total. Marker: {{report.<namespace>}}.
+        // Config disimpan di configHeader.reportTables[<ns>].
+        // spec: docs/DYNAMIC-TABLES.md
+
+        const REPORT_COL_TYPES = ['text', 'number', 'currency', 'percent', 'date', 'datetime'];
+        const REPORT_AGGREGATES = ['', 'sum', 'avg', 'count', 'min', 'max'];
+        const REPORT_ALIGNS = ['', 'left', 'right', 'center'];
+
+        function openReportTableModal(editNs) {
+            const titleEl = document.getElementById('reportTableModalTitle');
+            const nsInput = document.getElementById('reportTableNs');
+            const sqlInput = document.getElementById('reportTableSql');
+            const editIdInput = document.getElementById('reportTableEditNs');
+            const localeSelect = document.getElementById('reportTableLocale');
+            const currencySelect = document.getElementById('reportTableCurrency');
+            const emptyInput = document.getElementById('reportTableEmptyMessage');
+            const grandTotalCheckbox = document.getElementById('reportTableShowGrandTotal');
+            const status = document.getElementById('reportTableAnalyzeStatus');
+            const columnsBody = document.getElementById('reportTableColumnsBody');
+            const columnsBox = document.getElementById('reportTableColumnsBox');
+            const optionsBox = document.getElementById('reportTableOptionsBox');
+            const previewBox = document.getElementById('reportTablePreviewBox');
+
+            status.textContent = '';
+            columnsBody.innerHTML = '';
+            document.getElementById('reportTablePreview').innerHTML = '<em class="text-gray-500">Klik "Refresh Preview" untuk lihat hasil dgn data sample dari SQL.</em>';
+
+            if (editNs && configHeader.reportTables && configHeader.reportTables[editNs]) {
+                const cfg = configHeader.reportTables[editNs];
+                titleEl.textContent = 'Edit Tabel Laporan: ' + editNs;
+                nsInput.value = editNs;
+                nsInput.disabled = true;
+                sqlInput.value = cfg.sql || '';
+                editIdInput.value = editNs;
+                localeSelect.value = cfg.locale || 'id';
+                currencySelect.value = cfg.currency || 'IDR';
+                emptyInput.value = cfg.emptyMessage || 'Belum ada data';
+                grandTotalCheckbox.checked = cfg.showGrandTotal !== false;
+                (cfg.columns || []).forEach(col => addReportTableColumn(col));
+                if ((cfg.columns || []).length > 0) {
+                    columnsBox.style.display = 'block';
+                    optionsBox.style.display = 'grid';
+                    previewBox.style.display = 'block';
+                    updateReportTableGroupByOptions();
+                    // Restore groupBy value
+                    const gbSelect = document.getElementById('reportTableGroupBy');
+                    if (cfg.groupBy) {
+                        gbSelect.value = typeof cfg.groupBy === 'string' ? cfg.groupBy : (cfg.groupBy.field || '');
+                    }
+                }
+            } else {
+                titleEl.textContent = 'Buat Tabel Laporan';
+                nsInput.value = '';
+                nsInput.disabled = false;
+                sqlInput.value = '';
+                editIdInput.value = '';
+                localeSelect.value = 'id';
+                currencySelect.value = 'IDR';
+                emptyInput.value = 'Belum ada data';
+                grandTotalCheckbox.checked = true;
+                columnsBox.style.display = 'none';
+                optionsBox.style.display = 'none';
+                previewBox.style.display = 'none';
+            }
+            openAppModal('reportTable');
+        }
+
+        async function analyzeReportTableSql() {
+            const sql = (document.getElementById('reportTableSql').value || '').trim();
+            const status = document.getElementById('reportTableAnalyzeStatus');
+            if (!sql) {
+                status.textContent = 'SQL kosong';
+                status.className = 'text-xs self-center text-red-600';
+                return;
+            }
+            status.textContent = 'Menganalisa...';
+            status.className = 'text-xs self-center text-gray-500';
+            try {
+                const fd = new FormData();
+                fd.append('ajax', '1');
+                fd.append('action', 'analyze_query');
+                fd.append('query', sql);
+                const r = await fetch(EZDOC_URLS.analyze || '', { method: 'POST', body: fd });
+                const data = await r.json();
+                if (data.success && Array.isArray(data.columns)) {
+                    // Detect type otomatis based on column name heuristic
+                    const detectedCols = data.columns.map(c => detectColumnType(c.name, c.type));
+                    // Reset columns body dan populate dari SQL result
+                    document.getElementById('reportTableColumnsBody').innerHTML = '';
+                    detectedCols.forEach(col => addReportTableColumn(col));
+                    document.getElementById('reportTableColumnsBox').style.display = 'block';
+                    document.getElementById('reportTableOptionsBox').style.display = 'grid';
+                    document.getElementById('reportTablePreviewBox').style.display = 'block';
+                    updateReportTableGroupByOptions();
+                    status.textContent = '✓ ' + detectedCols.length + ' kolom ter-deteksi';
+                    status.className = 'text-xs self-center text-green-600';
+                } else {
+                    status.textContent = '✗ ' + (data.message || 'Analisa gagal');
+                    status.className = 'text-xs self-center text-red-600';
+                }
+            } catch (e) {
+                status.textContent = '✗ Error: ' + e.message;
+                status.className = 'text-xs self-center text-red-600';
+            }
+        }
+
+        // Heuristic: detect column type dari nama + SQL type hint.
+        // Consumer bisa override manually setelah auto-detect.
+        function detectColumnType(name, sqlType) {
+            const n = String(name || '').toLowerCase();
+            const t = String(sqlType || '').toLowerCase();
+            // Currency keywords (Indonesian + English)
+            if (/harga|total|subtotal|nilai|amount|price|cost|biaya|bayar|tarif|gaji|salary/.test(n)) {
+                return { field: name, label: prettyLabel(name), type: 'currency', aggregate: 'sum' };
+            }
+            // Percent keywords
+            if (/persen|percent|rate|ratio|discount|diskon|margin/.test(n)) {
+                return { field: name, label: prettyLabel(name), type: 'percent' };
+            }
+            // Date keywords
+            if (/tanggal|tgl|date|expiry|created|updated|deleted/.test(n) || /date|timestamp/.test(t)) {
+                const type = /time/.test(t) || /waktu/.test(n) ? 'datetime' : 'date';
+                return { field: name, label: prettyLabel(name), type: type };
+            }
+            // Number (SQL int/decimal/float)
+            if (/int|dec|numeric|float|double|number/.test(t) || /qty|jumlah|count|umur|tahun|bulan|hari/.test(n)) {
+                const agg = /qty|jumlah/.test(n) ? 'sum' : '';
+                return { field: name, label: prettyLabel(name), type: 'number', aggregate: agg };
+            }
+            // Default: text
+            return { field: name, label: prettyLabel(name), type: 'text' };
+        }
+
+        function prettyLabel(field) {
+            // 'harga_satuan' → 'Harga Satuan'
+            return String(field || '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        function addReportTableColumn(col) {
+            col = col || { field: '', label: '', type: 'text', align: '', aggregate: '', formula: '' };
+            const body = document.getElementById('reportTableColumnsBody');
+            const tr = document.createElement('tr');
+            tr.className = 'border-b hover:bg-gray-50 report-col-row';
+            tr.innerHTML = `
+                <td class="px-1 py-1"><input type="text" class="w-full rounded border-gray-300 text-xs px-1 py-0.5 report-col-field" value="${escapeHtml(col.field || '')}" placeholder="qty" onchange="updateReportTableGroupByOptions()"></td>
+                <td class="px-1 py-1"><input type="text" class="w-full rounded border-gray-300 text-xs px-1 py-0.5 report-col-label" value="${escapeHtml(col.label || '')}" placeholder="(same as field)"></td>
+                <td class="px-1 py-1">
+                    <select class="w-full rounded border-gray-300 text-xs px-1 py-0.5 report-col-type" onchange="updateReportTableAggregateOptions(this)">
+                        ${REPORT_COL_TYPES.map(t => `<option value="${t}" ${t === (col.type || 'text') ? 'selected' : ''}>${t}</option>`).join('')}
+                    </select>
+                </td>
+                <td class="px-1 py-1">
+                    <select class="w-full rounded border-gray-300 text-xs px-1 py-0.5 report-col-align">
+                        <option value="">auto</option>
+                        <option value="left" ${col.align === 'left' ? 'selected' : ''}>left</option>
+                        <option value="right" ${col.align === 'right' ? 'selected' : ''}>right</option>
+                        <option value="center" ${col.align === 'center' ? 'selected' : ''}>center</option>
+                    </select>
+                </td>
+                <td class="px-1 py-1">
+                    <select class="w-full rounded border-gray-300 text-xs px-1 py-0.5 report-col-aggregate">
+                        <option value="">none</option>
+                        <option value="sum" ${col.aggregate === 'sum' ? 'selected' : ''}>sum</option>
+                        <option value="avg" ${col.aggregate === 'avg' ? 'selected' : ''}>avg</option>
+                        <option value="count" ${col.aggregate === 'count' ? 'selected' : ''}>count</option>
+                        <option value="min" ${col.aggregate === 'min' ? 'selected' : ''}>min</option>
+                        <option value="max" ${col.aggregate === 'max' ? 'selected' : ''}>max</option>
+                    </select>
+                </td>
+                <td class="px-1 py-1"><input type="text" class="w-full rounded border-gray-300 text-xs px-1 py-0.5 font-mono report-col-formula" value="${escapeHtml(col.formula || '')}" placeholder="{qty} * {harga}"></td>
+                <td class="px-1 py-1 text-center"><button type="button" class="text-red-600 hover:text-red-800" onclick="this.closest('tr').remove(); updateReportTableGroupByOptions();"><i class="bi bi-x-lg"></i></button></td>
+            `;
+            body.appendChild(tr);
+            updateReportTableGroupByOptions();
+        }
+
+        // Update groupBy dropdown options dari field names di columns
+        function updateReportTableGroupByOptions() {
+            const select = document.getElementById('reportTableGroupBy');
+            if (!select) return;
+            const currentValue = select.value;
+            const fields = Array.from(document.querySelectorAll('.report-col-field'))
+                .map(i => i.value.trim())
+                .filter(f => f !== '');
+            select.innerHTML = '<option value="">— Tidak group —</option>'
+                + fields.map(f => `<option value="${escapeHtml(f)}" ${f === currentValue ? 'selected' : ''}>${escapeHtml(f)}</option>`).join('');
+        }
+
+        // Kalau type text/date/datetime, SUM/AVG/MIN/MAX tidak allowed (only count/none).
+        // Reset aggregate ke none kalau invalid combo.
+        function updateReportTableAggregateOptions(typeSelect) {
+            const tr = typeSelect.closest('tr');
+            const aggSelect = tr.querySelector('.report-col-aggregate');
+            const type = typeSelect.value;
+            const isNumeric = type === 'number' || type === 'currency' || type === 'percent';
+            const numericAggs = ['sum', 'avg', 'min', 'max'];
+            if (!isNumeric && numericAggs.includes(aggSelect.value)) {
+                aggSelect.value = ''; // reset
+                showToast('Aggregate ' + numericAggs.join('/') + ' hanya untuk type numeric. Reset ke none.', 'error');
+            }
+        }
+
+        // Extract config dari form state (untuk save + preview)
+        function collectReportTableConfig() {
+            const rows = document.querySelectorAll('#reportTableColumnsBody tr');
+            const columns = Array.from(rows).map(tr => {
+                const col = {
+                    field: tr.querySelector('.report-col-field').value.trim(),
+                    label: tr.querySelector('.report-col-label').value.trim(),
+                    type: tr.querySelector('.report-col-type').value,
+                };
+                const align = tr.querySelector('.report-col-align').value;
+                const aggregate = tr.querySelector('.report-col-aggregate').value;
+                const formula = tr.querySelector('.report-col-formula').value.trim();
+                if (align) col.align = align;
+                if (aggregate) col.aggregate = aggregate;
+                if (formula) col.formula = formula;
+                if (col.type === 'currency') col.currency = document.getElementById('reportTableCurrency').value;
+                if (col.label === '') delete col.label; // omit empty label = use field
+                return col;
+            }).filter(c => c.field !== '');
+
+            const groupBy = document.getElementById('reportTableGroupBy').value;
+            const config = {
+                sql: document.getElementById('reportTableSql').value.trim(),
+                columns: columns,
+                showGrandTotal: document.getElementById('reportTableShowGrandTotal').checked,
+                emptyMessage: document.getElementById('reportTableEmptyMessage').value.trim() || 'Belum ada data',
+                locale: document.getElementById('reportTableLocale').value,
+                currency: document.getElementById('reportTableCurrency').value,
+            };
+            if (groupBy) config.groupBy = groupBy;
+            return config;
+        }
+
+        async function saveReportTable() {
+            let ns = (document.getElementById('reportTableNs').value || '').trim();
+            const editNs = document.getElementById('reportTableEditNs').value;
+            if (!ns) { showToast('Nama tabel (namespace) wajib diisi', 'error'); return; }
+            ns = ns.replace(/[^a-zA-Z0-9_]/g, '');
+            if (!ns) { showToast('Namespace hanya boleh huruf/angka/underscore', 'error'); return; }
+
+            const cfg = collectReportTableConfig();
+            if (!cfg.sql) { showToast('SQL kosong', 'error'); return; }
+            if (cfg.columns.length === 0) { showToast('Minimal 1 kolom wajib diisi', 'error'); return; }
+
+            // Prevent rename collision
+            if (!editNs && configHeader.reportTables && configHeader.reportTables[ns]) {
+                if (!(await ezdocConfirm('Namespace "' + ns + '" sudah ada. Overwrite?', { title: 'Overwrite', variant: 'warning', confirmText: 'Overwrite' }))) return;
+            }
+
+            configHeader.reportTables[ns] = cfg;
+            renderReportTableList();
+            showToast('Tabel laporan "' + ns + '" disimpan');
+            closeAppModal('reportTable');
+        }
+
+        async function deleteReportTable(ns) {
+            if (!(await ezdocConfirm('Hapus tabel laporan "' + ns + '"? Marker {{report.' + ns + '}} di editor akan show "config missing" saat print.', { title: 'Hapus', variant: 'danger', confirmText: 'Hapus' }))) return;
+            if (configHeader.reportTables) delete configHeader.reportTables[ns];
+            renderReportTableList();
+            showToast('Tabel laporan "' + ns + '" dihapus');
+        }
+
+        function insertReportTableVar(ns) {
+            const editor = tinymce.get('editor');
+            if (!editor) return;
+            const tag = '{{report.' + ns + '}}';
+            editor.execCommand('mceInsertContent', false, tag);
+            showToast('Marker inserted: ' + tag);
+        }
+
+        function renderReportTableList() {
+            const list = document.getElementById('reportTableList');
+            const empty = document.getElementById('reportTableEmpty');
+            const countBadge = document.getElementById('reportTableCount');
+            if (!list) return;
+            const tables = configHeader.reportTables || {};
+            const keys = Object.keys(tables);
+            if (countBadge) countBadge.textContent = keys.length;
+            if (keys.length === 0) {
+                list.innerHTML = '';
+                if (empty) empty.style.display = 'block';
+                return;
+            }
+            if (empty) empty.style.display = 'none';
+            list.innerHTML = keys.map(ns => {
+                const cfg = tables[ns] || {};
+                const cols = Array.isArray(cfg.columns) ? cfg.columns : [];
+                const aggCount = cols.filter(c => c.aggregate).length;
+                const formulaCount = cols.filter(c => c.formula).length;
+                const groupInfo = cfg.groupBy ? (' • group: ' + (typeof cfg.groupBy === 'string' ? cfg.groupBy : cfg.groupBy.field)) : '';
+                return `
+                <div class="mb-2 p-2 bg-gray-100 rounded" style="border-left: 3px solid #4f46e5;">
+                    <div class="flex justify-between items-start mb-1">
+                        <div>
+                            <strong class="text-xs" style="color:#4f46e5;">${escapeHtml(ns)}</strong>
+                            <div class="text-gray-500" style="font-size:10px;">${cols.length} kolom${aggCount ? ' • ' + aggCount + ' aggregate' : ''}${formulaCount ? ' • ' + formulaCount + ' formula' : ''}${groupInfo}</div>
+                        </div>
+                        <div class="inline-flex">
+                            <button type="button" class="inline-flex items-center py-0 px-1 rounded-l border border-indigo-500 text-indigo-600 hover:bg-indigo-50" onclick="insertReportTableVar('${ns}')" title="Insert marker ke editor"><i class="bi bi-plus-square"></i></button>
+                            <button type="button" class="inline-flex items-center py-0 px-1 border border-gray-500 text-gray-700 hover:bg-gray-50" onclick="openReportTableModal('${ns}')" title="Edit"><i class="bi bi-pencil"></i></button>
+                            <button type="button" class="inline-flex items-center py-0 px-1 rounded-r border border-red-600 text-red-600 hover:bg-red-50" onclick="deleteReportTable('${ns}')" title="Hapus"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function previewReportTable() {
+            const previewDiv = document.getElementById('reportTablePreview');
+            const cfg = collectReportTableConfig();
+            if (!cfg.sql || cfg.columns.length === 0) {
+                previewDiv.innerHTML = '<em class="text-red-600">SQL + kolom wajib diisi untuk preview.</em>';
+                return;
+            }
+            previewDiv.innerHTML = '<em class="text-gray-500">Loading preview...</em>';
+
+            // Fetch sample rows dari existing analyze_query endpoint (limits to first 5 rows sample).
+            // TODO(v0.9.14b): dedicated preview endpoint yg render server-side ReportTable output.
+            // Untuk MVP, kita render client-side pakai raw data:
+            try {
+                const fd = new FormData();
+                fd.append('ajax', '1');
+                fd.append('action', 'analyze_query');
+                fd.append('query', cfg.sql + (cfg.sql.match(/limit\s+\d+$/i) ? '' : ' LIMIT 5'));
+                fd.append('return_rows', '1');
+                const r = await fetch(EZDOC_URLS.analyze || '', { method: 'POST', body: fd });
+                const data = await r.json();
+                if (!data.success) {
+                    previewDiv.innerHTML = '<em class="text-red-600">Preview error: ' + escapeHtml(data.message || 'unknown') + '</em>';
+                    return;
+                }
+                // Render simple preview client-side (approximation — real render pakai PHP ReportTable)
+                const rows = data.rows || [];
+                previewDiv.innerHTML = renderPreviewClientSide(cfg, rows);
+            } catch (e) {
+                previewDiv.innerHTML = '<em class="text-red-600">Preview error: ' + escapeHtml(e.message) + '</em>';
+            }
+        }
+
+        // Simplified client-side preview (rough approximation; final render pakai PHP ReportTable).
+        function renderPreviewClientSide(cfg, rows) {
+            if (rows.length === 0) {
+                return '<em class="text-gray-500">' + escapeHtml(cfg.emptyMessage || 'Belum ada data') + '</em>';
+            }
+            let html = '<div class="text-xs text-gray-500 mb-1">Preview (5 rows sample, formatting mungkin sedikit beda dgn final render server-side)</div>';
+            html += '<table class="w-full text-xs border-collapse" style="border:1px solid #ccc;">';
+            html += '<thead style="background:#f5f5f5;"><tr>';
+            cfg.columns.forEach(c => {
+                html += '<th class="border px-2 py-1 text-left">' + escapeHtml(c.label || c.field) + '</th>';
+            });
+            html += '</tr></thead><tbody>';
+            rows.slice(0, 5).forEach(row => {
+                html += '<tr>';
+                cfg.columns.forEach(c => {
+                    let val;
+                    if (c.formula) {
+                        val = '<em class="text-indigo-600">(computed)</em>';
+                    } else {
+                        val = escapeHtml(row[c.field] !== undefined && row[c.field] !== null ? String(row[c.field]) : '—');
+                    }
+                    html += '<td class="border px-2 py-1">' + val + '</td>';
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            html += '<div class="text-xs text-gray-500 mt-1"><i class="bi bi-info-circle"></i> Aggregate footer, formula values, dan formatting (Rp, %, dst) di-render server-side saat generate. Preview ini cuma cek data + column mapping.</div>';
+            return html;
         }
 
         // Default Vars Manager
@@ -1946,6 +2321,7 @@
                         scanCondSections();
                         scanDynTables();
                         if (typeof renderTabledbList === 'function') renderTabledbList();
+                        if (typeof renderReportTableList === 'function') renderReportTableList();
                         updateAllLogosInEditor(); // Show actual logos
                         initLogoDrag();
                         initTtdDrag();

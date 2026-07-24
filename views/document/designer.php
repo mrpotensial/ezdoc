@@ -605,6 +605,24 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     </div>
                 </div>
 
+                <!-- Report Table Panel (v0.9.14 — Collapsible) -->
+                <div class="border-b border-gray-200" x-data="{ open: false }">
+                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
+                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-table"></i>Tabel Laporan <span id="reportTableCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
+                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
+                    </div>
+                    <div x-show="open" x-collapse>
+                        <div class="p-2 pt-0">
+                            <button type="button" class="w-full mb-2 inline-flex items-center justify-center px-2 py-1 rounded text-xs border border-indigo-500 text-indigo-600 hover:bg-indigo-50" onclick="openReportTableModal()"><i class="bi bi-plus-lg mr-1"></i>Buat Tabel Laporan</button>
+                            <div id="reportTableList"></div>
+                            <div id="reportTableEmpty" class="text-center text-gray-500 text-xs py-2">
+                                Belum ada tabel laporan.<br>
+                                <span class="text-xs">Tabel dgn kolom SUM/AVG/formula (mis. total = qty*harga). Marker <code>{{report.nama}}</code> dipakai di editor.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- QR Panel (Collapsible) -->
                 <div class="border-b border-gray-200" x-data="{ open: false }">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
@@ -1007,6 +1025,124 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         </div>
     </div>
 
+    <!-- Report Table Modal (v0.9.14) — form-based editor untuk report-style tables -->
+    <div x-data x-show="$store.modals.reportTable" x-transition
+         class="fixed inset-0 flex items-center justify-center p-4 z-[100010]"
+         style="display:none;">
+        <div class="fixed inset-0 bg-black/50" @click="$store.modals.reportTable = false"></div>
+        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto" id="reportTableModal">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-indigo-50 rounded-t-lg">
+                <h6 class="text-base font-semibold text-indigo-900"><i class="bi bi-table mr-1"></i><span id="reportTableModalTitle">Buat Tabel Laporan</span></h6>
+                <button type="button" class="text-gray-500 opacity-80 hover:opacity-100 text-2xl leading-none" @click="$store.modals.reportTable = false">&times;</button>
+            </div>
+            <div class="p-4">
+                <input type="hidden" id="reportTableEditNs" value="">
+
+                <!-- Namespace + SQL -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">Nama Tabel (namespace) *</label>
+                        <input type="text" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1" id="reportTableNs" placeholder="contoh: penjualan, stok, keuangan" maxlength="32">
+                        <small class="text-gray-500 text-xs">Huruf/angka/underscore. Marker: <code>{{report.namanya}}</code></small>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">Locale</label>
+                        <select id="reportTableLocale" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1">
+                            <option value="id">Bahasa Indonesia</option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">Default Currency</label>
+                        <select id="reportTableCurrency" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1">
+                            <option value="IDR">IDR (Rp)</option>
+                            <option value="USD">USD ($)</option>
+                            <option value="EUR">EUR (€)</option>
+                            <option value="SGD">SGD (S$)</option>
+                            <option value="MYR">MYR (RM)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="block text-xs font-bold text-gray-700 mb-1">SQL SELECT *</label>
+                    <textarea class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1 font-mono" id="reportTableSql" rows="4" placeholder="SELECT kategori, nama, qty, harga FROM stok WHERE nopen={nopen} ORDER BY kategori"></textarea>
+                    <small class="text-gray-500 text-xs">Parameter <code>{nopen}</code>, <code>{norm}</code>, <code>{nama_field}</code> di-bind otomatis. Kalau pakai groupBy, wajib <code>ORDER BY</code> di SQL. Hanya SELECT/WITH allowed.</small>
+                </div>
+
+                <div class="flex mb-3 gap-2">
+                    <button type="button" class="inline-flex items-center px-2 py-1 rounded text-xs bg-indigo-600 text-white hover:bg-indigo-700" onclick="analyzeReportTableSql()"><i class="bi bi-search mr-1"></i>Deteksi Kolom dari SQL</button>
+                    <span id="reportTableAnalyzeStatus" class="text-xs self-center"></span>
+                </div>
+
+                <!-- Columns editor -->
+                <div class="mb-3" id="reportTableColumnsBox" style="display:none;">
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-xs font-bold text-gray-700">Kolom Tabel</label>
+                        <button type="button" class="inline-flex items-center px-2 py-0.5 rounded text-xs border border-indigo-500 text-indigo-600 hover:bg-indigo-50" onclick="addReportTableColumn()"><i class="bi bi-plus-lg mr-1"></i>Tambah Kolom</button>
+                    </div>
+                    <div class="overflow-x-auto border rounded">
+                        <table class="w-full text-xs" style="border-collapse: collapse;">
+                            <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="px-2 py-1 text-left border-b" title="SQL column name atau nama unik untuk formula">Field*</th>
+                                    <th class="px-2 py-1 text-left border-b" title="Header text ditampilkan di tabel">Label</th>
+                                    <th class="px-2 py-1 text-left border-b" title="Tipe data → format otomatis">Type</th>
+                                    <th class="px-2 py-1 text-left border-b" title="Perataan text di kolom">Align</th>
+                                    <th class="px-2 py-1 text-left border-b" title="Aggregate function untuk footer + subtotal">Aggregate</th>
+                                    <th class="px-2 py-1 text-left border-b" title="Formula untuk computed column: {field}*{other}">Formula</th>
+                                    <th class="px-2 py-1 text-center border-b"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="reportTableColumnsBody">
+                                <!-- rows added dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <small class="text-gray-500 block mt-1 text-xs">
+                        <strong>Type</strong>: text/number/currency/percent/date/datetime.
+                        <strong>Aggregate</strong>: none/sum/avg/count/min/max (SUM/AVG/MIN/MAX hanya untuk kolom numeric).
+                        <strong>Formula</strong>: <code>{qty} * {harga}</code>, <code>{subtotal} * 11 / 100</code> (safe expression, tidak ada function call).
+                    </small>
+                </div>
+
+                <!-- GroupBy + options -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3" id="reportTableOptionsBox" style="display:none;">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">Group By (opsional)</label>
+                        <select id="reportTableGroupBy" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1">
+                            <option value="">— Tidak group —</option>
+                        </select>
+                        <small class="text-gray-500 text-xs">Subtotal per group. Wajib <code>ORDER BY</code> di SQL.</small>
+                    </div>
+                    <div class="flex items-center pt-4">
+                        <input type="checkbox" id="reportTableShowGrandTotal" class="mr-2" checked>
+                        <label for="reportTableShowGrandTotal" class="text-xs">Tampilkan Grand Total (footer)</label>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">Pesan Empty (kalau tidak ada data)</label>
+                        <input type="text" id="reportTableEmptyMessage" class="w-full rounded border-gray-300 shadow-sm text-xs px-2 py-1" placeholder="Belum ada data" value="Belum ada data">
+                    </div>
+                </div>
+
+                <!-- Preview -->
+                <div class="mb-2" id="reportTablePreviewBox" style="display:none;">
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-xs font-bold text-gray-700">Preview</label>
+                        <button type="button" class="inline-flex items-center px-2 py-0.5 rounded text-xs border border-gray-500 text-gray-700 hover:bg-gray-50" onclick="previewReportTable()"><i class="bi bi-eye mr-1"></i>Refresh Preview</button>
+                    </div>
+                    <div id="reportTablePreview" class="p-2 border rounded bg-white text-xs" style="min-height:60px;">
+                        <em class="text-gray-500">Klik "Refresh Preview" untuk lihat hasil dgn data sample dari SQL.</em>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center justify-end px-4 py-3 border-t border-gray-200 gap-2">
+                <button type="button" class="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-500 text-white hover:bg-gray-600" @click="$store.modals.reportTable = false">Batal</button>
+                <button type="button" class="inline-flex items-center px-2 py-1 rounded text-xs bg-indigo-600 text-white hover:bg-indigo-700" onclick="saveReportTable()"><i class="bi bi-check-lg mr-1"></i>Simpan Tabel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- URL Params Summary Modal (Alpine) -->
     <div x-data x-show="$store.modals.params" x-transition
          class="fixed inset-0 flex items-center justify-center p-4 z-[100010]"
@@ -1065,6 +1201,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 varManager: false,
                 fieldInspector: false,
                 tabledb: false,
+                reportTable: false,
                 params: false,
                 verifyPreview: false,
                 open(name) { this[name] = true; },
