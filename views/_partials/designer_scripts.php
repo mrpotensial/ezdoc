@@ -402,10 +402,18 @@
 
         // Build chip HTML string (used for insert + load transform).
         // ns/selector/format sudah trimmed. Escape untuk HTML attr safety.
+        //
+        // CRITICAL: title uses HTML entities untuk `{`/`}` supaya tabledb marker
+        // regex (yg scan `{{tabledb.*}}`) TIDAK match text di dalam title attr
+        // saat content re-transformed. Browser tetap display literal `{{...}}` di
+        // tooltip. Kalau pakai raw `{{...}}` di title, re-run
+        // tabledbRawMarkersToChips akan nested-wrap chip → broken HTML.
         function buildTabledbChipHtml(ns, selector, format) {
             const typeClass = tabledbChipTypeClass(selector);
             const label = tabledbChipLabel(ns, selector, format);
             const rawMarker = '{{tabledb.' + ns + '.' + selector + (format ? '|' + format : '') + '}}';
+            // HTML-entity-encoded braces — regex-invisible tapi visible di tooltip
+            const safeTitle = rawMarker.replace(/\{/g, '&#123;').replace(/\}/g, '&#125;');
             const parsed = parseTabledbSelector(selector);
             const invalid = parsed.type === 'invalid' ? ' data-invalid="1"' : '';
             return '<span class="tabledb-marker ' + typeClass + '"'
@@ -413,7 +421,7 @@
                 + ' data-selector="' + escapeAttr(selector) + '"'
                 + ' data-format="' + escapeAttr(format || '') + '"'
                 + ' contenteditable="false"'
-                + ' title="' + escapeAttr(rawMarker) + '"'
+                + ' title="' + safeTitle + '"'
                 + invalid + '>'
                 + escapeHtml(label)
                 + '</span>';
@@ -427,11 +435,32 @@
         // Transform raw {{tabledb.*}} markers in HTML string → chip HTML.
         // Used on load (editor init + setContent) supaya existing templates
         // dgn raw markers otomatis jadi chips.
+        //
+        // Safety: skip transformation kalau string already contains chip spans
+        // (idempotent guard vs re-entrant BeforeSetContent yg bisa loop-wrap).
+        // Also: split by chip boundaries + only transform text OUTSIDE chip
+        // spans, supaya raw markers di data-* atau title attr TIDAK ter-wrap.
         function tabledbRawMarkersToChips(html) {
             if (!html || html.indexOf('{{tabledb') === -1) return html;
-            return html.replace(/\{\{tabledb(?:\.([a-zA-Z_]\w*))?\.([^|}]+?)(?:\|([^}]+))?\}\}/g, function (m, ns, sel, fmt) {
+            const markerRegex = /\{\{tabledb(?:\.([a-zA-Z_]\w*))?\.([^|}]+?)(?:\|([^}]+))?\}\}/g;
+            const wrap = function (m, ns, sel, fmt) {
                 return buildTabledbChipHtml(ns || 'default', sel.trim(), (fmt || '').trim());
-            });
+            };
+            // Fast path: no existing chips → transform everything
+            if (html.indexOf('tabledb-marker') === -1) {
+                return html.replace(markerRegex, wrap);
+            }
+            // Slow path: split by chip span boundaries, only transform between them.
+            // Regex captures full chip span (non-greedy up to </span>). Text before/
+            // after/between chip matches gets marker-transformed; chip spans left as-is.
+            const chipSplitRe = /(<span[^>]*class="[^"]*tabledb-marker[^"]*"[^>]*>[\s\S]*?<\/span>)/gi;
+            const parts = html.split(chipSplitRe);
+            for (let i = 0; i < parts.length; i++) {
+                // Odd indices = captured chip spans → leave alone
+                // Even indices = text between chips → transform raw markers
+                if (i % 2 === 0) parts[i] = parts[i].replace(markerRegex, wrap);
+            }
+            return parts.join('');
         }
 
         // Reverse transform: chip HTML → raw markers. Used on save.
