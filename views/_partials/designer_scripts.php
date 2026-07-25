@@ -416,11 +416,16 @@
             const safeTitle = rawMarker.replace(/\{/g, '&#123;').replace(/\}/g, '&#125;');
             const parsed = parseTabledbSelector(selector);
             const invalid = parsed.type === 'invalid' ? ' data-invalid="1"' : '';
+            // NOTE: NO contenteditable="false" — supaya TinyMCE bisa wrap chip
+            // dgn <strong>/<em>/<span style="color:X"> saat user apply toolbar
+            // formatting. Same pattern sebagai .field-placeholder. Klik chip
+            // masih ter-detect via editor.on('click') listener → open right
+            // panel. User bisa cursor masuk chip untuk styling (label bisa
+            // ter-edit visually tapi data-* attrs = source of truth saat save).
             return '<span class="tabledb-marker ' + typeClass + '"'
                 + ' data-ns="' + escapeAttr(ns) + '"'
                 + ' data-selector="' + escapeAttr(selector) + '"'
                 + ' data-format="' + escapeAttr(format || '') + '"'
-                + ' contenteditable="false"'
                 + ' title="' + safeTitle + '"'
                 + invalid + '>'
                 + escapeHtml(label)
@@ -1841,13 +1846,24 @@
                 .field-placeholder[data-type="select"] { background: #f3e8ff; outline-color: #a855f7; color: #6b21a8; }
                 /* Tabledb marker chip (v0.9.14b) — visual widget wrapping
                    {{tabledb.*}} markers untuk click-to-edit UX. Serialized ke
-                   raw marker text saat save. Type-color coded by selector. */
+                   raw marker text saat save. Type-color coded by selector.
+
+                   Style inheritance: font-weight/style/size/family/color/align
+                   INHERIT dari parent context (cell/paragraph). Chip cuma add
+                   background+border sebagai visual indicator, so user bisa bold/
+                   italic/color/align cells di TinyMCE toolbar — style tembus ke
+                   chip. Mirror pattern dari .field-placeholder. */
                 .tabledb-marker {
                     display: inline-block;
-                    padding: 1px 6px;
+                    padding: 0 4px;
                     border-radius: 3px;
                     font-family: inherit;
-                    font-size: 0.9em;
+                    font-size: inherit;
+                    font-weight: inherit;
+                    font-style: inherit;
+                    line-height: inherit;
+                    color: inherit;
+                    text-align: inherit;
                     border: 1px solid;
                     cursor: pointer;
                     user-select: none;
@@ -1861,27 +1877,26 @@
                     margin-right: 3px;
                     font-family: 'Font Awesome 6 Free';
                     font-weight: 900;
-                    font-size: 0.85em;
-                    opacity: 0.8;
+                    font-size: 0.75em;
+                    opacity: 0.6;
                 }
+                /* Type indicator = background + border color only (no color override
+                   supaya bold/italic/color toolbar tetap tembus). */
                 .tabledb-marker-raw {
                     background: #dbeafe;
                     border-color: #60a5fa;
-                    color: #1e3a8a;
                 }
-                .tabledb-marker-raw::before { content: '\f0ce'; /* fa-table */ }
+                .tabledb-marker-raw::before { content: '\f0ce'; color: #1e40af; }
                 .tabledb-marker-formula {
                     background: #e0e7ff;
                     border-color: #818cf8;
-                    color: #3730a3;
                 }
-                .tabledb-marker-formula::before { content: '\f1ec'; /* fa-calculator */ }
+                .tabledb-marker-formula::before { content: '\f1ec'; color: #3730a3; }
                 .tabledb-marker-aggregate {
                     background: #f3e8ff;
                     border-color: #c084fc;
-                    color: #6b21a8;
                 }
-                .tabledb-marker-aggregate::before { content: '\f668'; /* fa-sigma-not-in-fa — use sum */ }
+                .tabledb-marker-aggregate::before { content: '\f668'; color: #6b21a8; }
                 .tabledb-marker.tabledb-selected {
                     outline: 2px solid #ef4444;
                     outline-offset: 1px;
@@ -1890,9 +1905,8 @@
                 .tabledb-marker[data-invalid="1"] {
                     background: #fee2e2;
                     border-color: #f87171;
-                    color: #991b1b;
                 }
-                .tabledb-marker[data-invalid="1"]::before { content: '\f071'; /* fa-exclamation-triangle */ }
+                .tabledb-marker[data-invalid="1"]::before { content: '\f071'; color: #991b1b; }
                 /* Inline logo — layout-transparent (outline, no padding/border/min-width).
                    Non-floating placeholder tanpa image renders sebagai text label;
                    dgn image renders at natural image dimensions (matches print
