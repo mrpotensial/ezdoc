@@ -750,14 +750,34 @@
             const delBtn = document.getElementById('tabledbEdDelete');
             if (delBtn) delBtn.addEventListener('click', deleteTabledbSelectedChip);
 
-            // Column pill delegation — insert clicked column name at cursor
+            // Column pill delegation — smart insert:
+            //   - Formula input: insert at cursor (append/insert)
+            //   - Aggregate target: REPLACE dgn column name (aggregate on col)
+            //     kecuali target sudah punya `=` prefix (formula) → insert at cursor
             document.body.addEventListener('click', function (e) {
                 const pill = e.target.closest && e.target.closest('.tabledb-col-pill');
                 if (!pill) return;
                 const targetId = pill.getAttribute('data-target');
                 const col = pill.getAttribute('data-col');
                 const input = document.getElementById(targetId);
-                if (input && col) _insertAtCursor(input, col);
+                if (!input || !col) return;
+                // Aggregate target: REPLACE dgn column name kalau target blank
+                // ATAU sudah berupa plain column name. Kalau target sudah punya
+                // `=` prefix ATAU mengandung operators (implicit formula),
+                // INSERT at cursor (append/build formula).
+                if (targetId === 'tabledbEdAggTarget') {
+                    const cur = input.value.trim();
+                    const looksLikeFormula = cur.startsWith('=') || /[+\-*\/()]|\s/.test(cur);
+                    if (looksLikeFormula && cur !== '') {
+                        _insertAtCursor(input, col);
+                    } else {
+                        input.value = col;
+                        input.focus();
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                } else {
+                    _insertAtCursor(input, col);
+                }
             });
             // Formula preset button delegation
             document.body.addEventListener('click', function (e) {
@@ -775,13 +795,19 @@
             document.body.addEventListener('click', function (e) {
                 const btn = e.target.closest && e.target.closest('.tabledb-ed-agg-preset');
                 if (!btn) return;
-                const target = btn.getAttribute('data-target');
                 const input = document.getElementById('tabledbEdAggTarget');
-                if (input && target) {
+                if (!input) return;
+                // Special mode: prefix "= " ke target existing (untuk convert col → formula target)
+                const mode = btn.getAttribute('data-target-mode');
+                if (mode === 'formula-prefix') {
+                    const cur = input.value.trim();
+                    input.value = cur.startsWith('=') ? cur : '=' + (cur || 'kolom1 * kolom2');
+                } else {
+                    const target = btn.getAttribute('data-target') || '';
                     input.value = target;
-                    input.focus();
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
                 }
+                input.focus();
+                input.dispatchEvent(new Event('input', { bubbles: true }));
             });
 
             // Initialize type button state (default: raw)

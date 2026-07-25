@@ -671,19 +671,22 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                                         <input type="text" id="tabledbEdAggTarget" class="rounded border-gray-300 text-xs px-2 py-1 flex-1 font-mono" placeholder="col atau =formula atau *">
                                     </div>
                                     <div class="mb-1">
-                                        <div class="text-gray-500 mb-1">Klik kolom untuk isi target:</div>
+                                        <div class="text-gray-500 mb-1"><strong>Klik kolom</strong> di bawah untuk isi target (nama kolom asli dari SQL):</div>
                                         <div id="tabledbEdAggregateCols" class="flex flex-wrap gap-1"></div>
                                     </div>
                                     <div class="flex flex-wrap gap-1 mb-1">
-                                        <button type="button" class="tabledb-ed-agg-preset px-2 py-0.5 rounded text-[10px] border border-gray-400 hover:bg-gray-100" data-target="*">* (semua baris)</button>
-                                        <button type="button" class="tabledb-ed-agg-preset px-2 py-0.5 rounded text-[10px] border border-gray-400 hover:bg-gray-100" data-target="=qty*harga">= qty × harga</button>
+                                        <button type="button" class="tabledb-ed-agg-preset px-2 py-0.5 rounded text-[10px] border border-gray-400 hover:bg-gray-100" data-target="*" title="Count semua baris">* (all rows)</button>
+                                        <button type="button" class="tabledb-ed-agg-preset px-2 py-0.5 rounded text-[10px] border border-gray-400 hover:bg-gray-100" data-target-mode="formula-prefix" title="Prefix = kalau mau aggregate hasil formula">= (formula)</button>
                                     </div>
                                     <small class="text-gray-500 block">
-                                        <strong>sum:harga</strong> = jumlahkan kolom harga.<br>
-                                        <strong>sum:=qty*harga</strong> = jumlahkan hasil formula.<br>
+                                        <strong>sum:kolom</strong> = jumlahkan nilai kolom SQL.<br>
+                                        <strong>sum:=kolom1*kolom2</strong> = jumlahkan hasil formula (prefix <code>=</code>).<br>
                                         <strong>count:*</strong> = hitung semua baris.<br>
-                                        <strong>count:harga</strong> = hitung baris yg harga tidak kosong.
+                                        <strong>count:kolom</strong> = hitung baris yg kolom tidak kosong.
                                     </small>
+                                    <div class="mt-1 p-1 bg-amber-50 border border-amber-200 rounded text-[10px] text-amber-800">
+                                        <i class="bi bi-exclamation-triangle"></i> Kalau hasilnya <code>—</code> di generate, biasanya target kolom tidak cocok dgn SQL. Pakai <strong>Klik kolom</strong> di atas untuk pastikan nama benar.
+                                    </div>
                                 </div>
                                 <!-- Format -->
                                 <div>

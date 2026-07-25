@@ -759,23 +759,55 @@ function _tabledbRenderRow(string $rowHtml, string $markerRegex, array $rowConte
 
         // Compute raw value based on selector type
         $rawValue = null;
+        $nullReason = ''; // untuk hover title kalau result null
         if ($selector['type'] === 'raw') {
             $rawValue = $rowRaw[$selector['field']] ?? null;
+            if ($rawValue === null && $rowRaw !== null) {
+                $available = array_keys($rowRaw);
+                $nullReason = 'Kolom "' . $selector['field'] . '" tidak ada di SQL rows. '
+                    . 'Kolom tersedia: ' . implode(', ', $available);
+            }
         } elseif ($selector['type'] === 'formula') {
             try {
                 $rawValue = \Ezdoc\Table\FormulaEvaluator::evaluateBare($selector['formula'], $rowContext);
             } catch (\Ezdoc\Exceptions\ValidationException $e) {
                 return '<span style="color:#c00;" title="Formula error">' . htmlspecialchars($e->getMessage(), ENT_QUOTES) . '</span>';
             }
+            if ($rawValue === null) {
+                $available = is_array($rowContext) ? implode(', ', array_keys($rowContext)) : '(no row)';
+                $nullReason = 'Formula "' . $selector['formula'] . '" return null (kolom missing/non-numeric/div-by-zero). '
+                    . 'Kolom row: ' . $available;
+            }
         } elseif ($selector['type'] === 'aggregate') {
             $rawValue = _tabledbComputeAggregate($selector['verb'], $selector['target'], $allRows);
+            if ($rawValue === null) {
+                $target = $selector['target'];
+                // Match auto-detection logic di _tabledbComputeAggregate
+                $isFormula = ($target !== '' && $target[0] === '=')
+                    || preg_match('/[+\-*\/()]|\s/', $target);
+                $available = !empty($allRows) && is_array($allRows[0]) ? implode(', ', array_keys($allRows[0])) : '(no rows)';
+                if (empty($allRows)) {
+                    $nullReason = 'Aggregate: 0 rows dari SQL (query returned empty result set).';
+                } elseif ($isFormula) {
+                    $exprShown = $target[0] === '=' ? substr($target, 1) : $target;
+                    $nullReason = 'Aggregate: formula "' . $exprShown . '" tidak return angka valid di ANY row. '
+                        . 'Kolom tersedia: ' . $available . '. Cek nama kolom di formula.';
+                } else {
+                    $nullReason = 'Aggregate: kolom "' . $target . '" tidak ada atau tidak numeric di SQL rows. '
+                        . 'Kolom tersedia: ' . $available . '.';
+                }
+            }
         } else {
             return '<span style="color:#c00;">invalid marker</span>';
         }
 
         // Format
         if ($rawValue === null || $rawValue === '') {
-            return '—';
+            // Show dash BUT dgn title tooltip yg explain WHY — user bisa hover cek
+            $titleAttr = $nullReason !== ''
+                ? ' title="' . htmlspecialchars($nullReason, ENT_QUOTES) . '" style="text-decoration:underline dotted #c00;cursor:help;"'
+                : '';
+            return '<span' . $titleAttr . '>—</span>';
         }
         return _tabledbFormatValue($rawValue, $format);
     }, $rowHtml);
@@ -795,9 +827,20 @@ function _tabledbComputeAggregate(string $verb, string $target, array $allRows) 
         return count($allRows);
     }
 
-    // Extract numeric values per row
-    $isFormula = ($target !== '' && $target[0] === '=');
-    $expr = $isFormula ? substr($target, 1) : null;
+    // Detect formula:
+    // - Explicit prefix `=` → definitely formula (strip =)
+    // - Implicit: target contains operators (+ - * /) atau parens atau space
+    //   → user probably meant formula tanpa prefix (kuantiti * harga_satuan)
+    // - Otherwise: plain column name lookup
+    $isFormula = false;
+    $expr = null;
+    if ($target !== '' && $target[0] === '=') {
+        $isFormula = true;
+        $expr = trim(substr($target, 1));
+    } elseif (preg_match('/[+\-*\/()]|\s/', $target)) {
+        $isFormula = true;
+        $expr = trim($target);
+    }
 
     $values = [];
     foreach ($allRows as $row) {
