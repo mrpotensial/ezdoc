@@ -363,17 +363,25 @@
         }
 
         // Compact human-readable label untuk chip. Short supaya fit di cell.
+        // Long labels truncated dgn ellipsis; full text ada di title tooltip.
         function tabledbChipLabel(ns, selector, format) {
             const parsed = parseTabledbSelector(selector);
             const fmtSuffix = format ? ' (' + tabledbFormatBadge(format) + ')' : '';
-            if (parsed.type === 'raw') return parsed.field + fmtSuffix;
-            if (parsed.type === 'formula') return parsed.formula + fmtSuffix;
+            const MAX_LABEL_LEN = 22; // chars cap sebelum ellipsis
+            const trunc = function (str) {
+                str = String(str || '');
+                if (str.length <= MAX_LABEL_LEN) return str;
+                // Trim identifier — keep beginning+end untuk recognizability
+                return str.substring(0, MAX_LABEL_LEN - 1) + '…'; // …
+            };
+            if (parsed.type === 'raw') return trunc(parsed.field) + fmtSuffix;
+            if (parsed.type === 'formula') return trunc(parsed.formula) + fmtSuffix;
             if (parsed.type === 'aggregate') {
                 const targetLabel = parsed.target === '*' ? 'rows'
                     : (parsed.target[0] === '=' ? parsed.target.substring(1) : parsed.target);
-                return parsed.verb.toUpperCase() + ' ' + targetLabel + fmtSuffix;
+                return parsed.verb.toUpperCase() + ' ' + trunc(targetLabel) + fmtSuffix;
             }
-            return selector;
+            return trunc(selector);
         }
 
         // Compact format badge: currency → Rp, number:2 → num.2, dst
@@ -1870,7 +1878,7 @@
                    italic/color/align cells di TinyMCE toolbar — style tembus ke
                    chip. Mirror pattern dari .field-placeholder. */
                 .tabledb-marker {
-                    display: inline-block;
+                    display: inline;              /* inline supaya bisa wrap di cell narrow */
                     padding: 0 4px;
                     border-radius: 3px;
                     font-family: inherit;
@@ -1882,11 +1890,13 @@
                     text-align: inherit;
                     border: 1px solid;
                     cursor: pointer;
-                    user-select: none;
-                    -webkit-user-select: none;
+                    -webkit-box-decoration-break: clone;
+                    box-decoration-break: clone;  /* bg/border repeat per line saat wrap */
                     margin: 0 1px;
                     vertical-align: baseline;
-                    white-space: nowrap;
+                    white-space: normal;
+                    word-break: break-word;       /* break long identifier kalau perlu */
+                    max-width: 100%;
                 }
                 .tabledb-marker::before {
                     display: inline-block;
