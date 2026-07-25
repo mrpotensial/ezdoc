@@ -605,6 +605,91 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     </div>
                 </div>
 
+                <!-- Marker Terpilih Panel (v0.9.14b — click chip in editor to edit) -->
+                <div class="border-b border-gray-200" x-data="{ open: true }" id="tabledbMarkerEditorPanel">
+                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
+                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5">
+                            <i class="bi bi-braces-asterisk"></i>Marker Terpilih
+                            <span id="tabledbEditorStatus" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-500">kosong</span>
+                        </h6>
+                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
+                    </div>
+                    <div x-show="open" x-collapse>
+                        <div class="p-2 pt-0">
+                            <div id="tabledbEditorEmpty" class="text-center text-gray-500 text-xs py-3">
+                                <i class="bi bi-cursor-fill"></i> Klik chip <code>{{tabledb...}}</code> di editor untuk edit di sini.
+                            </div>
+                            <div id="tabledbEditorForm" style="display:none;" class="space-y-2 text-xs">
+                                <div>
+                                    <label class="block font-bold text-gray-700 mb-0.5">Namespace</label>
+                                    <input type="text" id="tabledbEdNs" class="w-full rounded border-gray-300 text-xs px-2 py-1" readonly>
+                                    <small class="text-gray-500">Data source (dari Query DB panel)</small>
+                                </div>
+                                <div>
+                                    <label class="block font-bold text-gray-700 mb-0.5">Tipe</label>
+                                    <div class="flex gap-1">
+                                        <button type="button" data-type="raw" class="tabledb-ed-type-btn flex-1 px-2 py-1 rounded border text-xs">Raw Column</button>
+                                        <button type="button" data-type="formula" class="tabledb-ed-type-btn flex-1 px-2 py-1 rounded border text-xs">Formula</button>
+                                        <button type="button" data-type="aggregate" class="tabledb-ed-type-btn flex-1 px-2 py-1 rounded border text-xs">Aggregate</button>
+                                    </div>
+                                </div>
+                                <!-- Raw column -->
+                                <div id="tabledbEdRawBox" style="display:none;">
+                                    <label class="block font-bold text-gray-700 mb-0.5">Column</label>
+                                    <select id="tabledbEdColumn" class="w-full rounded border-gray-300 text-xs px-2 py-1"></select>
+                                </div>
+                                <!-- Formula -->
+                                <div id="tabledbEdFormulaBox" style="display:none;">
+                                    <label class="block font-bold text-gray-700 mb-0.5">Formula (bare column names)</label>
+                                    <input type="text" id="tabledbEdFormula" class="w-full rounded border-gray-300 text-xs px-2 py-1 font-mono" placeholder="qty * harga">
+                                    <small class="text-gray-500">Contoh: <code>qty*harga</code>, <code>harga*(1-diskon/100)</code></small>
+                                </div>
+                                <!-- Aggregate -->
+                                <div id="tabledbEdAggregateBox" style="display:none;">
+                                    <label class="block font-bold text-gray-700 mb-0.5">Aggregate</label>
+                                    <div class="flex gap-1">
+                                        <select id="tabledbEdAggVerb" class="rounded border-gray-300 text-xs px-2 py-1" style="width:80px;">
+                                            <option value="sum">sum</option>
+                                            <option value="avg">avg</option>
+                                            <option value="count">count</option>
+                                            <option value="min">min</option>
+                                            <option value="max">max</option>
+                                        </select>
+                                        <input type="text" id="tabledbEdAggTarget" class="rounded border-gray-300 text-xs px-2 py-1 flex-1 font-mono" placeholder="col atau =formula atau *">
+                                    </div>
+                                    <small class="text-gray-500"><code>*</code> = count all rows. <code>=qty*harga</code> = sum of formula.</small>
+                                </div>
+                                <!-- Format -->
+                                <div>
+                                    <label class="block font-bold text-gray-700 mb-0.5">Format</label>
+                                    <div class="flex gap-1">
+                                        <select id="tabledbEdFormatType" class="rounded border-gray-300 text-xs px-2 py-1 flex-1">
+                                            <option value="">text (default)</option>
+                                            <option value="number">number</option>
+                                            <option value="currency">currency</option>
+                                            <option value="percent">percent</option>
+                                            <option value="date">date</option>
+                                            <option value="datetime">datetime</option>
+                                        </select>
+                                        <input type="text" id="tabledbEdFormatArgs" class="rounded border-gray-300 text-xs px-2 py-1" placeholder="args (IDR, 2, d/m/Y)" style="width:110px;">
+                                    </div>
+                                    <small class="text-gray-500">Args: currency=IDR/USD/EUR, number/percent=decimals, date=format</small>
+                                </div>
+                                <!-- Preview -->
+                                <div class="pt-1 border-t border-gray-200">
+                                    <label class="block font-bold text-gray-700 mb-0.5">Preview marker</label>
+                                    <code id="tabledbEdPreview" class="block bg-gray-50 border rounded px-2 py-1 text-[10px] break-all">—</code>
+                                </div>
+                                <!-- Actions -->
+                                <div class="flex gap-1 pt-1">
+                                    <button type="button" id="tabledbEdApply" class="flex-1 inline-flex items-center justify-center px-2 py-1 rounded text-xs bg-indigo-600 text-white hover:bg-indigo-700"><i class="bi bi-check-lg mr-1"></i>Apply</button>
+                                    <button type="button" id="tabledbEdDelete" class="inline-flex items-center px-2 py-1 rounded text-xs bg-red-600 text-white hover:bg-red-700" title="Hapus marker"><i class="bi bi-trash"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- QR Panel (Collapsible) -->
                 <div class="border-b border-gray-200" x-data="{ open: false }">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">

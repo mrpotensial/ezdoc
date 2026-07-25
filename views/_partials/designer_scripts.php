@@ -345,38 +345,338 @@
             colsList.innerHTML = columnButtons + formatHelpers;
         }
 
-        // Helper: Insert formatted column marker {{tabledb.ns.col|format}}
-        function insertTabledbHelperFormatted(ns) {
-            const col = document.getElementById('tabledbHelperColumn').value;
-            const format = document.getElementById('tabledbHelperFormat').value;
-            if (!col) { showToast('Pilih kolom dulu', 'error'); return; }
-            const tag = '{{tabledb.' + ns + '.' + col + format + '}}';
-            insertTabledbVar(tag);
+        // ─── Tabledb marker chip helpers (v0.9.14b widget pattern) ──────────
+        // Marker chip = visual widget wrapping raw {{tabledb.*}} marker.
+        // Data attrs: data-ns, data-selector, data-format (pipe stripped).
+        // Save: chip HTML → raw text (getCleanContentForSave).
+        // Load: raw text → chip HTML (editor init + setContent guard).
+
+        // Parse selector string → { type: 'raw'|'formula'|'aggregate', ...details }
+        function parseTabledbSelector(sel) {
+            sel = String(sel || '').trim();
+            if (!sel) return { type: 'invalid' };
+            if (sel[0] === '=') return { type: 'formula', formula: sel.substring(1).trim() };
+            const aggMatch = sel.match(/^(sum|avg|count|min|max):(.+)$/i);
+            if (aggMatch) return { type: 'aggregate', verb: aggMatch[1].toLowerCase(), target: aggMatch[2].trim() };
+            if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(sel)) return { type: 'raw', field: sel };
+            return { type: 'invalid' };
         }
 
-        // Helper: Insert formula marker {{tabledb.ns.=expression|format}}
+        // Compact human-readable label untuk chip. Short supaya fit di cell.
+        function tabledbChipLabel(ns, selector, format) {
+            const parsed = parseTabledbSelector(selector);
+            const fmtSuffix = format ? ' (' + tabledbFormatBadge(format) + ')' : '';
+            if (parsed.type === 'raw') return parsed.field + fmtSuffix;
+            if (parsed.type === 'formula') return parsed.formula + fmtSuffix;
+            if (parsed.type === 'aggregate') {
+                const targetLabel = parsed.target === '*' ? 'rows'
+                    : (parsed.target[0] === '=' ? parsed.target.substring(1) : parsed.target);
+                return parsed.verb.toUpperCase() + ' ' + targetLabel + fmtSuffix;
+            }
+            return selector;
+        }
+
+        // Compact format badge: currency → Rp, number:2 → num.2, dst
+        function tabledbFormatBadge(format) {
+            if (!format) return '';
+            const parts = format.split(':');
+            const type = parts[0];
+            switch (type) {
+                case 'currency': return parts[1] === 'USD' ? '$' : (parts[1] === 'EUR' ? '€' : 'Rp');
+                case 'number': return parts[1] ? '#.' + parts[1] : '#';
+                case 'percent': return '%';
+                case 'date': return 'd';
+                case 'datetime': return 'd/t';
+                default: return type;
+            }
+        }
+
+        // Determine chip type class from selector for CSS coloring
+        function tabledbChipTypeClass(selector) {
+            const parsed = parseTabledbSelector(selector);
+            if (parsed.type === 'raw') return 'tabledb-marker-raw';
+            if (parsed.type === 'formula') return 'tabledb-marker-formula';
+            if (parsed.type === 'aggregate') return 'tabledb-marker-aggregate';
+            return 'tabledb-marker-raw'; // fallback
+        }
+
+        // Build chip HTML string (used for insert + load transform).
+        // ns/selector/format sudah trimmed. Escape untuk HTML attr safety.
+        function buildTabledbChipHtml(ns, selector, format) {
+            const typeClass = tabledbChipTypeClass(selector);
+            const label = tabledbChipLabel(ns, selector, format);
+            const rawMarker = '{{tabledb.' + ns + '.' + selector + (format ? '|' + format : '') + '}}';
+            const parsed = parseTabledbSelector(selector);
+            const invalid = parsed.type === 'invalid' ? ' data-invalid="1"' : '';
+            return '<span class="tabledb-marker ' + typeClass + '"'
+                + ' data-ns="' + escapeAttr(ns) + '"'
+                + ' data-selector="' + escapeAttr(selector) + '"'
+                + ' data-format="' + escapeAttr(format || '') + '"'
+                + ' contenteditable="false"'
+                + ' title="' + escapeAttr(rawMarker) + '"'
+                + invalid + '>'
+                + escapeHtml(label)
+                + '</span>';
+        }
+
+        // Escape for HTML attribute
+        function escapeAttr(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        // Transform raw {{tabledb.*}} markers in HTML string → chip HTML.
+        // Used on load (editor init + setContent) supaya existing templates
+        // dgn raw markers otomatis jadi chips.
+        function tabledbRawMarkersToChips(html) {
+            if (!html || html.indexOf('{{tabledb') === -1) return html;
+            return html.replace(/\{\{tabledb(?:\.([a-zA-Z_]\w*))?\.([^|}]+?)(?:\|([^}]+))?\}\}/g, function (m, ns, sel, fmt) {
+                return buildTabledbChipHtml(ns || 'default', sel.trim(), (fmt || '').trim());
+            });
+        }
+
+        // Reverse transform: chip HTML → raw markers. Used on save.
+        function tabledbChipsToRawMarkers(html) {
+            if (!html || html.indexOf('tabledb-marker') === -1) return html;
+            // Match full chip span (with any attrs), extract data-* attributes
+            return html.replace(/<span[^>]*class="[^"]*tabledb-marker[^"]*"[^>]*>[\s\S]*?<\/span>/gi, function (spanHtml) {
+                const ns = (spanHtml.match(/data-ns="([^"]*)"/) || [, ''])[1];
+                const sel = (spanHtml.match(/data-selector="([^"]*)"/) || [, ''])[1];
+                const fmt = (spanHtml.match(/data-format="([^"]*)"/) || [, ''])[1];
+                // Unescape entities from attr (& etc)
+                const unesc = function (s) { return s.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>'); };
+                return '{{tabledb.' + unesc(ns) + '.' + unesc(sel) + (fmt ? '|' + unesc(fmt) : '') + '}}';
+            });
+        }
+
+        // Insert chip at cursor. Wraps raw marker.
+        function insertTabledbChip(ns, selector, format) {
+            const editor = tinymce.get('editor');
+            if (!editor) return;
+            const chipHtml = buildTabledbChipHtml(ns, selector, format || '');
+            editor.execCommand('mceInsertContent', false, chipHtml + '&nbsp;');
+            showToast('Marker: ' + tabledbChipLabel(ns, selector, format));
+        }
+
+        // ─── Selection state + right-panel editor ──────────────────────────
+        // Selected chip element (di iframe body). Null saat tidak ada selection.
+        let _tabledbSelectedChip = null;
+
+        function selectTabledbChip(el) {
+            const editor = tinymce.get('editor');
+            if (!editor) return;
+            deselectTabledbChip();
+
+            _tabledbSelectedChip = el;
+            el.classList.add('tabledb-selected');
+
+            // Populate form fields dari data-* attrs
+            const ns = el.getAttribute('data-ns') || '';
+            const selector = el.getAttribute('data-selector') || '';
+            const format = el.getAttribute('data-format') || '';
+            const parsed = parseTabledbSelector(selector);
+
+            document.getElementById('tabledbEdNs').value = ns;
+
+            // Set type radio state + show corresponding input box
+            _tabledbSetEditorType(parsed.type === 'invalid' ? 'raw' : parsed.type);
+
+            // Populate column dropdown (from configHeader.tableDbQueries[ns].columns)
+            _tabledbPopulateColumnDropdown(ns, parsed.type === 'raw' ? parsed.field : '');
+
+            // Populate formula/aggregate fields
+            if (parsed.type === 'formula') {
+                document.getElementById('tabledbEdFormula').value = parsed.formula;
+            }
+            if (parsed.type === 'aggregate') {
+                document.getElementById('tabledbEdAggVerb').value = parsed.verb;
+                document.getElementById('tabledbEdAggTarget').value = parsed.target;
+            }
+
+            // Format
+            const fmtParts = format.split(':');
+            document.getElementById('tabledbEdFormatType').value = fmtParts[0] || '';
+            document.getElementById('tabledbEdFormatArgs').value = fmtParts.slice(1).join(':') || '';
+
+            // Show form, hide empty state
+            document.getElementById('tabledbEditorEmpty').style.display = 'none';
+            document.getElementById('tabledbEditorForm').style.display = '';
+            document.getElementById('tabledbEditorStatus').textContent = ns;
+            document.getElementById('tabledbEditorStatus').classList.remove('bg-gray-100', 'text-gray-500');
+            document.getElementById('tabledbEditorStatus').classList.add('bg-indigo-100', 'text-indigo-700');
+
+            _tabledbUpdatePreview();
+        }
+
+        function deselectTabledbChip() {
+            if (_tabledbSelectedChip) {
+                _tabledbSelectedChip.classList.remove('tabledb-selected');
+                _tabledbSelectedChip = null;
+            }
+            document.getElementById('tabledbEditorEmpty').style.display = '';
+            document.getElementById('tabledbEditorForm').style.display = 'none';
+            const status = document.getElementById('tabledbEditorStatus');
+            status.textContent = 'kosong';
+            status.classList.remove('bg-indigo-100', 'text-indigo-700');
+            status.classList.add('bg-gray-100', 'text-gray-500');
+        }
+
+        function _tabledbSetEditorType(type) {
+            document.querySelectorAll('.tabledb-ed-type-btn').forEach(btn => {
+                if (btn.dataset.type === type) {
+                    btn.classList.add('bg-indigo-600', 'text-white', 'border-indigo-600');
+                    btn.classList.remove('bg-white', 'text-gray-700', 'border-gray-300');
+                } else {
+                    btn.classList.remove('bg-indigo-600', 'text-white', 'border-indigo-600');
+                    btn.classList.add('bg-white', 'text-gray-700', 'border-gray-300');
+                }
+            });
+            document.getElementById('tabledbEdRawBox').style.display = (type === 'raw') ? '' : 'none';
+            document.getElementById('tabledbEdFormulaBox').style.display = (type === 'formula') ? '' : 'none';
+            document.getElementById('tabledbEdAggregateBox').style.display = (type === 'aggregate') ? '' : 'none';
+        }
+
+        function _tabledbPopulateColumnDropdown(ns, selectedCol) {
+            const select = document.getElementById('tabledbEdColumn');
+            const query = (configHeader.tableDbQueries || {})[ns];
+            const cols = (query && Array.isArray(query.columns)) ? query.columns : [];
+            select.innerHTML = cols.length === 0
+                ? '<option value="">(no columns detected — analyze SQL di Query DB dulu)</option>'
+                : cols.map(c => {
+                    const safeCol = String(c).replace(/[^a-zA-Z0-9_]/g, '');
+                    return safeCol ? '<option value="' + escapeAttr(safeCol) + '"' + (safeCol === selectedCol ? ' selected' : '') + '>' + escapeHtml(safeCol) + '</option>' : '';
+                }).join('');
+        }
+
+        function _tabledbCollectEditorSelector() {
+            const activeType = document.querySelector('.tabledb-ed-type-btn.bg-indigo-600');
+            const type = activeType ? activeType.dataset.type : 'raw';
+            if (type === 'raw') return document.getElementById('tabledbEdColumn').value.trim();
+            if (type === 'formula') return '=' + document.getElementById('tabledbEdFormula').value.trim();
+            if (type === 'aggregate') {
+                const verb = document.getElementById('tabledbEdAggVerb').value;
+                const target = document.getElementById('tabledbEdAggTarget').value.trim() || '*';
+                return verb + ':' + target;
+            }
+            return '';
+        }
+
+        function _tabledbCollectEditorFormat() {
+            const fmtType = document.getElementById('tabledbEdFormatType').value;
+            const fmtArgs = document.getElementById('tabledbEdFormatArgs').value.trim();
+            if (!fmtType) return '';
+            return fmtArgs ? fmtType + ':' + fmtArgs : fmtType;
+        }
+
+        function _tabledbUpdatePreview() {
+            const ns = document.getElementById('tabledbEdNs').value;
+            const selector = _tabledbCollectEditorSelector();
+            const format = _tabledbCollectEditorFormat();
+            const raw = '{{tabledb.' + ns + '.' + selector + (format ? '|' + format : '') + '}}';
+            document.getElementById('tabledbEdPreview').textContent = raw;
+        }
+
+        function applyTabledbChipEdit() {
+            if (!_tabledbSelectedChip) return;
+            const editor = tinymce.get('editor');
+            if (!editor) return;
+
+            const ns = document.getElementById('tabledbEdNs').value;
+            const selector = _tabledbCollectEditorSelector();
+            const format = _tabledbCollectEditorFormat();
+            if (!selector || selector === '=' || selector.endsWith(':')) {
+                showToast('Selector kosong', 'error');
+                return;
+            }
+
+            // Rebuild chip in-place (preserve position via replacement)
+            const newHtml = buildTabledbChipHtml(ns, selector, format);
+            const parent = _tabledbSelectedChip.parentNode;
+            const tempDiv = editor.dom.doc.createElement('div');
+            tempDiv.innerHTML = newHtml;
+            const newChip = tempDiv.firstChild;
+            parent.replaceChild(newChip, _tabledbSelectedChip);
+            _tabledbSelectedChip = newChip;
+            newChip.classList.add('tabledb-selected');
+            editor.setDirty(true);
+            if (typeof markDirty === 'function') markDirty();
+            showToast('Marker updated');
+        }
+
+        function deleteTabledbSelectedChip() {
+            if (!_tabledbSelectedChip) return;
+            const editor = tinymce.get('editor');
+            _tabledbSelectedChip.parentNode.removeChild(_tabledbSelectedChip);
+            _tabledbSelectedChip = null;
+            deselectTabledbChip();
+            if (editor) {
+                editor.setDirty(true);
+                if (typeof markDirty === 'function') markDirty();
+            }
+            showToast('Marker deleted');
+        }
+
+        // Wire up right-panel event listeners (called once at editor init).
+        function initTabledbEditorPanel() {
+            // Type button switches
+            document.querySelectorAll('.tabledb-ed-type-btn').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    _tabledbSetEditorType(this.dataset.type);
+                    _tabledbUpdatePreview();
+                });
+            });
+            // Live preview on input changes
+            ['tabledbEdColumn', 'tabledbEdFormula', 'tabledbEdAggVerb', 'tabledbEdAggTarget', 'tabledbEdFormatType', 'tabledbEdFormatArgs'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', _tabledbUpdatePreview);
+                if (el && el.tagName === 'SELECT') el.addEventListener('change', _tabledbUpdatePreview);
+            });
+            // Apply button
+            const applyBtn = document.getElementById('tabledbEdApply');
+            if (applyBtn) applyBtn.addEventListener('click', applyTabledbChipEdit);
+            const delBtn = document.getElementById('tabledbEdDelete');
+            if (delBtn) delBtn.addEventListener('click', deleteTabledbSelectedChip);
+
+            // Initialize type button state (default: raw)
+            _tabledbSetEditorType('raw');
+        }
+
+        // Legacy insertTabledbVar — accepts full raw marker string, parses & inserts chip
+        function insertTabledbVar(tag) {
+            const m = String(tag || '').match(/^\{\{tabledb(?:\.([a-zA-Z_]\w*))?\.([^|}]+?)(?:\|([^}]+))?\}\}$/);
+            if (!m) {
+                showToast('Marker format invalid: ' + tag, 'error');
+                return;
+            }
+            insertTabledbChip(m[1] || 'default', m[2].trim(), (m[3] || '').trim());
+        }
+
+        // ─── Helper widget insert functions (updated to use chip inserter) ──
+
+        // Helper: Insert formatted column marker
+        function insertTabledbHelperFormatted(ns) {
+            const col = document.getElementById('tabledbHelperColumn').value;
+            const format = document.getElementById('tabledbHelperFormat').value; // includes leading | or ''
+            if (!col) { showToast('Pilih kolom dulu', 'error'); return; }
+            const cleanFormat = format.startsWith('|') ? format.substring(1) : format;
+            insertTabledbChip(ns, col, cleanFormat);
+        }
+
+        // Helper: Insert formula marker
         function insertTabledbHelperFormula(ns) {
             const formula = document.getElementById('tabledbHelperFormula').value.trim();
             const format = document.getElementById('tabledbHelperFormulaFormat').value;
             if (!formula) { showToast('Tulis formula (contoh: qty * harga)', 'error'); return; }
-            const tag = '{{tabledb.' + ns + '.=' + formula + format + '}}';
-            insertTabledbVar(tag);
+            const cleanFormat = format.startsWith('|') ? format.substring(1) : format;
+            insertTabledbChip(ns, '=' + formula, cleanFormat);
         }
 
-        // Helper: Insert aggregate marker {{tabledb.ns.verb:target|format}}
+        // Helper: Insert aggregate marker
         function insertTabledbHelperAggregate(ns) {
             const verb = document.getElementById('tabledbHelperAggVerb').value;
             const target = document.getElementById('tabledbHelperAggTarget').value.trim() || '*';
             const format = document.getElementById('tabledbHelperAggFormat').value;
-            const tag = '{{tabledb.' + ns + '.' + verb + ':' + target + format + '}}';
-            insertTabledbVar(tag);
-        }
-
-        function insertTabledbVar(tag) {
-            const editor = tinymce.get('editor');
-            if (!editor) return;
-            editor.execCommand('mceInsertContent', false, tag);
-            showToast(t('toast.variable_inserted', {tag: tag}, 'Variable inserted: {tag}'));
+            const cleanFormat = format.startsWith('|') ? format.substring(1) : format;
+            insertTabledbChip(ns, verb + ':' + target, cleanFormat);
         }
 
         async function saveTabledbQuery() {
@@ -726,6 +1026,12 @@
             content = content.replace(/<span([^>]*data-logo="([^"]+)"[^>]*)>.*?<\/span>/gs, function(match, attrs, logoName) {
                 return `<span${attrs}>[Logo: ${logoName}]</span>`;
             });
+
+            // v0.9.14b: unwrap tabledb marker chips → raw {{tabledb.*}} text.
+            // DB stores raw markers untuk backward compat + renderer processing.
+            if (typeof tabledbChipsToRawMarkers === 'function') {
+                content = tabledbChipsToRawMarkers(content);
+            }
 
             return content;
         }
@@ -1358,6 +1664,60 @@
                 .field-placeholder[data-type="checkbox"] { background: #dcfce7; outline-color: #22c55e; color: #166534; }
                 .field-placeholder[data-type="radio"] { background: #fce7f3; outline-color: #ec4899; color: #9d174d; }
                 .field-placeholder[data-type="select"] { background: #f3e8ff; outline-color: #a855f7; color: #6b21a8; }
+                /* Tabledb marker chip (v0.9.14b) — visual widget wrapping
+                   {{tabledb.*}} markers untuk click-to-edit UX. Serialized ke
+                   raw marker text saat save. Type-color coded by selector. */
+                .tabledb-marker {
+                    display: inline-block;
+                    padding: 1px 6px;
+                    border-radius: 3px;
+                    font-family: inherit;
+                    font-size: 0.9em;
+                    border: 1px solid;
+                    cursor: pointer;
+                    user-select: none;
+                    -webkit-user-select: none;
+                    margin: 0 1px;
+                    vertical-align: baseline;
+                    white-space: nowrap;
+                }
+                .tabledb-marker::before {
+                    display: inline-block;
+                    margin-right: 3px;
+                    font-family: 'Font Awesome 6 Free';
+                    font-weight: 900;
+                    font-size: 0.85em;
+                    opacity: 0.8;
+                }
+                .tabledb-marker-raw {
+                    background: #dbeafe;
+                    border-color: #60a5fa;
+                    color: #1e3a8a;
+                }
+                .tabledb-marker-raw::before { content: '\f0ce'; /* fa-table */ }
+                .tabledb-marker-formula {
+                    background: #e0e7ff;
+                    border-color: #818cf8;
+                    color: #3730a3;
+                }
+                .tabledb-marker-formula::before { content: '\f1ec'; /* fa-calculator */ }
+                .tabledb-marker-aggregate {
+                    background: #f3e8ff;
+                    border-color: #c084fc;
+                    color: #6b21a8;
+                }
+                .tabledb-marker-aggregate::before { content: '\f668'; /* fa-sigma-not-in-fa — use sum */ }
+                .tabledb-marker.tabledb-selected {
+                    outline: 2px solid #ef4444;
+                    outline-offset: 1px;
+                    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+                }
+                .tabledb-marker[data-invalid="1"] {
+                    background: #fee2e2;
+                    border-color: #f87171;
+                    color: #991b1b;
+                }
+                .tabledb-marker[data-invalid="1"]::before { content: '\f071'; /* fa-exclamation-triangle */ }
                 /* Inline logo — layout-transparent (outline, no padding/border/min-width).
                    Non-floating placeholder tanpa image renders sebagai text label;
                    dgn image renders at natural image dimensions (matches print
@@ -1519,6 +1879,14 @@
             `,
             table_default_attributes: { border: '1' },
             setup: function(editor) {
+                // v0.9.14b: transform raw {{tabledb.*}} markers → visual chips
+                // on ANY setContent (initial load + programmatic updates).
+                // e.content is mutated in place per TinyMCE plugin convention.
+                editor.on('BeforeSetContent', function (e) {
+                    if (e.content && typeof tabledbRawMarkersToChips === 'function') {
+                        e.content = tabledbRawMarkersToChips(e.content);
+                    }
+                });
                 // Custom Line Height Button
                 editor.ui.registry.addMenuButton('lineheightbtn', {
                     text: 'LH',
@@ -2001,9 +2369,24 @@
                 // Click placeholder di editor → auto expand + scroll ke sub-card matching di panel kanan.
                 // Ringan: single delegated listener, DOM walk max 8 levels, no re-render.
                 editor.on('click', function(e) {
-                    if (!window.ezdocFocusSidebarCard) return;
+                    // v0.9.14b: tabledb marker chip click → open right-panel editor
                     let el = e.target;
-                    let type = null, id = null, depth = 0;
+                    let depth = 0;
+                    while (el && el !== editor.getBody() && depth < 8) {
+                        if (el.classList && el.classList.contains('tabledb-marker')) {
+                            selectTabledbChip(el);
+                            return;
+                        }
+                        el = el.parentElement;
+                        depth++;
+                    }
+                    // Not a tabledb chip — deselect current tabledb selection
+                    if (_tabledbSelectedChip) deselectTabledbChip();
+
+                    if (!window.ezdocFocusSidebarCard) return;
+                    el = e.target;
+                    let type = null, id = null;
+                    depth = 0;
                     while (el && el !== editor.getBody() && depth < 8) {
                         if (el.classList) {
                             if (el.classList.contains('field-placeholder')) {
@@ -2042,6 +2425,18 @@
                     if (type && id) window.ezdocFocusSidebarCard(type, id);
                 });
                 editor.on('init', function() {
+                    // v0.9.14b: post-init sweep — transform raw markers yg belum
+                    // ke chip (BeforeSetContent might miss initial textarea load
+                    // di beberapa TinyMCE versions).
+                    try {
+                        const bodyEl = editor.getBody();
+                        if (bodyEl && bodyEl.innerHTML.indexOf('{{tabledb') !== -1) {
+                            bodyEl.innerHTML = tabledbRawMarkersToChips(bodyEl.innerHTML);
+                        }
+                    } catch (e) { console.warn('[tabledb] initial marker transform failed:', e); }
+                    // Wire right-panel editor controls once
+                    try { initTabledbEditorPanel(); } catch (e) { console.warn('[tabledb] panel init failed:', e); }
+
                     // Wait for iframe to be fully ready
                     setTimeout(function() {
                         loadPageSettings();
