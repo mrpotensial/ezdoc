@@ -642,22 +642,48 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                                 <div id="tabledbEdFormulaBox" style="display:none;">
                                     <label class="block font-bold text-gray-700 mb-0.5">Formula (bare column names)</label>
                                     <input type="text" id="tabledbEdFormula" class="w-full rounded border-gray-300 text-xs px-2 py-1 font-mono" placeholder="qty * harga">
-                                    <small class="text-gray-500">Contoh: <code>qty*harga</code>, <code>harga*(1-diskon/100)</code></small>
+                                    <div class="mt-1">
+                                        <div class="text-gray-500 mb-1">Klik kolom untuk insert ke formula (di posisi cursor):</div>
+                                        <div id="tabledbEdFormulaCols" class="flex flex-wrap gap-1"></div>
+                                    </div>
+                                    <div class="mt-1">
+                                        <div class="text-gray-500 mb-1">Preset umum:</div>
+                                        <div class="flex flex-wrap gap-1">
+                                            <button type="button" class="tabledb-ed-preset px-2 py-0.5 rounded text-[10px] border border-gray-400 hover:bg-gray-100" data-preset="qty * harga">qty × harga</button>
+                                            <button type="button" class="tabledb-ed-preset px-2 py-0.5 rounded text-[10px] border border-gray-400 hover:bg-gray-100" data-preset="harga * (1 - diskon / 100)">Setelah diskon %</button>
+                                            <button type="button" class="tabledb-ed-preset px-2 py-0.5 rounded text-[10px] border border-gray-400 hover:bg-gray-100" data-preset="subtotal * 11 / 100">PPN 11%</button>
+                                            <button type="button" class="tabledb-ed-preset px-2 py-0.5 rounded text-[10px] border border-gray-400 hover:bg-gray-100" data-preset="subtotal * 1.11">Total + PPN</button>
+                                        </div>
+                                    </div>
+                                    <small class="text-gray-500 block mt-1">Operator: <code>+ - * /</code> + kurung <code>( )</code>. Contoh: <code>(jual-beli)/beli</code></small>
                                 </div>
                                 <!-- Aggregate -->
                                 <div id="tabledbEdAggregateBox" style="display:none;">
                                     <label class="block font-bold text-gray-700 mb-0.5">Aggregate</label>
-                                    <div class="flex gap-1">
+                                    <div class="flex gap-1 mb-1">
                                         <select id="tabledbEdAggVerb" class="rounded border-gray-300 text-xs px-2 py-1" style="width:80px;">
-                                            <option value="sum">sum</option>
-                                            <option value="avg">avg</option>
-                                            <option value="count">count</option>
-                                            <option value="min">min</option>
-                                            <option value="max">max</option>
+                                            <option value="sum" title="Total penjumlahan">sum</option>
+                                            <option value="avg" title="Rata-rata">avg</option>
+                                            <option value="count" title="Jumlah baris">count</option>
+                                            <option value="min" title="Nilai terkecil">min</option>
+                                            <option value="max" title="Nilai terbesar">max</option>
                                         </select>
                                         <input type="text" id="tabledbEdAggTarget" class="rounded border-gray-300 text-xs px-2 py-1 flex-1 font-mono" placeholder="col atau =formula atau *">
                                     </div>
-                                    <small class="text-gray-500"><code>*</code> = count all rows. <code>=qty*harga</code> = sum of formula.</small>
+                                    <div class="mb-1">
+                                        <div class="text-gray-500 mb-1">Klik kolom untuk isi target:</div>
+                                        <div id="tabledbEdAggregateCols" class="flex flex-wrap gap-1"></div>
+                                    </div>
+                                    <div class="flex flex-wrap gap-1 mb-1">
+                                        <button type="button" class="tabledb-ed-agg-preset px-2 py-0.5 rounded text-[10px] border border-gray-400 hover:bg-gray-100" data-target="*">* (semua baris)</button>
+                                        <button type="button" class="tabledb-ed-agg-preset px-2 py-0.5 rounded text-[10px] border border-gray-400 hover:bg-gray-100" data-target="=qty*harga">= qty × harga</button>
+                                    </div>
+                                    <small class="text-gray-500 block">
+                                        <strong>sum:harga</strong> = jumlahkan kolom harga.<br>
+                                        <strong>sum:=qty*harga</strong> = jumlahkan hasil formula.<br>
+                                        <strong>count:*</strong> = hitung semua baris.<br>
+                                        <strong>count:harga</strong> = hitung baris yg harga tidak kosong.
+                                    </small>
                                 </div>
                                 <!-- Format -->
                                 <div>

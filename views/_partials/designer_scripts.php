@@ -574,6 +574,50 @@
                     const safeCol = String(c).replace(/[^a-zA-Z0-9_]/g, '');
                     return safeCol ? '<option value="' + escapeAttr(safeCol) + '"' + (safeCol === selectedCol ? ' selected' : '') + '>' + escapeHtml(safeCol) + '</option>' : '';
                 }).join('');
+            // Also populate the clickable column pills for Formula + Aggregate tabs
+            _tabledbPopulateColumnPills(ns);
+        }
+
+        // Populate clickable column pills for Formula + Aggregate input assists.
+        // Click a pill → insert column name at cursor in the corresponding input.
+        function _tabledbPopulateColumnPills(ns) {
+            const query = (configHeader.tableDbQueries || {})[ns];
+            const cols = (query && Array.isArray(query.columns)) ? query.columns : [];
+            const buildPills = function (targetInputId) {
+                if (cols.length === 0) {
+                    return '<span class="text-gray-400 italic text-[10px]">Analyze SQL di Query DB dulu untuk lihat kolom.</span>';
+                }
+                return cols.map(c => {
+                    const safeCol = String(c).replace(/[^a-zA-Z0-9_]/g, '');
+                    if (!safeCol) return '';
+                    return '<button type="button" class="tabledb-col-pill px-1.5 py-0 rounded border border-cyan-500 text-cyan-700 hover:bg-cyan-50 text-[10px]"'
+                        + ' data-col="' + escapeAttr(safeCol) + '"'
+                        + ' data-target="' + targetInputId + '"'
+                        + '>' + escapeHtml(safeCol) + '</button>';
+                }).join(' ');
+            };
+            const fBox = document.getElementById('tabledbEdFormulaCols');
+            const aBox = document.getElementById('tabledbEdAggregateCols');
+            if (fBox) fBox.innerHTML = buildPills('tabledbEdFormula');
+            if (aBox) aBox.innerHTML = buildPills('tabledbEdAggTarget');
+        }
+
+        // Insert text at current cursor position of input element (fallback: append)
+        function _insertAtCursor(input, text) {
+            if (!input) return;
+            const start = input.selectionStart, end = input.selectionEnd;
+            if (typeof start === 'number' && typeof end === 'number') {
+                const before = input.value.substring(0, start);
+                const after = input.value.substring(end);
+                input.value = before + text + after;
+                const newCursor = start + text.length;
+                input.setSelectionRange(newCursor, newCursor);
+            } else {
+                input.value += text;
+            }
+            input.focus();
+            // Trigger input event so live-preview updates
+            input.dispatchEvent(new Event('input', { bubbles: true }));
         }
 
         function _tabledbCollectEditorSelector() {
@@ -664,6 +708,40 @@
             if (applyBtn) applyBtn.addEventListener('click', applyTabledbChipEdit);
             const delBtn = document.getElementById('tabledbEdDelete');
             if (delBtn) delBtn.addEventListener('click', deleteTabledbSelectedChip);
+
+            // Column pill delegation — insert clicked column name at cursor
+            document.body.addEventListener('click', function (e) {
+                const pill = e.target.closest && e.target.closest('.tabledb-col-pill');
+                if (!pill) return;
+                const targetId = pill.getAttribute('data-target');
+                const col = pill.getAttribute('data-col');
+                const input = document.getElementById(targetId);
+                if (input && col) _insertAtCursor(input, col);
+            });
+            // Formula preset button delegation
+            document.body.addEventListener('click', function (e) {
+                const btn = e.target.closest && e.target.closest('.tabledb-ed-preset');
+                if (!btn) return;
+                const preset = btn.getAttribute('data-preset');
+                const input = document.getElementById('tabledbEdFormula');
+                if (input && preset) {
+                    input.value = preset;
+                    input.focus();
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            });
+            // Aggregate target preset button delegation
+            document.body.addEventListener('click', function (e) {
+                const btn = e.target.closest && e.target.closest('.tabledb-ed-agg-preset');
+                if (!btn) return;
+                const target = btn.getAttribute('data-target');
+                const input = document.getElementById('tabledbEdAggTarget');
+                if (input && target) {
+                    input.value = target;
+                    input.focus();
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            });
 
             // Initialize type button state (default: raw)
             _tabledbSetEditorType('raw');
@@ -759,11 +837,12 @@
             list.innerHTML = keys.map(ns => {
                 const q = queries[ns] || {};
                 const cols = Array.isArray(q.columns) ? q.columns : [];
-                const colChips = cols.slice(0, 8).map(c => {
+                // Show ALL columns dgn wrapping — no more +N hidden
+                const colChips = cols.map(c => {
                     const tag = '{{tabledb.' + ns + '.' + c + '}}';
                     return `<button type="button" class="inline-flex items-center py-0 px-1 mb-1 rounded border border-cyan-500 text-cyan-600 hover:bg-cyan-50" style="font-size:10px;" onclick="insertTabledbVar('${tag}')" title="${t('tabledb.insert_column_title_named', {tag: escapeHtml(tag)}, 'Insert {tag}')}">${escapeHtml(c)}</button>`;
                 }).join(' ');
-                const moreCount = cols.length > 8 ? ` <small class="text-gray-500">${t('tabledb.more_columns_label', {count: cols.length - 8}, '+{count} more')}</small>` : '';
+                const moreCount = '';
                 return `
                 <div class="mb-2 p-2 bg-gray-100 rounded" style="border-left: 3px solid #0e7490;">
                     <div class="flex justify-between items-start mb-1">
