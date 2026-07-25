@@ -498,10 +498,26 @@
         function selectTabledbChip(el) {
             const editor = tinymce.get('editor');
             if (!editor) return;
+            // Track if this is NEW selection (different chip) vs re-click same
+            const isNewSelection = (_tabledbSelectedChip !== el);
             deselectTabledbChip();
 
             _tabledbSelectedChip = el;
             el.classList.add('tabledb-selected');
+
+            // Auto-select entire chip node on FIRST click supaya toolbar
+            // Bold/Italic/Color wrap chip secara UTUH (outer wrapper), bukan
+            // partial text di dalam chip. Wrapping outer preserved di save
+            // (inner wrapping loss karena chip span diserialize ke raw marker).
+            // Re-click same chip TIDAK re-select — user bisa position cursor
+            // untuk optional partial edit.
+            if (isNewSelection) {
+                try {
+                    const range = editor.dom.createRng();
+                    range.selectNode(el);
+                    editor.selection.setRng(range);
+                } catch (e) { /* fallback: no-op if selection fails */ }
+            }
 
             // Populate form fields dari data-* attrs
             const ns = el.getAttribute('data-ns') || '';
