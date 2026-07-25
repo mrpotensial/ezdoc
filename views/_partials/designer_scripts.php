@@ -649,9 +649,21 @@
         }
 
         function applyTabledbChipEdit() {
-            if (!_tabledbSelectedChip) return;
+            if (!_tabledbSelectedChip) {
+                showToast('Tidak ada marker yg terpilih', 'error');
+                return;
+            }
             const editor = tinymce.get('editor');
-            if (!editor) return;
+            if (!editor) {
+                showToast('Editor tidak siap', 'error');
+                return;
+            }
+            // Verify chip masih di DOM (kalau editor pernah reset content, ref stale)
+            if (!_tabledbSelectedChip.parentNode || !editor.getBody().contains(_tabledbSelectedChip)) {
+                showToast('Marker sudah tidak ada di editor — click ulang chip', 'error');
+                deselectTabledbChip();
+                return;
+            }
 
             const ns = document.getElementById('tabledbEdNs').value;
             const selector = _tabledbCollectEditorSelector();
@@ -661,29 +673,58 @@
                 return;
             }
 
-            // Rebuild chip in-place (preserve position via replacement)
             const newHtml = buildTabledbChipHtml(ns, selector, format);
-            const parent = _tabledbSelectedChip.parentNode;
-            const tempDiv = editor.dom.doc.createElement('div');
-            tempDiv.innerHTML = newHtml;
-            const newChip = tempDiv.firstChild;
-            parent.replaceChild(newChip, _tabledbSelectedChip);
+            const oldChip = _tabledbSelectedChip;
+
+            // Wrap dalam undoManager.transact supaya TinyMCE track change
+            // + Ctrl+Z bisa undo. Direct DOM manipulation tanpa transact
+            // kadang tidak ter-serialize saat getContent.
+            let newChip = null;
+            editor.undoManager.transact(function () {
+                // Pakai TinyMCE's DOM helper untuk create+insert element supaya
+                // ownerDocument correct + editor's dom filters apply.
+                const container = editor.dom.create('div');
+                container.innerHTML = newHtml;
+                newChip = container.firstChild;
+                if (!newChip) {
+                    console.error('[tabledb] apply failed — newChip null dari HTML:', newHtml);
+                    return;
+                }
+                // Replace oldChip dgn newChip di DOM
+                oldChip.parentNode.replaceChild(newChip, oldChip);
+            });
+
+            if (!newChip) {
+                showToast('Apply gagal — lihat console', 'error');
+                return;
+            }
+
             _tabledbSelectedChip = newChip;
             newChip.classList.add('tabledb-selected');
             editor.setDirty(true);
             if (typeof markDirty === 'function') markDirty();
-            showToast('Marker updated');
+            // Trigger nodeChange supaya toolbar + serializer aware
+            try { editor.nodeChanged(); } catch (e) { /* older versions */ }
+            showToast('Marker updated: ' + tabledbChipLabel(ns, selector, format));
         }
 
         function deleteTabledbSelectedChip() {
             if (!_tabledbSelectedChip) return;
             const editor = tinymce.get('editor');
-            _tabledbSelectedChip.parentNode.removeChild(_tabledbSelectedChip);
+            const chip = _tabledbSelectedChip;
+            if (editor && editor.undoManager) {
+                editor.undoManager.transact(function () {
+                    if (chip.parentNode) chip.parentNode.removeChild(chip);
+                });
+            } else if (chip.parentNode) {
+                chip.parentNode.removeChild(chip);
+            }
             _tabledbSelectedChip = null;
             deselectTabledbChip();
             if (editor) {
                 editor.setDirty(true);
                 if (typeof markDirty === 'function') markDirty();
+                try { editor.nodeChanged(); } catch (e) {}
             }
             showToast('Marker deleted');
         }
