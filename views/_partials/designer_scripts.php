@@ -363,23 +363,31 @@
         }
 
         // Compact human-readable label untuk chip. Short supaya fit di cell.
-        // Long labels truncated dgn ellipsis; full text ada di title tooltip.
+        // Full text tetap accessible via title tooltip + right-panel form.
+        //
+        // Truncation strategy: CSS ellipsis handle visual overflow (nowrap +
+        // text-overflow:ellipsis), tapi JS juga cap ke MAX_LABEL_LEN supaya
+        // chip tidak butuh cell terlalu wide untuk look complete.
         function tabledbChipLabel(ns, selector, format) {
             const parsed = parseTabledbSelector(selector);
-            const fmtSuffix = format ? ' (' + tabledbFormatBadge(format) + ')' : '';
-            const MAX_LABEL_LEN = 22; // chars cap sebelum ellipsis
+            // Format badge tanpa parens (kompak): Rp, %, d, dst
+            const fmtSuffix = format ? ' ' + tabledbFormatBadge(format) : '';
+            const MAX_LABEL_LEN = 16; // chars cap sebelum ellipsis
             const trunc = function (str) {
                 str = String(str || '');
                 if (str.length <= MAX_LABEL_LEN) return str;
-                // Trim identifier — keep beginning+end untuk recognizability
-                return str.substring(0, MAX_LABEL_LEN - 1) + '…'; // …
+                return str.substring(0, MAX_LABEL_LEN - 1) + '…';
             };
             if (parsed.type === 'raw') return trunc(parsed.field) + fmtSuffix;
             if (parsed.type === 'formula') return trunc(parsed.formula) + fmtSuffix;
             if (parsed.type === 'aggregate') {
-                const targetLabel = parsed.target === '*' ? 'rows'
+                const targetLabel = parsed.target === '*' ? '*'
                     : (parsed.target[0] === '=' ? parsed.target.substring(1) : parsed.target);
-                return parsed.verb.toUpperCase() + ' ' + trunc(targetLabel) + fmtSuffix;
+                // Verb pendek: Σ (sum), µ (avg), # (count), ↓ (min), ↑ (max) — universally recognized math symbols
+                const verbSymbol = {
+                    sum: 'Σ', avg: 'µ', count: '#', min: '↓', max: '↑'
+                }[parsed.verb] || parsed.verb.toUpperCase();
+                return verbSymbol + ' ' + trunc(targetLabel) + fmtSuffix;
             }
             return trunc(selector);
         }
@@ -1878,7 +1886,7 @@
                    italic/color/align cells di TinyMCE toolbar — style tembus ke
                    chip. Mirror pattern dari .field-placeholder. */
                 .tabledb-marker {
-                    display: inline;              /* inline supaya bisa wrap di cell narrow */
+                    display: inline-block;         /* atomic block untuk ellipsis */
                     padding: 0 4px;
                     border-radius: 3px;
                     font-family: inherit;
@@ -1890,12 +1898,13 @@
                     text-align: inherit;
                     border: 1px solid;
                     cursor: pointer;
-                    -webkit-box-decoration-break: clone;
-                    box-decoration-break: clone;  /* bg/border repeat per line saat wrap */
                     margin: 0 1px;
                     vertical-align: baseline;
-                    white-space: normal;
-                    word-break: break-word;       /* break long identifier kalau perlu */
+                    /* Single line + ellipsis kalau terlalu panjang untuk cell.
+                       Cleaner visual dari wrap mid-word. Full text di title tooltip. */
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
                     max-width: 100%;
                 }
                 .tabledb-marker::before {
