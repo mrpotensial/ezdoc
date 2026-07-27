@@ -69,7 +69,15 @@ Library ini standalone project — tidak vendor-locked ke industry manapun. Dogf
 | Cross-language interop | Sign di PHP → verify di Go/TS = same result (contract-tested via conformance) |
 | UI ecosystem | Blade (official) + React (community, shadcn-style) + Vue/Livewire (community) |
 
-## 3. Current State (v0.1-unreleased snapshot)
+## 3. Current State
+
+> **Kesegaran bagian ini.** §3.6 (signature) diverifikasi lewat audit
+> membaca-kode pada 2026-07-27. Sub-bagian lain masih berupa snapshot lama
+> dari sekitar v0.1 dan sebagian sudah tertinggal jauh — §3.3 misalnya masih
+> menyebut domain layer "belum ada" padahal `Access`, `Document`, `Template`
+> dan `Exceptions` sudah terisi. Untuk status yang pasti, baca kodenya;
+> daftar milestone di §6 lebih dapat dipercaya daripada sub-bagian di sini
+> yang belum bertanggal.
 
 ### 3.1 Foundation Done
 
@@ -123,19 +131,32 @@ Library ini standalone project — tidak vendor-locked ke industry manapun. Dogf
 - Unit: `tests/ContextTest.php` (Context DI, CallableRoleProvider normalization, immutability)
 - Belum: Migration runner tests, Audit logger tests, UUID validation tests, integration tests
 
-### 3.6 Signature layer L1 only (target: L1 + L2 + L3 + A1)
+### 3.6 Signature layer — L1 + L2 + TSA jalan, L3 masih kerangka
 
-Sekarang cuma **Level 1 (HMAC signature)** — cukup untuk internal tamper-detection tapi **tidak legally binding** menurut UU ITE Indonesia. Roadmap: tambah L2 (Local PKI), L3 (PSrE Indonesia), dan A1 (blockchain anchor, orthogonal).
+Status di bawah berasal dari audit membaca-kode 2026-07-27, bukan dari daftar
+milestone. Sebelumnya bagian ini menulis "L1 only" padahal L2 dan TSA sudah
+lama berjalan — dan sebaliknya, changelog sempat menyebut L3 "shipped"
+padahal providernya belum bisa di-instansiasi.
 
-| Level | Mechanism | Legal validity (Indonesia) | Status |
-|-------|-----------|---------------------------|--------|
-| **L1** | HMAC-SHA256 dengan shared secret + content hash | Not legally binding (tapi tamper-detectable) | Implemented |
-| **L2** | Local PKI — self-signed / internal CA cert (X.509) | Non-repudiation within organization | Planned v0.6 |
-| **L3** | PSrE Indonesia (Peruri, Privy, VIDA, Digisign, BSrE) | Legally binding per UU ITE 2016 Pasal 11 | Planned v0.7+ |
-| **L3+** | L3 + TSA timestamp (RFC 3161) → PAdES-B-LT | Legally binding + verifiable long-term | Planned v0.8 |
-| **A1** | Blockchain anchor (hash publik di chain) — orthogonal, boleh combine dengan L1-L3 | Bukti keberadaan pada waktu X (proof-of-existence). Bukan sertifikasi identitas. Combined dengan L3 → strongest guarantee. | Planned v0.9.5 |
+| Level | Mechanism | Legal validity (Indonesia) | Status sebenarnya |
+|-------|-----------|---------------------------|-------------------|
+| **L1** | HMAC-SHA256 dengan shared secret + content hash | Tidak mengikat (tapi tamper-detectable) | **Jalan** |
+| **L2** | Local PKI — self-signed / internal CA cert (X.509) | Non-repudiation dalam organisasi | **Jalan, belum ada test** — `openssl_sign`/`verify`, `X509Certificate`, Env + File keystore |
+| **L3** | PSrE Indonesia (Peruri, Privy, VIDA, Digisign, BSrE) | Mengikat per UU ITE 2016 Pasal 11 | **Kerangka.** Plumbing (`BaseRemoteProvider`, `CurlHttpClient`, DTO) solid; `PeruriProvider`/`PrivyProvider` masih placeholder — token stub, endpoint dan skema payload menunggu kredensial sandbox. Lihat `docs/PSRE-INTEGRATION.md`. |
+| **L3+** | L3 + TSA timestamp (RFC 3161) → PAdES-B-LT | Mengikat + verifiable jangka panjang | **TSA jalan** (`OpensslTimestampClient`, `HttpTimestampClient`, parser DER). **PAdES sebagian**: `JSignPdfSigner` (butuh Java) bekerja; `OpensslPdfSigner::embedSignature()` sengaja melempar — PAdES murni-PHP belum ada. |
+| **A1** | Blockchain anchor (hash publik di chain) — orthogonal, boleh combine dengan L1-L3 | Bukti keberadaan pada waktu X (proof-of-existence). Bukan sertifikasi identitas. | **Belum ada** — tidak ada folder `Anchor/`. Rencana v0.9.5. |
+
+**Belum ada di seluruh layer**: CRL/OCSP revocation check, HSM keystore
+(PKCS#11), dan test untuk L2/TSA (tidak ada `tests/Signature/`).
 
 > **Note pola pikir**: Level 1-3 = "**siapa** yang tanda tangan + integritas isi". Anchoring (A1) = "**bukti publik** bahwa dokumen ini exist pada waktu X yang tidak bisa diubah setelah ter-anchor". Anchoring bisa combined dengan any level — L3 + A1 = signature legally binding + audit trail publik immutable.
+
+**Terpisah dari tabel di atas — verifikasi identitas penanda tangan (v0.9.15)**:
+OTP sekali-pakai ke nomor penanda tangan sebelum slot boleh digambar
+(§6.20). Ini kontrol di sisi aplikasi, **bukan** naik level ke L3: tidak ada
+sertifikat, tidak mengikat hukum. Jangan tertukar dengan "OTP flow" di §6.8,
+yang mengacu ke mekanisme consent milik PSrE saat remote signing — di sana
+CA yang mengirim dan memvalidasi, dan hasilnya tanda tangan tersertifikasi.
 
 ### 3.7 UI Layer Framework done, full views deferred to v0.9.7
 
@@ -1130,7 +1151,10 @@ Consumer app pakai `@section('ezdoc:designer:after-canvas')` untuk inject tanpa 
 - [ ] Study Peruri Digital Sign API (register akun sandbox, dapat sample cert)
 - [ ] Implement `Ezdoc\Signature\Providers\PeruriProvider`
 - [ ] Implement `Ezdoc\Signature\Envelope\PkcsSevenEnvelope` (RFC 5652)
-- [ ] Support OTP flow (email/SMS untuk approve signing)
+- [ ] Support OTP flow (email/SMS untuk approve signing) — **consent milik
+      PSrE**: CA yang mengirim dan memvalidasi, kunci di HSM mereka. Berbeda
+      dari OTP verifikasi penanda tangan di §6.20, yang dikirim dan
+      divalidasi aplikasi sendiri dan tidak menghasilkan sertifikat.
 - [ ] Verification: fetch signer cert from PSrE, validate chain to root
 - [ ] Sandbox integration test (real Peruri sandbox call)
 - [ ] Bump versi → `0.7.0`
@@ -1890,9 +1914,104 @@ milik author, marker inject data + format.
 - Group-by dgn subtotal per group — deferred (enhanced tabledb doesn't
   support natively, workaround via multiple queries)
 
-### 6.20 Milestone v1.0 — "PHP library extraction (Packagist)" ~1 week
+### 6.20 Milestone v0.9.15 — "Signer OTP verification" ~1-2 weeks **SHIPPED 2026-07-27**
 
-**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Depends on v0.9.7 (full views) + v0.9.8 (App orchestrator) + v0.9.9 (DB abstraction) + v0.9.10 (standalone hardening — no consumer-app runtime deps) + v0.9.11 (view separation + generate polish) + v0.9.12 (sidecar floating elements) + v0.9.13 (screen pagination + layout modes) + v0.9.14 (report-style dynamic tables)** completed.
+**Goal**: sebelum seseorang boleh menggambar tanda tangan di sebuah slot,
+kirim kode sekali-pakai ke nomor orang itu dan minta kode tersebut
+dimasukkan. Verifikasi berhasil menerbitkan *sign token* sekali-pakai yang
+harus disertakan saat menyimpan.
+
+**Bukan L3.** Ini kontrol identitas di sisi aplikasi, bukan tanda tangan
+tersertifikasi. Bandingkan dengan §6.8 yang menyebut "OTP flow" sebagai
+mekanisme *consent* milik PSrE saat remote signing — di sana OTP dikirim
+dan divalidasi oleh CA, kuncinya di HSM mereka, dan hasilnya sertifikat
+yang mengikat secara hukum. Yang di sini: aplikasi yang mengirim, aplikasi
+yang memvalidasi, hasilnya gambar tanda tangan biasa. Keduanya bisa hidup
+berdampingan; jangan tertukar.
+
+**Motivation**: tanda tangan pasien selama ini digambar petugas di layar
+tanpa bukti bahwa pemilik tanda tangan hadir dan setuju. OTP ke nomor yang
+tercatat memberi jejak: kode dikirim ke sana, dan seseorang yang memegang
+nomor itu membacakannya kembali.
+
+**Precedent (industry-standard proven)**:
+- **Twilio Verify** — pola challenge → verify → token
+- **Firebase Phone Auth** — challenge id + credential sekali-pakai
+- **DocuSign SMS Access Code** — kode ke nomor signer sebelum boleh membuka
+  dan menandatangani amplop
+- **RFC 6238 / OWASP ASVS 2.8** — batas percobaan, masa berlaku pendek,
+  hash saat disimpan
+
+**Deliverables**:
+
+- **`Ezdoc\Signature\Otp\UserOtpProvider`** — port satu-metode.
+  Transport-agnostik: WhatsApp, SMS, email, apa pun.
+- **`CallbackOtpProvider`** — consumer menyuntik closure. Pilihan yang tepat
+  ketika kode pengiriman sudah hidup di proses yang sama.
+- **`WebhookOtpProvider`** — untuk vendor eksternal sungguhan. Berjalan di
+  atas `CurlHttpClient` (verifikasi TLS aktif).
+- **`OtpService`** — challenge, verify, konsumsi token, parsing config slot.
+- **`OtpChallengeRepository`** + migrasi `ezdoc_ttd_otp_challenges`.
+- **2 endpoint**: `send_ttd_otp.php`, `verify_ttd_otp.php`.
+- **Config slot TTD**: `data-require-otp`, `data-otp-phone-source`,
+  `data-otp-ttl` + UI-nya di designer.
+- **Wizard 3 langkah** di modal tanda tangan pada generate view.
+- **`EZDOC_BOOTSTRAP_HOOK`** — hook konsumen yang jalan setelah autoloader
+  siap. Konstanta hanya bisa menyimpan skalar, jadi provider yang butuh
+  argumen konstruktor atau closure tidak bisa diekspresikan lewat `define()`.
+
+**Model kepercayaan**:
+- OTP disimpan sebagai hash bcrypt, tidak pernah plaintext, tidak pernah
+  masuk log.
+- 6 digit dari `random_int`; challenge id 128-bit; sign token 256-bit.
+- Sign token terikat pada (template, slot, dokumen) sekaligus — `ttd_id`
+  saja tidak cukup karena nilainya lokal per-template.
+- Konsumsi token = satu `UPDATE` bersyarat, jadi dua penyimpanan paralel
+  tidak bisa sama-sama lolos.
+- 3 percobaan per challenge, di-charge lewat `UPDATE ... WHERE attempts <
+  max` supaya cek dan increment tidak terpisah.
+- Cooldown 60 detik per slot; tanpa ini tiap request mencetak challenge baru
+  dengan jatah percobaan sendiri, sehingga cap 3-percobaan tidak membatasi
+  apa pun.
+- Masa berlaku dibaca dari template dan di-clamp 60..900 detik — tidak
+  pernah dari request.
+- Semua kegagalan verifikasi memakai satu pesan yang sama.
+
+**Provenance nomor tujuan** (keputusan produk, 2026-07-27):
+Operator **boleh** mengirim ke nomor selain yang tercatat — record yang
+stale atau kosong itu wajar di lapangan. Yang membuatnya akuntabel adalah
+jejaknya, bukan larangannya: setiap penyimpangan tercatat sebagai
+`otp.sent_override` beserta kedua nomor. Dua tingkat pengetatan tersedia
+kalau deployment lain butuh: `EZDOC_OTP_ALLOW_PHONE_OVERRIDE=false`
+(wajib ke nomor tercatat) atau `EZDOC_OTP_OVERRIDE_ROLES` (batasi peran).
+
+**Definition of Done** — SHIPPED:
+- ✅ Slot dengan `require_otp` tidak bisa ditandatangani tanpa token valid
+- ✅ Token sekali-pakai, terikat template + slot + dokumen
+- ✅ Percobaan dan cooldown ter-enforce secara atomik
+- ✅ Provider swappable; consumer tidak perlu menyentuh kode library
+- ✅ String library netral bahasa; UI lewat katalog id + en yang seimbang
+- ✅ Audit: `otp.sent`, `otp.sent_override`, `otp.verify_failed`,
+  `otp.verified`
+- ✅ 19 unit test (normalisasi nomor, masking, clamp TTL, parsing config)
+
+**Non-goals**:
+- Bukan pengganti L3 — tidak menghasilkan sertifikat, tidak mengikat hukum
+- Tanpa fallback multi-channel (satu provider per deployment)
+- Tanpa OTP untuk aksi selain tanda tangan
+
+**Known limitations (accepted)**:
+- `sign_token` tersimpan plaintext — akses baca DB berarti token bisa
+  dipakai. Menyimpan hash-nya adalah pekerjaan berikutnya.
+- Nomor telepon disimpan tanpa kebijakan retensi/purge.
+- Siklus challenge (cap percobaan, single-use, cooldown) belum punya test
+  integrasi karena butuh database.
+- Untuk dokumen yang belum tersimpan tidak ada nomor pembanding, sehingga
+  pengiriman pertama tidak bisa dinilai sebagai override.
+
+### 6.21 Milestone v1.0 — "PHP library extraction (Packagist)" ~1 week
+
+**Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Depends on v0.9.7 (full views) + v0.9.8 (App orchestrator) + v0.9.9 (DB abstraction) + v0.9.10 (standalone hardening — no consumer-app runtime deps) + v0.9.11 (view separation + generate polish) + v0.9.12 (sidecar floating elements) + v0.9.13 (screen pagination + layout modes) + v0.9.14 (enhanced tabledb markers) + v0.9.15 (signer OTP verification)** completed.
 
 - [ ] Move `ezdoc/` folder ke repo baru `mrpotensial/ezdoc`
 - [ ] Setup GitHub Actions CI (phpunit + phpstan level 6 + PHP matrix 7.4-8.3)
@@ -1908,7 +2027,7 @@ milik author, marker inject data + format.
 - **`Ezdoc\App::run()` 1-line mount + `Ezdoc\App::demo()` zero-config SQLite mode** (from v0.9.8) — consumer install verification tanpa DB config
 - Fresh consumer test: install → `Ezdoc\App::demo()` → save template → generate doc → sign → verify (semua works out-of-box, tanpa manual wiring)
 
-### 6.21 Milestone v1.1 — "Spec extraction (repo split + conformance vectors)" ~1-2 weeks
+### 6.22 Milestone v1.1 — "Spec extraction (repo split + conformance vectors)" ~1-2 weeks
 
 **Goal**: split `ezdoc-spec/` subfolder (seeded di v0.9.9) → standalone repo publik `mrpotensial/ezdoc-spec`; enrich dengan conformance test vectors untuk native ports.
 
@@ -1928,7 +2047,7 @@ milik author, marker inject data + format.
 - Repo has: schemas/, ddl/, protocol/, conformance/, docs/
 - Docs: "How to write a new port" guide dgn Go + Rust + TS starter examples
 
-### 6.22 Milestone v1.5 — "Go port" ~4-6 weeks
+### 6.23 Milestone v1.5 — "Go port" ~4-6 weeks
 
 **Goal**: `ezdoc-go` — native Go implementation, container-friendly.
 
@@ -1946,7 +2065,7 @@ milik author, marker inject data + format.
 - Conformance test pass (signature dari PHP di-verify oleh Go = same result)
 - Docker image jalan di Kubernetes cluster
 
-### 6.23 Milestone v2.0 — "TypeScript port + full ecosystem" ~6-8 weeks
+### 6.24 Milestone v2.0 — "TypeScript port + full ecosystem" ~6-8 weeks
 
 **Goal**: `@mrpotensial/ezdoc` — TypeScript native untuk Next.js / Node / browser.
 

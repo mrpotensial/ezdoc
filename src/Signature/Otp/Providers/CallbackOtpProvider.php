@@ -51,17 +51,23 @@ class CallbackOtpProvider implements UserOtpProvider
             $result = ($this->callback)($phone, $name, $code, $context);
 
             if (!$result instanceof OtpSendResult) {
+                // Contract violation by the consumer's callback — surfaced in
+                // full because it is a wiring bug, not runtime data.
                 return OtpSendResult::failure(
-                    'CallbackOtpProvider: callback harus mengembalikan instance OtpSendResult, got ' . gettype($result)
+                    'CallbackOtpProvider: callback must return an OtpSendResult, got ' . gettype($result)
                 );
             }
 
             return $result;
         } catch (\Throwable $e) {
-            return OtpSendResult::failure(
-                'CallbackOtpProvider error: ' . $e->getMessage(),
-                ['exception' => get_class($e), 'trace' => $e->getTraceAsString()]
+            // Message and stack trace stay in the log. A callback typically
+            // wraps vendor SDKs whose exceptions carry endpoints, tokens and
+            // file paths; none of that belongs in an HTTP response.
+            @error_log(
+                '[ezdoc:otp:callback] ' . get_class($e) . ': ' . $e->getMessage()
+                . "\n" . $e->getTraceAsString()
             );
+            return OtpSendResult::failure('OTP delivery failed.');
         }
     }
 }

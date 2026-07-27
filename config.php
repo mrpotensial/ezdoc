@@ -59,6 +59,31 @@ if (!defined('EZDOC_OTP_WEBHOOK_HEADERS')) {
     define('EZDOC_OTP_WEBHOOK_HEADERS', '[]');
 }
 
+// ─── OTP delivery policy ───
+
+// Country code prepended to national-format numbers (E.164, no "+").
+// Numbers already in international form are left alone. Set to '' to accept
+// only E.164 input and disable national-form handling entirely.
+if (!defined('EZDOC_OTP_COUNTRY_CODE')) {
+    define('EZDOC_OTP_COUNTRY_CODE', '62');
+}
+
+// May an operator send the code to a number other than the one recorded on
+// the document? A stale or missing number on file is common, so this defaults
+// to allowed — every deviation is written to the audit log as
+// `otp.sent_override`, carrying both the number on file and the one used.
+//
+// Set to false to require the code to go to the recorded number.
+if (!defined('EZDOC_OTP_ALLOW_PHONE_OVERRIDE')) {
+    define('EZDOC_OTP_ALLOW_PHONE_OVERRIDE', true);
+}
+
+// Optional narrower gate on that override: comma-separated role names.
+// Empty means any user who can already edit the document may redirect a code.
+if (!defined('EZDOC_OTP_OVERRIDE_ROLES')) {
+    define('EZDOC_OTP_OVERRIDE_ROLES', '');
+}
+
 // ─── Path constants ───
 if (!defined('EZDOC_ROOT')) define('EZDOC_ROOT', __DIR__);
 if (!defined('EZDOC_LIB'))  define('EZDOC_LIB', __DIR__ . '/lib');

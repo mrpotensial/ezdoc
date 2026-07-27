@@ -226,6 +226,10 @@ return [
             'invalid_code'       => 'Kode OTP tidak sesuai.',
             'step3_title'        => 'Tanda Tangan Pasien Terverifikasi',
             'verified_badge'     => 'OTP Terverifikasi',
+            // Toast dari handler JS.
+            'phone_required'     => 'Nomor WhatsApp wajib diisi.',
+            'send_success'       => 'Kode OTP terkirim.',
+            'verify_success'     => 'Verifikasi berhasil.',
         ],
     ],
 ];

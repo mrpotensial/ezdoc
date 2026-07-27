@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Ezdoc\Signature\Otp\Providers;
 
+use Ezdoc\Exceptions\EzdocException;
 use Ezdoc\Signature\Otp\UserOtpProvider;
 use Ezdoc\Signature\Otp\OtpSendResult;
 use Ezdoc\Signature\Otp\OtpService;
+use Ezdoc\Signature\Remote\CurlHttpClient;
+use Ezdoc\Signature\Remote\HttpClient;
 
 /**
  * Universal HTTP/Webhook-based OTP provider.
@@ -14,9 +17,21 @@ use Ezdoc\Signature\Otp\OtpService;
  * Sends OTP codes via HTTP request to any configurable endpoint URL.
  * Supports placeholder replacement in payload templates: {phone}, {name}, {code}.
  *
- * This provider is transport-agnostic — it doesn't care whether the endpoint
- * sends via WhatsApp, SMS, Email, or any other channel. That's the responsibility
- * of the webhook endpoint itself.
+ * Transport-agnostic — whether the endpoint delivers via WhatsApp, SMS or
+ * email is the endpoint's concern, not this class's.
+ *
+ * ## When NOT to use this
+ *
+ * If the delivery code already runs inside the consumer's process, call it
+ * directly through {@see CallbackOtpProvider} instead. Pointing this provider
+ * at the consumer's own session-guarded endpoint means a loopback request
+ * that carries no session — the usual symptom is a blanket HTTP 403.
+ *
+ * ## Transport
+ *
+ * Delegates to {@see HttpClient} (default {@see CurlHttpClient}), which
+ * verifies TLS certificates and enforces timeouts. Inject a different client
+ * for mTLS, a custom CA bundle, or a test double.
  *
  * Usage example:
  *   $provider = new WebhookOtpProvider(
@@ -33,25 +48,31 @@ class WebhookOtpProvider implements UserOtpProvider
     private array $headers;
     private array $payloadTemplate;
 
+    /** @var HttpClient */
+    private $http;
+
     /**
-     * @param string $endpointUrl     URL endpoint tujuan (wajib).
-     * @param array  $payloadTemplate Template array payload. Placeholders: {phone}, {name}, {code}.
-     * @param string $method          HTTP method: POST, GET, PUT, dll.
-     * @param array  $headers         Custom HTTP headers (e.g. ['Authorization: Bearer xyz']).
+     * @param string          $endpointUrl     Target endpoint URL (required).
+     * @param array           $payloadTemplate Payload template. Placeholders: {phone}, {name}, {code}.
+     * @param string          $method          HTTP method: POST, GET, PUT, ...
+     * @param array           $headers         Custom HTTP headers (e.g. ['Authorization: Bearer xyz']).
+     * @param HttpClient|null $http            Transport; defaults to {@see CurlHttpClient}.
      */
     public function __construct(
         string $endpointUrl,
         array $payloadTemplate,
         string $method = 'POST',
-        array $headers = []
+        array $headers = [],
+        ?HttpClient $http = null
     ) {
         if ($endpointUrl === '') {
-            throw new \InvalidArgumentException('WebhookOtpProvider: endpointUrl wajib diisi.');
+            throw new \InvalidArgumentException('WebhookOtpProvider: endpointUrl is required.');
         }
         $this->endpointUrl = $endpointUrl;
         $this->payloadTemplate = $payloadTemplate;
         $this->method = strtoupper($method);
         $this->headers = $headers;
+        $this->http = $http ?: new CurlHttpClient();
     }
 
     /**
@@ -68,7 +89,7 @@ class WebhookOtpProvider implements UserOtpProvider
     {
         $url = defined('EZDOC_OTP_WEBHOOK_URL') ? EZDOC_OTP_WEBHOOK_URL : '';
         if ($url === '') {
-            throw new \RuntimeException('WebhookOtpProvider membutuhkan konstanta EZDOC_OTP_WEBHOOK_URL.');
+            throw new \RuntimeException('WebhookOtpProvider requires the EZDOC_OTP_WEBHOOK_URL constant.');
         }
 
         $payloadJson = defined('EZDOC_OTP_WEBHOOK_PAYLOAD') ? EZDOC_OTP_WEBHOOK_PAYLOAD : '{}';
@@ -96,75 +117,96 @@ class WebhookOtpProvider implements UserOtpProvider
         // Process placeholders recursively in payload template
         $payload = $this->applyTemplate($this->payloadTemplate, $replacements);
 
-        $ch = curl_init();
+        // Body encoding follows the caller's declared Content-Type; default to
+        // form encoding, which is what most webhook endpoints expect.
+        $isJson = false;
+        foreach ($this->headers as $header) {
+            if (is_string($header) && stripos($header, 'content-type:') === 0
+                && stripos($header, 'application/json') !== false) {
+                $isJson = true;
+                break;
+            }
+        }
 
-        $curlOptions = [
-            CURLOPT_URL            => $this->endpointUrl,
-            CURLOPT_CUSTOMREQUEST  => $this->method,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 15,
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
+        $options = [
+            'headers' => $this->headersToMap($this->headers),
+            'timeout' => 15,
         ];
-
-        if (!empty($this->headers)) {
-            $curlOptions[CURLOPT_HTTPHEADER] = $this->headers;
-        }
-
         if (in_array($this->method, ['POST', 'PUT', 'PATCH'], true)) {
-            // Check if Content-Type is application/json
-            $isJson = false;
-            foreach ($this->headers as $header) {
-                if (stripos($header, 'Content-Type: application/json') !== false) {
-                    $isJson = true;
-                    break;
-                }
-            }
-            $curlOptions[CURLOPT_POSTFIELDS] = $isJson ? json_encode($payload) : http_build_query($payload);
+            $options['body'] = $isJson ? $payload : http_build_query($payload);
+            $options['json'] = $isJson;
         }
 
-        curl_setopt_array($ch, $curlOptions);
-
-        $response = curl_exec($ch);
-        $errno = curl_errno($ch);
-        $errorMsg = curl_error($ch);
-        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($errno !== 0) {
-            return OtpSendResult::failure("Koneksi ke Webhook OTP gagal: {$errorMsg}", [
-                'curl_errno' => $errno,
-                'http_code'  => $httpCode,
-            ]);
+        try {
+            $resp = $this->http->request($this->method, $this->endpointUrl, $options);
+        } catch (EzdocException $e) {
+            // Transport failure. The detail (endpoint host, TLS error, DNS)
+            // goes to the log; the caller gets a generic message so vendor
+            // and infrastructure internals never reach the browser.
+            @error_log('[ezdoc:otp:webhook] transport error: ' . $e->getMessage());
+            return OtpSendResult::failure('OTP delivery failed (transport error).');
         }
 
-        $decoded = json_decode((string) $response, true);
+        $httpCode = $resp->getStatusCode();
+        $body = $resp->getBody();
+        $decoded = json_decode($body, true);
+
         if (!is_array($decoded)) {
-            if ($httpCode >= 200 && $httpCode < 300) {
-                return OtpSendResult::success('OTP berhasil dikirim (Webhook HTTP OK).', null, [
-                    'raw_response' => substr((string) $response, 0, 500),
-                    'http_code'    => $httpCode,
-                ]);
+            // Non-JSON body: fall back to the HTTP status alone.
+            if ($resp->isSuccess()) {
+                return OtpSendResult::success('OTP sent.', null, ['http_code' => $httpCode]);
             }
-            return OtpSendResult::failure("Respon Webhook tidak valid (HTTP {$httpCode}).", [
-                'raw_response' => substr((string) $response, 0, 500),
-                'http_code'    => $httpCode,
-            ]);
+            @error_log("[ezdoc:otp:webhook] HTTP {$httpCode}, body: " . substr($body, 0, 500));
+            return OtpSendResult::failure('OTP delivery rejected by endpoint.', ['http_code' => $httpCode]);
         }
 
-        // Generic JSON success checking
+        // Generic JSON success heuristic — accepts the shapes most webhook
+        // endpoints return without requiring per-vendor configuration.
         $status = $decoded['status'] ?? $decoded['state'] ?? '';
-        if ($httpCode < 200 || $httpCode >= 300 || ($status !== 'ok' && $status !== 'success' && empty($decoded['success']) && !isset($decoded['message_id']))) {
-            $msg = $decoded['message'] ?? $decoded['error'] ?? 'Pengiriman OTP gagal di sisi Webhook.';
-            return OtpSendResult::failure($msg, $decoded);
+        $looksOk = $resp->isSuccess() && (
+            $status === 'ok'
+            || $status === 'success'
+            || !empty($decoded['success'])
+            || isset($decoded['message_id'])
+        );
+
+        if (!$looksOk) {
+            @error_log("[ezdoc:otp:webhook] HTTP {$httpCode}, payload: " . substr($body, 0, 500));
+            return OtpSendResult::failure('OTP delivery rejected by endpoint.', ['http_code' => $httpCode]);
         }
+
+        $referenceId = $decoded['broadcast_id'] ?? $decoded['message_id'] ?? $decoded['id'] ?? null;
 
         return OtpSendResult::success(
-            'OTP berhasil dikirim via Webhook.',
-            $decoded['broadcast_id'] ?? $decoded['message_id'] ?? $decoded['id'] ?? null,
-            $decoded
+            'OTP sent.',
+            is_scalar($referenceId) ? (string) $referenceId : null,
+            ['http_code' => $httpCode]
         );
+    }
+
+    /**
+     * Convert `['Header: value']` strings into the `['Header' => 'value']`
+     * map that {@see HttpClient} expects. Entries already in map form pass
+     * through unchanged.
+     *
+     * @param array<int|string, string> $headers
+     * @return array<string, string>
+     */
+    private function headersToMap(array $headers): array
+    {
+        $map = [];
+        foreach ($headers as $key => $value) {
+            if (is_string($key)) {
+                $map[$key] = (string) $value;
+                continue;
+            }
+            $pos = strpos((string) $value, ':');
+            if ($pos === false) {
+                continue;
+            }
+            $map[trim(substr((string) $value, 0, $pos))] = trim(substr((string) $value, $pos + 1));
+        }
+        return $map;
     }
 
     private function applyTemplate(array $template, array $replacements): array

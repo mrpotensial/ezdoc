@@ -123,5 +123,20 @@ return [
         'template_name_required'  => 'Nama template wajib diisi',
         'save_template_failed'    => 'Gagal menyimpan: {error}',
         'template_saved'          => 'Template berhasil disimpan',
+
+        // ── document/send_ttd_otp.php + verify_ttd_otp.php ──
+        // Kegagalan verifikasi sengaja memakai satu pesan seragam supaya
+        // pemanggil tidak bisa membedakan "challenge tidak ada", "sudah
+        // kadaluarsa", dan "kode salah".
+        'otp_phone_required'      => 'Nomor WhatsApp penanda tangan wajib diisi.',
+        'otp_not_required'        => 'Slot tanda tangan ini tidak memerlukan verifikasi OTP.',
+        'otp_slot_not_found'      => 'Slot tanda tangan tidak ditemukan di template.',
+        'otp_send_failed'         => 'Gagal mengirim kode OTP. Silakan coba lagi.',
+        'otp_sent'                => 'Kode OTP telah dikirim ke {phone}.',
+        'otp_invalid'             => 'Kode salah atau sudah kadaluarsa.',
+        'otp_verified'            => 'Verifikasi berhasil.',
+        'otp_token_required'      => 'Verifikasi OTP diperlukan sebelum menandatangani "{label}".',
+        'otp_not_configured'      => 'Pengiriman OTP belum dikonfigurasi di aplikasi ini.',
+        'otp_phone_override_denied' => 'Kode hanya boleh dikirim ke nomor yang tercatat.',
     ],
 ];

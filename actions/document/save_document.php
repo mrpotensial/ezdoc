@@ -169,6 +169,24 @@ foreach ($validMateraiIds as $mid) {
 $ttdData = [];
 $accessMode = ezdoc_access_mode($accessConfig);
 $otpServiceInstance = null;
+
+// Signatures already stored on this document. The form re-posts every stored
+// signature on each save, so this is what tells an actual new signature apart
+// from an unchanged one — the difference between demanding a fresh OTP and
+// letting an ordinary field edit through.
+$existingTtdValues = [];
+if ($doc_id > 0) {
+    $existingRow = $db->fetchOne(
+        'SELECT `signature_values` FROM `ezdoc_documents` WHERE `id` = ? LIMIT 1',
+        [$doc_id]
+    );
+    if ($existingRow && !empty($existingRow['signature_values'])) {
+        $decoded = json_decode((string) $existingRow['signature_values'], true);
+        if (is_array($decoded)) {
+            $existingTtdValues = $decoded;
+        }
+    }
+}
 foreach ($configTtd as $ttd) {
     $tid = $ttd['id'];
     $tv  = $_POST[$tid] ?? '';
@@ -193,17 +211,32 @@ foreach ($configTtd as $ttd) {
         }
     }
 
-    // OTP Enforcement check
-    if (!empty($ttd['require_otp'])) {
+    // ─── OTP enforcement ───
+    // Only when this signature is actually being drawn or replaced. Re-posting
+    // an unchanged signature (which every save does, since the hidden input
+    // carries the stored value) must not demand a fresh code — the token was
+    // already spent on the save that created it, so requiring one again would
+    // make the document permanently unsaveable, blocking even unrelated edits.
+    if (!empty($ttd['require_otp']) && $tv !== ($existingTtdValues[$tid] ?? '')) {
         $signToken = trim((string) ($_POST['_sign_token_' . $tid] ?? ''));
         if ($otpServiceInstance === null) {
             $otpServiceInstance = new \Ezdoc\Signature\Otp\OtpService();
         }
-        if (!$otpServiceInstance->validateSignToken($signToken, $tid)) {
+        // Bound to this template and document, not just the slot id — slot ids
+        // are template-local, so `ttd1` exists on nearly every template.
+        $tokenOk = $otpServiceInstance->validateSignToken(
+            $signToken,
+            $tid,
+            (int) $template_id,
+            $doc_id > 0 ? (int) $doc_id : null
+        );
+        if (!$tokenOk) {
             $ttdLabel = $ttd['label'] ?? $tid;
-            ezdoc_respond_error(t('otp.token_required', ['label' => $ttdLabel], 'Verifikasi OTP WhatsApp diperlukan sebelum menandatangani "{label}".'), 403, [
-                'ttd_id' => $tid,
-            ]);
+            ezdoc_respond_error(
+                t('response.otp_token_required', ['label' => $ttdLabel], 'OTP verification is required before signing "{label}".'),
+                403,
+                ['ttd_id' => $tid]
+            );
         }
     }
 

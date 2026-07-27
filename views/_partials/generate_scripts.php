@@ -493,6 +493,16 @@
                 if (data.success) {
                     showToast(data.message, 'success');
                     markClean(); // reset dirty state after successful save
+
+                    // Sign tokens are single-use and the server has now spent
+                    // them. Holding on would leave the modal showing a green
+                    // "verified" badge for a token that no longer works, and
+                    // re-post dead tokens on the next save.
+                    _otpState.signTokens = {};
+                    _otpState.currentChallengeId = null;
+                    document.querySelectorAll('input[id^="_sign_token_"]').forEach(function (el) {
+                        el.remove();
+                    });
                     // spec: ezdoc-spec/slots/generate.md#save-hook-post — dispatch after-save event
                     // for analytics, external sync (audit trail, notification, webhook), or auto-print.
                     try {
@@ -1217,6 +1227,8 @@
 
         const configTtdMap = <?= json_encode($configTtd ?? [], JSON_UNESCAPED_UNICODE) ?>;
         let _otpState = {
+            // Challenge currently awaiting a code. Scoped to whichever slot the
+            // modal has open — see the reset in openSign().
             currentChallengeId: null,
             signTokens: {},
             timerInterval: null
@@ -1226,6 +1238,13 @@
             if (!editMode) {
                 ezdocAlert(t('ttd.locked_no_sign', {}, 'This document is locked. Cannot sign. Create a new version to revise.'), { title: 'Locked', variant: 'warning' });
                 return;
+            }
+            // Drop any challenge left over from another slot. Without this,
+            // sending a code for slot A then opening slot B and typing a code
+            // would verify against A's challenge and file the resulting token —
+            // which the server bound to A — under B.
+            if (currentTtdId !== id) {
+                _otpState.currentChallengeId = null;
             }
             currentTtdId = id;
             document.getElementById('signTitle').textContent = label || t('fallback.signature', {}, 'Signature');
@@ -1305,7 +1324,7 @@
             const phone = phoneInput ? phoneInput.value.trim() : '';
 
             if (!phone) {
-                showToast(t('otp.phone_required', {}, 'Nomor WhatsApp pasien wajib diisi!'), 'error');
+                showToast(t('modal.otp.phone_required', {}, 'A phone number is required.'), 'error');
                 return;
             }
 
@@ -1332,7 +1351,7 @@
 
                 if (data.success) {
                     _otpState.currentChallengeId = data.challenge_id;
-                    showToast(data.message || t('otp.send_success', {}, 'Kode OTP terkirim!'), 'success');
+                    showToast(data.message || t('modal.otp.send_success', {}, 'Code sent.'), 'success');
 
                     // Switch to Step 2
                     document.getElementById('signOtpStep1').classList.add('hidden');
@@ -1399,7 +1418,7 @@
                     }
                     tokenInput.value = data.sign_token;
 
-                    showToast(data.message || t('otp.verify_success', {}, 'Verifikasi OTP berhasil!'), 'success');
+                    showToast(data.message || t('modal.otp.verify_success', {}, 'Verified.'), 'success');
 
                     // Unlock canvas & badge
                     document.getElementById('signOtpBadge').classList.remove('hidden');

@@ -75,5 +75,19 @@ return [
         'template_name_required' => 'Template name is required',
         'save_template_failed' => 'Failed to save: {error}',
         'template_saved' => 'Template saved successfully',
+
+        // ── document/send_ttd_otp.php + verify_ttd_otp.php ──
+        // Verification failures deliberately share one message so a caller
+        // cannot tell "no such challenge" from "expired" from "wrong code".
+        'otp_phone_required' => 'A recipient phone number is required.',
+        'otp_not_required' => 'This signature slot does not require OTP verification.',
+        'otp_slot_not_found' => 'Signature slot not found in the template.',
+        'otp_send_failed' => 'Could not send the code. Please try again.',
+        'otp_sent' => 'A code has been sent to {phone}.',
+        'otp_invalid' => 'Incorrect or expired code.',
+        'otp_verified' => 'Verified.',
+        'otp_token_required' => 'OTP verification is required before signing "{label}".',
+        'otp_not_configured' => 'OTP delivery is not configured for this application.',
+        'otp_phone_override_denied' => 'The code can only be sent to the number on file.',
     ],
 ];

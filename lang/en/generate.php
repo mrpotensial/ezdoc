@@ -213,6 +213,10 @@ return [
             'invalid_code'       => 'Invalid OTP code.',
             'step3_title'        => 'Patient Signature Verified',
             'verified_badge'     => 'OTP Verified',
+            // Toasts raised by the JS handlers.
+            'phone_required'     => 'A phone number is required.',
+            'send_success'       => 'Code sent.',
+            'verify_success'     => 'Verified.',
         ],
     ],
 ];
