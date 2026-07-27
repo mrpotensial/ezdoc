@@ -90,15 +90,21 @@ if ($hasTtdPlaceholders) {
         preg_match('/data-nama-field="([^"]+)"/', $attrs, $nm);
         preg_match('/data-allowed-roles="([^"]*)"/', $attrs, $arm);
         preg_match('/data-allowed-users="([^"]*)"/', $attrs, $aum);
+        preg_match('/data-require-otp="([^"]*)"/', $attrs, $otpm);
+        preg_match('/data-otp-phone-source="([^"]*)"/', $attrs, $otppm);
+        preg_match('/data-otp-ttl="([^"]*)"/', $attrs, $otptm);
         $configTtd[] = [
-            'id'         => $ttdId,
-            'label'      => $lm[1] ?? 'Tanda Tangan',
-            'nama_field' => $nm[1] ?? 'nama_' . $ttdId,
-            'rbac'       => ezdoc_parse_ttd_config($arm[1] ?? '', $aum[1] ?? ''),
+            'id'               => $ttdId,
+            'label'            => $lm[1] ?? 'Tanda Tangan',
+            'nama_field'       => $nm[1] ?? 'nama_' . $ttdId,
+            'rbac'             => ezdoc_parse_ttd_config($arm[1] ?? '', $aum[1] ?? ''),
+            'require_otp'      => !empty($otpm[1]) && ($otpm[1] === '1' || $otpm[1] === 'true'),
+            'otp_phone_source' => $otppm[1] ?? 'nomor_hp_pasien',
+            'otp_ttl_seconds'  => isset($otptm[1]) && $otptm[1] !== '' ? (int)$otptm[1] : 300,
         ];
     }
 } else {
-    $configTtd = array_map(function ($t) { return $t + ['rbac' => ['roles' => [], 'users' => []]]; }, $configTtdRaw);
+    $configTtd = array_map(function ($t) { return $t + ['rbac' => ['roles' => [], 'users' => []], 'require_otp' => !empty($t['require_otp'])]; }, $configTtdRaw);
 }
 
 // ─── Collect all fields from template ───
@@ -159,9 +165,10 @@ foreach ($validMateraiIds as $mid) {
     }
 }
 
-// ─── TTD signatures dgn per-TTD RBAC enforcement ───
+// ─── TTD signatures dgn per-TTD RBAC & OTP enforcement ───
 $ttdData = [];
 $accessMode = ezdoc_access_mode($accessConfig);
+$otpServiceInstance = null;
 foreach ($configTtd as $ttd) {
     $tid = $ttd['id'];
     $tv  = $_POST[$tid] ?? '';
@@ -183,6 +190,20 @@ foreach ($configTtd as $ttd) {
                 implode(',', $ttdRbac['roles'] ?? [])
             ));
             continue;
+        }
+    }
+
+    // OTP Enforcement check
+    if (!empty($ttd['require_otp'])) {
+        $signToken = trim((string) ($_POST['_sign_token_' . $tid] ?? ''));
+        if ($otpServiceInstance === null) {
+            $otpServiceInstance = new \Ezdoc\Signature\Otp\OtpService();
+        }
+        if (!$otpServiceInstance->validateSignToken($signToken, $tid)) {
+            $ttdLabel = $ttd['label'] ?? $tid;
+            ezdoc_respond_error(t('otp.token_required', ['label' => $ttdLabel], 'Verifikasi OTP WhatsApp diperlukan sebelum menandatangani "{label}".'), 403, [
+                'ttd_id' => $tid,
+            ]);
         }
     }
 

@@ -1215,6 +1215,13 @@
             }
         })();
 
+        const configTtdMap = <?= json_encode($configTtd ?? [], JSON_UNESCAPED_UNICODE) ?>;
+        let _otpState = {
+            currentChallengeId: null,
+            signTokens: {},
+            timerInterval: null
+        };
+
         function openSign(id, label) {
             if (!editMode) {
                 ezdocAlert(t('ttd.locked_no_sign', {}, 'This document is locked. Cannot sign. Create a new version to revise.'), { title: 'Locked', variant: 'warning' });
@@ -1224,6 +1231,58 @@
             document.getElementById('signTitle').textContent = label || t('fallback.signature', {}, 'Signature');
             modal.classList.add('show');
             clearSign();
+
+            // Find TTD config
+            const ttdInfo = configTtdMap.find(item => item.id === id) || {};
+            const requireOtp = !!(ttdInfo.require_otp);
+
+            const otpContainer = document.getElementById('signOtpContainer');
+            const otpBadge = document.getElementById('signOtpBadge');
+            const overlay = document.getElementById('signCanvasOverlay');
+            const btnSaveSign = document.getElementById('btnSaveSign');
+
+            if (requireOtp) {
+                otpContainer.classList.remove('hidden');
+                // Check if sign token already verified for this ttd
+                const existingToken = _otpState.signTokens[id];
+                if (existingToken) {
+                    // OTP Verified! Show canvas
+                    otpBadge.classList.remove('hidden');
+                    overlay.classList.add('hidden');
+                    if (btnSaveSign) btnSaveSign.disabled = false;
+                    document.getElementById('signOtpStep1').classList.add('hidden');
+                    document.getElementById('signOtpStep2').classList.add('hidden');
+                } else {
+                    // Requires OTP verification first
+                    otpBadge.classList.add('hidden');
+                    overlay.classList.remove('hidden');
+                    if (btnSaveSign) btnSaveSign.disabled = true;
+
+                    // Show Step 1 (Kirim OTP) with editable phone number
+                    document.getElementById('signOtpStep1').classList.remove('hidden');
+                    document.getElementById('signOtpStep2').classList.add('hidden');
+
+                    // Resolve phone field
+                    const phoneFieldSrc = ttdInfo.otp_phone_source || 'nomor_hp_pasien';
+                    let patientPhone = '';
+                    const phoneCtrl = document.querySelector(`input[name="${phoneFieldSrc}"], input[name="no_hp"], input[name="nomor_hp"]`);
+                    if (phoneCtrl) patientPhone = phoneCtrl.value || '';
+                    else {
+                        const editable = document.querySelector(`.f[data-field="${phoneFieldSrc}"]`);
+                        if (editable) patientPhone = editable.textContent || '';
+                    }
+
+                    const phoneInput = document.getElementById('signOtpPhoneInput');
+                    if (phoneInput) phoneInput.value = patientPhone;
+                }
+            } else {
+                // No OTP required
+                otpContainer.classList.add('hidden');
+                otpBadge.classList.add('hidden');
+                overlay.classList.add('hidden');
+                if (btnSaveSign) btnSaveSign.disabled = false;
+            }
+
             const existing = document.getElementById('ttd_' + id)?.value;
             if (existing) {
                 const img = new Image();
@@ -1238,6 +1297,156 @@
                 };
                 img.src = existing;
             }
+        }
+
+        async function sendTtdOtp() {
+            if (!currentTtdId) return;
+            const phoneInput = document.getElementById('signOtpPhoneInput');
+            const phone = phoneInput ? phoneInput.value.trim() : '';
+
+            if (!phone) {
+                showToast(t('otp.phone_required', {}, 'Nomor WhatsApp pasien wajib diisi!'), 'error');
+                return;
+            }
+
+            const btn = document.getElementById('btnSendOtp');
+            const btnText = document.getElementById('btnSendOtpText');
+            btn.disabled = true;
+            btnText.textContent = t('modal.otp.sending', {}, 'Mengirim OTP...');
+
+            try {
+                const fd = new FormData();
+                fd.append('_doc_action', 'send_ttd_otp');
+                fd.append('template_id', templateId);
+                fd.append('ttd_id', currentTtdId);
+                fd.append('phone', phone);
+                if (CURRENT_DOC_ID) fd.append('doc_id', CURRENT_DOC_ID);
+
+                // Get patient name if available
+                const nameCtrl = document.querySelector('input[name="nama_pasien"], input[name="nama"]');
+                if (nameCtrl && nameCtrl.value) fd.append('nama_pasien', nameCtrl.value);
+
+                const endpoint = typeof _ezdocEndpoint === 'function' ? _ezdocEndpoint('docAction') : 'actions/document/send_ttd_otp.php';
+                const resp = await fetch(endpoint, { method: 'POST', body: fd });
+                const data = await resp.json();
+
+                if (data.success) {
+                    _otpState.currentChallengeId = data.challenge_id;
+                    showToast(data.message || t('otp.send_success', {}, 'Kode OTP terkirim!'), 'success');
+
+                    // Switch to Step 2
+                    document.getElementById('signOtpStep1').classList.add('hidden');
+                    document.getElementById('signOtpStep2').classList.remove('hidden');
+
+                    const descEl = document.getElementById('signOtpStep2Desc');
+                    if (descEl) descEl.textContent = t('modal.otp.step2_desc', {phone: data.masked_phone}, `Kode OTP 6 digit telah dikirimkan ke WhatsApp ${data.masked_phone}. Silakan minta kode tersebut dari pasien dan masukkan di bawah ini.`);
+
+                    const codeInput = document.getElementById('signOtpCodeInput');
+                    if (codeInput) { codeInput.value = ''; codeInput.focus(); }
+
+                    startOtpResendTimer(60);
+                } else {
+                    showToast(data.message || 'Gagal mengirim OTP.', 'error');
+                }
+            } catch (e) {
+                showToast('Gagal mengirim OTP: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btnText.textContent = t('modal.otp.send_btn', [], 'Kirim Kode OTP via WA');
+            }
+        }
+
+        async function verifyTtdOtp() {
+            if (!_otpState.currentChallengeId) {
+                showToast('Sesi OTP tidak valid. Silakan kirim ulang OTP.', 'error');
+                return;
+            }
+
+            const codeInput = document.getElementById('signOtpCodeInput');
+            const code = codeInput ? codeInput.value.trim() : '';
+
+            if (code.length !== 6) {
+                showToast('Kode OTP harus 6 digit angka!', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('btnVerifyOtp');
+            const btnText = document.getElementById('btnVerifyOtpText');
+            btn.disabled = true;
+            btnText.textContent = t('modal.otp.verifying', {}, 'Memverifikasi...');
+
+            try {
+                const fd = new FormData();
+                fd.append('_doc_action', 'verify_ttd_otp');
+                fd.append('challenge_id', _otpState.currentChallengeId);
+                fd.append('otp_code', code);
+
+                const endpoint = typeof _ezdocEndpoint === 'function' ? _ezdocEndpoint('docAction') : 'actions/document/verify_ttd_otp.php';
+                const resp = await fetch(endpoint, { method: 'POST', body: fd });
+                const data = await resp.json();
+
+                if (data.success) {
+                    _otpState.signTokens[currentTtdId] = data.sign_token;
+
+                    // Create/update hidden input on main form
+                    let tokenInput = document.getElementById('_sign_token_' + currentTtdId);
+                    if (!tokenInput) {
+                        tokenInput = document.createElement('input');
+                        tokenInput.type = 'hidden';
+                        tokenInput.id = '_sign_token_' + currentTtdId;
+                        tokenInput.name = '_sign_token_' + currentTtdId;
+                        document.getElementById('mainForm').appendChild(tokenInput);
+                    }
+                    tokenInput.value = data.sign_token;
+
+                    showToast(data.message || t('otp.verify_success', {}, 'Verifikasi OTP berhasil!'), 'success');
+
+                    // Unlock canvas & badge
+                    document.getElementById('signOtpBadge').classList.remove('hidden');
+                    document.getElementById('signCanvasOverlay').classList.add('hidden');
+                    document.getElementById('btnSaveSign').disabled = false;
+
+                    document.getElementById('signOtpStep1').classList.add('hidden');
+                    document.getElementById('signOtpStep2').classList.add('hidden');
+                } else {
+                    showToast(data.message || 'Verifikasi gagal.', 'error');
+                    if (data.attempts_left !== undefined) {
+                        const attemptsEl = document.getElementById('signOtpAttemptsLeft');
+                        if (attemptsEl) attemptsEl.textContent = t('modal.otp.attempts_left', {attempts: data.attempts_left}, `Sisa percobaan: ${data.attempts_left} kali`);
+                    }
+                }
+            } catch (e) {
+                showToast('Gagal memverifikasi OTP: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btnText.textContent = t('modal.otp.verify_btn', [], 'Verifikasi OTP');
+            }
+        }
+
+        function resendTtdOtp() {
+            document.getElementById('signOtpStep2').classList.add('hidden');
+            document.getElementById('signOtpStep1').classList.remove('hidden');
+        }
+
+        function startOtpResendTimer(seconds) {
+            if (_otpState.timerInterval) clearInterval(_otpState.timerInterval);
+            const btnResend = document.getElementById('btnResendOtp');
+            const btnResendText = document.getElementById('btnResendOtpText');
+            btnResend.disabled = true;
+
+            let remaining = seconds;
+            btnResendText.textContent = t('modal.otp.resend_countdown', {seconds: remaining}, `Kirim ulang (${remaining}s)`);
+
+            _otpState.timerInterval = setInterval(() => {
+                remaining--;
+                if (remaining <= 0) {
+                    clearInterval(_otpState.timerInterval);
+                    btnResend.disabled = false;
+                    btnResendText.textContent = t('modal.otp.resend_btn', [], 'Kirim Ulang');
+                } else {
+                    btnResendText.textContent = t('modal.otp.resend_countdown', {seconds: remaining}, `Kirim ulang (${remaining}s)`);
+                }
+            }, 1000);
         }
 
         function closeSign() { modal.classList.remove('show'); }

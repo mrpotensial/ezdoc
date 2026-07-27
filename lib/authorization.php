@@ -51,6 +51,18 @@ function ezdoc_current_user_id(): int
 }
 
 /**
+ * Guard: ensure user is authenticated (userId > 0) if RBAC is enforced.
+ */
+function ezdoc_require_auth(string $message = 'Unauthorized'): void
+{
+    $userId = ezdoc_current_user_id();
+    if ($userId <= 0 && (defined('EZDOC_ENFORCE_RBAC') ? EZDOC_ENFORCE_RBAC : false)) {
+        require_once __DIR__ . '/responses.php';
+        ezdoc_respond_error($message, 401);
+    }
+}
+
+/**
  * Get current user's role array — route via role provider.
  * @return array<string>
  */

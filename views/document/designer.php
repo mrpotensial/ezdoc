@@ -711,7 +711,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                                 </div>
                                 <!-- Actions -->
                                 <div class="flex gap-1 pt-1">
-                                    <button type="button" id="tabledbEdApply" class="flex-1 inline-flex items-center justify-center px-2 py-1 rounded text-xs bg-indigo-600 text-white hover:bg-indigo-700"><i class="bi bi-check-lg mr-1"></i>Apply</button>
+                                    <button type="button" id="tabledbEdApply" class="flex-1 inline-flex items-center justify-center px-2 py-1 rounded text-xs bg-indigo-600 text-white hover:bg-indigo-700"><i class="bi bi-check-lg mr-1"></i><span id="tabledbEdApplyLabel">Apply</span></button>
                                     <button type="button" id="tabledbEdDelete" class="inline-flex items-center px-2 py-1 rounded text-xs bg-red-600 text-white hover:bg-red-700" title="Hapus marker"><i class="bi bi-trash"></i></button>
                                 </div>
                             </div>

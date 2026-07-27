@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * ezdoc/views/document/generate.php — full-featured document generator + printer.
  * Ported dari reference implementation (monolith consumer app cetak view).
@@ -255,18 +255,32 @@ if ($hasTtdPlaceholders) {
         preg_match('/data-nama-field="([^"]+)"/', $attrs, $nm);
         preg_match('/data-ttd-modes="([^"]+)"/', $attrs, $mm);
         preg_match('/data-ttd-qr-data="([^"]+)"/', $attrs, $qm);
+        preg_match('/data-require-otp="([^"]+)"/', $attrs, $rom);
+        preg_match('/data-otp-phone-source="([^"]+)"/', $attrs, $opsm);
+        preg_match('/data-otp-ttl="([^"]+)"/', $attrs, $otm);
+
+        $requireOtpVal = $rom[1] ?? '0';
+        $requireOtp = ($requireOtpVal === '1' || $requireOtpVal === 'true');
 
         $configTtd[] = [
             'id' => $ttdId,
             'label' => $lm[1] ?? t('fallback.signature', [], 'Signature'),
             'nama_field' => $nm[1] ?? 'nama_' . $ttdId,
             'ttd_modes' => $mm[1] ?? 'image',
-            'qr_data' => html_entity_decode($qm[1] ?? '')
+            'qr_data' => html_entity_decode($qm[1] ?? ''),
+            'require_otp' => $requireOtp,
+            'otp_phone_source' => $opsm[1] ?? 'nomor_hp_pasien',
+            'otp_ttl' => (int)($otm[1] ?? 300)
         ];
     }
 } else {
     // Use old format configTtd
-    $configTtd = $configTtdRaw;
+    $configTtd = array_map(function($item) {
+        if (isset($item['require_otp'])) {
+            $item['require_otp'] = !empty($item['require_otp']);
+        }
+        return $item;
+    }, $configTtdRaw);
 }
 
 // Get logos (support old and new format)
@@ -2425,19 +2439,79 @@ function renderFieldForPdf($name, $type, $val, $label) {
         </div>
     </form>
 
-    <!-- Sign Modal - Fullscreen -->
+    <!-- Sign Modal - Fullscreen / Responsive -->
     <div class="modal" id="signModal">
-        <div class="modal-box">
-            <div class="modal-header" id="signTitle"><?= h(t('fallback.signature', [], 'Signature')) ?></div>
-            <div class="modal-body">
-                <div class="w-full">
+        <div class="modal-box max-w-[890px]">
+            <div class="modal-header flex items-center justify-between">
+                <span id="signTitle"><?= h(t('fallback.signature', [], 'Signature')) ?></span>
+                <span id="signOtpBadge" class="hidden inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                    <i class="bi bi-patch-check-fill mr-1"></i> <?= h(t('modal.otp.verified_badge', [], 'OTP Terverifikasi')) ?>
+                </span>
+            </div>
+
+            <!-- OTP Container Step 1 & Step 2 -->
+            <div id="signOtpContainer" class="hidden p-4 bg-slate-50 border-b border-slate-200">
+                <!-- Step 1: Kirim OTP -->
+                <div id="signOtpStep1">
+                    <h6 class="text-sm font-bold text-slate-800 mb-1 flex items-center gap-1.5">
+                        <i class="bi bi-whatsapp text-emerald-600 text-base"></i>
+                        <span><?= h(t('modal.otp.step1_title', [], 'Verifikasi OTP Pasien')) ?></span>
+                    </h6>
+                    <p class="text-xs text-slate-600 mb-3"><?= h(t('modal.otp.step1_desc', [], 'Fitur Tanda Tangan ini memerlukan verifikasi Kode OTP yang dikirimkan ke nomor WhatsApp pasien.')) ?></p>
+                    
+                    <div class="mb-3">
+                        <label class="block text-xs font-semibold text-slate-700 mb-1"><?= h(t('modal.otp.phone_label', [], 'Nomor WhatsApp Pasien:')) ?></label>
+                        <input type="text" id="signOtpPhoneInput" class="w-full text-xs p-2 border border-slate-300 rounded font-mono focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" placeholder="08xxxxxxxxxx / 628xxxxxxxxxx">
+                        <small class="text-[11px] text-slate-500"><?= h(t('modal.otp.phone_hint', [], 'Masukkan/sesuaikan nomor WhatsApp pasien (format: 08xx / 628xx)')) ?></small>
+                    </div>
+
+                    <button type="button" id="btnSendOtp" onclick="sendTtdOtp()" class="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold transition flex items-center justify-center gap-2">
+                        <i class="bi bi-send-fill"></i> <span id="btnSendOtpText"><?= h(t('modal.otp.send_btn', [], 'Kirim Kode OTP via WA')) ?></span>
+                    </button>
+                </div>
+
+                <!-- Step 2: Input 6-Digit OTP -->
+                <div id="signOtpStep2" class="hidden">
+                    <h6 class="text-sm font-bold text-slate-800 mb-1 flex items-center gap-1.5">
+                        <i class="bi bi-shield-lock-fill text-emerald-600 text-base"></i>
+                        <span><?= h(t('modal.otp.step2_title', [], 'Masukkan Kode OTP')) ?></span>
+                    </h6>
+                    <p class="text-xs text-slate-600 mb-3" id="signOtpStep2Desc"></p>
+
+                    <div class="mb-3">
+                        <label class="block text-xs font-semibold text-slate-700 mb-1"><?= h(t('modal.otp.otp_input_label', [], 'Kode OTP (6 Digit):')) ?></label>
+                        <input type="text" id="signOtpCodeInput" maxlength="6" class="w-full text-center text-lg tracking-[0.5em] font-bold p-2 border border-slate-300 rounded font-mono focus:border-emerald-500" placeholder="123456" autocomplete="off">
+                        <div id="signOtpAttemptsLeft" class="text-[11px] text-amber-600 mt-1 font-semibold"></div>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button type="button" id="btnVerifyOtp" onclick="verifyTtdOtp()" class="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold transition flex items-center justify-center gap-2">
+                            <i class="bi bi-check-circle-fill"></i> <span id="btnVerifyOtpText"><?= h(t('modal.otp.verify_btn', [], 'Verifikasi OTP')) ?></span>
+                        </button>
+                        <button type="button" id="btnResendOtp" onclick="resendTtdOtp()" disabled class="py-2 px-3 bg-slate-200 text-slate-600 rounded text-xs font-medium transition">
+                            <span id="btnResendOtpText"><?= h(t('modal.otp.resend_btn', [], 'Kirim Ulang')) ?></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Body Canvas -->
+            <div class="modal-body" id="signCanvasArea">
+                <div class="w-full relative">
                     <canvas id="signCanvas" width="850" height="400"></canvas>
-                    <div class="sign-hint"><?= h(t('modal.sign.hint', [], 'Draw your signature in the area above using your mouse or touchscreen')) ?></div>
+                    <div id="signCanvasOverlay" class="hidden absolute inset-0 bg-slate-100/90 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center p-6 text-center">
+                        <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xl mb-2">
+                            <i class="bi bi-lock-fill"></i>
+                        </div>
+                        <h6 class="text-sm font-bold text-slate-800 mb-1"><?= h(t('modal.otp.step1_title', [], 'Verifikasi OTP Pasien')) ?></h6>
+                        <p class="text-xs text-slate-500 max-w-sm"><?= h(t('modal.otp.step1_desc', [], 'Silakan selesaikan pengiriman dan verifikasi kode OTP di atas untuk mengaktifkan canvas tanda tangan.')) ?></p>
+                    </div>
+                    <div class="sign-hint"><?= h(t('modal.sign.hint', [], 'Gambar tanda tangan di area di atas menggunakan mouse atau sentuhan layar')) ?></div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="bg-red-500 text-white" type="button" onclick="clearSign()"><?= h(t('actions.delete', [], 'Delete')) ?></button>
-                <button class="bg-green-500 text-white" type="button" onclick="saveSign()"><?= h(t('actions.save', [], 'Save')) ?></button>
+                <button class="bg-green-500 text-white" type="button" id="btnSaveSign" onclick="saveSign()"><?= h(t('actions.save', [], 'Save')) ?></button>
                 <button class="bg-gray-500 text-white" type="button" onclick="closeSign()"><?= h(t('actions.close', [], 'Close')) ?></button>
             </div>
         </div>

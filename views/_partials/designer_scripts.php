@@ -509,7 +509,18 @@
 
         // ─── Selection state + right-panel editor ──────────────────────────
         // Selected chip element (di iframe body). Null saat tidak ada selection.
+        // Only set via EXPLICIT chip click (edit mode). Cleared via
+        // deselectTabledbChip() or click elsewhere.
         let _tabledbSelectedChip = null;
+        // Panel mode: 'edit' (chip clicked, Apply modifies chip),
+        //             'insert' (caret in cell w/ chip context, Apply inserts new),
+        //             'empty' (no context)
+        let _tabledbPanelMode = 'empty';
+        // Last cell dengan chip yg jadi INSERT context — dipakai supaya
+        // NodeChange di sel yg sama tidak re-populate form (avoid flicker).
+        let _tabledbLastInsertCell = null;
+        // Debounce timer untuk NodeChange handler
+        let _tabledbCaretDebounce = null;
 
         function selectTabledbChip(el) {
             const editor = tinymce.get('editor');
@@ -563,12 +574,73 @@
             document.getElementById('tabledbEdFormatType').value = fmtParts[0] || '';
             document.getElementById('tabledbEdFormatArgs').value = fmtParts.slice(1).join(':') || '';
 
-            // Show form, hide empty state
+            // Show form, hide empty state — mark panel mode = 'edit'
+            _tabledbPanelMode = 'edit';
+            _tabledbLastInsertCell = null;
             document.getElementById('tabledbEditorEmpty').style.display = 'none';
             document.getElementById('tabledbEditorForm').style.display = '';
-            document.getElementById('tabledbEditorStatus').textContent = ns;
-            document.getElementById('tabledbEditorStatus').classList.remove('bg-gray-100', 'text-gray-500');
+            document.getElementById('tabledbEditorStatus').textContent = ns + ' · edit';
+            document.getElementById('tabledbEditorStatus').classList.remove('bg-gray-100', 'text-gray-500', 'bg-emerald-100', 'text-emerald-700');
             document.getElementById('tabledbEditorStatus').classList.add('bg-indigo-100', 'text-indigo-700');
+            // Delete btn visible (edit mode), Apply label = "Apply"
+            document.getElementById('tabledbEdDelete').style.display = '';
+            document.getElementById('tabledbEdApplyLabel').textContent = 'Apply';
+
+            _tabledbUpdatePreview();
+        }
+
+        // Enter INSERT mode — cursor di cell yg contain chip, no explicit chip
+        // selection. Panel populated dari LAST chip di cell sbg starting point.
+        // Apply button = "+ Insert" → creates new chip at caret dgn form values.
+        function enterInsertModeFromCell(cellEl, chipInCell) {
+            if (!cellEl || !chipInCell) return;
+            const editor = tinymce.get('editor');
+            if (!editor) return;
+
+            // Clear any lingering chip selection visual
+            if (_tabledbSelectedChip) {
+                _tabledbSelectedChip.classList.remove('tabledb-selected');
+                _tabledbSelectedChip = null;
+            }
+
+            _tabledbPanelMode = 'insert';
+            _tabledbLastInsertCell = cellEl;
+
+            // Populate form dari chipInCell's data
+            const ns = chipInCell.getAttribute('data-ns') || '';
+            const selector = chipInCell.getAttribute('data-selector') || '';
+            const format = chipInCell.getAttribute('data-format') || '';
+            const parsed = parseTabledbSelector(selector);
+
+            document.getElementById('tabledbEdNs').value = ns;
+            _tabledbSetEditorType(parsed.type === 'invalid' ? 'raw' : parsed.type);
+            _tabledbPopulateColumnDropdown(ns, parsed.type === 'raw' ? parsed.field : '');
+
+            if (parsed.type === 'formula') {
+                document.getElementById('tabledbEdFormula').value = parsed.formula;
+            } else {
+                document.getElementById('tabledbEdFormula').value = '';
+            }
+            if (parsed.type === 'aggregate') {
+                document.getElementById('tabledbEdAggVerb').value = parsed.verb;
+                document.getElementById('tabledbEdAggTarget').value = parsed.target;
+            } else {
+                document.getElementById('tabledbEdAggVerb').value = 'sum';
+                document.getElementById('tabledbEdAggTarget').value = '';
+            }
+
+            const fmtParts = format.split(':');
+            document.getElementById('tabledbEdFormatType').value = fmtParts[0] || '';
+            document.getElementById('tabledbEdFormatArgs').value = fmtParts.slice(1).join(':') || '';
+
+            document.getElementById('tabledbEditorEmpty').style.display = 'none';
+            document.getElementById('tabledbEditorForm').style.display = '';
+            document.getElementById('tabledbEditorStatus').textContent = ns + ' · insert';
+            document.getElementById('tabledbEditorStatus').classList.remove('bg-gray-100', 'text-gray-500', 'bg-indigo-100', 'text-indigo-700');
+            document.getElementById('tabledbEditorStatus').classList.add('bg-emerald-100', 'text-emerald-700');
+            // Hide Delete btn (insert mode — nothing to delete), change Apply label
+            document.getElementById('tabledbEdDelete').style.display = 'none';
+            document.getElementById('tabledbEdApplyLabel').textContent = '+ Insert';
 
             _tabledbUpdatePreview();
         }
@@ -578,12 +650,18 @@
                 _tabledbSelectedChip.classList.remove('tabledb-selected');
                 _tabledbSelectedChip = null;
             }
+            _tabledbPanelMode = 'empty';
+            _tabledbLastInsertCell = null;
             document.getElementById('tabledbEditorEmpty').style.display = '';
             document.getElementById('tabledbEditorForm').style.display = 'none';
             const status = document.getElementById('tabledbEditorStatus');
             status.textContent = 'kosong';
-            status.classList.remove('bg-indigo-100', 'text-indigo-700');
+            status.classList.remove('bg-indigo-100', 'text-indigo-700', 'bg-emerald-100', 'text-emerald-700');
             status.classList.add('bg-gray-100', 'text-gray-500');
+            const delBtn = document.getElementById('tabledbEdDelete');
+            if (delBtn) delBtn.style.display = '';
+            const applyLabel = document.getElementById('tabledbEdApplyLabel');
+            if (applyLabel) applyLabel.textContent = 'Apply';
         }
 
         function _tabledbSetEditorType(type) {
@@ -745,6 +823,68 @@
             showToast('Marker updated: ' + tabledbChipLabel(ns, selector, format));
         }
 
+        // INSERT mode Apply → build chip dari form + insert at cursor.
+        function insertTabledbChipFromPanel() {
+            const editor = tinymce.get('editor');
+            if (!editor) return;
+            const ns = document.getElementById('tabledbEdNs').value;
+            const selector = _tabledbCollectEditorSelector();
+            const format = _tabledbCollectEditorFormat();
+            if (!ns || !selector || selector === '=' || selector.endsWith(':')) {
+                showToast('Selector kosong', 'error');
+                return;
+            }
+            // Focus editor supaya insert masuk di caret position terakhir
+            editor.focus();
+            insertTabledbChip(ns, selector, format);
+        }
+
+        // Router untuk Apply button — dispatch based on panel mode.
+        function tabledbApplyButtonHandler() {
+            if (_tabledbPanelMode === 'insert') {
+                insertTabledbChipFromPanel();
+            } else {
+                applyTabledbChipEdit();
+            }
+        }
+
+        // Handle caret context change. Called dari NodeChange (debounced) +
+        // dari click handler (immediate). Logic:
+        //   - Kalau _tabledbSelectedChip aktif (user click chip) → do nothing,
+        //     EDIT mode sticky sampai user click chip lain atau click luar
+        //     table.
+        //   - Kalau caret di dalam cell yg contain chip → INSERT mode dgn
+        //     chip terakhir sbg context.
+        //   - Kalau caret di luar table → EMPTY.
+        function _tabledbHandleCaretContext(el) {
+            // Sticky EDIT mode saat chip explicitly selected
+            if (_tabledbSelectedChip) return;
+
+            if (!el) { deselectTabledbChip(); return; }
+
+            // Find nearest cell (td/th) ancestor
+            const cell = el.closest && el.closest('td, th');
+            if (!cell) {
+                // Luar table — clear panel kalau bukan sudah empty
+                if (_tabledbPanelMode !== 'empty') deselectTabledbChip();
+                return;
+            }
+
+            // Cell exists — find latest chip di dalamnya
+            const chips = cell.querySelectorAll('.tabledb-marker');
+            if (chips.length === 0) {
+                if (_tabledbPanelMode !== 'empty') deselectTabledbChip();
+                return;
+            }
+
+            // Cell SAME sebagai last INSERT context → tidak re-populate (avoid form flicker)
+            if (_tabledbPanelMode === 'insert' && _tabledbLastInsertCell === cell) return;
+
+            // Enter INSERT mode dgn chip terakhir sbg template
+            const lastChip = chips[chips.length - 1];
+            enterInsertModeFromCell(cell, lastChip);
+        }
+
         function deleteTabledbSelectedChip() {
             if (!_tabledbSelectedChip) return;
             const editor = tinymce.get('editor');
@@ -781,9 +921,9 @@
                 if (el) el.addEventListener('input', _tabledbUpdatePreview);
                 if (el && el.tagName === 'SELECT') el.addEventListener('change', _tabledbUpdatePreview);
             });
-            // Apply button
+            // Apply button — dispatch based on panel mode (edit vs insert)
             const applyBtn = document.getElementById('tabledbEdApply');
-            if (applyBtn) applyBtn.addEventListener('click', applyTabledbChipEdit);
+            if (applyBtn) applyBtn.addEventListener('click', tabledbApplyButtonHandler);
             const delBtn = document.getElementById('tabledbEdDelete');
             if (delBtn) delBtn.addEventListener('click', deleteTabledbSelectedChip);
 
@@ -2135,6 +2275,16 @@
                         e.content = tabledbRawMarkersToChips(e.content);
                     }
                 });
+
+                // v0.9.14b: caret context tracking untuk Panel INSERT mode.
+                // NodeChange fires on cursor movement — debounce 120ms supaya
+                // panel tidak flicker saat user scroll caret rapidly.
+                editor.on('NodeChange', function (e) {
+                    if (_tabledbCaretDebounce) clearTimeout(_tabledbCaretDebounce);
+                    _tabledbCaretDebounce = setTimeout(function () {
+                        try { _tabledbHandleCaretContext(e.element); } catch (err) {}
+                    }, 120);
+                });
                 // Custom Line Height Button
                 editor.ui.registry.addMenuButton('lineheightbtn', {
                     text: 'LH',
@@ -2628,8 +2778,11 @@
                         el = el.parentElement;
                         depth++;
                     }
-                    // Not a tabledb chip — deselect current tabledb selection
+                    // Not a tabledb chip — deselect current chip, then let
+                    // NodeChange handler detect cell context untuk insert mode.
                     if (_tabledbSelectedChip) deselectTabledbChip();
+                    // Trigger caret handler immediately (not wait for debounce)
+                    try { _tabledbHandleCaretContext(e.target); } catch (err) {}
 
                     if (!window.ezdocFocusSidebarCard) return;
                     el = e.target;
@@ -4087,6 +4240,10 @@
                 // RBAC per-TTD attributes (kosong = allow all, backward compat)
                 const allowedRolesRaw = (attrs.match(/data-allowed-roles="([^"]*)"/) || [])[1] || '';
                 const allowedUsersRaw = (attrs.match(/data-allowed-users="([^"]*)"/) || [])[1] || '';
+                // OTP attributes
+                const requireOtpRaw = (attrs.match(/data-require-otp="([^"]*)"/) || [])[1] || '0';
+                const otpPhoneSourceRaw = (attrs.match(/data-otp-phone-source="([^"]*)"/) || [])[1] || 'nomor_hp_pasien';
+                const otpTtlRaw = (attrs.match(/data-otp-ttl="([^"]*)"/) || [])[1] || '300';
 
                 const isFloating = classes.includes('floating');
                 const isBehind = classes.includes('behind');
@@ -4102,6 +4259,9 @@
                     defaultNama: defaultNamaRaw.replace(/&quot;/g, '"'),
                     allowedRoles: allowedRolesRaw,
                     allowedUsers: allowedUsersRaw,
+                    require_otp: requireOtpRaw === '1' || requireOtpRaw === 'true',
+                    otpPhoneSource: otpPhoneSourceRaw,
+                    otpTtlSeconds: otpTtlRaw,
                 });
             }
 
@@ -4120,6 +4280,9 @@
                     // Sync RBAC per-TTD juga supaya sidebar tetap konsisten dengan editor
                     existing.allowedRoles = ttd.allowedRoles;
                     existing.allowedUsers = ttd.allowedUsers;
+                    existing.require_otp = ttd.require_otp;
+                    existing.otpPhoneSource = ttd.otpPhoneSource;
+                    existing.otpTtlSeconds = ttd.otpTtlSeconds;
                 } else {
                     configTtd.push(ttd);
                 }
@@ -5239,6 +5402,9 @@
                 defaultNama: 'data-default-nama',
                 allowedRoles: 'data-allowed-roles',    // RBAC: comma-separated role names
                 allowedUsers: 'data-allowed-users',    // RBAC: comma-separated id_pegawai
+                require_otp: 'data-require-otp',
+                otpPhoneSource: 'data-otp-phone-source',
+                otpTtlSeconds: 'data-otp-ttl',
             };
             const dataAttr = dataAttrMap[attrName];
             if (!dataAttr) return;
@@ -5383,6 +5549,7 @@
                 const hasQr = ttdModes.includes('qr');
                 const searchText = ((ttd.label || '') + ' ' + (ttd.nama_field || '') + ' ' + mode + ' ' + ttdModes).toLowerCase();
                 const verifyActive = (ttd.qrData || '').includes('{verify_url}');
+                const isRequireOtp = !!(ttd.require_otp);
 
                 return `
                 <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${m.accent} before:content-['']" data-search-text="${escapeHtml(searchText)}" data-focus-target="ttd:${eId}">
@@ -5452,7 +5619,31 @@
                             <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${escapeHtml(ttd.defaultNama || '')}" onchange="updateTtdAttr('${eId}', 'defaultNama', this.value, ${i})" placeholder="dr. Hilmi...">
                         </div>
                     </div>
-                    <!-- Card Footer: RBAC collapsible -->
+
+                    <!-- Card Footer 1: OTP Settings collapsible -->
+                    <details class="border-t border-gray-200 group bg-gray-50/40">
+                        <summary class="cursor-pointer text-[11px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100/60 flex items-center gap-1.5 pl-3 pr-2 py-1.5 select-none list-none transition-colors">
+                            <i class="bi bi-chevron-right text-[10px] text-gray-400 transition-transform group-open:rotate-90"></i>
+                            <i class="bi bi-whatsapp text-[10px] text-emerald-600"></i>
+                            Verifikasi OTP <span class="${isRequireOtp ? 'text-emerald-700 font-bold' : 'text-gray-400 font-normal'}">(${isRequireOtp ? 'Wajib' : 'Kosong'})</span>
+                        </summary>
+                        <div class="pl-3 pr-2 py-1.5 bg-gray-50 border-t border-gray-200/60 space-y-1.5">
+                            <label class="flex items-center gap-1.5 text-[11px] font-semibold text-gray-700 cursor-pointer">
+                                <input class="rounded border-gray-400 text-emerald-600 focus:ring-1 focus:ring-emerald-500 shadow-sm" type="checkbox" ${isRequireOtp ? 'checked' : ''} onchange="updateTtdAttr('${eId}', 'require_otp', this.checked ? '1' : '0', ${i})">
+                                Wajibkan OTP WhatsApp Pasien
+                            </label>
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Field Nomor HP Pasien</label>
+                                <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white font-mono" value="${escapeHtml(ttd.otpPhoneSource || 'nomor_hp_pasien')}" onchange="updateTtdAttr('${eId}', 'otpPhoneSource', this.value, ${i})" placeholder="nomor_hp_pasien">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">Masa Berlaku OTP (Detik)</label>
+                                <input type="number" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white font-mono" value="${parseInt(ttd.otpTtlSeconds) || 300}" onchange="updateTtdAttr('${eId}', 'otpTtlSeconds', this.value, ${i})" placeholder="300">
+                            </div>
+                        </div>
+                    </details>
+
+                    <!-- Card Footer 2: RBAC collapsible -->
                     <details class="border-t border-gray-200 group bg-gray-50/40">
                         <summary class="cursor-pointer text-[11px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100/60 flex items-center gap-1.5 pl-3 pr-2 py-1.5 select-none list-none transition-colors">
                             <i class="bi bi-chevron-right text-[10px] text-gray-400 transition-transform group-open:rotate-90"></i>

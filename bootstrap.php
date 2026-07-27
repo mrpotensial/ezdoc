@@ -101,3 +101,29 @@ if (EZDOC_STRICT_SETUP && isset($GLOBALS['conn']) && $GLOBALS['conn']) {
     }
     unset($__ezdocConn, $__ezdocTables, $__ezdocMissing, $__t, $__rs, $__isAjax, $__missingList);
 }
+
+// ─── Consumer wiring hook ───
+// Runs AFTER the autoloader is ready, so the hook file can instantiate classes
+// that implement library interfaces (OTP providers, PDF renderers, dst).
+//
+// Constants can only hold scalars, so a class name is the most a `define()`
+// can express. Anything needing constructor arguments, a closure, or an
+// existing service instance must be wired from real PHP — that is what this
+// hook is for.
+//
+//   // consumer, before requiring this file:
+//   define('EZDOC_BOOTSTRAP_HOOK', __DIR__ . '/ezdoc_otp_setup.php');
+//
+// The hook file typically assigns $GLOBALS['EZDOC_OTP_PROVIDER'] with a
+// ready-made instance; \Ezdoc\Context::fromGlobals() picks it up lazily.
+//
+// Precedent: Laravel service providers, Symfony DI configuration,
+// WordPress plugin bootstrap — configuration constants for scalars,
+// an executable hook for object graphs.
+if (defined('EZDOC_BOOTSTRAP_HOOK') && EZDOC_BOOTSTRAP_HOOK !== '' && is_file(EZDOC_BOOTSTRAP_HOOK)) {
+    require_once EZDOC_BOOTSTRAP_HOOK;
+}
+
+// OTP Provider initialization is handled lazily inside \Ezdoc\Context::fromGlobals().
+// Consumers configure it via EZDOC_OTP_PROVIDER_CLASS (simple, no-arg providers)
+// or $GLOBALS['EZDOC_OTP_PROVIDER'] (pre-built instance — set from the hook above).
