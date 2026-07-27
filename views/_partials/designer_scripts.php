@@ -1677,7 +1677,7 @@
             // Right-click contextmenu untuk common ops
             contextmenu: 'link image table',
             // Non-editable class untuk lock certain content areas
-            noneditable_class: 'mceNonEditable',
+            noneditable_class: 'mceNonEditable', 
             // Import CSS from consumer app supaya template preview match production styling
             importcss_append: true,
             // ===== Paste hygiene (industri: PowerPaste-equivalent via built-in options) =====
@@ -1886,7 +1886,7 @@
                    italic/color/align cells di TinyMCE toolbar — style tembus ke
                    chip. Mirror pattern dari .field-placeholder. */
                 .tabledb-marker {
-                    display: inline-block;         /* atomic block untuk ellipsis */
+                    display: inline-block;
                     padding: 0 4px;
                     border-radius: 3px;
                     font-family: inherit;
@@ -1900,12 +1900,36 @@
                     cursor: pointer;
                     margin: 0 1px;
                     vertical-align: baseline;
-                    /* Single line + ellipsis kalau terlalu panjang untuk cell.
-                       Cleaner visual dari wrap mid-word. Full text di title tooltip. */
+                    /* Visual: single line + ellipsis kalau terlalu panjang. */
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
                     max-width: 100%;
+                    min-width: 0;
+                    /* Trick supaya browser compute min-content = 1 char (bukan
+                       full identifier width). Table auto-layout pakai min-content
+                       sebagai floor untuk column width — tanpa ini, column tidak
+                       bisa di-resize di bawah full-word width chip. break-all
+                       + anywhere bikin content "breakable" untuk purpose min-
+                       content calc, tapi visual TETAP single-line karena nowrap. */
+                    word-break: break-all;
+                    overflow-wrap: anywhere;
+                }
+                /* Cell containing chip: allow shrink via overflow + override
+                   saved inline min-width dari resize attempts sebelumnya via
+                   !important. :has() untuk modern browsers. */
+                td:has(.tabledb-marker), th:has(.tabledb-marker) {
+                    min-width: 0 !important;
+                    overflow: hidden;
+                    word-break: break-all;
+                }
+                /* Table auto-layout treat chip intrinsic width sbg floor untuk
+                   column width. Force table-layout: fixed di tables yg contain
+                   chip supaya cell respect user-set widths — content overflow
+                   ke ellipsis instead of forcing column wider. */
+                table:has(.tabledb-marker) {
+                    table-layout: fixed;
+                    width: 100%;
                 }
                 .tabledb-marker::before {
                     display: inline-block;
