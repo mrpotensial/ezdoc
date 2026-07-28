@@ -125,7 +125,7 @@ final class FloatingInjectorTest extends TestCase
             600,
             800,
             'front',
-            null,
+            '120px',
             ['label' => 'Doctor', 'nama_field' => 'nama_dokter', 'ttd_modes' => 'image']
         );
         $result = FloatingInjector::inject('', [$el]);
@@ -142,7 +142,7 @@ final class FloatingInjectorTest extends TestCase
 
     public function testTtdDefaultsWhenDataMissing(): void
     {
-        $el = new FloatingElement('sign1', 'ttd', 100, 100, 'front', null, []);
+        $el = new FloatingElement('sign1', 'ttd', 100, 100, 'front', '120px', []);
         $result = FloatingInjector::inject('', [$el]);
 
         // Defaults: label = 'Signature', nama_field = 'nama_<id>', ttd_modes = 'image'
@@ -155,7 +155,7 @@ final class FloatingInjectorTest extends TestCase
 
     public function testMateraiMarkerStructure(): void
     {
-        $el = new FloatingElement('m1', 'materai', 200, 300, 'front');
+        $el = new FloatingElement('m1', 'materai', 200, 300, 'front', '120px');
         $result = FloatingInjector::inject('', [$el]);
 
         $this->assertStringContainsString('<div', $result);
@@ -172,7 +172,7 @@ final class FloatingInjectorTest extends TestCase
     {
         $logo = new FloatingElement('logo1', 'logo', 100, 100, 'front', '80px');
         $qr   = new FloatingElement('qr1', 'qr', 500, 500, 'front', '60px');
-        $ttd  = new FloatingElement('ttd1', 'ttd', 600, 800, 'front');
+        $ttd  = new FloatingElement('ttd1', 'ttd', 600, 800, 'front', '120px');
 
         $result = FloatingInjector::inject('<p>Content</p>', [$logo, $qr, $ttd]);
 
@@ -211,7 +211,7 @@ final class FloatingInjectorTest extends TestCase
             0,
             0,
             'front',
-            null,
+            '120px',
             ['label' => 'Dr. <b>House</b> "MD"']
         );
         $result = FloatingInjector::inject('', [$el]);
@@ -245,7 +245,7 @@ final class FloatingInjectorTest extends TestCase
         $originals = [
             new FloatingElement('logo1', 'logo', 100, 100, 'front', '80px'),
             new FloatingElement('qr1', 'qr', 500, 500, 'behind', '60px'),
-            new FloatingElement('mat1', 'materai', 300, 700, 'front'),
+            new FloatingElement('mat1', 'materai', 300, 700, 'front', '120px'),
         ];
 
         $html = FloatingInjector::inject('<p>Body</p>', $originals);
