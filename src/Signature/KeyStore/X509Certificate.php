@@ -163,7 +163,10 @@ final class X509Certificate
         // Drain stale errors sebelum masuk OpenSSL call.
         while (openssl_error_string() !== false) { /* noop */ }
 
-        $handle = openssl_x509_read($pem);
+        // Suppressed because the failure is handled right below: without this,
+        // malformed input both raises a PHP warning and throws, so a caller
+        // that catches the exception still gets noise in the log.
+        $handle = @openssl_x509_read($pem);
         if ($handle === false) {
             $errs = [];
             while (($e = openssl_error_string()) !== false) {

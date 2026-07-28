@@ -332,7 +332,49 @@ final class PkcsSevenEnvelope implements Envelope
                     ],
                 ];
             }
-            // result === true
+            // result === true — the signature is internally consistent. That
+            // says nothing yet about WHICH document it covers.
+            //
+            // openssl_pkcs7_verify() checks the signature against the content
+            // carried inside the envelope, not against $originalContent. Left
+            // there, this method would answer "valid" for any document handed
+            // to it — including an empty one — because the caller's content is
+            // never consulted. Binding the two is the entire promise of a
+            // signature, so it is enforced here.
+            $embedded = @file_get_contents($contentOut);
+
+            if ($embedded === false || $embedded === '') {
+                // Nothing to compare against: a bare detached envelope carries
+                // no content, and PHP's API gives no way to feed one in. Rather
+                // than report success on an unchecked document, say so.
+                if (empty($options['skip_content_check'])) {
+                    return [
+                        'valid' => false,
+                        'reason' => 'signature is well-formed but its content could not be extracted, '
+                            . 'so it cannot be tied to the supplied document',
+                        'signer_info' => [],
+                        'checks' => [
+                            'openssl_result' => true,
+                            'content_match' => null,
+                            'chain_check' => !$noVerify,
+                            'detached' => $this->detached,
+                        ],
+                    ];
+                }
+            } elseif (!hash_equals($embedded, $originalContent)) {
+                return [
+                    'valid' => false,
+                    'reason' => 'signature is valid but covers different content than the document supplied',
+                    'signer_info' => [],
+                    'checks' => [
+                        'openssl_result' => true,
+                        'content_match' => false,
+                        'chain_check' => !$noVerify,
+                        'detached' => $this->detached,
+                    ],
+                ];
+            }
+
             $signerInfo = self::extractSignerInfo($signerOut);
 
             return [
@@ -372,12 +414,38 @@ final class PkcsSevenEnvelope implements Envelope
      * Sniff apakah bytes berupa PKCS7 (PEM armor 'BEGIN PKCS7' / 'BEGIN CMS'
      * atau DER magic byte SEQUENCE 0x30).
      */
+    /**
+     * Whether the bytes look like an S/MIME-wrapped PKCS#7 signature.
+     *
+     * Both shapes openssl_pkcs7_sign() emits are covered: `multipart/signed`
+     * when detached, and `application/(x-)pkcs7-mime` when not. Only the
+     * header block is inspected, so the check stays cheap on large envelopes.
+     */
+    private static function isSmimePkcs7(string $bytes): bool
+    {
+        $head = substr($bytes, 0, 512);
+        if (stripos($head, 'MIME-Version:') === false) {
+            return false;
+        }
+
+        return stripos($head, 'pkcs7-signature') !== false
+            || stripos($head, 'pkcs7-mime') !== false
+            || stripos($head, 'multipart/signed') !== false;
+    }
+
     public static function isPkcs7(string $bytes): bool
     {
         if ($bytes === '') {
             return false;
         }
         if (self::isPemPkcs7($bytes)) {
+            return true;
+        }
+        // S/MIME. This is what pack() actually returns: PHP's
+        // openssl_pkcs7_sign() always writes S/MIME, whatever flags it is
+        // given, so without this branch the sniffer failed to recognise the
+        // very envelopes this class produces.
+        if (self::isSmimePkcs7($bytes)) {
             return true;
         }
         // DER: harus mulai dengan SEQUENCE tag (0x30). Cek juga OID contentInfo
