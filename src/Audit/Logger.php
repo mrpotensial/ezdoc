@@ -110,26 +110,54 @@ final class Logger
 
         $message = isset($ctx['message']) ? substr((string) $ctx['message'], 0, 2000) : null;
 
-        $stmt = @mysqli_prepare($db, "
-            INSERT INTO ezdoc_audit_log
-            (event_type, event_uuid, actor_id, actor_roles, actor_type,
-             target_type, target_id, template_id, doc_id,
-             ip_address, user_agent, request_id, session_id, trace_id,
-             previous_value, new_value, metadata, result, message)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-        if (!$stmt) return;
+        // Auditing must never take down the operation it is recording, so every
+        // failure here is swallowed. The `@` operator alone is not enough:
+        // under MYSQLI_REPORT_STRICT — which the migration runner turns on, and
+        // which many hosts set globally — these calls raise
+        // mysqli_sql_exception, which `@` does not suppress.
+        try {
+            $stmt = @mysqli_prepare($db, "
+                INSERT INTO ezdoc_audit_log
+                (event_type, event_uuid, actor_id, actor_roles, actor_type,
+                 target_type, target_id, template_id, doc_id,
+                 ip_address, user_agent, request_id, session_id, trace_id,
+                 previous_value, new_value, metadata, result, message)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            if (!$stmt) return;
 
-        // 19 params: s s i s s s s i i s s s s s s s s s s
-        @mysqli_stmt_bind_param(
-            $stmt,
-            'ssisssssiisssssssss',
-            $eventType, $eventUuid, $actorId, $actorRolesStr, $actorType,
-            $targetType, $targetId, $templateId, $docId,
-            $ip, $ua, $requestId, $sessionId, $traceId,
-            $previousValue, $newValue, $metadata, $result, $message
-        );
-        @mysqli_stmt_execute($stmt);
+            // 19 params, in the order listed above:
+            //   1  event_type      s
+            //   2  event_uuid      s
+            //   3  actor_id        i
+            //   4  actor_roles     s
+            //   5  actor_type      s
+            //   6  target_type     s
+            //   7  target_id       s
+            //   8  template_id     i
+            //   9  doc_id          i
+            //  10  ip_address      s   <- string; binding this as `i` turned
+            //  11  user_agent      s      "192.168.1.190" into 192
+            //  12  request_id      s
+            //  13  session_id      s
+            //  14  trace_id        s
+            //  15  previous_value  s
+            //  16  new_value       s
+            //  17  metadata        s
+            //  18  result          s
+            //  19  message         s
+            @mysqli_stmt_bind_param(
+                $stmt,
+                'ssissssiissssssssss',
+                $eventType, $eventUuid, $actorId, $actorRolesStr, $actorType,
+                $targetType, $targetId, $templateId, $docId,
+                $ip, $ua, $requestId, $sessionId, $traceId,
+                $previousValue, $newValue, $metadata, $result, $message
+            );
+            @mysqli_stmt_execute($stmt);
+        } catch (\Throwable $e) {
+            @error_log('[ezdoc:audit] failed to record "' . $eventType . '": ' . $e->getMessage());
+        }
     }
 
     /**
