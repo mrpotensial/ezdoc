@@ -224,19 +224,58 @@ function ezdoc_can_on_template(?array $accessConfig, string $action): bool
     // Superadmin bypass semua
     if (ezdoc_has_role('superadmin')) return true;
 
-    // Backward-compat: no config = allow all (v2 behavior)
-    if (!$accessConfig) return true;
+    // Tidak ada config sama sekali → jatuh ke default deployment.
+    if (!$accessConfig) {
+        return ezdoc_access_default_allows($action, 'no access_config');
+    }
 
     $sectionConfig = $accessConfig[$action] ?? null;
-    if (!is_array($sectionConfig)) return true;
+    if (!is_array($sectionConfig)) {
+        return ezdoc_access_default_allows($action, 'action not listed');
+    }
 
     $roles = $sectionConfig['roles'] ?? [];
     $users = $sectionConfig['users'] ?? [];
 
-    // Kalau section kosong (roles & users kedua-duanya empty) → allow (opt-out)
-    if (empty($roles) && empty($users)) return true;
+    // Section ada tapi kosong (roles & users dua-duanya kosong) → default juga.
+    if (empty($roles) && empty($users)) {
+        return ezdoc_access_default_allows($action, 'action listed but empty');
+    }
 
     return ezdoc_can(['roles' => $roles, 'users' => $users]);
+}
+
+/**
+ * Jawaban untuk situasi yang tidak diatur access_config, plus catatannya.
+ *
+ * Satu-satunya tempat jalur prosedural memutuskan hal ini, dan jawabannya
+ * dibaca dari konstanta yang sama dengan yang dipakai AccessConfig::empty().
+ * Sebelumnya jawabannya di-hardcode di sini sebagai "allow" sementara sisi OOP
+ * menolak — dua default tersirat yang bertentangan.
+ *
+ * Nyalakan EZDOC_LOG_ACCESS_DEFAULT untuk melihat template mana saja yang
+ * bergantung pada default ini sebelum membaliknya ke 'strict' di v1.0.
+ *
+ * @param string $action Action yang sedang diminta.
+ * @param string $why    Kenapa keputusannya jatuh ke default (untuk log).
+ */
+function ezdoc_access_default_allows(string $action, string $why): bool
+{
+    $allows = \Ezdoc\Access\AccessConfig::defaultMode()
+        !== \Ezdoc\Access\AccessConfig::MODE_STRICT;
+
+    if (defined('EZDOC_LOG_ACCESS_DEFAULT') && EZDOC_LOG_ACCESS_DEFAULT) {
+        @error_log(sprintf(
+            '[ezdoc:access-default] action=%s reason="%s" decision=%s user=%d uri=%s',
+            $action,
+            $why,
+            $allows ? 'allow' : 'deny',
+            ezdoc_current_user_id(),
+            $_SERVER['REQUEST_URI'] ?? '-'
+        ));
+    }
+
+    return $allows;
 }
 
 /**

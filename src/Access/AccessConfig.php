@@ -44,11 +44,32 @@ final class AccessConfig
     }
 
     /**
-     * Empty config — no rules defined, mode strict (deny by default).
+     * Config for a template that carries none.
+     *
+     * The answer comes from `EZDOC_ACCESS_DEFAULT` rather than being decided
+     * here. It used to return strict unconditionally while the procedural
+     * helper in lib/authorization.php returned allow for the same situation —
+     * two defaults, opposite answers, both implicit.
+     *
+     * @see defaultMode()
      */
     public static function empty(): self
     {
-        return new self(self::MODE_STRICT, []);
+        return new self(self::defaultMode(), []);
+    }
+
+    /**
+     * Mode applied when a template has no access_config.
+     *
+     * Falls back to permissive when the constant is absent or holds something
+     * unrecognised — an unreadable setting must not quietly lock a deployment
+     * out of its own documents.
+     */
+    public static function defaultMode(): string
+    {
+        $configured = defined('EZDOC_ACCESS_DEFAULT') ? (string) EZDOC_ACCESS_DEFAULT : self::MODE_PERMISSIVE;
+
+        return $configured === self::MODE_STRICT ? self::MODE_STRICT : self::MODE_PERMISSIVE;
     }
 
     /**
@@ -69,9 +90,20 @@ final class AccessConfig
      */
     public static function fromArray(array $data): self
     {
-        $mode = isset($data['mode']) && is_string($data['mode']) && $data['mode'] === self::MODE_PERMISSIVE
-            ? self::MODE_PERMISSIVE
-            : self::MODE_STRICT;
+        // An explicit mode in the stored config always wins. Anything else —
+        // absent, or a value we do not recognise — falls back to the
+        // deployment default rather than to a mode chosen here.
+        if (isset($data['mode']) && is_string($data['mode'])) {
+            if ($data['mode'] === self::MODE_PERMISSIVE) {
+                $mode = self::MODE_PERMISSIVE;
+            } elseif ($data['mode'] === self::MODE_STRICT) {
+                $mode = self::MODE_STRICT;
+            } else {
+                $mode = self::defaultMode();
+            }
+        } else {
+            $mode = self::defaultMode();
+        }
 
         $rules = [];
         foreach ($data as $action => $ruleList) {

@@ -2013,6 +2013,32 @@ kalau deployment lain butuh: `EZDOC_OTP_ALLOW_PHONE_OVERRIDE=false`
 
 **Goal**: pisahkan `ezdoc/` jadi standalone repo, publish ke Packagist. **Depends on v0.9.7 (full views) + v0.9.8 (App orchestrator) + v0.9.9 (DB abstraction) + v0.9.10 (standalone hardening — no consumer-app runtime deps) + v0.9.11 (view separation + generate polish) + v0.9.12 (sidecar floating elements) + v0.9.13 (screen pagination + layout modes) + v0.9.14 (enhanced tabledb markers) + v0.9.15 (signer OTP verification)** completed.
 
+**Breaking change yang direncanakan — default akses jadi strict**
+
+Template yang tidak punya `access_config` saat ini diizinkan
+(`EZDOC_ACCESS_DEFAULT = 'permissive'`). v1.0 membaliknya ke `'strict'`,
+mengikuti prinsip fail-safe defaults (Saltzer & Schroeder 1975; OWASP ASVS
+V4.1.1; NIST SP 800-53 AC-3) — sama seperti AWS IAM, Kubernetes RBAC, dan
+PostgreSQL RLS yang menolak sampai ada yang mengizinkan.
+
+Sebelum v0.9.15 jawabannya tersirat di dua tempat yang berbeda pendapat:
+`AccessConfig::empty()` menolak, `ezdoc_can_on_template()` mengizinkan.
+Semua `actions/` lewat yang kedua, sedangkan `DocumentService` memakai yang
+pertama — sehingga me-wire `DocumentService` akan membalik jawabannya tanpa
+ada yang meminta. Keduanya sekarang membaca satu konstanta.
+
+Membalik konstanta saja tidak cukup, karena tidak ada yang tahu template
+mana yang bergantung pada default itu. Urutannya:
+
+- [ ] Nyalakan `EZDOC_LOG_ACCESS_DEFAULT` di dogfood, kumpulkan beberapa
+      minggu. Tiap entri `[ezdoc:access-default]` adalah satu template yang
+      akan terpengaruh
+- [ ] Migrasi yang menuliskan `access_config` eksplisit ke template yang
+      muncul di log, supaya tidak ada lagi yang bergantung pada default
+- [ ] Balik `EZDOC_ACCESS_DEFAULT` ke `'strict'`
+- [ ] Catat di UPGRADE.md sebagai breaking change beserta cara consumer
+      mempertahankan perilaku lama (`define('EZDOC_ACCESS_DEFAULT', 'permissive')`)
+
 - [ ] Move `ezdoc/` folder ke repo baru `mrpotensial/ezdoc`
 - [ ] Setup GitHub Actions CI (phpunit + phpstan level 6 + PHP matrix 7.4-8.3)
 - [ ] Tag `v1.0.0`, publish ke Packagist

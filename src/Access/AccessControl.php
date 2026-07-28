@@ -58,10 +58,12 @@ final class AccessControl
             }
         }
 
-        // 2. Kalau config tidak define rules untuk action ini:
-        //    - permissive mode → allow (backward compat)
-        //    - strict mode     → deny (default zero-trust)
+        // 2. Config tidak menyebut action ini. Mode-nya sendiri berasal dari
+        //    EZDOC_ACCESS_DEFAULT ketika config-nya kosong, jadi jawaban di
+        //    sini sama dengan yang diberikan jalur prosedural.
         if (!$config->hasRulesFor($action)) {
+            $this->logDefaultDecision($action, $config->isStrict());
+
             if ($config->isStrict()) {
                 return AccessDecision::deny(
                     "No rules defined for action '{$action}' (strict mode)"
@@ -85,6 +87,28 @@ final class AccessControl
         return AccessDecision::deny(
             "User does not match any rule for '{$action}' (rules: " . implode(', ', $ruleList) . ')'
         );
+    }
+
+    /**
+     * Record that a decision fell through to the deployment default — that is,
+     * that this template would be affected if EZDOC_ACCESS_DEFAULT were
+     * flipped to strict.
+     *
+     * Mirrors ezdoc_access_default_allows() on the procedural side so both
+     * paths land in the same log.
+     */
+    private function logDefaultDecision(string $action, bool $isStrict): void
+    {
+        if (!defined('EZDOC_LOG_ACCESS_DEFAULT') || !EZDOC_LOG_ACCESS_DEFAULT) {
+            return;
+        }
+
+        @error_log(sprintf(
+            '[ezdoc:access-default] action=%s reason="action not listed" decision=%s path=oop uri=%s',
+            $action,
+            $isStrict ? 'deny' : 'allow',
+            $_SERVER['REQUEST_URI'] ?? '-'
+        ));
     }
 
     /**

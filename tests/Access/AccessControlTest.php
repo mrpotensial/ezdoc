@@ -103,25 +103,34 @@ final class AccessControlTest extends TestCase
     }
 
     /**
-     * An absent or unparseable config denies — the OOP layer is zero-trust.
+     * A template with no access_config follows EZDOC_ACCESS_DEFAULT, which
+     * ships as permissive so existing installs keep working.
      *
-     * NOTE: the procedural helpers do the opposite. `ezdoc_can_on_template()`
-     * in lib/authorization.php returns true when the config is null, when the
-     * action has no section, or when that section lists neither roles nor
-     * users — documented there as "backward-compat: no config = allow all".
-     * Every action file currently goes through those helpers, so today's live
-     * behaviour is allow-by-default.
+     * This used to be decided in two places that disagreed: AccessConfig
+     * returned strict while ezdoc_can_on_template() returned allow. Actions
+     * used the second, DocumentService the first, so wiring DocumentService up
+     * would have silently locked every template that carries no config.
      *
-     * That divergence matters for the v1.0 plan of moving actions onto the OOP
-     * layer: doing so silently flips templates that carry no access_config from
-     * open to closed. Pinned here so the flip is a deliberate decision rather
-     * than a surprise.
+     * v1.0 flips the constant to strict — see docs/PRD.md §6.21. That is a
+     * breaking change, so it needs the log data first (EZDOC_LOG_ACCESS_DEFAULT)
+     * and a migration that writes explicit config to existing templates.
      */
-    public function testEmptyConfigDeniesInTheOopLayer(): void
+    public function testEmptyConfigFollowsTheDeploymentDefault(): void
     {
         $control = new AccessControl($this->roleProvider([]));
+        $decision = $control->can(1, 'edit', AccessConfig::empty());
 
-        self::assertTrue($control->can(1, 'edit', AccessConfig::empty())->isDenied());
+        self::assertSame(
+            AccessConfig::defaultMode() === AccessConfig::MODE_PERMISSIVE,
+            $decision->isAllowed(),
+            'the empty-config answer must match EZDOC_ACCESS_DEFAULT'
+        );
+    }
+
+    /** Shipped default, stated outright so a change to it fails here. */
+    public function testShippedDefaultIsPermissive(): void
+    {
+        self::assertSame(AccessConfig::MODE_PERMISSIVE, AccessConfig::defaultMode());
     }
 
     public function testEmptyConfigStillYieldsToBypassRole(): void
@@ -129,6 +138,35 @@ final class AccessControlTest extends TestCase
         $control = new AccessControl($this->roleProvider(['superadmin']));
 
         self::assertTrue($control->can(1, 'edit', AccessConfig::empty())->isAllowed());
+    }
+
+    /**
+     * The two authorisation paths must give the same answer for the same
+     * situation. They did not before EZDOC_ACCESS_DEFAULT existed.
+     */
+    public function testBothPathsAgreeOnTheUnconfiguredCase(): void
+    {
+        $oop = (new AccessControl($this->roleProvider([])))
+            ->can(1, 'edit', AccessConfig::empty())
+            ->isAllowed();
+
+        $procedural = ezdoc_can_on_template(null, 'edit');
+
+        self::assertSame($procedural, $oop, 'OOP and procedural paths must agree');
+    }
+
+    /** Same for a config that names other actions but not this one. */
+    public function testBothPathsAgreeWhenTheActionIsNotListed(): void
+    {
+        $raw = ['mode' => 'permissive', 'edit' => ['roles' => ['dokter'], 'users' => []]];
+
+        $oop = (new AccessControl($this->roleProvider([])))
+            ->can(1, 'delete', AccessConfig::fromArray($raw))
+            ->isAllowed();
+
+        $procedural = ezdoc_can_on_template($raw, 'delete');
+
+        self::assertSame($procedural, $oop);
     }
 
     // ─── Role rules ───

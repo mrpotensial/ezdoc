@@ -16,6 +16,34 @@ if (!defined('EZDOC_VERSION')) define('EZDOC_VERSION', '1.0.0-phaseA');
 // Bertahap: set false dulu, kumpulkan log, baru switch ke true.
 if (!defined('EZDOC_ENFORCE_RBAC')) define('EZDOC_ENFORCE_RBAC', true);
 
+// ─── Default akses untuk template tanpa access_config ───
+//
+// Menentukan jawaban ketika sebuah template tidak punya access_config sama
+// sekali, atau punya tapi tidak menyebut action yang sedang diminta.
+//
+//   'permissive' — izinkan (perilaku yang berjalan sejak awal)
+//   'strict'     — tolak, kecuali pemegang bypass role
+//
+// Kenapa ini ada: sebelumnya jawabannya tersirat di dua tempat yang berbeda
+// pendapat. AccessConfig::empty() menolak, sementara ezdoc_can_on_template()
+// mengizinkan. Semua file actions/ lewat yang kedua, jadi perilaku live adalah
+// izinkan — tapi DocumentService memakai yang pertama, sehingga memakainya
+// akan membalik jawabannya tanpa ada yang meminta. Sekarang keduanya membaca
+// konstanta ini.
+//
+// Arah v1.0 adalah 'strict' (fail-safe defaults; OWASP ASVS V4.1.1, NIST
+// AC-3). Default di sini tetap 'permissive' supaya instalasi yang sudah
+// berjalan tidak berubah diam-diam. Sebelum membalik: nyalakan
+// EZDOC_LOG_ACCESS_DEFAULT di bawah, kumpulkan datanya, lalu tuliskan
+// access_config eksplisit ke template yang bergantung pada default ini.
+if (!defined('EZDOC_ACCESS_DEFAULT')) define('EZDOC_ACCESS_DEFAULT', 'permissive');
+
+// Catat setiap kali keputusan akses jatuh ke default di atas — yaitu setiap
+// kali sebuah template akan terpengaruh kalau defaultnya dibalik ke 'strict'.
+// Nyalakan untuk beberapa waktu sebelum pembalikan; entri masuk error_log
+// dengan awalan [ezdoc:access-default].
+if (!defined('EZDOC_LOG_ACCESS_DEFAULT')) define('EZDOC_LOG_ACCESS_DEFAULT', false);
+
 // ─── Template Management RBAC ───
 // Roles yang boleh SAVE/EDIT/DELETE/LOCK/COPY template (design-time actions).
 // Bukan per-template access_config — ini global role check.
