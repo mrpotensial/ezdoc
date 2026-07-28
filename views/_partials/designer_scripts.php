@@ -99,6 +99,11 @@
             customWidth: 210,
             customHeight: 297,
             padding: { top: 20, right: 20, bottom: 20, left: 20 },
+            // Continuous adalah default. Hanya template yang secara eksplisit
+            // menyimpan 'paged' yang tetap paged — nilai tersimpan ditimpakan
+            // di bawah. generate.php memakai default yang sama, supaya
+            // tampilan di designer dan hasil render tidak pernah berbeda.
+            layoutMode: 'continuous',
             tableDbQueries: {} // namespace -> { sql, columns, params }
         };
 
@@ -1215,7 +1220,7 @@
             configHeader.paperSize = paperSize;
             configHeader.orientation = orientation;
             configHeader.padding = { top: padTop, right: padRight, bottom: padBottom, left: padLeft };
-            const layoutMode = document.getElementById('layoutMode')?.value || 'paged';
+            const layoutMode = document.getElementById('layoutMode')?.value || 'continuous';
             configHeader.layoutMode = layoutMode;
 
             // editorContainer: simplified — TinyMCE widget fills wrapper.
@@ -1304,7 +1309,7 @@
             if (pl) pl.value = configHeader.padding?.left ?? 20;
 
             const lm = document.getElementById('layoutMode');
-            if (lm) lm.value = configHeader.layoutMode || 'paged';
+            if (lm) lm.value = configHeader.layoutMode || 'continuous';
 
             updatePageSize();
         }
@@ -1330,7 +1335,7 @@
                 bottom: padBottom,
                 left: padLeft
             };
-            configHeader.layoutMode = document.getElementById('layoutMode')?.value || 'paged';
+            configHeader.layoutMode = document.getElementById('layoutMode')?.value || 'continuous';
 
             console.log('Synced configHeader:', configHeader); // Debug
         }

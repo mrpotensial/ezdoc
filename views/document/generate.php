@@ -322,11 +322,16 @@ $padTop = (int)($padding['top'] ?? 20);
 $padRight = (int)($padding['right'] ?? 20);
 $padBottom = (int)($padding['bottom'] ?? 20);
 
-// Layout mode: 'paged' (default, multi-page cards with mask/spacer) atau
-// 'continuous' (single scrollable container, no page breaks). Padding rules
-// tetap apply di both modes.
-$layoutMode = $configHeader['layoutMode'] ?? 'paged';
-if (!in_array($layoutMode, ['paged', 'continuous'], true)) $layoutMode = 'paged';
+// Layout mode: 'continuous' (default — satu kontainer scroll, tanpa page
+// break) atau 'paged' (kartu multi-halaman dengan mask/spacer). Aturan
+// padding berlaku di kedua mode.
+//
+// Default harus sama dengan designer (lihat configHeader.layoutMode di
+// views/_partials/designer_scripts.php). Kalau berbeda, template yang belum
+// pernah menyimpan layoutMode akan tampil satu macam di designer dan macam
+// lain saat digenerate.
+$layoutMode = $configHeader['layoutMode'] ?? 'continuous';
+if (!in_array($layoutMode, ['paged', 'continuous'], true)) $layoutMode = 'continuous';
 $padLeft = (int)($padding['left'] ?? 20);
 
 // Load document
