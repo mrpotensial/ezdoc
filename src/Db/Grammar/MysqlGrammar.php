@@ -341,6 +341,9 @@ class MysqlGrammar implements Grammar
     // Feature flags
     // ========================================================================
 
+    /** LIMIT berdiri sendiri — tidak butuh ORDER BY. */
+    public function requiresOrderByForPaging(): bool { return false; }
+
     public function supportsNativeJson(): bool  { return true; }
     public function supportsNativeUuid(): bool  { return false; }
     public function supportsNativeEnum(): bool  { return true; }

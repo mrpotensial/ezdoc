@@ -300,6 +300,9 @@ class PostgresGrammar implements Grammar
         return $sql;
     }
 
+    /** LIMIT/OFFSET berdiri sendiri — tidak butuh ORDER BY. */
+    public function requiresOrderByForPaging(): bool { return false; }
+
     public function supportsNativeJson(): bool  { return true; }
     public function supportsNativeUuid(): bool  { return true; }
     public function supportsNativeEnum(): bool  { return true; } // via CREATE TYPE, tapi impl v0.9.9 pakai CHECK

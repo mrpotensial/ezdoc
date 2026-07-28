@@ -6,6 +6,64 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v1.0-prep track — "Db grammar test coverage + T-SQL paging fix"
+
+Empat dari lima Grammar (MariaDB, Postgres, SQLite, SQL Server) sebelumnya nol
+test — padahal portabilitas lintas dialect justru janji utama v0.9.9. Menutup
+gap itu menemukan satu bug portabilitas nyata.
+
+**Fixed — paging SQL Server menghasilkan T-SQL invalid (2026-07-28)**
+
+- `QueryBuilder->limit()` tanpa `->orderBy()` meng-emit
+ `SELECT … FROM [t] OFFSET 0 ROWS FETCH NEXT 25 ROWS ONLY` — syntax error di
+ SQL Server, karena `OFFSET/FETCH` adalah bagian dari `ORDER BY`, bukan suffix
+ statement. Chain builder yang sama valid di empat dialect lain, jadi kegagalan
+ cuma muncul di target yang paling jarang dites manual.
+- **`Grammar::requiresOrderByForPaging(): bool`** (baru di interface) —
+ `true` hanya di `SqlServerGrammar`.
+- `QueryBuilder::compileSelect()` emit `ORDER BY (SELECT 0)` kalau caller tidak
+ kasih ordering dan grammar-nya minta. `(SELECT 0)` scalar yang di-discard
+ optimizer — parser puas tanpa memaksa sort. Pattern sama dipakai Laravel
+ (`SqlServerGrammar::compileAnsiOffset`) dan Doctrine DBAL
+ (`SQLServerPlatform::doModifyLimitQuery`).
+- ⚠️ **Breaking untuk implementor `Grammar` di luar tree** — interface dapat
+ satu method baru. Empat grammar in-tree sudah di-update; tidak ada implementor
+ eksternal yang diketahui.
+
+**Added — test coverage Db (2026-07-28)**
+
+- **`tests/Db/Grammar/GrammarContractTest.php`** (105 test) — satu set aturan
+ dijalankan ke kelima grammar via data provider: identifier quoting anti-
+ breakout, literal quoting anti-breakout, backslash per-dialect, totalitas
+ type mapping (tipe baru di Blueprint langsung gagal di semua grammar sampai
+ dipetakan), bentuk statement, DROP/LIMIT, koherensi feature flag vs SQL.
+- **`tests/Db/Grammar/SqliteGrammarTest.php`** (32 test) — DDL-nya **dieksekusi**
+ ke `sqlite::memory:` lalu di-introspeksi, bukan dicocokkan sebagai string:
+ CHECK enum benar-benar menolak nilai di luar daftar, FK benar-benar cascade,
+ AUTOINCREMENT benar-benar mencegah id dipakai ulang.
+- **`tests/Db/Grammar/PostgresGrammarTest.php`** (35 test) — JSONB, identity
+ column, COMMENT ON sebagai statement terpisah, unsigned yang di-drop.
+- **`tests/Db/Grammar/SqlServerGrammarTest.php`** (32 test) — bracket escaping,
+ NVARCHAR vs TEXT deprecated, ISJSON, PK constraint bernama deterministik.
+- **`tests/Db/Grammar/MariaDbGrammarTest.php`** (12 test) — kontraknya "identik
+ dgn MySQL kecuali `name()`", dijaga byte-per-byte lintas 6 bentuk Blueprint +
+ reflection guard supaya override baru harus dideklarasikan sadar.
+- **`tests/Db/QueryBuilderDialectTest.php`** (45 test) — satu chain builder
+ dikompilasi ke lima dialect; hasil SQLite-nya dijalankan beneran.
+- **`tests/Support/GrammarOnlyConnection.php`** — Connection double yang cuma
+ tahu dialect-nya; method lain melempar, jadi test yang tak sengaja eksekusi
+ query gagal keras alih-alih menyentuh database.
+
+**Documented — divergence lintas dialect** (`docs/DB-ABSTRACTION.md`)
+
+Hal yang portable secara sintaks tapi beda secara semantik, masing-masing
+dipin oleh test: `ifNotExists()` di-drop di SQL Server; `unsigned()` di-drop di
+Postgres (batas 2^63-1 vs 2^64-1); `GENERATED ALWAYS` menolak INSERT ber-id;
+composite `primary()` tidak ter-emit di SQLite kalau tabelnya punya `id()`;
+`defaultRaw()` tidak diterjemahkan. Plus catatan bahwa
+`PostgresGrammar::supportsNativeEnum()` menjelaskan Postgres-nya, bukan output
+grammar-nya.
+
 ### v1.0-prep track — "Router direct sub-view routing + Slot rename"
 
 Foundational rename untuk v1.0 naming convention. Slots + routes di-namespace

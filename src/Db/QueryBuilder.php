@@ -393,6 +393,17 @@ final class QueryBuilder
         }
 
         $limitSql = $g->compileLimit($this->limit, $this->offset);
+
+        // T-SQL: OFFSET/FETCH cuma valid sebagai bagian dari ORDER BY. Kalau
+        // caller tidak kasih ordering, emit constant ordering supaya statement
+        // tetap parseable — `(SELECT 0)` scalar yang di-discard optimizer, jadi
+        // tidak impose sort beneran. Pattern sama dipakai Laravel
+        // (SqlServerGrammar::compileAnsiOffset) dan Doctrine DBAL
+        // (SQLServerPlatform::doModifyLimitQuery).
+        if ($limitSql !== '' && $this->orders === [] && $g->requiresOrderByForPaging()) {
+            $sql .= ' ORDER BY (SELECT 0)';
+        }
+
         if ($limitSql !== '') $sql .= ' ' . $limitSql;
 
         return [$sql, $this->whereParams];

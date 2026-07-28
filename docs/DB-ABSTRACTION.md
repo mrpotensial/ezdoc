@@ -241,6 +241,34 @@ Grammar expose `supportsNativeJson()`, `supportsNativeUuid()`,
 `supportsNativeEnum()`, `supportsSavepoints()` — untuk consumer branch
 kalau butuh grammar-specific optimization.
 
+`requiresOrderByForPaging()` beda sifat: bukan optimization hint, tapi
+constraint syntax. Di T-SQL, `OFFSET … FETCH NEXT` adalah bagian dari
+`ORDER BY`, jadi paging tanpa ordering = syntax error. QueryBuilder baca flag
+ini dan emit `ORDER BY (SELECT 0)` kalau caller tidak kasih ordering sendiri
+(pattern sama: Laravel `SqlServerGrammar::compileAnsiOffset`, Doctrine DBAL
+`SQLServerPlatform::doModifyLimitQuery`). Empat grammar lain return `false`.
+
+> **Catatan `supportsNativeEnum()` di Postgres.** Flag-nya `true` karena
+> Postgres punya `CREATE TYPE … AS ENUM`, tapi grammar-nya sengaja emit
+> `TEXT` + `CHECK` — lifecycle enum type lintas migration belum di-scope.
+> Jadi flag ini menjelaskan *database*-nya, bukan output grammar-nya. Belum
+> ada yang branch di flag ini; kalau nanti ada, flag-nya yang harus berubah.
+
+### Divergence yang perlu diketahui
+
+Hal-hal yang portable secara sintaks tapi beda secara semantik:
+
+| Hal | Dampak |
+|---|---|
+| `ifNotExists()` di SQL Server | T-SQL tidak punya `CREATE TABLE IF NOT EXISTS` — flag di-drop diam-diam. Migration yang mengandalkan flag ini idempotent di 4 dialect, tidak di SQL Server. Pakai `SchemaManager::hasTable()`. |
+| `unsigned()` di Postgres | Tidak ada unsigned integer — flag di-drop. `BIGINT UNSIGNED` MySQL muat sampai 2^64-1, Postgres `BIGINT` cuma 2^63-1. |
+| `GENERATED ALWAYS AS IDENTITY` | Postgres menolak INSERT yang isi id sendiri (butuh `OVERRIDING SYSTEM VALUE`). SQL Server `IDENTITY` sama. MySQL/SQLite menerima. Berpengaruh ke import data & fixture yang pin id. |
+| `id()` + `primary([...])` di SQLite | SQLite wajib PK inline untuk rowid alias, jadi composite PK-nya tidak ter-emit. Pakai `unique([...])` kalau yang dimau uniqueness. |
+| `defaultRaw()` | Fragment mentah, tidak diterjemahkan. `CURRENT_TIMESTAMP` jalan di semua; `NOW()` tidak. |
+
+Semua poin di atas ada test-nya di `tests/Db/Grammar/` — kalau perilakunya
+berubah, test-nya yang bicara duluan.
+
 ### Manually emit DDL
 
 ```php

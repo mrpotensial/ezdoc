@@ -295,6 +295,12 @@ class SqlServerGrammar implements Grammar
         return "OFFSET $offset ROWS FETCH NEXT $limit ROWS ONLY";
     }
 
+    /**
+     * OFFSET/FETCH adalah bagian dari ORDER BY di T-SQL — tanpa ORDER BY,
+     * statement-nya syntax error. QueryBuilder yang emit ordering placeholder.
+     */
+    public function requiresOrderByForPaging(): bool { return true; }
+
     public function supportsNativeJson(): bool  { return false; } // NVARCHAR + ISJSON hint
     public function supportsNativeUuid(): bool  { return true; }
     public function supportsNativeEnum(): bool  { return false; }

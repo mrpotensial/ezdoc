@@ -113,6 +113,19 @@ interface Grammar
      */
     public function compileLimit(?int $limit, int $offset = 0): string;
 
+    /**
+     * True kalau clause dari `compileLimit()` cuma valid setelah ORDER BY.
+     *
+     * T-SQL: OFFSET/FETCH adalah bagian dari ORDER BY, bukan suffix statement —
+     * `SELECT … FROM t OFFSET 0 ROWS FETCH NEXT 25 ROWS ONLY` syntax error.
+     * MySQL/MariaDB/SQLite/Postgres: LIMIT berdiri sendiri, return false.
+     *
+     * QueryBuilder pakai flag ini untuk emit ordering placeholder kalau caller
+     * tidak kasih ORDER BY sendiri. Grammar tidak bisa putuskan sendiri — dia
+     * cuma emit tail, tidak tahu apa caller sudah nulis ORDER BY.
+     */
+    public function requiresOrderByForPaging(): bool;
+
     // Feature flags
     public function supportsNativeJson(): bool;
     public function supportsNativeUuid(): bool;
