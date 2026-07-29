@@ -56,10 +56,35 @@ function ezdoc_current_user_id(): int
 function ezdoc_require_auth(string $message = 'Unauthorized'): void
 {
     $userId = ezdoc_current_user_id();
-    if ($userId <= 0 && (defined('EZDOC_ENFORCE_RBAC') ? EZDOC_ENFORCE_RBAC : false)) {
-        require_once __DIR__ . '/responses.php';
-        ezdoc_respond_error($message, 401);
+    if ($userId > 0 || !(defined('EZDOC_ENFORCE_RBAC') ? EZDOC_ENFORCE_RBAC : false)) {
+        return;
     }
+
+    require_once __DIR__ . '/responses.php';
+
+    // "Unauthorized" alone sends people to look at roles and permissions, and
+    // this check is not about either — it asks whether the request carries an
+    // identity at all. The usual cause is a mount that never passed one, which
+    // is invisible from the response and from the role checks that still pass.
+    $roles = $GLOBALS['author_role_array'] ?? null;
+    $hasRoles = is_array($roles) && $roles !== [];
+
+    @error_log(
+        '[ezdoc:auth] identity check refused a request: user id is 0'
+        . ($hasRoles
+            ? ' while roles are present (' . implode(',', $roles) . ') — the mount carries roles but not app.author_id'
+            : ' and no roles are set — the request never had an identity')
+        . '. uri=' . ($_SERVER['REQUEST_URI'] ?? '-')
+    );
+
+    $extra = [];
+    if (defined('EZDOC_DEBUG') && EZDOC_DEBUG) {
+        $extra['reason'] = $hasRoles
+            ? 'Roles resolved but user id is 0. The mount passed roles without app.author_id.'
+            : 'No user id and no roles. This request never carried an identity.';
+    }
+
+    ezdoc_respond_error($message, 401, $extra);
 }
 
 /**

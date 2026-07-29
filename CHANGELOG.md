@@ -108,6 +108,17 @@ seperti masalah otorisasi padahal bukan.
 - **`app.author_roles`** (kunci config baru) → `$GLOBALS['author_role_array']`,
  simetris dengan `app.author_id`. Didokumentasikan di `docs/APP-API.md` dengan
  peringatan untuk selalu mengirim keduanya.
+- **`ezdoc_require_auth()` menjelaskan penolakannya.** Jawaban "Unauthorized"
+ saja mengirim orang memeriksa role dan permission, sedangkan pemeriksaan ini
+ bukan tentang keduanya — ia menanyakan apakah request membawa identitas sama
+ sekali. Sekarang selalu mencatat ke log dan membedakan "role ada tapi id 0"
+ (mount membawa role tanpa `app.author_id`) dari "tidak keduanya"; alasannya
+ ikut ke respons kalau `EZDOC_DEBUG` menyala.
+- **`public/config.example.php`** (baru) — front controller `public/index.php`
+ adalah pintu berdiri sendiri yang tidak memuat bootstrap host, jadi sesi dan
+ identitas tidak ada di sana kecuali file mount yang membawanya. Contohnya
+ menunjukkan dua cara (require bootstrap host lalu teruskan globalnya, atau
+ `app.bootstrap`) plus gejala kalau identitasnya tertinggal.
 
 **Documented — kopling yang belum dibereskan** (`docs/PRD.md` §3.9)
 
