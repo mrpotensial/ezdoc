@@ -379,7 +379,7 @@ final class OpensslPdfSigner implements PdfSigner
     /**
      * Fallback verify via openssl_pkcs7_verify.
      *
-     * @param string $pkcs7DerOrPem CMS signature bytes
+     * @param string $pkcs7Bytes CMS signature bytes, DER atau PEM
      * @param string $content       byte-range concat content
      * @param array<string,mixed> $options
      * @return array{valid: bool, reason: string, checks: array<string,mixed>}

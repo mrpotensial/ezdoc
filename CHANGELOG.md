@@ -6,6 +6,68 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v1.0-prep track — "Amplop PKCS#7 disimpan sebagai DER + PHPStan"
+
+**Changed — amplop `pkcs7` sekarang DER, bukan S/MIME (2026-07-29)**
+
+DER adalah encoding kanonis CMS (RFC 5652) dan satu-satunya bentuk yang
+diterima verifier pihak lain, PAdES, maupun CAdES:
+
+```bash
+openssl cms -verify -inform DER -in envelope.der -CAfile ca.pem -out isi.txt
+```
+
+Sebelumnya yang tersimpan S/MIME, karena `openssl_pkcs7_sign()` selalu menulis
+format itu apa pun flag-nya. S/MIME adalah pembungkus *transport email*
+(RFC 8551), bukan format penyimpanan, dan memilihnya membawa tiga akibat yang
+semuanya berasal dari satu akar — ketiganya sebelumnya dipin sebagai
+keterbatasan di test, sekarang jadi test positif:
+
+- `unpack()` tidak bisa membaca keluaran `pack()` sendiri → sekarang bisa.
+- Konten biner tidak selamat → sekarang round-trip utuh (termasuk byte NUL).
+- Konten ber-LF gagal diverifikasi (S/MIME mengkanonikalisasi ke CRLF) →
+ sekarang `PKCS7_BINARY` mematikan kanonikalisasi; EOL campur pun byte-exact.
+
+**Tidak ada migrasi data.** `verify()` dan `unpack()` menerima DER, PEM, dan
+S/MIME sekaligus, jadi amplop lama tetap terverifikasi apa adanya — ada test
+khusus untuk S/MIME attached maupun detached versi lama. Yang berubah hanya
+format tulis.
+
+- **`PkcsSevenEnvelope::toDerBytes()`** dan **`::toPem()`** (baru, static) —
+ konversi amplop dari bentuk apa pun; `toPem()` untuk kolom yang hanya teks.
+- **`unpack()` diperbaiki** — memakai `openssl_pkcs7_verify()` dengan
+ `PKCS7_NOVERIFY` untuk mengambil sertifikat, bukan `openssl_pkcs7_read()`.
+ Yang terakhir menolak armor PEM PKCS#7 yang sah — armor yang sama yang dibaca
+ `openssl pkcs7 -inform PEM` tanpa keluhan.
+- ⚠️ **Default `$detached` berubah `true` → `false`.** Amplop detached tidak
+ bisa diikat ke dokumen mana pun oleh API OpenSSL milik PHP, jadi `verify()`
+ menolaknya alih-alih meloloskan dokumen yang tak pernah diperiksa. PAdES yang
+ memang detached tetap lewat `PadesEnvelope`/`OpensslPdfSigner`.
+- Test PkcsSevenEnvelope: 19 → 31, termasuk verifikasi silang oleh `openssl cms`
+ sebagai implementasi independen.
+
+**Added — konfigurasi PHPStan (2026-07-29)**
+
+- **`phpstan.neon`** (baru) — level 5, target `phpVersion: 70400` sesuai lantai
+ dukungan di composer.json, plus **`phpstan-baseline.neon`** berisi 27 utang
+ yang sudah ada supaya tidak bertambah. Kode baru wajib bersih.
+- Script: `composer stan`, `composer stan:baseline`, `composer check`
+ (test + stan). Script `check-compat` lama dihapus — ia menunjuk
+ `phpstan-php74.neon` yang tidak pernah ada.
+- **Tiga cacat nyata diperbaiki sebelum di-baseline** (bukan dibekukan):
+ `Context::$otpProvider` docblock menunjuk `Ezdoc\UserOtpProvider` yang tidak
+ ada (import hilang); `@param` di `OpensslPdfSigner` menyebut parameter yang
+ tidak ada; guard mati di `PdfBytesRange::computeHash()`.
+- **Temuan yang perlu keputusan:** `openssl_pkcs7_verify()` hanya menerima
+ `null` untuk parameter opsional yang tak dipakai — string kosong dan path ke
+ file kosong sama-sama membuat OpenSSL gagal membuka file (sudah diuji). Di
+ PHP 7.4 parameter itu belum nullable, jadi jalur PKCS#7 pada praktiknya butuh
+ PHP 8.0+ meskipun composer.json menyebut `>=7.4`. PHP 7.4 sendiri sudah EOL
+ sejak November 2022.
+- **`composer.json`**: `dompdf/dompdf`, `ext-openssl`, `ext-pdo` ditambahkan ke
+ `suggest`. `DompdfRenderer` selama ini butuh dompdf tanpa pernah menyebutnya —
+ konsumen yang install ezdoc dari Packagist akan fatal.
+
 ### v1.0-prep track — "Db grammar test coverage + T-SQL paging fix"
 
 Empat dari lima Grammar (MariaDB, Postgres, SQLite, SQL Server) sebelumnya nol

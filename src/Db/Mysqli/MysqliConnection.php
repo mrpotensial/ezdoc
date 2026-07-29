@@ -10,6 +10,7 @@ use Ezdoc\Db\Exception\QueryException;
 use Ezdoc\Db\Exception\SchemaException;
 use Ezdoc\Db\Exception\TransactionException;
 use Ezdoc\Db\Grammar\Grammar;
+use Ezdoc\Db\Grammar\MariaDbGrammar;
 use Ezdoc\Db\Grammar\MysqlGrammar;
 use Ezdoc\Db\QueryBuilder;
 use Ezdoc\Db\Schema\SchemaManager;
@@ -75,10 +76,7 @@ final class MysqliConnection implements Connection
         // server_info ex: "8.0.35" (MySQL), "10.11.6-MariaDB-log" (MariaDB)
         $info = (string) ($conn->server_info ?? '');
         if (stripos($info, 'mariadb') !== false) {
-            // TODO(v0.9.9 W2): return new MariaDbGrammar()
-            // Sementara pakai MysqlGrammar — dialect overlap ~95%, differences
-            // mostly JSON semantics + ENUM which akan di-fix di MariaDbGrammar.
-            return new MysqlGrammar();
+            return new MariaDbGrammar();
         }
         return new MysqlGrammar();
     }

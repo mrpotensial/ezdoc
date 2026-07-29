@@ -59,7 +59,11 @@ final class PdfBytesRange
     private $length2;
 
     /**
-     * @param array<int,int> $range 4-element array of ints [s1, l1, s2, l2]
+     * Nilai boleh string numerik — `/ByteRange` datang dari parsing PDF, dan
+     * caller lain kadang meneruskan hasil query apa adanya. Yang bukan angka
+     * ditolak, bukan di-cast diam-diam.
+     *
+     * @param array<int,int|string> $range 4 elemen [s1, l1, s2, l2]
      * @throws ValidationException
      */
     public function __construct(array $range)
@@ -191,11 +195,9 @@ final class PdfBytesRange
             throw new EzdocException('PdfBytesRange::computeHash unsupported algo: ' . $algo);
         }
         $content = $byteRange->computeHashedContent($pdfBytes);
-        $hash = hash($algo, $content, true);
-        if ($hash === false || $hash === '') {
-            throw new EzdocException('PdfBytesRange::computeHash: hash() returned empty');
-        }
-        return $hash;
+
+        // Algo sudah divalidasi di atas, jadi hash() tidak bisa gagal di sini.
+        return hash($algo, $content, true);
     }
 
     /**

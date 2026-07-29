@@ -8,6 +8,7 @@ use Ezdoc\Auth\HasRoleProvider;
 use Ezdoc\Auth\RoleProvider;
 use Ezdoc\Exceptions\EzdocException;
 use Ezdoc\Rendering\PdfRenderer;
+use Ezdoc\Signature\Otp\UserOtpProvider;
 use mysqli;
 
 /**
@@ -65,7 +66,7 @@ final class Context
     /** @var UserOtpProvider|null */
     public $otpProvider;
 
-    public function __construct(mysqli $db, RoleProvider $roleProvider, ?PdfRenderer $pdf = null, ?\Ezdoc\Signature\Otp\UserOtpProvider $otpProvider = null)
+    public function __construct(mysqli $db, RoleProvider $roleProvider, ?PdfRenderer $pdf = null, ?UserOtpProvider $otpProvider = null)
     {
         $this->db = $db;
         $this->roleProvider = $roleProvider;
@@ -100,7 +101,7 @@ final class Context
         //   2. EZDOC_OTP_PROVIDER_CLASS::fromGlobals() — static factory (auto-resolve deps)
         //   3. new EZDOC_OTP_PROVIDER_CLASS() — no-arg constructor (simple providers)
         $otpProvider = null;
-        if (isset($GLOBALS['EZDOC_OTP_PROVIDER']) && $GLOBALS['EZDOC_OTP_PROVIDER'] instanceof \Ezdoc\Signature\Otp\UserOtpProvider) {
+        if (isset($GLOBALS['EZDOC_OTP_PROVIDER']) && $GLOBALS['EZDOC_OTP_PROVIDER'] instanceof UserOtpProvider) {
             $otpProvider = $GLOBALS['EZDOC_OTP_PROVIDER'];
         } elseif (defined('EZDOC_OTP_PROVIDER_CLASS') && EZDOC_OTP_PROVIDER_CLASS !== '' && class_exists(EZDOC_OTP_PROVIDER_CLASS)) {
             $otpProviderClass = EZDOC_OTP_PROVIDER_CLASS;
@@ -168,7 +169,7 @@ final class Context
     }
 
     /** Immutable copy dengan UserOtpProvider diubah. */
-    public function withOtpProvider(?\Ezdoc\Signature\Otp\UserOtpProvider $otpProvider): self
+    public function withOtpProvider(?UserOtpProvider $otpProvider): self
     {
         return new self($this->db, $this->roleProvider, $this->pdf, $otpProvider);
     }

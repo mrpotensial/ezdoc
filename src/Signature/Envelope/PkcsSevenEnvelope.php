@@ -21,17 +21,48 @@ use Ezdoc\Signature\KeyStore\X509Certificate;
  * `tempnam() + chmod 0600 + try/finally unlink()` — pattern kanonis
  * yang aman dari race condition symlink.
  *
- * ## Detached vs Attached
+ * ## Format tersimpan: DER
  *
- * Default: detached (`PKCS7_DETACHED`). Envelope tidak carry content;
- * verifier wajib supply original bytes. Toggle via constructor kalau
- * ingin embed content.
+ * `pack()` menghasilkan **DER** — encoding kanonis CMS menurut RFC 5652, dan
+ * satu-satunya bentuk yang diterima verifier pihak lain
+ * (`openssl cms -verify -inform DER`), PAdES, dan CAdES.
+ *
+ * Sebelumnya kelas ini menyimpan S/MIME, karena `openssl_pkcs7_sign()` selalu
+ * menulis format itu apa pun flag-nya. S/MIME adalah pembungkus *transport
+ * email* (RFC 8551), bukan format penyimpanan, dan memilihnya membawa tiga
+ * akibat yang semuanya berasal dari satu akar:
+ *
+ *   1. `unpack()` tidak bisa membaca keluaran `pack()` sendiri.
+ *   2. Konten biner tidak selamat — S/MIME transport teks.
+ *   3. Konten ber-LF gagal diverifikasi — S/MIME mengkanonikalisasi ke CRLF,
+ *      jadi isinya tidak lagi cocok dengan dirinya sendiri.
+ *
+ * Ketiganya hilang dengan DER. `PKCS7_BINARY` mematikan kanonikalisasi, dan
+ * byte CMS-nya diambil keluar dari pembungkus S/MIME yang OpenSSL keluarkan.
+ * (`openssl_cms_sign()` bisa menulis DER langsung, tapi baru ada di PHP 8.0
+ * sementara lantai dukungan library ini 7.4.)
+ *
+ * ### Amplop lama tetap terbaca
+ *
+ * `verify()` dan `unpack()` menerima DER, PEM, maupun S/MIME. Amplop yang
+ * sudah tersimpan sebelum perubahan ini tetap bisa diverifikasi apa adanya —
+ * tidak ada migrasi data. Yang berubah hanya format tulis.
+ *
+ * ## Detached vs attached
+ *
+ * Default: **attached** (isi tertanam di amplop). Tanda tangan yang tidak
+ * membawa isinya tidak bisa diikat ke dokumen mana pun oleh API OpenSSL milik
+ * PHP — `verify()` akan menolak, bukan mengembalikan "valid" atas dokumen yang
+ * tak pernah diperiksa. Lihat catatan di `verify()`.
+ *
+ * Untuk PAdES — yang memang detached, karena isinya adalah `/ByteRange` di
+ * dalam PDF-nya sendiri — pakai `PadesEnvelope` / `OpensslPdfSigner`.
  *
  * ## Cross-runtime OpenSSL
  *
- * `openssl_pkcs7_sign()` menerima cert+key sebagai resource / string
- * (PEM) / OpenSSLCertificate / OpenSSLAsymmetricKey — kita pass PEM
- * string dari `X509Certificate::getPem()` + resource dari `PrivateKey::getResource()`.
+ * `openssl_cms_sign()` menerima cert+key sebagai resource / string (PEM) /
+ * OpenSSLCertificate / OpenSSLAsymmetricKey — kita pass PEM string dari
+ * `X509Certificate::getPem()` + resource dari `PrivateKey::getResource()`.
  * Konsisten di PHP 7.x resource dan PHP 8+ object.
  *
  * ## Signature vs Envelope
@@ -66,10 +97,14 @@ final class PkcsSevenEnvelope implements Envelope
 
     /**
      * @param string $caBundle path ke CA bundle PEM (opsional; kosong → PKCS7_NOVERIFY di verify)
-     * @param bool   $detached true = detached signature (default), false = attached
+     * @param bool   $detached true = amplop tidak membawa isi. Standarnya false:
+     *                         amplop detached tidak bisa diikat ke dokumen oleh
+     *                         API PHP, jadi `verify()` akan menolaknya kecuali
+     *                         caller lewat `skip_content_check`. Untuk PAdES
+     *                         pakai PadesEnvelope.
      * @throws ValidationException kalau caBundle non-empty tapi file tidak ada
      */
-    public function __construct(string $caBundle = '', bool $detached = true)
+    public function __construct(string $caBundle = '', bool $detached = false)
     {
         if ($caBundle !== '' && !is_file($caBundle)) {
             throw ValidationException::forField(
@@ -130,6 +165,9 @@ final class PkcsSevenEnvelope implements Envelope
             $untrusted = $options['untrusted_bundle'];
         }
 
+        // PKCS7_BINARY mematikan kanonikalisasi baris. Tanpa ini, isi ber-LF
+        // ditandatangani sebagai CRLF dan tidak lagi cocok dengan dirinya
+        // sendiri saat diverifikasi.
         $defaultFlags = PKCS7_BINARY | PKCS7_NOATTR;
         if ($this->detached) {
             $defaultFlags |= PKCS7_DETACHED;
@@ -168,7 +206,22 @@ final class PkcsSevenEnvelope implements Envelope
             if ($bytes === false || $bytes === '') {
                 throw new EzdocException('PkcsSevenEnvelope::pack(): empty output from openssl_pkcs7_sign()');
             }
-            return $bytes;
+
+            // openssl_pkcs7_sign() selalu menulis S/MIME — pembungkus transport
+            // email, bukan format penyimpanan. Byte CMS-nya diambil keluar dari
+            // situ dan itulah yang disimpan.
+            //
+            // `openssl_cms_sign()` bisa mengeluarkan DER langsung, tapi baru ada
+            // di PHP 8.0 sedangkan lantai dukungan library ini 7.4. Membongkar
+            // base64-nya hanya memindahkan byte yang sama — hasilnya identik dan
+            // jalan di semua versi.
+            $der = self::toDer($bytes);
+            if ($der === null) {
+                throw new EzdocException(
+                    'PkcsSevenEnvelope::pack(): could not extract CMS bytes from the S/MIME openssl produced'
+                );
+            }
+            return $der;
         } finally {
             self::safeUnlink($inPath);
             self::safeUnlink($outPath);
@@ -178,10 +231,18 @@ final class PkcsSevenEnvelope implements Envelope
     /**
      * {@inheritdoc}
      *
-     * Extract signer cert(s) via `openssl_pkcs7_read()`. Signature bytes
-     * TIDAK bisa dipisahkan dari container PKCS7 tanpa parse ASN.1 penuh
-     * — kita return envelope bytes as-is di key 'signature' supaya
-     * caller yang butuh re-verify punya sumber lengkap.
+     * Menerima DER, PEM, maupun S/MIME.
+     *
+     * Sertifikat penanda tangan diambil lewat `openssl_pkcs7_verify()` dengan
+     * `PKCS7_NOVERIFY`, bukan `openssl_pkcs7_read()`. Yang terakhir menolak
+     * armor PEM PKCS#7 yang sah — armor yang sama yang dibaca `openssl pkcs7
+     * -inform PEM` tanpa keluhan — jadi ia tidak bisa dipakai. `NOVERIFY`
+     * melewati pemeriksaan rantai dengan sengaja: memutuskan tepercaya atau
+     * tidak adalah pekerjaan `verify()`, sedangkan `unpack()` hanya membongkar.
+     *
+     * Byte tanda tangan tidak bisa dipisahkan dari kontainer CMS tanpa parsing
+     * ASN.1 penuh, jadi 'signature' berisi amplop utuh — caller yang perlu
+     * memverifikasi ulang punya sumber lengkap.
      *
      * @throws EzdocException envelope tidak parseable
      */
@@ -191,30 +252,48 @@ final class PkcsSevenEnvelope implements Envelope
             throw new EzdocException('PkcsSevenEnvelope::unpack(): empty envelope');
         }
 
+        $smime = self::toSmime($envelopeBytes);
+        if ($smime === null) {
+            throw new EzdocException(
+                'PkcsSevenEnvelope::unpack(): unrecognised envelope — expected CMS in DER, PEM or S/MIME form'
+            );
+        }
+
         $inPath = self::mkTmp(self::TMP_PREFIX_IN);
+        $signerOut = self::mkTmp(self::TMP_PREFIX_OUT);
+        $contentOut = self::mkTmp(self::TMP_PREFIX_OUT);
         try {
-            if (file_put_contents($inPath, $envelopeBytes) === false) {
+            if (file_put_contents($inPath, $smime) === false) {
                 throw new EzdocException('PkcsSevenEnvelope::unpack(): failed to write temp input');
             }
             @chmod($inPath, 0600);
+            @chmod($signerOut, 0600);
+            @chmod($contentOut, 0600);
 
             self::drainOpenSslErrors();
 
-            $certs = [];
-            $ok = openssl_pkcs7_read($inPath, $certs);
+            $ok = openssl_pkcs7_verify(
+                $inPath,
+                PKCS7_NOVERIFY | PKCS7_BINARY,
+                $signerOut,
+                [],
+                null,
+                $contentOut
+            );
             if ($ok !== true) {
                 $errs = self::drainOpenSslErrors();
                 throw new EzdocException(
-                    'openssl_pkcs7_read() failed: ' . ($errs !== '' ? $errs : 'unknown envelope structure')
+                    'PkcsSevenEnvelope::unpack(): envelope not parseable: '
+                    . ($errs !== '' ? $errs : 'unknown structure')
                 );
             }
 
-            // Ambil signer cert pertama (kalau ada). Multi-signer envelope
-            // bisa carry banyak — expose semua di metadata['all_certs'].
-            $signerPem = null;
-            if (!empty($certs) && isset($certs[0]) && is_string($certs[0]) && $certs[0] !== '') {
-                $signerPem = $certs[0];
+            $signerPem = @file_get_contents($signerOut);
+            if ($signerPem === false || $signerPem === '') {
+                $signerPem = null;
             }
+
+            $der = self::toDer($envelopeBytes);
 
             return [
                 'signature' => $envelopeBytes,
@@ -222,13 +301,16 @@ final class PkcsSevenEnvelope implements Envelope
                 'timestamp' => null, // signingTime attr tidak di-expose openssl PHP API
                 'metadata' => [
                     'format' => self::FORMAT,
+                    'encoding' => self::describeEncoding($envelopeBytes),
                     'is_pem' => self::isPemPkcs7($envelopeBytes),
-                    'cert_count' => count($certs),
-                    'all_certs' => $certs,
+                    'der_length' => $der === null ? 0 : strlen($der),
+                    'cert_count' => $signerPem === null ? 0 : substr_count($signerPem, '-----BEGIN CERTIFICATE-----'),
                 ],
             ];
         } finally {
             self::safeUnlink($inPath);
+            self::safeUnlink($signerOut);
+            self::safeUnlink($contentOut);
         }
     }
 
@@ -269,12 +351,27 @@ final class PkcsSevenEnvelope implements Envelope
             ? $options['flags']
             : $defaultFlags;
 
+        // openssl_pkcs7_verify() hanya menerima S/MIME. Amplop DER dibungkus
+        // ulang menjadi p7m — base64 murni di sekitar byte yang sama, jadi
+        // isinya tidak tersentuh dan tidak ada kanonikalisasi yang terjadi.
+        // Amplop S/MIME lama diteruskan apa adanya: OpenSSL sudah menangani
+        // multipart/signed maupun p7m secara asli.
+        $smime = self::toSmime($envelopeBytes);
+        if ($smime === null) {
+            return [
+                'valid' => false,
+                'reason' => 'unrecognised envelope — expected CMS in DER, PEM or S/MIME form',
+                'signer_info' => [],
+                'checks' => ['non_empty' => true, 'recognised' => false],
+            ];
+        }
+
         $inPath = self::mkTmp(self::TMP_PREFIX_IN);
         $signerOut = self::mkTmp(self::TMP_PREFIX_OUT);
         $contentOut = self::mkTmp(self::TMP_PREFIX_OUT);
 
         try {
-            if (file_put_contents($inPath, $envelopeBytes) === false) {
+            if (file_put_contents($inPath, $smime) === false) {
                 throw new EzdocException('PkcsSevenEnvelope::verify(): failed to write temp envelope');
             }
             @chmod($inPath, 0600);
@@ -472,6 +569,155 @@ final class PkcsSevenEnvelope implements Envelope
     {
         return strpos($bytes, '-----BEGIN PKCS7-----') !== false
             || strpos($bytes, '-----BEGIN CMS-----') !== false;
+    }
+
+    /**
+     * Nama encoding untuk metadata — bukan untuk percabangan logika.
+     */
+    private static function describeEncoding(string $bytes): string
+    {
+        if ($bytes === '') {
+            return 'empty';
+        }
+        if (self::isPemPkcs7($bytes)) {
+            return 'pem';
+        }
+        if (self::isSmimePkcs7($bytes)) {
+            return 'smime';
+        }
+        return $bytes[0] === "\x30" ? 'der' : 'unknown';
+    }
+
+    /**
+     * Ambil byte DER dari amplop apa pun bentuknya.
+     *
+     * DER dikembalikan apa adanya; PEM dilepas armornya; S/MIME diambil blok
+     * base64-nya. Untuk S/MIME, blok dicari dari belakang — pada
+     * `multipart/signed` bagian tanda tangan datang setelah isinya, dan sebuah
+     * blok baru diterima kalau hasil dekodenya benar-benar dimulai dengan tag
+     * SEQUENCE. Isi dokumen yang kebetulan berbentuk base64 karena itu tidak
+     * salah dikira tanda tangan.
+     *
+     * @return string|null null kalau tidak ada CMS yang bisa dikenali
+     */
+    private static function toDer(string $bytes): ?string
+    {
+        if ($bytes === '') {
+            return null;
+        }
+
+        if ($bytes[0] === "\x30") {
+            return $bytes;
+        }
+
+        if (strpos($bytes, '-----BEGIN') !== false) {
+            if (preg_match('/-----BEGIN [A-Z0-9 #]+-----(.+?)-----END/s', $bytes, $m) !== 1) {
+                return null;
+            }
+            return self::decodeDerBlock($m[1]);
+        }
+
+        foreach (array_reverse(preg_split('/\r?\n\r?\n/', $bytes) ?: []) as $part) {
+            $der = self::decodeDerBlock($part);
+            if ($der !== null) {
+                return $der;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Dekode satu blok base64, terima hanya kalau hasilnya diawali SEQUENCE.
+     */
+    private static function decodeDerBlock(string $block): ?string
+    {
+        $clean = preg_replace('/[^A-Za-z0-9+\/=]/', '', $block);
+        if (!is_string($clean) || strlen($clean) < 64) {
+            return null;
+        }
+        $der = base64_decode($clean, true);
+        if ($der === false || $der === '' || $der[0] !== "\x30") {
+            return null;
+        }
+        return $der;
+    }
+
+    /**
+     * Bentuk amplop menjadi sesuatu yang bisa dibaca `openssl_pkcs7_*`.
+     *
+     * S/MIME diteruskan utuh — membongkar lalu menyusunnya kembali akan
+     * membuang isi yang dibawa `multipart/signed`, dan tanda tangan detached
+     * lama justru tergantung pada isi itu. Selain itu, DER dibungkus jadi p7m.
+     *
+     * @return string|null null kalau bukan CMS yang dikenali
+     */
+    private static function toSmime(string $bytes): ?string
+    {
+        if ($bytes === '') {
+            return null;
+        }
+        if (self::isSmimePkcs7($bytes)) {
+            return $bytes;
+        }
+
+        $der = self::toDer($bytes);
+        return $der === null ? null : self::derToSmime($der);
+    }
+
+    /**
+     * Bungkus DER jadi S/MIME p7m.
+     *
+     * Hanya base64 di sekeliling byte yang sama — tidak ada isi yang disentuh,
+     * jadi kanonikalisasi CRLF yang merusak S/MIME sebagai format penyimpanan
+     * tidak pernah terjadi di sini.
+     */
+    private static function derToSmime(string $der): string
+    {
+        return "MIME-Version: 1.0\r\n"
+            . "Content-Disposition: attachment; filename=\"smime.p7m\"\r\n"
+            . "Content-Type: application/x-pkcs7-mime; smime-type=signed-data; name=\"smime.p7m\"\r\n"
+            . "Content-Transfer-Encoding: base64\r\n"
+            . "\r\n"
+            . chunk_split(base64_encode($der), 64, "\r\n");
+    }
+
+    /**
+     * Bungkus DER jadi armor PEM PKCS#7 — untuk caller yang butuh bentuk teks
+     * (kolom DB teks, transport yang tidak binary-safe).
+     *
+     * @throws ValidationException kalau bytes-nya bukan CMS yang dikenali
+     */
+    public static function toPem(string $bytes): string
+    {
+        $der = self::toDer($bytes);
+        if ($der === null) {
+            throw ValidationException::forField(
+                'bytes',
+                'not a recognised CMS envelope (expected DER, PEM or S/MIME)'
+            );
+        }
+        return "-----BEGIN PKCS7-----\n"
+            . chunk_split(base64_encode($der), 64, "\n")
+            . "-----END PKCS7-----\n";
+    }
+
+    /**
+     * Byte DER kanonis dari amplop apa pun — bentuk yang diminta verifier lain
+     * (`openssl cms -verify -inform DER`), PAdES, dan CAdES.
+     *
+     * @throws ValidationException kalau bytes-nya bukan CMS yang dikenali
+     */
+    public static function toDerBytes(string $bytes): string
+    {
+        $der = self::toDer($bytes);
+        if ($der === null) {
+            throw ValidationException::forField(
+                'bytes',
+                'not a recognised CMS envelope (expected DER, PEM or S/MIME)'
+            );
+        }
+        return $der;
     }
 
     /**

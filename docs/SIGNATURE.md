@@ -155,12 +155,46 @@ support via `signature_id_within_doc` (0..N per `document_id`). Key columns:
 | `provider`           | `hmac` \| `local_pki` \| `peruri`                  |
 | `level`              | 1 / 2 / 3                                          |
 | `envelope_format`    | `hmac` \| `raw` \| `pkcs7` \| `pades`              |
-| `envelope`           | `MEDIUMBLOB` — raw bytes (base64 at transport)     |
+| `envelope`           | `MEDIUMBLOB` — raw bytes (base64 at transport). `pkcs7` is stored as DER; see below |
 | `content_hash`       | SHA-256 hex of the signed bytes                    |
 | `certificate_pem`    | Full leaf cert (L2/L3) — snapshotted at sign time  |
 | `certificate_serial` | Indexed for revocation lookup                      |
 | `signed_at`          | `DATETIME(3)` — millisecond precision              |
 | `verify_status`      | `valid` \| `tampered` \| `expired` \| `revoked` \| `untrusted` \| `error` \| `pending` |
+
+### The `pkcs7` envelope is stored as DER
+
+DER is the canonical CMS encoding (RFC 5652) and the only form a counterparty's
+verifier will accept:
+
+```bash
+openssl cms -verify -inform DER -in envelope.der -CAfile ca.pem -out content.txt
+```
+
+Earlier releases stored S/MIME, because `openssl_pkcs7_sign()` always writes
+that regardless of the flags it is given. S/MIME is an *email transport*
+(RFC 8551), not a storage format, and choosing it carried three consequences —
+`unpack()` could not read what `pack()` produced, binary content did not
+survive, and content with bare LF endings failed to verify because S/MIME
+canonicalises to CRLF. All three came from the one root cause and all three are
+gone.
+
+**Envelopes stored before the change keep working.** `verify()` and `unpack()`
+accept DER, PEM and S/MIME alike, so there is no data migration. Only the write
+format changed. To convert stored rows anyway:
+
+```php
+use Ezdoc\Signature\Envelope\PkcsSevenEnvelope;
+
+$der = PkcsSevenEnvelope::toDerBytes($row['envelope']);  // from any of the three
+$pem = PkcsSevenEnvelope::toPem($row['envelope']);       // for text-only columns
+```
+
+The envelope is **attached** — it carries the signed content. A detached CMS
+cannot be tied to any document by PHP's OpenSSL API, so `verify()` refuses it
+rather than reporting success on a document it never checked. PAdES is detached
+by design (its content is the PDF's own `/ByteRange`) and lives in
+`PadesEnvelope` / `OpensslPdfSigner` instead.
 
 List documents with at least one currently-valid signature:
 

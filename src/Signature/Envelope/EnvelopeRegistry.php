@@ -80,7 +80,11 @@ final class EnvelopeRegistry
     /**
      * Factory: registry dengan built-in envelope pre-registered.
      *
-     * PKCS7 didaftar dengan konfigurasi minimal (no CA bundle, detached).
+     * PKCS7 didaftar dengan konfigurasi minimal: tanpa CA bundle, attached.
+     * Attached karena amplop detached tidak bisa diikat ke dokumen mana pun
+     * oleh API OpenSSL milik PHP — verify() akan menolaknya, bukan meloloskan
+     * dokumen yang tak pernah diperiksa.
+     *
      * Consumer yang butuh chain validation harus `register('pkcs7', new PkcsSevenEnvelope('/path/to/ca.pem'))`
      * untuk override.
      */
@@ -89,7 +93,7 @@ final class EnvelopeRegistry
         $reg = new self();
         $reg->register(RawEnvelope::FORMAT, new RawEnvelope());
         $reg->register(HmacEnvelope::FORMAT, new HmacEnvelope());
-        $reg->register(PkcsSevenEnvelope::FORMAT, new PkcsSevenEnvelope('', true));
+        $reg->register(PkcsSevenEnvelope::FORMAT, new PkcsSevenEnvelope());
         return $reg;
     }
 }

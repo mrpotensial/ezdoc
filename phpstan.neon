@@ -1,0 +1,50 @@
+# PHPStan — analisis statik untuk src/.
+#
+# PHPUnit membuktikan kode melakukan hal yang benar ketika dijalankan.
+# PHPStan membuktikan hal tentang kode yang *tidak* dijalankan test: cabang
+# error, kombinasi tipe, jalur yang tak tersentuh. Untuk library yang akan
+# dipublikasikan itu penting — konsumen akan melewati jalur yang tidak ada
+# di test kita.
+#
+# Level 5 adalah titik masuk yang jujur: cukup ketat untuk menangkap tipe yang
+# salah dan cabang mati, belum menuntut anotasi generic di mana-mana. Naikkan
+# bertahap; setiap kenaikan tinggal regenerate baseline.
+#
+#   composer stan            — analisis (utang di baseline diabaikan)
+#   composer stan:baseline   — tulis ulang baseline setelah utang dibayar
+
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    level: 5
+
+    paths:
+        - src
+
+    # dompdf adalah dependensi opsional milik konsumen, bukan milik ezdoc —
+    # `suggest` di composer.json, bukan `require`. DompdfRenderer memang tidak
+    # bisa dianalisis tanpa paketnya terpasang; itu konsekuensi yang diterima,
+    # bukan bug yang disembunyikan.
+    ignoreErrors:
+        -
+            message: '#Dompdf\\#'
+            path: src/Rendering/DompdfRenderer.php
+
+        # openssl_pkcs7_verify() menerima null untuk parameter opsional yang
+        # tidak dipakai, dan null adalah SATU-SATUNYA nilai yang diterima:
+        # string kosong maupun path ke file kosong sama-sama membuat OpenSSL
+        # gagal membuka file ("Error opening the file", verify = -1). Sudah
+        # diuji, bukan asumsi.
+        #
+        # Di PHP 7.4 parameter itu belum nullable, jadi baris ini sekaligus
+        # menandai bahwa jalur PKCS#7 pada praktiknya butuh PHP 8.0+ meskipun
+        # composer.json menyebut 7.4. Lihat catatan di UPGRADE/CHANGELOG.
+        -
+            message: '#of function openssl_pkcs7_verify expects string, null given#'
+            path: src/Signature/Envelope/PkcsSevenEnvelope.php
+
+    # PHP 7.4 adalah lantai dukungan (composer.json). Analisis dijalankan di
+    # PHP 8.x, jadi ini memberi tahu PHPStan target sebenarnya — kalau tidak,
+    # dia melewatkan hal yang pecah di 7.4.
+    phpVersion: 70400
