@@ -6,6 +6,82 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v1.0-prep track — "Context lepas dari mysqli + auth yang tidak diam"
+
+Audit kopling ke host, dipicu satu pertanyaan: apakah library ini masih
+bergantung pada fungsi lokal konsumen? Sebagian iya — dan salah satunya
+membatalkan kerja portabilitas v0.9.9.
+
+**Fixed — `Context` mengunci mysqli sementara `App::run()` menerima PDO (2026-07-29)**
+
+Kontradiksi internal yang terbukti dari runtime:
+
+```
+App::run() menerima PDO?  -> ya (divalidasi mysqli|PDO di App.php:59)
+Context::fromGlobals()    -> GAGAL: memerlukan $GLOBALS['conn'] sebagai mysqli
+new Context(PDO)          -> GAGAL: TypeError
+Db\Connection(PDO)        -> jalan, grammar=sqlite
+```
+
+Konsumen Postgres/SQLite bisa membuat `PdoConnection` tapi tidak bisa membuat
+`Context` — padahal `Context` dipakai semua view dan action. Abstraksi lima
+dialek yang baru ditest 273 kali itu **tidak bisa dijangkau lewat pintu utama**.
+
+- `Context::__construct()` dan `withDb()` menerima **mysqli / PDO /
+ `Db\Connection`**, pola yang sudah dipakai semua Repository.
+- **`Context::connection(): Connection`** (baru) — mengadaptasi + cache. Driver
+ memilih grammar-nya sendiri, jadi panggilan yang sama jalan di lima dialect.
+- `$db` tetap publik dan tidak dinormalisasi, jadi call site lama tidak berubah.
+- **18 action file** meng-hardcode `new MysqliConnection(Context::default()->db)`
+ → `Context::default()->connection()`.
+- `Audit\Logger` menulis lewat `Db\Connection`, bukan `mysqli_stmt_bind_param`.
+ Type string tulisan tangan itu yang dulu membuat `ip_address` tersimpan
+ sebagai `192` alih-alih `192.168.1.190` — sekarang driver yang menurunkan
+ tipe dari nilainya, jadi seluruh kelas kesalahan itu hilang.
+- `DocumentService::loadTemplateRow()` idem.
+
+**Changed — shim auth default tidak lagi gagal diam-diam (2026-07-29)**
+
+`HasRoleProvider` adalah yang didapat host kalau tidak mewiring apa pun, dan ia
+menjawab "user 0, tanpa role" ke setiap pertanyaan — tanpa bersuara. Otorisasi
+tetap berjalan, audit mencatat pelaku yang tidak bisa diidentifikasi, dan salah
+konfigurasinya baru muncul jauh kemudian di tempat yang tidak berhubungan.
+
+Sekarang memperingatkan sekali per proses, dan **membedakan dua situasi**:
+
+- auth belum diwiring sama sekali
+- **role terbaca tapi identitas tidak** — bootstrap host mengisi satu global
+ tapi tidak yang lain. Ini yang paling menipu: role check lolos, bypass
+ superadmin jalan, sampai ada yang bertanya "siapa ini".
+
+`EZDOC_SILENCE_AUTH_WARNING` untuk mematikannya — deployment demo/anonim memang
+tidak punya user. **`tests/Auth/HasRoleProviderTest.php`** (12 test) menguji apa
+yang dikatakannya, bukan cuma apa yang dikembalikannya.
+
+**Fixed — mount `App::run()` membawa identitas tanpa role (2026-07-29)**
+
+`App::run()` dan `Router::renderView()` men-set `$GLOBALS['author_id']` dari
+`app.author_id`, tapi **tidak ada padanannya untuk role**. Mount yang membawa
+satu tanpa yang lain menghasilkan request setengah terpasang: role check lolos,
+bypass superadmin jalan, lalu apa pun yang bertanya *siapa* penggunanya dapat 0.
+Audit mencatat tanpa pelaku, dan guard identitas menolak. Gejalanya terlihat
+seperti masalah otorisasi padahal bukan.
+
+- **`app.author_roles`** (kunci config baru) → `$GLOBALS['author_role_array']`,
+ simetris dengan `app.author_id`. Didokumentasikan di `docs/APP-API.md` dengan
+ peringatan untuk selalu mengirim keduanya.
+
+**Documented — kopling yang belum dibereskan** (`docs/PRD.md` §3.9)
+
+`App.php`/`Router.php` masih menulis `$GLOBALS['conn'|'author_id'|
+'author_role_array']` (library mengambil nama dari namespace global host);
+`Migrations\Runner` masih mysqli penuh; daftar dokumen di `Router` ter-gate
+`instanceof mysqli`; `SchemaManager` nol implementasi. Tercatat dengan rencana,
+bukan terlupakan.
+
+PRD §3.8 juga diselaraskan — bagian itu masih menulis PKCS#7/PAdES/RFC 3161
+"belum ada" padahal §3.6 sudah mengaudit ketiganya berjalan.
+
 ### v1.0-prep track — "Amplop PKCS#7 disimpan sebagai DER + PHPStan"
 
 **Changed — amplop `pkcs7` sekarang DER, bukan S/MIME (2026-07-29)**

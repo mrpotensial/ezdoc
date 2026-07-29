@@ -6,10 +6,14 @@ namespace Ezdoc;
 
 use Ezdoc\Auth\HasRoleProvider;
 use Ezdoc\Auth\RoleProvider;
+use Ezdoc\Db\Connection;
+use Ezdoc\Db\Mysqli\MysqliConnection;
+use Ezdoc\Db\Pdo\PdoConnection;
 use Ezdoc\Exceptions\EzdocException;
 use Ezdoc\Rendering\PdfRenderer;
 use Ezdoc\Signature\Otp\UserOtpProvider;
 use mysqli;
+use PDO;
 
 /**
  * Ezdoc\Context — dependency injection container untuk library.
@@ -48,8 +52,19 @@ final class Context
     /** @var Context|null */
     private static $defaultInstance = null;
 
-    /** @var mysqli */
+    /**
+     * The handle the host application supplied, untouched.
+     *
+     * Kept as-is rather than normalised because existing call sites pass it
+     * straight to a Repository (which accepts either) or to mysqli functions.
+     * Code that wants a portable handle should call {@see connection()}.
+     *
+     * @var mysqli|PDO|Connection
+     */
     public $db;
+
+    /** @var Connection|null lazily adapted from $db */
+    private $connection;
 
     /** @var RoleProvider */
     public $roleProvider;
@@ -66,12 +81,54 @@ final class Context
     /** @var UserOtpProvider|null */
     public $otpProvider;
 
-    public function __construct(mysqli $db, RoleProvider $roleProvider, ?PdfRenderer $pdf = null, ?UserOtpProvider $otpProvider = null)
+    /**
+     * Typed `mixed` on purpose: this is the validating boundary, so it has to
+     * be able to see — and reject — whatever a host actually passes. Narrowing
+     * the docblock to the accepted union would make the guard below look like
+     * dead code to a static analyser, which is how such guards get deleted.
+     *
+     * @param mixed $db Database handle: mysqli, PDO, or Ezdoc\Db\Connection.
+     *   The first two are adapted on demand; a Connection is used as given.
+     * @throws EzdocException kalau $db bukan salah satu dari ketiganya
+     */
+    public function __construct($db, RoleProvider $roleProvider, ?PdfRenderer $pdf = null, ?UserOtpProvider $otpProvider = null)
     {
+        if (!($db instanceof mysqli) && !($db instanceof PDO) && !($db instanceof Connection)) {
+            throw new EzdocException(
+                'Ezdoc\\Context: $db must be mysqli, PDO or Ezdoc\\Db\\Connection, got '
+                . (is_object($db) ? get_class($db) : gettype($db)) . '.'
+            );
+        }
         $this->db = $db;
         $this->roleProvider = $roleProvider;
         $this->pdf = $pdf;
         $this->otpProvider = $otpProvider;
+    }
+
+    /**
+     * The database handle as a portable {@see Connection}.
+     *
+     * Everything that speaks SQL should go through this rather than `$db`.
+     * `$db` is whatever the host handed over — often a raw mysqli — and using
+     * it directly is what tied this library to one database engine while the
+     * Db layer sat there supporting five.
+     *
+     * mysqli and PDO are adapted once and cached; the driver picks its own
+     * grammar, so the same call works on MySQL, MariaDB, SQLite, Postgres and
+     * SQL Server.
+     */
+    public function connection(): Connection
+    {
+        if ($this->connection === null) {
+            if ($this->db instanceof Connection) {
+                $this->connection = $this->db;
+            } elseif ($this->db instanceof PDO) {
+                $this->connection = new PdoConnection($this->db);
+            } else {
+                $this->connection = new MysqliConnection($this->db);
+            }
+        }
+        return $this->connection;
     }
 
     /**
@@ -86,12 +143,13 @@ final class Context
     public static function fromGlobals(): self
     {
         $db = isset($GLOBALS['conn']) ? $GLOBALS['conn'] : null;
-        if (!$db instanceof mysqli) {
+        if (!($db instanceof mysqli) && !($db instanceof PDO) && !($db instanceof Connection)) {
             // EzdocException extends \RuntimeException — backward-compat:
             // existing code yang `catch (\RuntimeException)` tetap catch ini.
             throw new EzdocException(
-                'Context::fromGlobals() memerlukan $GLOBALS[\'conn\'] sebagai mysqli instance. '
-                . 'Pastikan consumer app\'s bootstrap file sudah di-require sebelum call ini.'
+                'Context::fromGlobals() memerlukan $GLOBALS[\'conn\'] berupa mysqli, PDO, '
+                . 'atau Ezdoc\\Db\\Connection. Pastikan bootstrap host app sudah di-require '
+                . 'sebelum call ini. Got: ' . (isset($GLOBALS['conn']) ? (is_object($GLOBALS['conn']) ? get_class($GLOBALS['conn']) : gettype($GLOBALS['conn'])) : 'nothing')
             );
         }
 
@@ -150,8 +208,12 @@ final class Context
         self::$defaultInstance = null;
     }
 
-    /** Immutable copy dengan db diubah. */
-    public function withDb(mysqli $db): self
+    /**
+     * Immutable copy dengan db diubah.
+     *
+     * @param mysqli|PDO|Connection $db
+     */
+    public function withDb($db): self
     {
         return new self($db, $this->roleProvider, $this->pdf, $this->otpProvider);
     }

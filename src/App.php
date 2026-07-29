@@ -66,9 +66,16 @@ final class App
         if ($db !== null) {
             $GLOBALS['conn'] = $db;
         }
+        // Identity and roles travel together — see the note in Router::renderView().
+        // A mount that carries one but not the other produces a request where
+        // role checks pass while nothing can say who the user is.
         $authorId = $cfg->get('app.author_id');
         if ($authorId !== null) {
             $GLOBALS['author_id'] = $authorId;
+        }
+        $authorRoles = $cfg->get('app.author_roles');
+        if (is_array($authorRoles)) {
+            $GLOBALS['author_role_array'] = $authorRoles;
         }
 
         // Mark orchestration BEFORE bootstrap so bootstrap + inline dispatcher

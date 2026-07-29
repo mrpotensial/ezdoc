@@ -42,7 +42,16 @@ if (!defined('EZDOC_ACCESS_DEFAULT')) define('EZDOC_ACCESS_DEFAULT', 'permissive
 // kali sebuah template akan terpengaruh kalau defaultnya dibalik ke 'strict'.
 // Nyalakan untuk beberapa waktu sebelum pembalikan; entri masuk error_log
 // dengan awalan [ezdoc:access-default].
-if (!defined('EZDOC_LOG_ACCESS_DEFAULT')) define('EZDOC_LOG_ACCESS_DEFAULT', false);
+//
+// Mencatat saja — tidak satu pun keputusan otorisasi berubah karenanya. Di
+// ezdoc_access_default_allows() jawabannya dihitung sebelum cabang logging dan
+// dikembalikan sesudahnya; AccessControl::logDefaultDecision() sama. Dan hanya
+// menyala saat tidak ada aturan eksplisit yang cocok, bukan tiap request —
+// jadi log yang sepi berarti tidak ada yang bergantung pada default permisif.
+//
+// Dinyalakan 2026-07-29 untuk mengumpulkan data sebelum pembalikan ke 'strict'
+// di v1.0. Matikan lagi setelah datanya cukup.
+if (!defined('EZDOC_LOG_ACCESS_DEFAULT')) define('EZDOC_LOG_ACCESS_DEFAULT', true);
 
 // ─── Template Management RBAC ───
 // Roles yang boleh SAVE/EDIT/DELETE/LOCK/COPY template (design-time actions).

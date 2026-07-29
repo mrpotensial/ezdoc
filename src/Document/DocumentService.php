@@ -123,17 +123,18 @@ final class DocumentService
     private function loadTemplateRow(int $templateId): ?array
     {
         if ($templateId <= 0) return null;
-        $sql = 'SELECT id, uuid, version, access_config FROM ezdoc_templates WHERE id = ? LIMIT 1';
-        $stmt = mysqli_prepare($this->ctx->db, $sql);
-        if (!$stmt) return null;
-        mysqli_stmt_bind_param($stmt, 'i', $templateId);
-        if (!mysqli_stmt_execute($stmt)) {
-            mysqli_stmt_close($stmt);
+
+        try {
+            $row = $this->ctx->connection()->fetchOne(
+                'SELECT id, uuid, version, access_config FROM ezdoc_templates WHERE id = ? LIMIT 1',
+                [$templateId]
+            );
+        } catch (\Throwable $e) {
+            // Callers treat null as "template not available" and handle it;
+            // a lookup failure should not surface as a different kind of error.
             return null;
         }
-        $result = mysqli_stmt_get_result($stmt);
-        $row = $result ? mysqli_fetch_assoc($result) : null;
-        mysqli_stmt_close($stmt);
+
         return $row ?: null;
     }
 

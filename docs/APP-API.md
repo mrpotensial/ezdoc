@@ -14,7 +14,8 @@ Config values are read via `Ezdoc\UI\Config::get()`, which accepts both **flat d
 | `app.base_path` | `string` | `''` | URL prefix the consumer mounts under. Router prepends this to every internal URL it generates. Examples: `?page=ezdoc_ui`, `/admin/docs`, or empty (query-only mode for `public/index.php`). |
 | `app.query_key` | `string` | `ezdoc_page` | Query param used for page dispatch (`?<query_key>=list`). |
 | `app.asset_key` | `string` | `ezdoc_asset` | Query param used for asset streaming (`?<asset_key>=css/ezdoc.css`). |
-| `app.author_id` | `int` \| `string` \| null | null | Signer id for audit trail. Set as `$GLOBALS['author_id']` for legacy actions. |
+| `app.author_id` | `int` \| `string` \| null | null | Current user id. Set as `$GLOBALS['author_id']`. Leaving it out means every audit entry records no actor, and any endpoint that requires an identified user refuses. |
+| `app.author_roles` | `list<string>` \| null | null | Current user's roles. Set as `$GLOBALS['author_role_array']`. **Pass it together with `app.author_id`** — a mount carrying one but not the other produces a request where role checks pass while nothing can say who the user is, which reads as an authorization bug and is not one. |
 | `app.auto_migrate` | `bool` | `true` | Runs migrations on first bootstrap. Maps to `EZDOC_AUTO_MIGRATE` constant. |
 | `app.strict_setup` | `bool` | `true` | Show friendly error page when core tables are missing. Maps to `EZDOC_STRICT_SETUP`. |
 | `app.hmac_secret` | `string` | env `EZDOC_HMAC_SECRET` | L1 signature secret. Fatal if empty in production; auto-set to a demo constant when `app.demo_mode=true`. |

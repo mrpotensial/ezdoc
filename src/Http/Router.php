@@ -519,9 +519,21 @@ final class Router
         if ($this->db !== null) {
             $GLOBALS['conn'] = $this->db;
         }
+
+        // Identity and roles travel together or the request is half-wired.
+        //
+        // Only `author_id` used to be carried here, which let a mount end up
+        // with roles resolved but no identity — role checks pass, a superadmin
+        // bypass works, and then anything that asks *who* the user is gets 0.
+        // Audit entries record no actor, and identity guards refuse. The
+        // failure looks like an authorization problem and is not one.
         $authorId = $this->config->get('app.author_id');
         if ($authorId !== null) {
             $GLOBALS['author_id'] = $authorId;
+        }
+        $authorRoles = $this->config->get('app.author_roles');
+        if (is_array($authorRoles)) {
+            $GLOBALS['author_role_array'] = $authorRoles;
         }
         // Legacy dispatcher calls exit() inside handlers — capture via ob buffer.
         // We do not attempt to prevent exit; consumer's after-emit code will not run,

@@ -85,10 +85,10 @@ Library ini standalone project — tidak vendor-locked ke industry manapun. Dogf
 |-------|------|--------|
 | Autoload | `autoload.php` | PSR-4 fallback + polyfill wiring |
 | Composer | `composer.json` | php: `>=7.4`, suggest `symfony/polyfill-php80` |
-| DI Container | `src/Context.php` | Immutable, `withDb()`/`withRoleProvider()`, `fromGlobals()` |
+| DI Container | `src/Context.php` | Immutable, `withDb()`/`withRoleProvider()`, `fromGlobals()`. Menerima **mysqli / PDO / `Db\Connection`**; `connection()` mengadaptasi + cache |
 | UUID | `src/UUID.php` | v7 (RFC 9562), v4, extractTimestampMs, isValid |
-| Auth | `src/Auth/{RoleProvider,HasRoleProvider,CallableRoleProvider}.php` | Interface + 2 impls |
-| Audit | `src/Audit/Logger.php` | 19-field silent-fail writer |
+| Auth | `src/Auth/{RoleProvider,HasRoleProvider,CallableRoleProvider}.php` | Interface + 2 impls. Shim default memperingatkan sekali per proses kalau konvensi host tidak ada (`EZDOC_SILENCE_AUTH_WARNING` untuk mematikan) |
+| Audit | `src/Audit/Logger.php` | 19-field silent-fail writer, menulis lewat `Db\Connection` (bukan `mysqli_stmt_bind_param`) |
 | Migration | `src/Migrations/Runner.php` | Self-heal orphan registry, batch-continue |
 | Polyfill | `lib/polyfill.php` | str_starts_with, str_ends_with, str_contains, get_debug_type, array_is_list, mb_str_pad |
 | Bootstrap | `bootstrap.php` | Sanity check tables, EZDOC_STRICT_SETUP flag, friendly error page |
@@ -126,10 +126,32 @@ Library ini standalone project — tidak vendor-locked ke industry manapun. Dogf
  Idempotent, safe repeated
 - Library now **fully ezdoc_*-tables-only** — no consumer-app-specific tables in library scope
 
-### 3.5 Tests Minimal
+### 3.5 Tests — 630 test, 1342 assertion
 
-- Unit: `tests/ContextTest.php` (Context DI, CallableRoleProvider normalization, immutability)
-- Belum: Migration runner tests, Audit logger tests, UUID validation tests, integration tests
+PHPUnit aktif lokal (`composer test`), PHPStan level 5 bersih (`composer stan`),
+keduanya via `composer check`. **Tidak pernah dijalankan di server**, dan test DB
+menolak nama database yang tidak mengandung "test".
+
+| Area | Test | Catatan |
+|---|---|---|
+| `Signature/` | 102 | L1/L2, KeyStore, PKCS#7, `/ByteRange`, encoder DER RFC 3161 |
+| `Db/` | 273 | 5 grammar via kontrak bersama; DDL SQLite **dieksekusi** ke `sqlite::memory:` lalu diintrospeksi |
+| `Access/`, `Auth/` | 35 | Termasuk peringatan shim default saat konvensi host tidak ada |
+| `Audit/`, `Migrations/` | 31 | MySQL test DB terisolasi di Laragon |
+| Sisanya | ~189 | Context DI, Router, Template, Table, i18n |
+
+**Yang ditemukan test ini, bukan ditemukan pengguna:**
+
+- Amplop PKCS#7 tidak mengikat isi — tanda tangan tersimpan memvalidasi
+ dokumen apa pun, termasuk string kosong
+- `QueryBuilder->limit()` tanpa `orderBy()` menghasilkan T-SQL yang tidak sah
+ (OFFSET/FETCH adalah bagian dari ORDER BY)
+- Audit log menyimpan `192` alih-alih `192.168.1.190` — satu karakter meleset
+ di type string `mysqli_stmt_bind_param`
+- `Context` menolak PDO padahal `App::run()` menerimanya
+
+**Belum ada**: integration test lintas engine sungguhan (Postgres/SQL Server
+container), CI. GitHub Actions ditunda atas permintaan.
 
 ### 3.6 Signature layer — L1 + L2 + TSA jalan, L3 masih kerangka
 
@@ -189,16 +211,60 @@ CA yang mengirim dan memvalidasi, dan hasilnya tanda tangan tersertifikasi.
 
 **Reference implementation**: dogfood consumer app pages sudah dogfooded end-to-end di production — proven featureset yang consumer library user akan expect.
 
-### 3.8 Cryptography Minimal
+### 3.8 Cryptography — sesuai 3.6
 
-Sekarang: hash `sha256`, HMAC via `hash_hmac()`, UUID v7 via `random_bytes`. Belum ada:
-- Asymmetric crypto (RSA / ECDSA)
-- X.509 certificate handling (`openssl_x509_*`)
-- PKCS#7 / CMS signing envelope
-- PAdES signed PDF
-- Timestamp Authority (RFC 3161)
-- Key management (env var → file → HSM path)
-- Certificate revocation check (CRL / OCSP)
+Bagian ini sebelumnya menulis PKCS#7, PAdES, dan RFC 3161 "belum ada", padahal
+3.6 sudah mengaudit bahwa ketiganya berjalan. Diselaraskan.
+
+| Sudah ada | Catatan |
+|---|---|
+| Hash `sha256`, HMAC (`hash_hmac`), UUID v7 | L1 |
+| Asymmetric RSA/ECDSA, X.509 (`openssl_x509_*`) | L2 lewat `LocalPkiProvider` + `KeyStore` |
+| PKCS#7 / CMS SignedData | **Disimpan sebagai DER** (RFC 5652). Membaca DER/PEM/S/MIME |
+| PAdES `/ByteRange` | `PdfBytesRange` + `OpensslPdfSigner` |
+| Timestamp RFC 3161 | Encoder TimeStampReq tulis tangan, diverifikasi silang `openssl asn1parse` |
+| Key management env → file | `FileKeyStore`, izin 0600 |
+
+| Belum ada | Milestone |
+|---|---|
+| L3 PSrE — jalurnya ada, provider belum bisa di-instansiasi | v0.9.x |
+| Certificate revocation (CRL / OCSP) | v1.0 |
+| HSM / PKCS#11 | v1.1+ |
+| `sign_token` masih plaintext; retensi nomor telepon OTP belum ada kebijakan | v1.0 |
+
+### 3.9 Kopling ke host — audit 2026-07-29
+
+Dilakukan karena pertanyaan langsung: apakah library ini masih bergantung pada
+fungsi lokal konsumen? Jawabannya sebagian, dan sisanya sekarang tercatat.
+
+**Sudah benar** — `RoleProvider` adalah interface dengan `CallableRoleProvider`
+yang generik; semua Repository menerima `Db\Connection` **atau** mysqli; jahitan
+injeksi lengkap (`Context::withRoleProvider()`, `ezdoc_set_role_provider()`).
+Kopling ke konvensi host terkurung di satu kelas shim.
+
+**Diperbaiki 2026-07-29:**
+
+- `Context` dulu mengunci `mysqli` di type hint, sementara `App::run()` menerima
+ PDO — jadi konsumen Postgres/SQLite bisa membuat `PdoConnection` tapi tidak
+ bisa membuat `Context`, padahal `Context` dipakai semua view dan action.
+ **Abstraksi 5 dialek itu tidak bisa dijangkau lewat pintu utama.** Sekarang
+ menerima ketiganya, dengan `connection()` yang mengadaptasi + cache.
+- 18 action file meng-hardcode `new MysqliConnection(Context::default()->db)`;
+ diganti `Context::default()->connection()`.
+- `Audit\Logger` dan `DocumentService::loadTemplateRow()` memanggil
+ `mysqli_prepare` langsung — dipindah ke `Db\Connection`.
+- Shim default gagal diam-diam saat identitas tidak ada. Sekarang memperingatkan
+ sekali per proses, dan membedakan "auth belum diwiring" dari "role ada tapi
+ identitas tidak" — asimetri kedua itu yang paling menipu.
+
+**Belum — tercatat, bukan terlupakan:**
+
+| Hal | Dampak | Rencana |
+|---|---|---|
+| `App.php` + `Router.php` menulis `$GLOBALS['conn'\|'author_id'\|'author_role_array']` | Library mengambil nama dari namespace global host; `conn` rawan bentrok | Jadikan jembatan legacy yang di-gate konstanta, butuh jalur deprecation |
+| `Migrations\Runner` masih mysqli penuh | Migrasi hanya jalan di MySQL/MariaDB | Bagian dari sapuan lapisan persistensi v0.9.9 |
+| `Router` daftar dokumen ter-gate `instanceof mysqli` | Konsumen PDO dapat daftar kosong, bukan fatal | Butuh `SchemaManager` yang belum diimplementasi |
+| `SchemaManager` nol implementasi — kedua Connection `throw` | DDL bisa di-*compile*, belum bisa dieksekusi/diintrospeksi | v0.9.9 W2 |
 
 ## 4. Gap Analysis
 
