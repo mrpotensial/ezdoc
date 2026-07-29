@@ -11,6 +11,17 @@ define('EZDOC_CONFIG_LOADED', true);
 // ─── Version ───
 if (!defined('EZDOC_VERSION')) define('EZDOC_VERSION', '1.0.0-phaseA');
 
+// ─── Debug ───
+// Kalau sebuah action fatal, ezdoc_guard_fatal_as_json() tetap menjawab JSON
+// (tanpa itu badannya kosong dan pemanggil melaporkan "Unexpected end of JSON
+// input", yang tidak menyebutkan apa pun tentang penyebabnya). Pesan fatalnya
+// selalu masuk error_log dengan awalan [ezdoc:fatal].
+//
+// Nyalakan ini untuk mengikutkan pesan itu ke dalam respons juga — berguna saat
+// menelusuri, tapi pesan fatal bisa menyebut path file dan internal, jadi
+// MATIKAN LAGI setelah selesai.
+if (!defined('EZDOC_DEBUG')) define('EZDOC_DEBUG', false);
+
 // ─── Feature Flags ───
 // Set ke true untuk enforce RBAC di semua action. false = permissive (audit-log only, no reject).
 // Bertahap: set false dulu, kumpulkan log, baru switch ke true.

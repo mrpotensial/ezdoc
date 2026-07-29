@@ -58,6 +58,44 @@ Sekarang memperingatkan sekali per proses, dan **membedakan dua situasi**:
 tidak punya user. **`tests/Auth/HasRoleProviderTest.php`** (12 test) menguji apa
 yang dikatakannya, bukan cuma apa yang dikembalikannya.
 
+**Added — `tests/ActionFilesTest.php`: integritas 18 endpoint action (2026-07-29)**
+
+Endpoint action adalah seluruh permukaan HTTP library ini, dan tidak satu pun
+tersentuh test. Konsekuensinya baru terlihat saat sebuah bulk edit meng-*truncate*
+18 di antaranya jadi 0 byte tanpa ada yang protes: file kosong itu PHP yang sah,
+jadi `php -l` lolos; tidak ada test yang memuatnya, jadi suite tetap hijau; dan
+dispatcher me-`require` file yang tidak mendefinisikan apa pun, kembali normal,
+lalu menjawab **200 OK dengan badan kosong** — yang di sisi pemanggil muncul
+sebagai "Unexpected end of JSON input", jauh dari penyebabnya.
+
+116 test (data provider per file) memeriksa hal yang bisa diperiksa murah:
+tidak kosong, parse, mengakhiri request (`ezdoc_respond_*`/`exit`), tidak
+meng-hardcode driver, tidak meninggalkan import mati.
+
+**Added — fatal error tetap dijawab sebagai JSON (2026-07-29)**
+
+Endpoint action menjawab JSON dan pemanggilnya selalu `await resp.json()`.
+Fatal error menghasilkan badan **kosong**, jadi yang terlihat di browser adalah
+`Unexpected end of JSON input` — pesan yang tidak menyebutkan apa pun tentang
+penyebabnya dan mengirim orang mencari ke arah yang salah. Pesan aslinya ada di
+log server, kalau yang menelusuri kebetulan punya aksesnya.
+
+- **`ezdoc_guard_fatal_as_json()`** di `lib/responses.php`, dipasang di
+ `actions/_dispatcher.php` sehingga berlaku untuk semua action. try/catch tidak
+ bisa menutup ini — E_ERROR/E_PARSE mengakhiri proses tanpa melempar, jadi
+ `register_shutdown_function` satu-satunya kait yang melihatnya. Pola yang sama
+ dipakai Laravel dan Symfony.
+- Membuang buffer keluaran yang masih terbuka lebih dulu — Router menjalankan
+ action di dalam `ob_start()`, dan keluaran separuh jadi di depan JSON membuat
+ badannya tidak terbaca karena alasan kedua.
+- Pesan fatalnya **selalu** masuk `error_log` dengan awalan `[ezdoc:fatal]`, dan
+ ikut ke respons hanya kalau **`EZDOC_DEBUG`** menyala — pesan fatal bisa
+ menyebut path file dan internal.
+- **`tests/Http/FatalJsonGuardTest.php`** (10 test). Tidak bisa diuji in-process
+ karena yang ditangani justru mengakhiri proses, jadi tiap kasus menjalankan
+ subprocess PHP sungguhan — termasuk satu test baseline yang membuktikan badan
+ kosongnya memang gejala yang dihilangkan.
+
 **Fixed — mount `App::run()` membawa identitas tanpa role (2026-07-29)**
 
 `App::run()` dan `Router::renderView()` men-set `$GLOBALS['author_id']` dari

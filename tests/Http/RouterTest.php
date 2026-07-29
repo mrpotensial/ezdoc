@@ -219,4 +219,80 @@ final class RouterTest extends TestCase
         $req = $this->makeRequest(['ezdoc_page' => 'list']);
         $this->assertSame('list', $router->match($req));
     }
+
+    // ─── Unmatched action ──────────────────────────────────────────────
+
+    /**
+     * Drive an action request the way a browser does.
+     *
+     * The dispatcher reads `$_POST` and `$_SERVER` directly rather than the
+     * RequestContext the Router carries, so a request built only from the
+     * context never reaches the branches being tested. Mirroring production
+     * means setting both.
+     *
+     * @param array<string,mixed> $post
+     * @return array{0: string, 1: RequestContext}
+     */
+    private function dispatchAction(array $post): array
+    {
+        $savedPost = $_POST;
+        $savedServer = $_SERVER;
+
+        $_POST = $post;
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+
+        try {
+            $router = $this->makeRouter();
+            $req = $this->makeRequest(['ezdoc_page' => 'action'], $post, 'POST');
+            $res = new ResponseWriter();
+
+            return [(string) $router->dispatch($req, $res), $req];
+        } finally {
+            $_POST = $savedPost;
+            $_SERVER = $savedServer;
+        }
+    }
+
+    /**
+     * An action request that no dispatcher branch claims used to come back as
+     * "200 OK" with an empty body. The caller does `await resp.json()`, so what
+     * a developer actually saw was "Unexpected end of JSON input" — which names
+     * neither the endpoint nor the missing parameter, and looks exactly like a
+     * crash. Hours go into the wrong hypothesis.
+     *
+     * The legacy consumer-side mount has always answered with a diagnostic
+     * here; this asserts both doors now do.
+     */
+    public function testAnUnmatchedActionAnswersWithADiagnosticNotAnEmptyBody(): void
+    {
+        [$body] = $this->dispatchAction(['tidak_dikenal' => '1']);
+
+        self::assertNotSame('', $body, 'an empty body is the bug this replaces');
+
+        $decoded = json_decode($body, true);
+        self::assertIsArray($decoded, "not JSON, got: {$body}");
+        self::assertFalse($decoded['success']);
+        self::assertSame('No matching action for this request', $decoded['message']);
+    }
+
+    /**
+     * The reply has to say enough to find the mistake — which keys arrived,
+     * under which method. Keys only: the values are the caller's payload and
+     * do not belong in an error echoed back.
+     */
+    public function testTheDiagnosticNamesTheKeysItReceived(): void
+    {
+        [$body] = $this->dispatchAction(['salah_ketik' => 'send_ttd_otp', 'phone' => '08123']);
+
+        $decoded = json_decode($body, true);
+
+        self::assertSame('POST', $decoded['method']);
+        self::assertContains('salah_ketik', $decoded['post_keys']);
+        self::assertContains('ezdoc_page', $decoded['get_keys']);
+        self::assertStringNotContainsString(
+            '08123',
+            (string) json_encode($decoded),
+            'keys are diagnostic; values are the caller\'s payload'
+        );
+    }
 }

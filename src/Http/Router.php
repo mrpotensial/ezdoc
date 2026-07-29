@@ -549,8 +549,34 @@ final class Router
             return $emit === null ? $captured : ($emit . $captured);
         }
         $captured = ob_get_clean();
-        // If dispatcher returned without exit (no match), let App decide passthrough by returning captured buffer.
-        return $captured === false ? '' : $captured;
+        if ($captured !== false && trim($captured) !== '') {
+            return $captured;
+        }
+
+        // The dispatcher returned without matching anything and without writing
+        // a response. Every handler it routes to ends in exit(), so reaching
+        // here means no branch claimed the request.
+        //
+        // This used to return the empty buffer, which reaches the browser as
+        // "200 OK" with nothing in it — and the caller, which does
+        // `await resp.json()`, reports "Unexpected end of JSON input". That
+        // names neither the endpoint nor the missing parameter, and it looks
+        // identical to a crash. The legacy consumer-side mount has always
+        // answered with a diagnostic instead; this is the same answer, so both
+        // doors behave alike.
+        //
+        // The echoed keys are request metadata the caller just sent, not
+        // values — enough to see which branch was missed without quoting the
+        // payload back.
+        $res->status(400)->json([
+            'success'   => false,
+            'message'   => 'No matching action for this request',
+            'method'    => $req->method(),
+            'post_keys' => array_keys($req->post),
+            'get_keys'  => array_keys($req->query),
+        ], 400);
+
+        return $res->emit();
     }
 
     // ─── View rendering helpers ───────────────────────────────────────

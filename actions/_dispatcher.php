@@ -58,6 +58,12 @@ if (!function_exists('ezdoc_respond_success')) {
     require_once __DIR__ . '/../bootstrap.php';
 }
 
+// Setiap handler di bawah menjawab JSON, dan pemanggilnya selalu `resp.json()`.
+// Fatal error menghasilkan badan kosong — browser melaporkan "Unexpected end of
+// JSON input", yang tidak menyebutkan apa pun tentang penyebabnya. Ini membuat
+// fatal tetap terjawab dalam format yang sama.
+ezdoc_guard_fatal_as_json();
+
 // i18n — guarantee $translator + global t() exist regardless of entry path.
 // This dispatcher can be require_once'd from an already-bootstrapped
 // designer.php/generate.php (which already set $translator/$GLOBALS['translator']
