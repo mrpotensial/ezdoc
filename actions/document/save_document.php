@@ -169,6 +169,13 @@ $ttdData = [];
 $accessMode = ezdoc_access_mode($accessConfig);
 $otpServiceInstance = null;
 
+/**
+ * Sign tokens accepted during validation, spent after the document is written.
+ *
+ * @var list<array{token: string, ttd_id: string, doc_id: int|null}>
+ */
+$pendingSignTokens = [];
+
 // Signatures already stored on this document. The form re-posts every stored
 // signature on each save, so this is what tells an actual new signature apart
 // from an unchanged one — the difference between demanding a fresh OTP and
@@ -221,14 +228,32 @@ foreach ($configTtd as $ttd) {
         if ($otpServiceInstance === null) {
             $otpServiceInstance = new \Ezdoc\Signature\Otp\OtpService();
         }
+        // Checked now, spent only once the document is actually written.
+        //
+        // This used to consume the token here. Everything after this point can
+        // still refuse the save — a locked document, a failed write — and the
+        // token is single-use, so a refusal destroyed it. The operator had
+        // signed, verified a code, and was then asked for another one for a
+        // signature that was never stored.
+        //
         // Bound to this template and document, not just the slot id — slot ids
         // are template-local, so `ttd1` exists on nearly every template.
-        $tokenOk = $otpServiceInstance->validateSignToken(
+        $tokenDocId = $doc_id > 0 ? (int) $doc_id : null;
+        $tokenOk = $otpServiceInstance->checkSignToken(
             $signToken,
             $tid,
             (int) $template_id,
-            $doc_id > 0 ? (int) $doc_id : null
+            $tokenDocId
         );
+        if ($tokenOk) {
+            // Same doc_id the check used — the slot lookup below may reassign
+            // $doc_id, and a consume against a different one would not match.
+            $pendingSignTokens[] = [
+                'token'  => $signToken,
+                'ttd_id' => $tid,
+                'doc_id' => $tokenDocId,
+            ];
+        }
         if (!$tokenOk) {
             $ttdLabel = $ttd['label'] ?? $tid;
             ezdoc_respond_error(
@@ -247,29 +272,59 @@ $jsonTtd    = json_encode($ttdData, JSON_UNESCAPED_UNICODE);
 $authorId   = (int) ($author_id ?? 0);
 
 // ─── Check exists & lock status ───
+//
+// A document is identified by its slot: (template_uuid, norm, nopen, label).
+// Saving without a doc_id therefore does not necessarily create a new record —
+// if the slot is taken, this save updates whatever is already there. That is
+// what makes re-saving a form an update rather than a duplicate.
+//
+// The consequence is easy to miss: reusing the same NORM/NOPEN as an earlier
+// document means addressing that same document, even when the screen says
+// "new". If it happens to be locked, the save is refused for a document the
+// user did not think they were touching.
 $isEdit = false;
 $existingLocked = 0;
+$blocking = null;
+
 if ($doc_id > 0) {
     $r = $db->fetchOne(
-        'SELECT id, is_locked FROM ezdoc_documents WHERE id = ? AND deleted_at IS NULL',
+        'SELECT id, version, is_locked FROM ezdoc_documents WHERE id = ? AND deleted_at IS NULL',
         [$doc_id]
     );
-    if ($r) { $isEdit = true; $existingLocked = (int) $r['is_locked']; }
+    if ($r) { $isEdit = true; $existingLocked = (int) $r['is_locked']; $blocking = $r; }
 }
 
 if (!$isEdit) {
     // Find latest version in slot — search by template_uuid untuk lintas template version
     $row = $db->fetchOne(
-        'SELECT id, is_locked FROM ezdoc_documents
+        'SELECT id, version, is_locked FROM ezdoc_documents
          WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ? AND deleted_at IS NULL
          ORDER BY version DESC LIMIT 1',
         [$templateUuid, $norm, $nopen, $label]
     );
-    if ($row) { $doc_id = (int) $row['id']; $isEdit = true; $existingLocked = (int) $row['is_locked']; }
+    if ($row) { $doc_id = (int) $row['id']; $isEdit = true; $existingLocked = (int) $row['is_locked']; $blocking = $row; }
 }
 
 if ($isEdit && $existingLocked) {
-    ezdoc_respond_error(t('response.document_locked_cannot_edit', [], 'This document is locked and cannot be edited. Unlock it first or create a new version.'));
+    // Name the document doing the blocking. Without this the reply says only
+    // "locked", which reads as "the thing I am making is locked" — and the
+    // thing being made does not exist yet. Knowing the id, its version, and
+    // the slot it was matched on is the difference between a dead end and an
+    // obvious next step (unlock that one, or change the NORM/NOPEN/label).
+    ezdoc_respond_error(
+        t('response.document_locked_cannot_edit', [], 'This document is locked and cannot be edited. Unlock it first or create a new version.'),
+        400,
+        [
+            'locked_doc_id' => (int) $blocking['id'],
+            'locked_version' => (int) ($blocking['version'] ?? 0),
+            'matched_slot' => [
+                'norm'  => $norm,
+                'nopen' => $nopen,
+                'label' => $label,
+            ],
+            'matched_by' => ((int) ($_POST['_doc_id'] ?? 0)) > 0 ? 'doc_id' : 'slot',
+        ]
+    );
 }
 
 // Auto-compute document title (Filament/Nova pattern)
@@ -340,6 +395,36 @@ try {
     '[ezdoc:save] SAVED doc_id=%d template_id=%d template_uuid=%s norm=[%s] nopen=[%s] label=[%s] isEdit=%s',
     $doc_id, $template_id, $templateUuid, $norm, $nopen, $label, $isEdit ? 'yes' : 'no'
 ));
+
+// ─── Spend the sign tokens ───
+// Only now. The signature is stored, so the one use each token was good for
+// has been taken. Doing this during validation meant any later refusal — a
+// locked document, a failed write — burned a token for a signature that never
+// landed, and the operator was asked for a fresh code with no way to recover
+// the old one.
+//
+// The consume is still the atomic UPDATE that guarantees single use; the check
+// earlier only asked whether it would succeed. If one fails here the document
+// is already written, so the save stands and the mismatch is logged rather
+// than surfaced — the alternative is telling the user their save failed when
+// it did not.
+foreach ($pendingSignTokens as $pending) {
+    $spent = $otpServiceInstance->validateSignToken(
+        $pending['token'],
+        $pending['ttd_id'],
+        (int) $template_id,
+        $pending['doc_id']
+    );
+    if (!$spent) {
+        @error_log(sprintf(
+            '[ezdoc:otp] sign token passed validation but could not be spent: ttd=%s template=%d doc=%s saved_doc=%d',
+            $pending['ttd_id'],
+            $template_id,
+            $pending['doc_id'] === null ? 'null' : (string) $pending['doc_id'],
+            $doc_id
+        ));
+    }
+}
 
 // ─── Post-save: verify slug + data hash ───
 $verifyUrl = '';

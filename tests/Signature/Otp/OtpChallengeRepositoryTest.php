@@ -150,6 +150,72 @@ final class OtpChallengeRepositoryTest extends TestCase
         self::assertFalse($this->repo->consumeSignToken($token, 'ttd1', 1, 10), 'replay must fail');
     }
 
+    // ─── Checking without spending ───
+
+    /**
+     * Regression for a defect that cost a real signature.
+     *
+     * The save path validated the token, then went on to checks that can still
+     * refuse — a locked document, a failed write. Validation spent the token,
+     * so a refusal destroyed it: the operator had entered a code and drawn a
+     * signature, the save was rejected for an unrelated reason, and the next
+     * attempt demanded a fresh code for a signature that was never stored.
+     * Single-use means nothing recovers it.
+     */
+    public function testCheckingATokenDoesNotSpendIt(): void
+    {
+        $token = $this->issueToken($this->makeChallenge());
+
+        self::assertTrue($this->repo->verifySignToken($token, 'ttd1', 1, 10));
+        self::assertTrue($this->repo->verifySignToken($token, 'ttd1', 1, 10), 'checking is not using');
+
+        self::assertTrue(
+            $this->repo->consumeSignToken($token, 'ttd1', 1, 10),
+            'the token must still be spendable after being checked'
+        );
+    }
+
+    public function testCheckingFailsOnceTheTokenIsSpent(): void
+    {
+        $token = $this->issueToken($this->makeChallenge());
+        $this->repo->consumeSignToken($token, 'ttd1', 1, 10);
+
+        self::assertFalse($this->repo->verifySignToken($token, 'ttd1', 1, 10));
+    }
+
+    /**
+     * Check and consume must agree on every condition, or a token that passes
+     * validation fails to spend and the document saves without the signature
+     * being accounted for.
+     *
+     * @dataProvider mismatchedBindings
+     */
+    public function testCheckAndConsumeAgreeOnRejection(string $ttdId, int $templateId, ?int $docId): void
+    {
+        $token = $this->issueToken($this->makeChallenge());
+
+        self::assertFalse($this->repo->verifySignToken($token, $ttdId, $templateId, $docId));
+        self::assertFalse($this->repo->consumeSignToken($token, $ttdId, $templateId, $docId));
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: int, 2: int|null}>
+     */
+    public static function mismatchedBindings(): array
+    {
+        return [
+            'wrong template' => ['ttd1', 999, 10],
+            'wrong slot'     => ['ttd2', 1, 10],
+            'wrong document' => ['ttd1', 1, 999],
+            'no document'    => ['ttd1', 1, null],
+        ];
+    }
+
+    public function testCheckingATokenThatWasNeverIssuedFails(): void
+    {
+        self::assertFalse($this->repo->verifySignToken('stkn_never_issued', 'ttd1', 1, 10));
+    }
+
     /**
      * Slot ids are template-local — `ttd1` exists on nearly every template — so
      * binding on ttd_id alone would let a token minted on a throwaway template

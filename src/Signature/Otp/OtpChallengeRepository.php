@@ -192,19 +192,46 @@ final class OtpChallengeRepository
      * not unique — slot ids are template-local, so `ttd1` exists on nearly
      * every template.
      */
-    public function consumeSignToken(string $signToken, string $ttdId, int $templateId, ?int $docId = null): bool
+    /**
+     * Answer whether a sign token would be accepted, without spending it.
+     *
+     * Exists so a caller can validate early and commit late. Spending the token
+     * during validation means any later refusal — a locked document, a failed
+     * write — destroys it, and the operator is asked for a fresh code for a
+     * signature that was never stored. The token is single-use, so there is no
+     * second chance to get it right.
+     *
+     * The conditions are the same as {@see consumeSignToken()}; only the effect
+     * differs. Pair them: check here, consume once the work has succeeded.
+     */
+    public function verifySignToken(string $signToken, string $ttdId, int $templateId, ?int $docId = null): bool
     {
-        $sql = "UPDATE `ezdoc_ttd_otp_challenges`
-                   SET `sign_token_used_at` = ?
-                 WHERE `sign_token` = ?
-                   AND `ttd_id` = ?
-                   AND `template_id` = ?
-                   AND `verified_at` IS NOT NULL
-                   AND `sign_token_used_at` IS NULL
-                   AND `expires_at` > ?";
+        [$sql, $params] = $this->signTokenPredicate($signToken, $ttdId, $templateId, $docId);
+
+        $row = $this->db->fetchOne(
+            'SELECT `challenge_id` FROM `ezdoc_ttd_otp_challenges` WHERE ' . $sql . ' LIMIT 1',
+            $params
+        );
+
+        return $row !== null;
+    }
+
+    /**
+     * The conditions a usable sign token satisfies, shared by check and consume
+     * so the two can never drift apart.
+     *
+     * @return array{0: string, 1: list<mixed>}
+     */
+    private function signTokenPredicate(string $signToken, string $ttdId, int $templateId, ?int $docId): array
+    {
+        $sql = "`sign_token` = ?
+                AND `ttd_id` = ?
+                AND `template_id` = ?
+                AND `verified_at` IS NOT NULL
+                AND `sign_token_used_at` IS NULL
+                AND `expires_at` > ?";
 
         $params = [
-            date('Y-m-d H:i:s'),
             $signToken,
             $ttdId,
             $templateId,
@@ -219,6 +246,20 @@ final class OtpChallengeRepository
             $sql .= " AND `doc_id` = ?";
             $params[] = $docId;
         }
+
+        return [$sql, $params];
+    }
+
+    public function consumeSignToken(string $signToken, string $ttdId, int $templateId, ?int $docId = null): bool
+    {
+        [$where, $params] = $this->signTokenPredicate($signToken, $ttdId, $templateId, $docId);
+
+        // The used-at stamp goes in front of the predicate's own parameters.
+        array_unshift($params, date('Y-m-d H:i:s'));
+
+        $sql = "UPDATE `ezdoc_ttd_otp_challenges`
+                   SET `sign_token_used_at` = ?
+                 WHERE " . $where;
 
         return (int) $this->db->execute($sql, $params) > 0;
     }

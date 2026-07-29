@@ -351,6 +351,24 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         .sidebar-scroll:hover::-webkit-scrollbar-thumb { background: #d1d5db; background-clip: padding-box; }
         .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: #9ca3af; background-clip: padding-box; }
     </style>
+    <?php
+    // Consumer custom CSS/JS, loaded last so it can override anything above.
+    //
+    // This view renders its own <head> instead of going through layout.php —
+    // the editor needs a layout TinyMCE and dompdf can assume. That meant
+    // `assets.custom_css` reached the list and picker views but silently did
+    // nothing here, which is the one place a consumer most wants to restyle.
+    //
+    // $theme is documented optional: the view can be included without going
+    // through the Router, and this is the first thing here to depend on it.
+    if (isset($theme) && $theme instanceof \Ezdoc\UI\Theme):
+        foreach ($theme->getCustomCssPaths() as $cssPath): ?>
+    <link rel="stylesheet" href="<?= h($cssPath) ?>">
+    <?php endforeach;
+        foreach ($theme->getCustomJsPaths() as $jsPath): ?>
+    <script src="<?= h($jsPath) ?>" defer></script>
+    <?php endforeach;
+    endif; ?>
 </head>
 <body>
 <?php endif; /* !$__ezdoc_isFragment */ ?>

@@ -281,6 +281,26 @@ class OtpService
     }
 
     /**
+     * Whether a sign token would be accepted right now, without spending it.
+     *
+     * For callers that validate before doing work that can still fail. Spending
+     * the token up front means a later refusal destroys it, and the operator is
+     * asked for a fresh code for a signature that was never stored — the token
+     * is single-use, so nothing recovers it.
+     *
+     * Pair with {@see validateSignToken()}: check here, consume once the work
+     * has succeeded. Pass the same `$docId` to both, or the consume will not
+     * match what was checked.
+     */
+    public function checkSignToken(string $signToken, string $ttdId, int $templateId, ?int $docId = null): bool
+    {
+        if ($signToken === '' || $ttdId === '' || $templateId <= 0) {
+            return false;
+        }
+        return $this->repo->verifySignToken($signToken, $ttdId, $templateId, $docId);
+    }
+
+    /**
      * Normalize a phone number to E.164 digits, without the leading "+".
      *
      * A number already in international form is left alone. A national-format

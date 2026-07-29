@@ -2201,6 +2201,25 @@ function renderFieldForPdf($name, $type, $val, $label) {
     </script>
     <title><?= h($template['nama_template']) ?></title>
     <?php include __DIR__ . '/../_partials/generate_styles.php'; ?>
+    <?php
+    // Consumer custom CSS/JS, loaded last so it can override anything above.
+    //
+    // Like the designer, this view renders its own <head> rather than going
+    // through layout.php, so `assets.custom_css` used to apply to the template
+    // picker but not to the document being filled in — the screen a consumer
+    // is most likely to want restyled.
+    //
+    // The PDF <head> further up is deliberately left alone: dompdf gets only
+    // the print stylesheet, and letting arbitrary screen CSS into it would
+    // change what comes out of the printer.
+    if (isset($theme) && $theme instanceof \Ezdoc\UI\Theme):
+        foreach ($theme->getCustomCssPaths() as $cssPath): ?>
+    <link rel="stylesheet" href="<?= h($cssPath) ?>">
+    <?php endforeach;
+        foreach ($theme->getCustomJsPaths() as $jsPath): ?>
+    <script src="<?= h($jsPath) ?>" defer></script>
+    <?php endforeach;
+    endif; ?>
 </head>
 <body class="<?= $param_is_locked ? 'edit-off' : 'edit-on' ?>">
     <?php if ($saveMessage): ?>

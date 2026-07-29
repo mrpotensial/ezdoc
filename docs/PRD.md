@@ -126,19 +126,25 @@ Library ini standalone project — tidak vendor-locked ke industry manapun. Dogf
  Idempotent, safe repeated
 - Library now **fully ezdoc_*-tables-only** — no consumer-app-specific tables in library scope
 
-### 3.5 Tests — 630 test, 1342 assertion
+### 3.5 Tests — 765 test terverifikasi (2026-07-29)
 
 PHPUnit aktif lokal (`composer test`), PHPStan level 5 bersih (`composer stan`),
 keduanya via `composer check`. **Tidak pernah dijalankan di server**, dan test DB
 menolak nama database yang tidak mengandung "test".
 
+Angka di atas adalah hasil eksekusi terakhir yang benar-benar dijalankan, bukan
+perkiraan. Test yang ditulis setelah itu ditandai di bawah sampai dieksekusi.
+
 | Area | Test | Catatan |
 |---|---|---|
 | `Signature/` | 102 | L1/L2, KeyStore, PKCS#7, `/ByteRange`, encoder DER RFC 3161 |
 | `Db/` | 273 | 5 grammar via kontrak bersama; DDL SQLite **dieksekusi** ke `sqlite::memory:` lalu diintrospeksi |
+| `ActionFiles` | 116 | Integritas 18 endpoint action — permukaan HTTP yang sebelumnya nol test |
 | `Access/`, `Auth/` | 35 | Termasuk peringatan shim default saat konvensi host tidak ada |
 | `Audit/`, `Migrations/` | 31 | MySQL test DB terisolasi di Laragon |
-| Sisanya | ~189 | Context DI, Router, Template, Table, i18n |
+| `Http/` | 30 | Router, dan guard fatal→JSON via subprocess PHP sungguhan |
+| `Otp/` | 46 | Termasuk 7 regresi "cek tidak boleh membelanjakan token" |
+| Sisanya | ~132 | Context DI, Template, Table, i18n |
 
 **Yang ditemukan test ini, bukan ditemukan pengguna:**
 
@@ -149,6 +155,16 @@ menolak nama database yang tidak mengandung "test".
 - Audit log menyimpan `192` alih-alih `192.168.1.190` — satu karakter meleset
  di type string `mysqli_stmt_bind_param`
 - `Context` menolak PDO padahal `App::run()` menerimanya
+
+**Yang justru ditemukan pengguna, karena test-nya tidak ada:**
+
+- 18 endpoint action ter-*truncate* jadi 0 byte oleh bulk edit — file kosong
+ adalah PHP yang sah, jadi `php -l` lolos dan suite tetap hijau. Sekarang
+ dijaga `ActionFilesTest`.
+- Token OTP dikonsumsi saat validasi, sementara penolakan terjadi sesudahnya —
+ token sekali-pakai hangus untuk tanda tangan yang tak pernah tersimpan.
+
+Keduanya di jalur yang sama: **kode yang tidak dijalankan test mana pun.**
 
 **Belum ada**: integration test lintas engine sungguhan (Postgres/SQL Server
 container), CI. GitHub Actions ditunda atas permintaan.
@@ -257,10 +273,39 @@ Kopling ke konvensi host terkurung di satu kelas shim.
  sekali per proses, dan membedakan "auth belum diwiring" dari "role ada tapi
  identitas tidak" — asimetri kedua itu yang paling menipu.
 
+### 3.10 Pintu `public/` — syarat mount, ditemukan 2026-07-29
+
+`Ezdoc\App::run()` dijual sebagai "1-line mount" (§2, §6 v0.9.8). Yang tidak
+tertulis di mana pun sampai sekarang: **front controller `public/index.php`
+adalah pintu yang berdiri sendiri.** Ia tidak memuat bootstrap host, jadi sesi,
+koneksi, dan identitas pengguna tidak ada di baliknya kecuali file mount yang
+membawanya.
+
+Ini bukan teori. Semua gejala di bawah muncul di dogfood dalam satu sesi, dan
+semuanya berasal dari akar yang sama:
+
+| Gejala | Sebab |
+|---|---|
+| OTP menolak dengan 401 padahal sesi host sehat (`$author_id` = 18) | Mount tidak mengirim `app.author_id` |
+| Role check lolos, bypass superadmin jalan, tapi identitas 0 | `app.author_roles` terbawa, `app.author_id` tidak |
+| Setiap entri audit mencatat pelaku 0 | Idem — dan tidak ada endpoint lain yang memeriksa identitas, jadi tak pernah ketahuan |
+| "Unexpected end of JSON input" | Action tak cocok mengembalikan 200 kosong; fatal mengembalikan badan kosong |
+
+**Yang sudah dikerjakan:** `app.author_roles` (simetris dengan `app.author_id`),
+`ezdoc_require_auth()` yang menjelaskan penolakannya, `public/config.example.php`,
+diagnostik untuk action tak cocok, dan `ezdoc_guard_fatal_as_json()`.
+
+**Yang masih terbuka:** `App::run()` menerima config tanpa identitas **tanpa
+berkata apa-apa**. Untuk deployment publik/anonim itu sah, tapi untuk mount yang
+seharusnya terautentikasi itu kegagalan diam. Kandidat v1.0: minta mount
+menyatakan niatnya — entah mengirim identitas, atau menyalakan
+`EZDOC_SILENCE_AUTH_WARNING` secara sadar.
+
 **Belum — tercatat, bukan terlupakan:**
 
 | Hal | Dampak | Rencana |
 |---|---|---|
+| `App::run()` diam saat mount tak membawa identitas | Kegagalan baru muncul di endpoint pertama yang memeriksa, jauh dari sebabnya | v1.0 — mount wajib menyatakan niat |
 | `App.php` + `Router.php` menulis `$GLOBALS['conn'\|'author_id'\|'author_role_array']` | Library mengambil nama dari namespace global host; `conn` rawan bentrok | Jadikan jembatan legacy yang di-gate konstanta, butuh jalur deprecation |
 | `Migrations\Runner` masih mysqli penuh | Migrasi hanya jalan di MySQL/MariaDB | Bagian dari sapuan lapisan persistensi v0.9.9 |
 | `Router` daftar dokumen ter-gate `instanceof mysqli` | Konsumen PDO dapat daftar kosong, bukan fatal | Butuh `SchemaManager` yang belum diimplementasi |

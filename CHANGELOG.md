@@ -58,6 +58,56 @@ Sekarang memperingatkan sekali per proses, dan **membedakan dua situasi**:
 tidak punya user. **`tests/Auth/HasRoleProviderTest.php`** (12 test) menguji apa
 yang dikatakannya, bukan cuma apa yang dikembalikannya.
 
+**Fixed — token OTP hangus oleh penyimpanan yang justru ditolak (2026-07-29)**
+
+`save_document.php` mengonsumsi sign token di baris 226, sementara penolakan
+karena dokumen terkunci terjadi di baris 283 dan penulisan dokumen baru di
+baris 337. Artinya setiap penolakan **setelah** validasi — dokumen terkunci,
+penulisan gagal — menghabiskan token untuk tanda tangan yang tidak pernah
+tersimpan. Token itu sekali pakai, jadi tidak ada yang memulihkannya: operator
+sudah memasukkan kode dan menggambar tanda tangan, lalu diminta kode baru.
+
+Terlihat di lapangan sebagai: simpan → "dokumen terkunci" → perbaiki
+penyebabnya → simpan lagi → **"Verifikasi OTP diperlukan"**, padahal OTP baru
+saja berhasil.
+
+- **`OtpChallengeRepository::verifySignToken()`** (baru) — menjawab apakah token
+ akan diterima, tanpa membelanjakannya.
+- **`signTokenPredicate()`** privat — satu sumber syarat, dipakai oleh cek
+ maupun konsumsi, sehingga keduanya tidak bisa menyimpang. Cek yang lolos tapi
+ gagal dibelanjakan adalah bug yang lebih halus lagi.
+- **`OtpService::checkSignToken()`** — pembungkusnya.
+- `save_document.php` mengumpulkan token yang lolos lalu membelanjakannya tepat
+ setelah INSERT/UPDATE berhasil, memakai `doc_id` yang **sama** dengan saat
+ pemeriksaan — pencarian slot di antaranya bisa mengubah `$doc_id`.
+- Jaminan sekali-pakai tidak berubah: yang membelanjakan tetap UPDATE atomik
+ yang sama. Kalau konsumsi gagal setelah dokumen tersimpan, dicatat ke log dan
+ bukan dilaporkan sebagai kegagalan — dokumennya sudah tertulis, dan memberi
+ tahu user bahwa penyimpanannya gagal justru tidak benar.
+
+**Changed — penolakan karena dokumen terkunci menyebutkan pelakunya (2026-07-29)**
+
+Dokumen diidentifikasi oleh slot `(template_uuid, norm, nopen, label)`, bukan
+oleh "baru vs edit". `_doc_id = 0` berarti "carikan di slot ini" — itu yang
+membuat menyimpan ulang sebuah form jadi update, bukan duplikat. Konsekuensinya
+mudah terlewat: memakai NORM/NOPEN yang sama dengan dokumen sebelumnya berarti
+menunjuk dokumen itu juga, meski layar bilang "baru".
+
+Respons 400-nya kini membawa `locked_doc_id`, `locked_version`, `matched_slot`,
+dan `matched_by` (`'slot'` vs `'doc_id'`). Yang terakhir menjawab pertanyaan
+sebenarnya: apakah ini dokumen yang saya buka, atau ditemukan lewat NORM/NOPEN
+yang kebetulan sama.
+
+**Changed — action yang tidak cocok menjawab diagnostik, bukan 200 kosong (2026-07-29)**
+
+Request action yang tidak diklaim cabang dispatcher mana pun dulu kembali
+sebagai **200 OK dengan badan kosong**. Pemanggil melakukan `await resp.json()`,
+jadi yang terlihat adalah "Unexpected end of JSON input" — tidak menyebut
+endpoint maupun parameter yang kurang, dan persis menyerupai crash. Pintu
+consumer (`page/ezdoc_action.php`) sudah lama menjawab diagnostik untuk kasus
+yang sama; sekarang kedua pintu sama. Isinya method + daftar key yang diterima
+(hanya key, bukan value — itu payload pemanggil).
+
 **Added — `tests/ActionFilesTest.php`: integritas 18 endpoint action (2026-07-29)**
 
 Endpoint action adalah seluruh permukaan HTTP library ini, dan tidak satu pun
@@ -119,6 +169,16 @@ seperti masalah otorisasi padahal bukan.
  identitas tidak ada di sana kecuali file mount yang membawanya. Contohnya
  menunjukkan dua cara (require bootstrap host lalu teruskan globalnya, atau
  `app.bootstrap`) plus gejala kalau identitasnya tertinggal.
+- **`public/config.php`** (baru, khusus deployment ini) — me-require
+ `koneksi.php`, yang sekaligus menyediakan `session_start()`, `$conn`,
+ `$author_id`, `$author_role_array`, **dan** `EZDOC_BOOTSTRAP_HOOK` yang
+ mewiring provider OTP. Satu require menutup semuanya.
+
+> **Kalau kamu memakai front controller `public/`, file mount ini wajib ada.**
+> Tanpa itu `index.php` jatuh ke `App::demo()` (SQLite, tanpa identitas), dan
+> setiap endpoint yang menanyakan siapa penggunanya akan menolak dengan 401
+> sementara role check tetap lolos — gejala yang terbaca seperti masalah
+> otorisasi padahal request-nya cuma anonim.
 
 **Documented — kopling yang belum dibereskan** (`docs/PRD.md` §3.9)
 
