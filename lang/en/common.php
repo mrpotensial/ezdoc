@@ -57,6 +57,11 @@ return [
         'patient_identity_required' => 'Medical record number and registration number are required',
         'ttd_sign_forbidden' => 'Not authorized to sign as "{label}"',
         'document_locked_cannot_edit' => 'This document is locked and cannot be edited. Unlock it first or create a new version.',
+        // Distinct from document_locked_cannot_edit: that one is an explicit
+        // lock, this is a consequence of having been signed. Unsigned slots stay
+        // fillable — it is the content that freezes.
+        'document_signed_fields_frozen' => 'This document has been signed, so its content can no longer change. Create a new version to revise it. Changed: {fields}',
+        'signature_replace_needs_new_version' => 'Signature "{ttd}" is already recorded and cannot be replaced by saving. Create a new version instead.',
         'save_failed' => 'Failed: {error}',
         'document_saved' => 'Document saved successfully',
         'document_locked' => 'Document locked',

@@ -327,6 +327,116 @@ if ($isEdit && $existingLocked) {
     );
 }
 
+// ─── Snapshot tanda tangan tersimpan, dengan $doc_id yang SUDAH final ───
+//
+// $existingTtdValues di atas diambil dengan `_doc_id` mentah dari POST, sebelum
+// pencarian slot berkesempatan mengubah $doc_id. Untuk gerbang OTP itu memadai;
+// untuk memutuskan tanda tangan mana yang benar-benar BARU, tidak — menyimpan
+// dengan `_doc_id = 0` yang lalu cocok ke dokumen slot yang sudah ada akan
+// membuat setiap slot tampak baru, dan mencatat baris tanda tangan duplikat
+// setiap kali dokumen disimpan.
+//
+// Diambil di sini: $doc_id sudah final, tulisan belum terjadi.
+$ttdBeforeSave = [];
+$fieldsBeforeSave = [];
+if ($doc_id > 0) {
+    $beforeRow = $db->fetchOne(
+        'SELECT `field_values`, `signature_values` FROM `ezdoc_documents` WHERE `id` = ? LIMIT 1',
+        [$doc_id]
+    );
+    if ($beforeRow) {
+        $decodedBefore = json_decode((string) ($beforeRow['signature_values'] ?? ''), true);
+        if (is_array($decodedBefore)) {
+            $ttdBeforeSave = $decodedBefore;
+        }
+        $decodedFields = json_decode((string) ($beforeRow['field_values'] ?? ''), true);
+        if (is_array($decodedFields)) {
+            $fieldsBeforeSave = $decodedFields;
+        }
+    }
+}
+
+// ─── Isi dikunci saat sudah ada tanda tangan; slot tetap terbuka (§7b) ───
+//
+// Dua hal berbeda yang dikunci, bukan dua keadaan dari satu flag. `is_locked`
+// mencampur keduanya, dan itu sebabnya menyimpan setelah satu tanda tangan bisa
+// tertolak seluruhnya — orang kedua dan ketiga jadi tidak bisa menandatangani.
+//
+// Aturannya bukan pilihan kebijakan, tapi konsekuensi apa yang tanda tangan
+// nyatakan (§5): hash-nya mencakup `fields`, jadi mengedit field setelah ada
+// tanda tangan merusak tanda tangan itu — field harus beku. Hash-nya TIDAK
+// mencakup slot lain, jadi orang berikutnya menandatangani tidak menyentuh yang
+// sudah ada — slot boleh tetap terbuka.
+//
+// Ini pengingat dini, bukan batas keamanannya: verifikasi tetap membandingkan
+// hash dan akan melaporkan perubahan apa pun, tertangkap di sini atau tidak.
+// Karena itu guard-nya menyasar kasus yang jelas — nilai field tersimpan yang
+// berubah, atau tanda tangan yang sudah ada ditukar — dan tidak menghalangi
+// penyimpanan atas hal yang belum tentu suntingan.
+$signedSlots = [];
+if ($doc_id > 0) {
+    $signedRows = $db->fetchAll(
+        'SELECT `metadata` FROM `ezdoc_signatures` WHERE `document_id` = ? AND `deleted_at` IS NULL',
+        [$doc_id]
+    );
+    foreach ($signedRows as $sr) {
+        $sm = json_decode((string) ($sr['metadata'] ?? ''), true);
+        if (is_array($sm) && !empty($sm['ttd_id'])) {
+            $signedSlots[(string) $sm['ttd_id']] = true;
+        }
+    }
+}
+
+if ($signedSlots !== []) {
+    // Nilai field tersimpan yang berubah atau hilang. Field BARU dibiarkan
+    // lewat: itu bisa jadi template yang bertambah kolom, bukan orang mengubah
+    // pernyataan yang sudah ditandatangani. Verifikasi tetap menangkapnya.
+    $changedFields = [];
+    foreach ($fieldsBeforeSave as $fname => $fvalue) {
+        if (!array_key_exists($fname, $fieldData)) {
+            continue; // form tidak mengirimnya — bukan bukti suntingan
+        }
+        if ((string) $fieldData[$fname] !== (string) $fvalue) {
+            $changedFields[] = (string) $fname;
+        }
+    }
+
+    if ($changedFields !== []) {
+        ezdoc_respond_error(
+            t(
+                'response.document_signed_fields_frozen',
+                ['fields' => implode(', ', array_slice($changedFields, 0, 5))],
+                'This document has been signed, so its content can no longer change. Create a new version to revise it. Changed: {fields}'
+            ),
+            409,
+            [
+                'signed_slots'   => array_keys($signedSlots),
+                'changed_fields' => $changedFields,
+                'remedy'         => 'new_version',
+            ]
+        );
+    }
+
+    // Menandatangani ulang slot yang sudah ditandatangani adalah pencabutan
+    // lalu tanda tangan baru. Itu harus tindakan eksplisit, bukan efek samping
+    // menyimpan.
+    foreach (array_keys($signedSlots) as $signedTtd) {
+        $submitted = (string) ($ttdData[$signedTtd] ?? '');
+        $stored = (string) ($ttdBeforeSave[$signedTtd] ?? '');
+        if ($submitted !== '' && $stored !== '' && $submitted !== $stored) {
+            ezdoc_respond_error(
+                t(
+                    'response.signature_replace_needs_new_version',
+                    ['ttd' => $signedTtd],
+                    'Signature "{ttd}" is already recorded and cannot be replaced by saving. Create a new version instead.'
+                ),
+                409,
+                ['ttd_id' => $signedTtd, 'remedy' => 'new_version']
+            );
+        }
+    }
+}
+
 // Auto-compute document title (Filament/Nova pattern)
 $computedTitle = trim((string) ($_POST['title'] ?? ''));
 if ($computedTitle === '') {
@@ -395,6 +505,116 @@ try {
     '[ezdoc:save] SAVED doc_id=%d template_id=%d template_uuid=%s norm=[%s] nopen=[%s] label=[%s] isEdit=%s',
     $doc_id, $template_id, $templateUuid, $norm, $nopen, $label, $isEdit ? 'yes' : 'no'
 ));
+
+// ─── Catat tanda tangan sebagai record ───
+//
+// Sampai sekarang TTD hanya tersimpan sebagai base64 di JSON dokumen. Itu
+// gambar, bukan tanda tangan yang bisa diverifikasi: tidak ada catatan siapa,
+// kapan, atau apa yang ditandatangani. Di sini tiap TTD yang BARU atau BERUBAH
+// jadi satu baris di `ezdoc_signatures`, dengan hash isi yang diikatnya.
+//
+// Berlaku untuk mode gambar maupun QR — keduanya tampilan untuk tindakan yang
+// sama. Lihat docs/PLAN-SIGNATURE-RECORDS.md.
+//
+// Seperti audit log, kegagalan di sini tidak boleh menjatuhkan penyimpanan yang
+// sudah berhasil: dokumennya sudah tertulis, dan memberi tahu user bahwa
+// simpannya gagal justru tidak benar.
+try {
+    $signingKey = \Ezdoc\Signature\SigningKey::resolve();
+
+    if ($signingKey === null) {
+        // SigningKey sudah mencatat alasannya sekali per proses. Tidak menulis
+        // baris apa pun adalah pilihan sadar: record yang "ditandatangani" tanpa
+        // kunci sungguhan terlihat seperti bukti tanpa menjadi bukti.
+        $signatureRecordNote = 'skipped: no signing key configured';
+    } else {
+        // Identitas dokumen. Pada INSERT sudah ada di $docUuid; pada UPDATE
+        // perlu dibaca — dan baru sekarang $doc_id pasti final.
+        if (!isset($docUuid) || $docUuid === '') {
+            $uuidRow = $db->fetchOne('SELECT `uuid` FROM `ezdoc_documents` WHERE `id` = ? LIMIT 1', [$doc_id]);
+            $docUuid = (string) ($uuidRow['uuid'] ?? '');
+        }
+
+        $sigRepo = new \Ezdoc\Signature\SignatureRepository($db);
+        $provider = new \Ezdoc\Signature\Providers\HmacProvider($signingKey);
+        $signerId = (string) ezdoc_current_user_id();
+        $signerRoles = ezdoc_current_user_roles();
+        // Snapshot, bukan referensi: kalau orangnya pindah jabatan tahun depan,
+        // dokumen tetap menunjukkan jabatan saat menandatangani.
+        $signerRole = !empty($signerRoles) ? substr(implode(',', $signerRoles), 0, 64) : null;
+
+        $slotIndex = 0;
+        $recorded = 0;
+        foreach ($configTtd as $ttdCfg) {
+            $tid = $ttdCfg['id'];
+            $slotIndex++;
+
+            $newValue = (string) ($ttdData[$tid] ?? '');
+            $oldValue = (string) ($ttdBeforeSave[$tid] ?? '');
+
+            // Form mengirim ulang setiap tanda tangan tersimpan pada tiap
+            // penyimpanan. Tanpa perbandingan ini, mengedit satu field akan
+            // mencatat ulang semua tanda tangan yang tidak berubah.
+            if ($newValue === '' || $newValue === $oldValue) {
+                continue;
+            }
+
+            $contentHash = \Ezdoc\Signature\SignaturePayload::hash(
+                $docUuid,
+                (string) $templateUuid,
+                (int) $templateVersion,
+                $fieldData,
+                $tid,
+                $newValue
+            );
+
+            $signResult = $provider->sign(new \Ezdoc\Signature\SignRequest([
+                'contentBytes' => $contentHash,
+                'contentHash'  => $contentHash,
+                'signerId'     => $signerId,
+                'metadata'     => ['ttd_id' => $tid, 'ttd_label' => $ttdCfg['label'] ?? $tid],
+            ]));
+
+            $sigRepo->insert([
+                'document_id'             => $doc_id,
+                'signature_id_within_doc' => $slotIndex - 1,
+                'signer_id'               => $signerId,
+                'signer_role'             => $signerRole,
+                'signer_user_id'          => ezdoc_current_user_id() > 0 ? ezdoc_current_user_id() : null,
+                'provider'                => $signResult->getProviderName(),
+                'level'                   => $signResult->getLevel(),
+                'envelope_format'         => $signResult->getEnvelopeFormat(),
+                'envelope'                => $signResult->getEnvelope(),
+                'content_hash'            => $contentHash,
+                // Menamai bentuk payload DAN kanonikalisasinya, supaya verifier
+                // tahu cara menghitung ulang.
+                'content_hash_algo'       => \Ezdoc\Signature\SignaturePayload::ALGO,
+                // DateTimeImmutable, bukan date(): date() menerima timestamp
+                // integer detik, jadi format 'v' selalu menghasilkan 000 dan
+                // presisi milidetik yang jadi alasan kolom ini DATETIME(3)
+                // terbuang tanpa suara. Dua tanda tangan dalam detik yang sama
+                // akan kehilangan urutannya.
+                'signed_at'               => (new \DateTimeImmutable())->format('Y-m-d H:i:s.v'),
+                'verify_status'           => 'valid',
+                'metadata'                => [
+                    'ttd_id'    => $tid,
+                    'ttd_label' => $ttdCfg['label'] ?? $tid,
+                    'replaced'  => $oldValue !== '',
+                ],
+            ]);
+            $recorded++;
+        }
+
+        $signatureRecordNote = $recorded > 0 ? "recorded {$recorded}" : 'nothing new to record';
+    }
+} catch (\Throwable $e) {
+    $signatureRecordNote = 'failed: ' . $e->getMessage();
+    @error_log(sprintf(
+        '[ezdoc:signature] gagal mencatat tanda tangan untuk doc_id=%d: %s',
+        $doc_id,
+        $e->getMessage()
+    ));
+}
 
 // ─── Spend the sign tokens ───
 // Only now. The signature is stored, so the one use each token was good for

@@ -95,6 +95,11 @@ return [
         'patient_identity_required'   => 'No RM dan No Pendaftaran wajib diisi',
         'ttd_sign_forbidden'          => 'Tidak berhak menandatangani sebagai "{label}"',
         'document_locked_cannot_edit' => 'Dokumen ini locked dan tidak bisa diedit. Unlock dulu atau buat versi baru.',
+        // Beda dari document_locked_cannot_edit: itu kunci eksplisit, ini
+        // konsekuensi sudah ditandatangani. Slot yang belum ditandatangani
+        // tetap bisa diisi — yang beku isinya.
+        'document_signed_fields_frozen' => 'Dokumen ini sudah ditandatangani, jadi isinya tidak bisa lagi berubah. Buat versi baru untuk merevisi. Yang berubah: {fields}',
+        'signature_replace_needs_new_version' => 'Tanda tangan "{ttd}" sudah tercatat dan tidak bisa diganti lewat penyimpanan. Buat versi baru.',
         'save_failed'                 => 'Gagal: {error}',
         'document_saved'              => 'Dokumen berhasil disimpan',
 

@@ -1,6 +1,6 @@
 # Plan — Tanda tangan sebagai record, QR TTD, dan pertumbuhan penyimpanan
 
-Status: **Fase 0 selesai** (2026-07-30) — sisanya rancangan disepakati, keputusan §9 diambil
+Status: **Fase 0 + Fase 1 selesai** (2026-07-30) — sisanya rancangan disepakati, keputusan §9 diambil
 Tanggal: 2026-07-30
 Pemicu: pertanyaan "QR mode TTD isinya apa supaya standar industri?"
 
@@ -66,7 +66,7 @@ Standarnya RFC 8785 (JSON Canonicalization Scheme), padanan C14N untuk XML.
 
 **Diperbaiki di Fase 0** — `Ezdoc\Support\CanonicalJson`, lihat §8.
 
-### 3.2 Tanda tangan tidak boleh menutup tanda tangan lain
+### 3.2 Tanda tangan tidak boleh menutup tanda tangan lain — ✅ diterapkan Fase 1
 
 Kalau hash tanda tangan A mencakup `signature_values` — yang berisi tanda
 tangan B — maka B menandatangani sesudahnya akan **merusak A**:
@@ -449,7 +449,52 @@ Versioning algoritma tetap relevan, tapi tempatnya di Fase 1:
 `ezdoc_signatures.content_hash_algo` (kolomnya sudah ada), untuk hash
 per-tanda-tangan yang **memang** akan diverifikasi.
 
-### Fase 1 — tanda tangan jadi record
+### Fase 1 — tanda tangan jadi record ✅ SELESAI 2026-07-30
+
+**1a — fondasi.** `SigningKey` (HKDF RFC 5869, pemisahan domain dari secret
+verify URL; secret <32 byte ditolak bukan di-stretch; absen → `null` supaya
+penyimpanan tidak terhalang) dan `SignaturePayload` (aturan §5 jadi kode,
+`ALGO = sha256-jcs-v1`). 27 test.
+
+**1b — pencatatan.** `save_document.php` menulis satu baris per TTD baru/berubah:
+signer + role snapshot, `content_hash` §5, amplop HMAC L1, `signed_at` presisi
+milidetik. Terverifikasi terhadap MySQL nyata: hash berbeda per slot, pencatatan
+idempoten, dan record-nya benar-benar bisa diverifikasi — hitung ulang hash lalu
+cek amplop memberi SAH, dan pecah setelah satu field diubah.
+
+Dua cacat ketemu sambil mengerjakan: `$existingTtdValues` diambil dengan
+`_doc_id` mentah sebelum pencarian slot mengubah `$doc_id` (dipakai snapshot
+terpisah); dan `date('Y-m-d H:i:s.v')` selalu menghasilkan `.000` karena `date()`
+menerima timestamp integer detik — presisi yang jadi alasan kolom `DATETIME(3)`
+terbuang tanpa suara.
+
+**1c — penguncian §7b.** Diuji kelima kasusnya terhadap MySQL:
+
+| Kasus | Hasil |
+|---|---|
+| Tanda tangan slot A | SUKSES |
+| Tanda tangan slot B (A sudah ada) | **SUKSES** — slot tetap terbuka |
+| Ubah nilai field | DITOLAK 409 |
+| Ganti tanda tangan A | DITOLAK 409 |
+| Simpan ulang tanpa perubahan | SUKSES |
+
+Baris kedua itu inti §7b: orang kedua dan ketiga tetap bisa menandatangani.
+Baris terakhir juga wajib — form mengirim ulang semua tanda tangan tiap simpan,
+jadi tanpa itu setiap penyimpanan setelah tanda tangan pertama akan gagal.
+
+Penolakannya membawa jalan keluar, bukan cuma "tidak boleh":
+`signed_slots`, `changed_fields`, dan `remedy: new_version`.
+
+**Guard ini pengingat dini, bukan batas keamanannya.** Verifikasi tetap
+membandingkan hash dan akan melaporkan perubahan apa pun, tertangkap di sini
+atau tidak. Karena itu guard-nya menyasar kasus yang jelas dan membiarkan field
+BARU lewat — itu bisa template bertambah kolom, bukan orang mengubah pernyataan
+yang sudah ditandatangani.
+
+⚠️ **Inert sampai `EZDOC_HMAC_SECRET` diset.** Sudah diwiring di `koneksi.php`
+dari `doc_verify_get_secret()`.
+
+### Fase 1 — rincian rencana awal
 
 - Saat TTD berubah nilainya → `SignatureRepository::insert()` dengan hash §5
 - L1 HMAC (`HmacProvider`), tanpa sertifikat, tanpa TSA
