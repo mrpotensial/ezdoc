@@ -36,6 +36,7 @@ return [
         'close'  => 'Tutup',
         'ok'     => 'OK',
         'edit'   => 'Edit',
+        'view_document' => 'Lihat dokumen itu',
     ],
     'fallback' => [
         // Default TTD (tanda tangan / signature) label shown when no

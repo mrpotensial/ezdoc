@@ -132,4 +132,63 @@ final class ActionFilesTest extends TestCase
             basename($path) . ' imports MysqliConnection without using it'
         );
     }
+
+    /**
+     * An action file must not read a variable it never declared global.
+     *
+     * These files are `require`d from two places, and the two differ in exactly
+     * the way that makes this bug invisible. A consumer that requires the
+     * dispatcher at global scope leaks its own `$conn`/`$author_id` into the
+     * included file, so an undeclared variable happens to be populated. Under
+     * `App::run()` the dispatcher is required from inside a method, so the same
+     * variable is null — and the request dies with "Call to a member function
+     * query() on null", which names neither the file nor the real cause.
+     *
+     * `$GLOBALS['conn']` being set is not enough: without `global $conn` the
+     * local name does not alias it.
+     *
+     * @dataProvider actionFiles
+     */
+    public function testAnActionFileDeclaresTheGlobalsItReads(string $path): void
+    {
+        $source = (string) file_get_contents($path);
+
+        // Comments and docblocks mention these names constantly. Strip them
+        // first, or every file that documents its history fails.
+        $code = '';
+        foreach (token_get_all($source) as $token) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $code .= is_array($token) ? $token[1] : $token;
+        }
+
+        $hostGlobals = ['conn', 'author_id', 'author_role_array'];
+
+        preg_match_all('/global\s+([^;]+);/', $code, $dm);
+        $declared = [];
+        foreach ($dm[1] as $list) {
+            preg_match_all('/\$(\w+)/', $list, $vm);
+            foreach ($vm[1] as $name) {
+                $declared[$name] = true;
+            }
+        }
+
+        $offenders = [];
+        foreach ($hostGlobals as $name) {
+            if (isset($declared[$name])) {
+                continue;
+            }
+            // Skip the declaration itself, then look for any remaining read.
+            $withoutDecls = preg_replace('/global\s+[^;]+;/', '', $code);
+            if (preg_match('/\$' . $name . '\b/', (string) $withoutDecls) === 1) {
+                $offenders[] = '$' . $name;
+            }
+        }
+
+        self::assertSame([], $offenders,
+            basename($path) . ' reads ' . implode(', ', $offenders)
+            . ' without declaring it global — works when required at global scope, null under App::run().'
+            . ' Prefer Context::default()->db, or declare the global.');
+    }
 }

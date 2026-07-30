@@ -124,6 +124,11 @@ return [
         'identity_required' => 'MR No. and Registration No. are required!',
         'generic_failed' => 'Failed: {reason}',
         'restore_success' => 'Restored successfully ({count} version(s))',
+        // A document is addressed by its slot: (template, MR no., registration
+        // no., label). Reusing an earlier document's MR/registration number means
+        // addressing that same document, even when the screen says "new".
+        'locked_slot_title' => 'Slot already taken',
+        'locked_slot_detail' => 'Document #{id} (version {version}) already occupies this slot — MR {norm}, Reg {nopen}, label "{label}".',
     ],
     'confirm' => [
         'delete_version' => 'Delete version v{version}? This cannot be undone.',

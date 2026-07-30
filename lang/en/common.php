@@ -22,6 +22,7 @@ return [
         'close' => 'Close',
         'ok' => 'OK',
         'edit' => 'Edit',
+        'view_document' => 'View that document',
     ],
     'fallback' => [
         'signature' => 'Signature',

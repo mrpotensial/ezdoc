@@ -137,6 +137,11 @@ return [
         'identity_required' => 'No RM dan No Pendaftaran wajib diisi!',
         'generic_failed'    => 'Gagal: {reason}',
         'restore_success'   => 'Berhasil di-restore ({count} versi)',
+        // Dokumen dialamati oleh slot-nya: (template, No RM, No Pendaftaran,
+        // label). Mengisi No RM/Pendaftaran yang sama dengan dokumen sebelumnya
+        // berarti menuju dokumen yang sama, walau layarnya bilang "baru".
+        'locked_slot_title'  => 'Slot ini sudah terpakai',
+        'locked_slot_detail' => 'Dokumen #{id} (versi {version}) sudah menempati slot ini — No RM {norm}, No Pendaftaran {nopen}, label "{label}".',
     ],
     'confirm' => [
         'delete_version' => 'Hapus versi v{version}? Aksi ini tidak bisa di-undo.',

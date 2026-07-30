@@ -660,15 +660,41 @@ foreach ($pendingSignTokens as $pending) {
 }
 
 // ─── Post-save: verify slug + data hash ───
-$verifyUrl = '';
-if (function_exists('doc_verify_ensure_slug') && function_exists('doc_verify_build_url')) {
-    $verifySlug = doc_verify_ensure_slug($conn, (int) $doc_id);
-    if ($verifySlug) $verifyUrl = doc_verify_build_url($verifySlug);
-}
+//
+// Hook opsional milik consumer app. Keduanya menerima handle mysqli mentah,
+// bukan `Connection` — mereka ditulis sebelum lapisan abstraksi ada, dan
+// memanggil `->query()` langsung.
+//
+// Handle-nya diambil dari Context, bukan dari `$conn`.
+//
+// `$conn` di sini dulunya variabel yang tidak pernah dideklarasikan. Ia
+// kebetulan terisi HANYA lewat satu pintu masuk: consumer yang me-require
+// dispatcher di scope global, tempat `$conn` milik bootstrap-nya ikut terlihat.
+// Lewat `App::run()`, dispatcher di-require di dalam sebuah method, jadi `$conn`
+// null dan penyimpanan gagal dengan "Call to a member function query() on null"
+// — padahal `$GLOBALS['conn']` sudah diisi. File ini mendeklarasikan
+// `global $author_id` tapi tidak `$conn`, dan itu bedanya.
+//
+// Context adalah jawaban yang benar karena tidak bergantung pada bagaimana file
+// ini dimuat. Pola yang sama sudah dipakai action lain sejak v0.9.10.
+$rawDb = Context::default()->db;
 
+// Hook-nya mysqli-only. Mount yang memakai PDO harus melewati keduanya, bukan
+// jatuh dengan error yang menuding tempat yang salah.
+$verifyUrl = '';
 $hashInfo = null;
-if (function_exists('doc_verify_compute_and_store_hash')) {
-    $hashInfo = doc_verify_compute_and_store_hash($conn, (int) $doc_id);
+if ($rawDb instanceof \mysqli) {
+    if (function_exists('doc_verify_ensure_slug') && function_exists('doc_verify_build_url')) {
+        $verifySlug = doc_verify_ensure_slug($rawDb, (int) $doc_id);
+        if ($verifySlug) $verifyUrl = doc_verify_build_url($verifySlug);
+    }
+
+    if (function_exists('doc_verify_compute_and_store_hash')) {
+        $hashInfo = doc_verify_compute_and_store_hash($rawDb, (int) $doc_id);
+    }
+} elseif (function_exists('doc_verify_ensure_slug')) {
+    @error_log('[ezdoc] hook doc_verify_* dilewati: butuh mysqli, dapat '
+        . (is_object($rawDb) ? get_class($rawDb) : gettype($rawDb)));
 }
 
 ezdoc_audit_log($isEdit ? 'doc.updated' : 'doc.created', [

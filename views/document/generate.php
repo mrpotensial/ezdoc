@@ -1221,9 +1221,13 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         // This is not a template pattern, and it is not the standalone QR's
         // `{verify_url}` marker. Those two exist for different jobs and answering
         // both from one value is what made the earlier attempt wrong.
+        // `$conn` diperiksa, bukan diasumsikan. Ia parameter ber-default null,
+        // dan hook consumer-nya mysqli-only — memanggilnya dengan null memberi
+        // "Call to a member function query() on null", pesan yang menuding tempat
+        // yang sama sekali salah.
         $ttdVerifyUrl = '';
         $__slugTtd = '';
-        if (function_exists('doc_verify_ensure_slug') && (int) $doc_id > 0) {
+        if ($conn instanceof \mysqli && function_exists('doc_verify_ensure_slug') && (int) $doc_id > 0) {
             $__slugTtd = (string) doc_verify_ensure_slug($conn, (int) $doc_id);
             if ($__slugTtd !== '' && function_exists('doc_verify_build_url')) {
                 $ttdVerifyUrl = doc_verify_build_url($__slugTtd, $ttdId);
@@ -2003,7 +2007,7 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
             // renderContent(). Dihitung ulang tiap render, tidak pernah disimpan.
             $ttdVerifyUrlPdf = '';
             $__slugPdfTtd = '';
-            if (function_exists('doc_verify_ensure_slug') && (int) $doc_id > 0) {
+            if ($conn instanceof \mysqli && function_exists('doc_verify_ensure_slug') && (int) $doc_id > 0) {
                 $__slugPdfTtd = (string) doc_verify_ensure_slug($conn, (int) $doc_id);
                 if ($__slugPdfTtd !== '' && function_exists('doc_verify_build_url')) {
                     $ttdVerifyUrlPdf = doc_verify_build_url($__slugPdfTtd, $ttdId);

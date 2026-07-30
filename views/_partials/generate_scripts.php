@@ -557,14 +557,67 @@
                         try { history.replaceState(null, '', targetUrl); } catch (e) {}
                     }
                 } else {
-                    showToast(data.message, 'error');
                     btn.textContent = origText;
                     btn.disabled = false;
+                    await handleSaveRejection(data);
                 }
             } catch (e) {
                 showToast(t('toast.save_failed', {error: e.message}, 'Failed to save: {error}'), 'error');
                 btn.textContent = origText;
                 btn.disabled = false;
+            }
+        }
+
+        // Penolakan simpan yang menyebut dokumen lain harus menawarkan jalan ke
+        // dokumen itu.
+        //
+        // Sebuah dokumen dialamati oleh slot-nya — (template, NORM, Nopen, label).
+        // Mengisi NORM/Nopen yang sama dengan dokumen sebelumnya berarti menuju
+        // dokumen yang SAMA, walau layarnya bilang "baru". Kalau yang di sana
+        // terkunci, simpannya ditolak untuk dokumen yang petugas tidak merasa
+        // sedang disentuh.
+        //
+        // Toast tidak memberi jalan keluar: pesannya hilang sendiri dan tidak ada
+        // yang bisa diklik. Padahal server sudah mengirim slot yang cocok, jadi
+        // tautan ke dokumennya bisa dibangun tepat.
+        async function handleSaveRejection(data) {
+            const slot = data.matched_slot;
+            const lockedId = data.locked_doc_id;
+
+            if (!lockedId || !slot) {
+                showToast(data.message, 'error');
+                return;
+            }
+
+            const p = _preservedParams();
+            p.set('template_id', templateId);
+            if (slot.norm) p.set('norm', slot.norm);
+            if (slot.nopen) p.set('nopen', slot.nopen);
+            if (slot.label && slot.label !== '-') p.set('label', slot.label);
+            const target = '?' + p.toString();
+
+            const detail = t('alert.locked_slot_detail', {
+                id: lockedId,
+                version: data.locked_version || 1,
+                norm: slot.norm || '-',
+                nopen: slot.nopen || '-',
+                label: slot.label || '-'
+            }, 'Document #{id} (version {version}) already occupies this slot — MR {norm}, Reg {nopen}, label "{label}".');
+
+            const go = await ezdocConfirm(data.message + '\n\n' + detail, {
+                title: t('alert.locked_slot_title', {}, 'Slot already taken'),
+                variant: 'warning',
+                confirmText: t('actions.view_document', {}, 'View that document'),
+                cancelText: t('actions.close', {}, 'Close')
+            });
+
+            // Membuka dokumennya bukan tindakan merusak, tapi apa pun yang belum
+            // tersimpan di form ini akan hilang. Karena simpannya baru saja
+            // ditolak, tidak ada yang tersimpan — jadi peringatan navigasi biasa
+            // yang justru menyesatkan di sini.
+            if (go) {
+                if (typeof markClean === 'function') markClean();
+                window.location.href = target;
             }
         }
 
@@ -679,7 +732,9 @@
                 const data = await resp.json();
                 if (!data.success) {
                     closeVerifyQrModal();
-                    showToast(t('toast.save_failed', {error: data.message || 'error'}, 'Failed to save: {error}'), 'error');
+                    // Jalur penolakan yang sama seperti submitForm — kalau yang
+                    // menghalangi adalah dokumen lain, tawarkan jalan ke sana.
+                    await handleSaveRejection(data);
                     return;
                 }
                 // Build URL untuk reload — pastikan doc_id + _show_verify_qr masuk
