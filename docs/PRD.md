@@ -126,7 +126,7 @@ Library ini standalone project — tidak vendor-locked ke industry manapun. Dogf
  Idempotent, safe repeated
 - Library now **fully ezdoc_*-tables-only** — no consumer-app-specific tables in library scope
 
-### 3.5 Tests — 765 test terverifikasi (2026-07-29)
+### 3.5 Tests — 862 test terverifikasi (2026-07-30)
 
 PHPUnit aktif lokal (`composer test`), PHPStan level 5 bersih (`composer stan`),
 keduanya via `composer check`. **Tidak pernah dijalankan di server**, dan test DB
@@ -137,14 +137,15 @@ perkiraan. Test yang ditulis setelah itu ditandai di bawah sampai dieksekusi.
 
 | Area | Test | Catatan |
 |---|---|---|
-| `Signature/` | 102 | L1/L2, KeyStore, PKCS#7, `/ByteRange`, encoder DER RFC 3161 |
+| `Signature/` | 218 | L1/L2, KeyStore, PKCS#7, `/ByteRange`, encoder DER RFC 3161, OTP, payload per tanda tangan, verifier, nilai slot |
 | `Db/` | 273 | 5 grammar via kontrak bersama; DDL SQLite **dieksekusi** ke `sqlite::memory:` lalu diintrospeksi |
-| `ActionFiles` | 116 | Integritas 18 endpoint action — permukaan HTTP yang sebelumnya nol test |
+| akar `tests/` | 131 | Integritas 18 endpoint action, Context DI, UUID |
+| `Template/`, `Table/` | 86 | Floating element, extractor/injector, tabledb |
+| `UI/` | 33 | Slot registry, dan paritas i18n dua arah — kunci, bentuk, placeholder |
 | `Access/`, `Auth/` | 35 | Termasuk peringatan shim default saat konvensi host tidak ada |
-| `Audit/`, `Migrations/` | 31 | MySQL test DB terisolasi di Laragon |
 | `Http/` | 30 | Router, dan guard fatal→JSON via subprocess PHP sungguhan |
-| `Otp/` | 46 | Termasuk 7 regresi "cek tidak boleh membelanjakan token" |
-| Sisanya | ~132 | Context DI, Template, Table, i18n |
+| `Audit/`, `Migrations/` | 31 | MySQL test DB terisolasi di Laragon |
+| `Support/` | 25 | `CanonicalJson` — subset RFC 8785, urutan kunci UTF-16 |
 
 **Yang ditemukan test ini, bukan ditemukan pengguna:**
 
@@ -155,6 +156,13 @@ perkiraan. Test yang ditulis setelah itu ditandai di bawah sampai dieksekusi.
 - Audit log menyimpan `192` alih-alih `192.168.1.190` — satu karakter meleset
  di type string `mysqli_stmt_bind_param`
 - `Context` menolak PDO padahal `App::run()` menerimanya
+- Sign token sekali-pakai terbakar pada simpan yang **ditolak** — petugas sudah
+ menandatangani dan verifikasi OTP, lalu diminta kode lagi untuk tanda tangan
+ yang tidak pernah tersimpan
+- Empat cacat i18n yang tampil sebagai teks rusak ke pengguna: dua kunci tidak
+ ada di kedua bahasa (`materai.warning_title`, `confirm.delete_logo`), dan dua
+ placeholder tidak sejajar antar bahasa sehingga kurung kurawalnya tercetak
+ apa adanya atau alasan kegagalan hilang
 
 **Yang justru ditemukan pengguna, karena test-nya tidak ada:**
 
@@ -273,20 +281,37 @@ Kopling ke konvensi host terkurung di satu kelas shim.
  sekali per proses, dan membedakan "auth belum diwiring" dari "role ada tapi
  identitas tidak" — asimetri kedua itu yang paling menipu.
 
-### 3.9b Tanda tangan belum berupa record — lihat `docs/PLAN-SIGNATURE-RECORDS.md`
+### 3.9b Tanda tangan sebagai record — ✅ selesai 2026-07-30, lihat `docs/PLAN-SIGNATURE-RECORDS.md`
 
-`ezdoc_signatures` lengkap (`signer_id`, `signer_role`, `signed_at DATETIME(3)`,
-`content_hash`, `tsa_response`, `verify_status`) dan **tidak ada satu baris pun
-ditulis ke sana**. `SignatureRepository::insert()` dan `HmacProvider` sama-sama
-tidak dipanggil dari jalur mana pun. TTD yang digambar petugas hanya tersimpan
-sebagai base64 di `ezdoc_documents.signature_values` — itu gambar, bukan tanda
-tangan yang bisa diverifikasi.
+Keadaan awal: `ezdoc_signatures` lengkap (`signer_id`, `signer_role`,
+`signed_at DATETIME(3)`, `content_hash`, `tsa_response`, `verify_status`) dan
+**tidak ada satu baris pun ditulis ke sana**. TTD yang digambar petugas hanya
+tersimpan sebagai base64 di `ezdoc_documents.signature_values` — itu gambar,
+bukan tanda tangan yang bisa diverifikasi.
 
-Konsekuensi yang muncul saat mendesain QR mode TTD: QR itu seharusnya menunjuk
-ke tanda tangan tertentu, tapi tidak ada yang bisa ditunjuk. Rencana lengkap
-beserta dua bug yang ditemukan sambil menelusuri (hash dokumen tidak
-dikanonikalisasi; tanda tangan tidak boleh menutup tanda tangan lain) dan
-masalah pertumbuhan penyimpanan ada di `docs/PLAN-SIGNATURE-RECORDS.md`.
+Ditemukan saat mendesain QR mode TTD: QR itu seharusnya menunjuk ke tanda tangan
+tertentu, tapi tidak ada yang bisa ditunjuk.
+
+Yang sekarang berlaku (Fase 0–3, rincian dan alasan tiap keputusan ada di
+dokumen rencananya):
+
+| | |
+|---|---|
+| Kanonikalisasi | `Ezdoc\Support\CanonicalJson` — subset RFC 8785, dipakai hash dokumen maupun hash per tanda tangan |
+| Kunci | `Ezdoc\Signature\SigningKey` — HKDF (RFC 5869) untuk pemisahan domain; secret di bawah 32 byte ditolak, tidak diregangkan |
+| Hash per tanda tangan | `Ezdoc\Signature\SignaturePayload` — `fields` + **satu** slot. Tanda tangan tidak menutup tanda tangan lain, jadi urutan menandatangani tidak mengubah apa pun |
+| Nilai slot | `Ezdoc\Signature\SignatureValue` — gambar (data URI) atau `qr:v1`. Mode QR sebelumnya tersaring di gerbang simpan tanpa pesan: terlihat menandatangani, tidak ada record yang tertulis |
+| Verifikasi | `Ezdoc\Signature\DocumentSignatureVerifier` — `valid`/`tampered`/`untrusted`/`unverifiable`/`revoked`, tampil di halaman verify per tanda tangan |
+| Penguncian | Isi dikunci saat ada tanda tangan, slot tetap terbuka — konsekuensi aturan hash, bukan pilihan kebijakan |
+| URL per tanda tangan | `?s=<mac>&ttd=<id>` dengan `ttd_id` **di dalam** MAC, framing length-prefix. URL lama tetap lolos |
+
+Bug yang tertangkap sambil menelusuri: hash dokumen tidak dikanonikalisasi; sign
+token terbakar pada simpan yang ditolak; `doc_verify_resolve_qr_value()` tidak
+pernah menyembuhkan apa pun pada base URL berbentuk subdomain; empat cacat i18n
+(dua kunci hilang, dua placeholder tidak sejajar antar bahasa).
+
+Di luar lingkup: L2/L3 sertifikat, pemanggilan TSA, UI pencabutan, migrasi
+penyimpanan gambar (jalur S, §7 dokumen rencana).
 
 ### 3.9c Paritas migrasi SQLite belum utuh — ditemukan 2026-07-30
 

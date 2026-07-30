@@ -58,7 +58,7 @@ return [
     'alert' => [
         'failed'                       => 'Gagal: {message}',
         'created'                      => 'Berhasil dibuat: {name}',
-        'generic_failed'               => 'Gagal',
+        'generic_failed'               => 'Gagal: {reason}',
         'generic_failed_message'       => 'Gagal: {message}',
         'print_endpoint_missing'       => 'Print/preview endpoint belum di-configure. Set urls.print di Config untuk enable preview.',
         'save_template_before_inspect' => 'Simpan template dulu sebelum inspect.',
@@ -78,6 +78,7 @@ return [
         'locked_fields_change' => 'Template ini LOCKED. Field berikut akan hilang/rename:' . "\n\n" . '{fields}' . "\n\n" . 'Lanjut? (disarankan pakai "Inspect Fields" untuk rename/migrate dulu)',
         'delete_field'         => 'Hapus field {{{name}}}?',
         'delete_qr'            => 'Hapus QR "{name}"?',
+        'delete_logo'          => 'Hapus logo "{name}"?',
         'delete_materai'       => 'Hapus materai placeholder ini?',
         'delete_ttd'           => 'Hapus TTD ini?',
         'delete_template'      => 'Hapus template "{name}"?',

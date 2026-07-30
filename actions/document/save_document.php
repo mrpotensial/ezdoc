@@ -196,7 +196,20 @@ if ($doc_id > 0) {
 foreach ($configTtd as $ttd) {
     $tid = $ttd['id'];
     $tv  = $_POST[$tid] ?? '';
-    if (!$tv || !preg_match('#^data:image/(png|jpe?g|gif);base64,#', $tv)) continue;
+
+    // Dua bentuk nilai yang sah, dan tidak ada yang lain.
+    //
+    // Gambar tetap diperiksa ketat sampai ke tipe MIME-nya. Penanda mode QR
+    // dicocokkan persis — bukan dengan prefix, bukan dengan pola. Gerbang ini
+    // satu-satunya yang menentukan apa yang boleh masuk ke `signature_values`,
+    // dan melonggarkannya jadi "apa saja yang tidak kosong" akan membuat siapa
+    // pun yang bisa POST bisa menaruh string pilihannya di sana.
+    //
+    // Sebelum ini penanda QR tersaring di sini tanpa pesan apa pun: mode QR
+    // terlihat menandatangani, tapi tidak ada satu pun record yang tertulis.
+    $isImageValue = (bool) preg_match('#^data:image/(png|jpe?g|gif);base64,#', (string) $tv);
+    $isQrActValue = ($tv === \Ezdoc\Signature\SignatureValue::QR_ACT);
+    if (!$isImageValue && !$isQrActValue) continue;
 
     $ttdRbac = $ttd['rbac'] ?? ['roles' => [], 'users' => []];
     if (!ezdoc_can_sign_ttd($ttdRbac)) {

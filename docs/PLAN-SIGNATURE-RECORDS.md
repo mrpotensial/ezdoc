@@ -17,8 +17,8 @@ Ada **tiga** jalur QR di ezdoc, dan membedakannya menentukan segalanya:
 | | Untuk apa | Isinya sekarang |
 |---|---|---|
 | **QR terpisah** (`qr-placeholder`, `data-qr="<field>"`) | Multifungsi — QR dari field apa pun, termasuk `{verify_url}` dokumen | Sudah benar, tidak diubah |
-| **QR mode TTD** (toggle per slot) | QR **adalah tanda tangannya** | Belum bisa berisi apa pun yang bermakna |
-| **Mode verify QR** (toggle dokumen, tombol "QR: ON/OFF") | Sembunyikan semua gambar TTD, ganti QR yang bisa dipindai | Verify URL dokumen — **sama untuk semua slot** |
+| **QR mode TTD** (toggle per slot) | QR **adalah tanda tangannya** | ✅ pointer ke tanda tangan slot itu |
+| **Mode verify QR** (toggle dokumen, tombol "QR: ON/OFF") | Sembunyikan semua gambar TTD, ganti QR yang bisa dipindai | ✅ "ubah semua slot ke mode QR sekaligus" |
 
 QR mode TTD seharusnya menunjuk ke **tanda tangan itu**. Masalahnya: tanda
 tangan belum berupa record apa pun. Tidak ada yang bisa ditunjuk.
@@ -26,6 +26,9 @@ tangan belum berupa record apa pun. Tidak ada yang bisa ditunjuk.
 Mode verify QR sudah punya alur interaksi yang benar (tombol → konfirmasi →
 simpan → QR muncul) tapi isinya satu URL untuk semua. Setelah tanda tangan jadi
 record, keduanya menyatu — lihat §6.
+
+**Status: Fase 0–3 selesai 2026-07-30.** Tiga jalur jadi dua, isinya dari satu
+tempat. Yang tersisa jalur S (penyimpanan gambar, §7) — mandiri dari ini.
 
 ## 2. Keadaan sekarang (terverifikasi, bukan asumsi)
 
@@ -148,7 +151,7 @@ tempat.
 ## 6. Desain QR mode TTD
 
 ```
-<verify_base>/<slug>?s=<hmac(slug|ttd_id)>&ttd=<ttd_id>
+<verify_base>/<slug>?s=<mac>&ttd=<ttd_id>
 ```
 
 | Bagian | Alasannya |
@@ -157,7 +160,12 @@ tempat.
 | `ttd_id` | tanda tangan yang mana — tanpa ini, empat penanda tangan menghasilkan empat QR identik |
 | `s` | HMAC menutup **slug + ttd_id**. Kalau `ttd_id` di luar HMAC, `&ttd=` bisa ditukar dan QR "Kepala Unit" diarahkan ke tanda tangan orang lain |
 
-URL lama (HMAC slug saja) harus tetap lolos — halaman verify mencoba dua-duanya.
+Bentuk yang ditandatangani, bukan sekadar `slug|ttd_id` — lihat Fase 3 untuk
+alasan panjang ditulis di depan tiap komponen.
+
+URL lama (HMAC slug saja, tanpa `&ttd=`) tetap lolos. Tapi URL yang **membawa**
+`ttd` wajib punya MAC yang mencakup ttd itu: menerima MAC slug-saja di situ
+berarti siapa pun bisa menempel `&ttd=` pilihannya ke URL dokumen yang sah.
 
 **Data pasien tidak masuk QR.** QR yang tercetak di kertas bisa dipindai siapa
 saja; URL verifikasi menyerahkan keputusan siapa boleh melihat apa ke halaman
@@ -523,29 +531,103 @@ Status: `valid`, `tampered`, `untrusted`, `unverifiable`, `revoked`.
 `summarise()` mengambil verdict terburuk — dokumen tidak jadi "sah" karena
 mayoritas tanda tangannya sah.
 
-**Yang belum:** menampilkannya di `verifikasi/index.php` dan menerima `?ttd=`.
-Logikanya siap dipakai.
+Tampil di `verifikasi/index.php`, dan `?ttd=` diterima — pengikatan MAC-nya
+dikerjakan di Fase 3.
 
 ### Fase 2 — rincian rencana awal
 
 - Terima `?ttd=`, tampilkan tabel §6
 - Tanpa ini, Fase 1 mengumpulkan data yang belum bisa dilihat
 
-### Fase 3 — QR TTD + alur klik + penyatuan tiga jalur QR
+### Fase 3 — QR TTD + alur klik + penyatuan tiga jalur QR ✅ SELESAI 2026-07-30
 
-- HMAC diperluas ke `slug|ttd_id`, URL lama tetap lolos
-- Alur: klik mode QR → konfirmasi → OTP kalau slot minta → tercatat → QR muncul.
-  **Pakai ulang** `toggleVerifyQrMode()` / `confirmVerifyQrMode()` yang sudah
-  melakukan konfirmasi-simpan-reload; jangan tulis UI baru
-- Verify QR mode berubah arti: dari "override semua slot dengan verify URL
-  dokumen" jadi "ubah semua slot ke mode QR sekaligus". Isinya ikut jalur
-  per-tanda-tangan yang sama
-- Hapus jalur render duplikat: `$verifyQrArea`, `$imgDisplayOverride`,
-  `generateVerifyQr()`
-- Batalkan default `{verify_url}` untuk QR TTD (keliru — itu tugas QR terpisah)
-- Beri jalan pulang untuk nilai manual yang membeku: konten tersimpan menang
-  atas pattern, jadi nilai yang pernah diketik bertahan selamanya tanpa cara
-  mengembalikannya ke otomatis
+**Pengikatan `ttd_id` ke MAC.** `doc_verify_sign_slug($slug, $ttdId = '')`.
+Bentuk tingkat dokumen tetap HMAC atas slug mentah — itu satu-satunya alasan
+cabangnya ada, supaya QR yang sudah tercetak tetap lolos. Bentuk per-tanda-tangan
+memakai framing bertag dengan panjang di depan tiap komponen:
+
+```
+'ezdoc-ttd-v1' | strlen(slug) ':' slug | strlen(ttd_id) ':' ttd_id
+```
+
+Panjang ditulis di depan nilainya, bukan cuma dipisah pemisah. Dengan pemisah
+saja, `sign('abc','def')` dan `sign('abc|def')` menghasilkan string yang sama —
+hari ini tak terjangkau karena slug base62, tapi itu bersandar pada kebetulan
+format. Pola length-prefix yang sama dipakai transcript hash TLS 1.3 dan
+canonical request AWS SigV4. Slug non-base62 juga jatuh ke cabang bertag, jadi
+konstruksinya injektif tanpa syarat.
+
+`doc_verify_check_signature($slug, $sig, $ttdId = '')` **mewajibkan** MAC yang
+mencakup `ttd` kalau URL membawanya. Menerima MAC slug-saja di situ akan
+meniadakan seluruh gunanya: ambil URL dokumen yang sah, tempel `&ttd=` apa pun.
+
+`?ttd=` diparse dan divalidasi **sebelum** pemeriksaan MAC di
+`verifikasi/index.php` — nilainya ikut ditandatangani, jadi tidak boleh dibaca
+ulang setelahnya.
+
+**Nilai slot punya dua bentuk sah.** `Ezdoc\Signature\SignatureValue` — 14 test.
+Sebelum ini mode QR **tidak pernah menulis record apa pun**: gerbang di
+`save_document.php` menuntut data URI, jadi mode QR terlihat menandatangani
+sementara QR-nya menunjuk record yang tidak ada. Sekarang `qr:v1` diterima —
+dicocokkan persis, bukan prefix — dan lewat RBAC serta OTP yang sama.
+
+Pemisahan gambar dari tanda tangannya sendiri bukan penemuan baru: PAdES
+membedakan *appearance stream* dari nilai tanda tangan, dan invisible signature
+sah tanpa appearance sama sekali.
+
+**Pointer hanya muncul kalau slot sudah ditandatangani.** Layar maupun PDF.
+QR tercetak yang menunjuk record yang belum ada akan selamanya menjawab "tanda
+tangan tidak dikenal", dan kertas tidak bisa ditarik. Isi tersimpan dan pattern
+template tidak ikut aturan ini — keduanya tidak pernah mengklaim ada record.
+Itu juga yang membuat dokumen lama dengan QR yang diisi tangan tetap apa adanya.
+
+**Urutan resolusi isi QR, sama di tiga tempat** (layar, PDF, JS):
+`isi tersimpan` → `pattern template` → `pointer per tanda tangan`. Pattern yang
+disetel template tapi field-nya kosong **tidak** diganti diam-diam dengan pointer.
+
+**Alur klik.** Modal tanda tangan yang sama dipakai ulang dengan isi tengah
+ditukar (`#signQrConfirmArea`). Alasannya bukan hemat markup: OTP, RBAC, cek
+dokumen terkunci, dan pengelolaan sign token semuanya hidup di sana. Menandatangani
+memicu `submitForm()` — tanda tangan adalah tindakan commit, tidak punya draft.
+
+**Verify QR mode berubah arti** dari "override semua slot dengan verify URL
+dokumen" jadi "ubah semua slot ke mode QR sekaligus". Ia memaksa QR bahkan pada
+slot yang template-nya cuma mengizinkan gambar, karena alasannya bertahan: ia
+menyembunyikan **semua** gambar tanda tangan, dan gambar bisa disalin ke dokumen
+lain sementara pointer ke record tidak bisa.
+
+**Yang dihapus, tanpa fitur yang hilang:** `$verifyQrArea`,
+`$imgDisplayOverride`, `generateVerifyQr()`, `initVerifyQrOnLoad()`, CSS
+`.ttd-area-verify-qr`/`.ttd-verify-qr-preview`, dan input readonly "URL
+Verifikasi" di modal — URL itu tidak ada di QR mana pun lagi.
+
+**Default `{verify_url}` untuk QR TTD dibatalkan.** Itu tugas QR terpisah.
+Penggantinya pointer per tanda tangan, dan sengaja **bukan** pattern yang bisa
+diketik: nilainya dihitung ulang tiap render dari slug + ttd_id, jadi rotasi
+kunci atau pindah domain tidak membekukan URL basi ke dalam dokumen.
+
+**Jalan pulang untuk nilai manual.** Mengosongkan isi QR mengembalikannya ke
+otomatis; keterangan di prompt menyebut apa yang sebenarnya kembali — pattern
+template kalau ada, kalau tidak pointer per tanda tangan.
+
+**Bug lain yang tertangkap sambil jalan:**
+
+| | Temuan |
+|---|---|
+| `doc_verify_resolve_qr_value()` | Regex penyembuhannya menuntut segmen path `/verifikasi/`, padahal base produksi berupa subdomain. Penyembuhan MAC/base basi **tidak pernah jalan** di konfigurasi sekarang |
+| i18n | `materai.warning_title` dan `confirm.delete_logo` tidak ada di kedua bahasa; `designer.alert.generic_failed` kehilangan `{reason}` di id; `designer.toast.save_failed` memakai `{error}` di en padahal pemanggilnya mengirim `message` |
+
+Dua tes baru menutup kelas bug i18n itu, bukan cuma kejadiannya:
+`TranslationParityTest` (kunci + bentuk + placeholder sejajar antar bahasa) dan
+`TranslationUsageTest` (setiap kunci yang dipanggil view benar-benar ada, dan
+placeholder yang dikirim pemanggil dipakai terjemahannya).
+
+Self-test URL verifikasi: `pengeluaran/doc_verify_selftest.php`, 32 pemeriksaan.
+
+**Belum dikerjakan di fase ini:** flag "wajib tanda tangan" per slot (§9 A).
+Halaman legacy `form_pembuat_surat_cetak_v2/v3.php` punya salinan `renderContent`
+sendiri dan belum tahu `qr:v1` — dokumen yang ditandatangani mode QR akan
+menampilkan gambar rusak kalau dibuka di sana.
 
 ### Di luar lingkup rencana ini
 

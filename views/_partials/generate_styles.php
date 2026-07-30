@@ -382,30 +382,35 @@
             display: block !important;
             aspect-ratio: 1 / 1 !important;
         }
-        /* Verify QR area — reuse dimensi QR biasa, tambah styling khas verify (warna teal) */
-        .ttd-area-verify-qr { text-align: center; min-height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
-        .ttd-verify-qr-preview {
-            width: 110px !important;
-            height: 110px !important;
-            min-width: 110px !important;
-            min-height: 110px !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            margin: 0 auto !important;
-            flex-shrink: 0 !important;
+        /* Tombol tanda tangan mode QR — muncul saat slot belum ditandatangani.
+           Sengaja tenang: garis putus-putus dan abu-abu, sama bahasanya dengan
+           .ttd-canvas-placeholder di mode gambar, supaya jelas ini tempat kosong
+           yang menunggu diisi dan bukan hiasan. */
+        .ttd-qr-sign-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 8px 12px;
+            font-size: 11px;
+            font-weight: 500;
+            color: #4b5563;
+            background: #fff;
+            border: 1px dashed #9ca3af;
+            border-radius: 4px;
+            cursor: pointer;
+            white-space: nowrap;
         }
-        .ttd-verify-qr-preview img {
-            width: 100px !important;
-            height: 100px !important;
-            max-width: 100px !important;
-            max-height: 100px !important;
-            min-width: 100px !important;
-            min-height: 100px !important;
-            object-fit: contain !important;
-            display: block !important;
-            aspect-ratio: 1 / 1 !important;
-        }
+        .ttd-qr-sign-cta:hover { border-color: #6b7280; border-style: solid; background: #f9fafb; }
+        .ttd-qr-sign-cta-icon { font-size: 13px; line-height: 1; }
+        /* Mode baca / dokumen terkunci: tidak ada yang bisa ditandatangani, jadi
+           tombolnya tidak boleh menawarkan diri. */
+        .edit-off .ttd-qr-sign-cta { display: none !important; }
+
+        /* Dulu ada .ttd-area-verify-qr / .ttd-verify-qr-preview di sini: salinan
+           dimensi .ttd-area-qr untuk jalur render QR verifikasi yang terpisah.
+           Jalurnya sudah tidak ada — mode itu sekarang memakai .ttd-area-qr yang
+           sama — jadi aturan duplikatnya ikut hilang. */
+
         /* Toggle Verify QR button — visual indicator saat ON */
         #btnToggleVerifyQr { transition: background 0.2s; }
         .ttd-qr-content-input {

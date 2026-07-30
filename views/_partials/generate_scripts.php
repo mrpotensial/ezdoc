@@ -595,8 +595,12 @@
             }
 
             // OFF → ON: buka modal konfirmasi
+            //
+            // Adanya URL verifikasi tingkat dokumen dipakai sebagai penanda
+            // "dokumen sudah punya slug", bukan sebagai isi QR — tiap slot punya
+            // pointer-nya sendiri. Tanpa slug, tidak ada satu pun pointer yang
+            // bisa dibangun, jadi dokumennya harus disimpan lebih dulu.
             const vu = document.getElementById('verifyUrlInput')?.value || '';
-            const urlDisplay = document.getElementById('verifyQrModalUrl');
             const warnBox = document.getElementById('verifyQrModalWarn');
             const confirmBtn = document.getElementById('btnVerifyQrConfirm');
             const mainBox = document.getElementById('verifyQrModalMain');
@@ -606,13 +610,11 @@
             if (savingBox) savingBox.style.display = 'none';
 
             if (vu) {
-                urlDisplay.value = vu;
                 warnBox.style.display = 'none';
                 confirmBtn.textContent = t('modal.verify_qr.confirm_activate', {}, 'OK, Activate');
                 confirmBtn.disabled = false;
                 confirmBtn.dataset.needSave = '0';
             } else {
-                urlDisplay.value = t('modal.verify_qr.pending_url', {}, '(will be generated after the document is saved)');
                 warnBox.style.display = '';
                 confirmBtn.textContent = t('modal.verify_qr.save_and_activate', {}, 'Save & Activate');
                 confirmBtn.dataset.needSave = '1';
@@ -653,50 +655,12 @@
             await saveAndReloadForVerifyQr(true);
         }
 
-        // Generate QR verifikasi untuk TTD tertentu.
-        // Server render area .ttd-area-verify-qr dengan preview "Loading QR..." — fungsi ini
-        // replace dengan img QR yang di-generate dari verifyUrl (sama untuk semua TTD).
-        function generateVerifyQr(ttdId) {
-            const preview = document.getElementById('ttd_verify_qr_preview_' + ttdId);
-            if (!preview) return;
-            const verifyUrl = document.getElementById('verifyUrlInput')?.value || '';
-            if (!verifyUrl) {
-                preview.innerHTML = '<small class="text-amber-500 text-[10px]">' + t('ttd.save_first', {}, 'Save document first') + '</small>';
-                return;
-            }
-            preview.innerHTML = '<small class="text-gray-400 text-[10px]">' + t('ttd.loading_qr', {}, 'Loading QR...') + '</small>';
-            fetch(_ezdocQrUrl(verifyUrl))
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        preview.innerHTML = `<img src="${data.qr}" class="w-[100px] h-[100px] max-w-[none] max-h-[none] object-contain block my-0 mx-auto" alt="${t('ttd.verify_qr_alt', {}, 'Verification QR')}" title="${verifyUrl.replace(/"/g, '&quot;')}">`;
-                    } else {
-                        preview.innerHTML = `<small class="text-red-700 text-[10px]">${t('ttd.qr_failed', {error: data.message || 'error'}, 'QR failed: {error}')}</small>`;
-                    }
-                })
-                .catch(err => {
-                    preview.innerHTML = `<small class="text-red-700 text-[10px]">${t('ttd.qr_failed', {error: err.message}, 'QR failed: {error}')}</small>`;
-                });
-        }
-
-        // Auto-generate verify QR saat page load kalau mode ON.
-        // Server-render sudah include "Loading QR..." placeholder di area yang visible.
-        // Wrap di DOMContentLoaded biar dijalankan setelah DOM siap.
-        function initVerifyQrOnLoad() {
-            const stateInput = document.getElementById('inputShowVerifyQr');
-            if (!stateInput || stateInput.value !== '1') return;
-            document.querySelectorAll('[id^="ttd_area_verify_qr_"]').forEach(el => {
-                if (el.style.display !== 'none') {
-                    const ttdId = el.id.replace('ttd_area_verify_qr_', '');
-                    generateVerifyQr(ttdId);
-                }
-            });
-        }
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initVerifyQrOnLoad);
-        } else {
-            initVerifyQrOnLoad();
-        }
+        // Dulu di sini ada generateVerifyQr() + initVerifyQrOnLoad(): jalur render
+        // ketiga yang mengisi area .ttd-area-verify-qr dengan URL verifikasi
+        // dokumen — nilai yang sama untuk setiap slot. Areanya sudah tidak
+        // dirender lagi; mode ini sekarang cuma memaksa semua slot ke mode QR, dan
+        // isinya diurus generateTtdQr() lewat jalur per-tanda-tangan yang sama.
+        // Tidak ada fitur yang hilang: yang berkurang hanya duplikasinya.
 
         // Save form via fetch (persist state), lalu reload URL dengan `_show_verify_qr=X`.
         // Server-render akan handle semua visual change (TTD → verify QR atau balik).
@@ -1251,6 +1215,45 @@
             modal.classList.add('show');
             clearSign();
 
+            // Mode QR memakai modal yang sama dengan isi tengah yang ditukar.
+            // Alasannya bukan hemat markup: OTP, RBAC, cek dokumen terkunci, dan
+            // pengelolaan sign token semuanya hidup di sini. Alur kedua akan
+            // berarti empat hal itu harus dijaga sejajar, dan yang paling mudah
+            // tertinggal justru yang paling penting.
+            const isQrMode = (document.getElementById('ttd_mode_' + id)?.value === 'qr');
+            const canvasWrap = document.getElementById('signCanvas');
+            const canvasHint = document.getElementById('signCanvasHint');
+            const qrConfirm = document.getElementById('signQrConfirmArea');
+            const btnClear = document.getElementById('btnClearSign');
+            const btnSave = document.getElementById('btnSaveSign');
+
+            if (canvasWrap) canvasWrap.classList.toggle('hidden', isQrMode);
+            if (canvasHint) canvasHint.classList.toggle('hidden', isQrMode);
+            if (qrConfirm) qrConfirm.classList.toggle('hidden', !isQrMode);
+            // Tidak ada yang bisa dihapus dari sesuatu yang belum digambar.
+            if (btnClear) btnClear.classList.toggle('hidden', isQrMode);
+            if (btnSave) {
+                btnSave.textContent = isQrMode
+                    ? t('modal.sign_qr.confirm_btn', {}, 'Sign')
+                    : t('actions.save', {}, 'Save');
+            }
+
+            if (isQrMode) {
+                const signer = window.EZDOC_SIGNER || {};
+                const roles = (signer.roles || []).join(', ');
+                const asEl = document.getElementById('signQrAs');
+                const slotEl = document.getElementById('signQrSlot');
+                // Ditampilkan apa adanya, termasuk saat identitasnya tidak ada.
+                // Menandatangani sebagai "0" adalah masalah yang harus terlihat
+                // sebelum ditandatangani, bukan sesudahnya di halaman verify.
+                if (asEl) {
+                    asEl.textContent = (signer.id && signer.id !== '0')
+                        ? (roles ? `#${signer.id} · ${roles}` : `#${signer.id}`)
+                        : t('modal.sign_qr.no_identity', {}, 'no identity — check access configuration');
+                }
+                if (slotEl) slotEl.textContent = label || id;
+            }
+
             // Find TTD config
             const ttdInfo = configTtdMap.find(item => item.id === id) || {};
             const requireOtp = !!(ttdInfo.require_otp);
@@ -1312,8 +1315,10 @@
                 if (btnSaveSign) btnSaveSign.disabled = false;
             }
 
+            // Nilai slot yang bukan data URI tidak bisa digambar ke canvas —
+            // penanda mode QR akan berakhir sebagai src dan memicu error load.
             const existing = document.getElementById('ttd_' + id)?.value;
-            if (existing) {
+            if (existing && existing.startsWith('data:')) {
                 const img = new Image();
                 img.onload = () => {
                     // Scale and center existing signature on larger canvas
@@ -1489,23 +1494,60 @@
             </div>`;
         }
 
-        function saveSign() {
-            if (currentTtdId) {
-                const data = canvas.toDataURL('image/png');
-                const hiddenInput = document.getElementById('ttd_' + currentTtdId);
-                hiddenInput.value = data;
+        // Penanda "slot ini ditandatangani lewat mode QR".
+        // Harus sama dengan Ezdoc\Signature\SignatureValue::QR_ACT — kalau berbeda,
+        // dokumennya tersimpan tapi tidak ada record tanda tangan yang tertulis.
+        const EZDOC_QR_ACT = 'qr:v1';
 
-                const preview = document.getElementById('preview_' + currentTtdId);
-                if (preview) {
-                    const labelEl = preview.parentElement.querySelector('.ttd-label');
-                    const label = labelEl ? labelEl.textContent : t('fallback.signature', {}, 'Signature');
-                    // Check if using new area structure
-                    const imgArea = preview.querySelector('.ttd-area-image');
-                    const target = imgArea || preview;
-                    target.innerHTML = `<img src="${data}" class="ttd-signature" alt="TTD">${getActionsHtml(currentTtdId, label)}`;
+        function saveSign() {
+            if (!currentTtdId) { closeSign(); return; }
+
+            const isQrMode = (document.getElementById('ttd_mode_' + currentTtdId)?.value === 'qr');
+            const hiddenInput = document.getElementById('ttd_' + currentTtdId);
+            if (!hiddenInput) { closeSign(); return; }
+
+            if (isQrMode) {
+                // Yang disimpan penanda tindakan, bukan gambar dan bukan URL QR-nya.
+                // URL itu turunan dari slug + ttd_id: menyimpannya akan membekukan
+                // base URL dan MAC saat ini ke dalam dokumen, sehingga rotasi kunci
+                // atau pindah domain meninggalkan URL basi yang tercetak.
+                hiddenInput.value = EZDOC_QR_ACT;
+
+                const area = document.getElementById('ttd_area_qr_' + currentTtdId);
+                if (area) {
+                    area.dataset.ttdSigned = '1';
+                    // QR-nya baru muncul setelah ini: pointer-nya sudah menunjuk
+                    // sesuatu yang akan ada begitu dokumennya tersimpan.
+                    generateTtdQr(currentTtdId);
                 }
                 if (typeof triggerDirty === 'function') triggerDirty();
+                closeSign();
+
+                // Menandatangani adalah tindakan commit — tanda tangan tidak punya
+                // keadaan draft. Recordnya baru tertulis saat dokumen disimpan, jadi
+                // menunggu petugas menekan Simpan berarti QR sudah terlihat di layar
+                // sementara record yang ditunjuknya belum ada.
+                //
+                // submitForm() dipakai apa adanya: ia yang memvalidasi field,
+                // menjalankan hook simpan, dan mengurus sign token sekali-pakai.
+                // Menulis simpan sendiri di sini akan melewati ketiganya.
+                if (typeof submitForm === 'function') submitForm();
+                return;
             }
+
+            const data = canvas.toDataURL('image/png');
+            hiddenInput.value = data;
+
+            const preview = document.getElementById('preview_' + currentTtdId);
+            if (preview) {
+                const labelEl = preview.parentElement.querySelector('.ttd-label');
+                const label = labelEl ? labelEl.textContent : t('fallback.signature', {}, 'Signature');
+                // Check if using new area structure
+                const imgArea = preview.querySelector('.ttd-area-image');
+                const target = imgArea || preview;
+                target.innerHTML = `<img src="${data}" class="ttd-signature" alt="TTD">${getActionsHtml(currentTtdId, label)}`;
+            }
+            if (typeof triggerDirty === 'function') triggerDirty();
             closeSign();
         }
 
@@ -1583,15 +1625,29 @@
 
             const preview = document.getElementById('preview_' + ttdId);
             if (preview) {
+                const labelEl = preview.parentElement.querySelector('.ttd-label');
+                const label = labelEl ? labelEl.textContent : t('fallback.signature', {}, 'Signature');
                 const imgArea = preview.querySelector('.ttd-area-image');
-                if (imgArea) {
-                    const labelEl = preview.parentElement.querySelector('.ttd-label');
-                    const label = labelEl ? labelEl.textContent : t('fallback.signature', {}, 'Signature');
-                    imgArea.innerHTML = `<div class="ttd-canvas-placeholder" onclick="openSign('${ttdId}', '${label}')"></div>`;
-                } else {
-                    const labelEl = preview.parentElement.querySelector('.ttd-label');
-                    const label = labelEl ? labelEl.textContent : t('fallback.signature', {}, 'Signature');
-                    preview.innerHTML = `<div class="ttd-canvas-placeholder" onclick="openSign('${ttdId}', '${label}')"></div>`;
+                const target = imgArea || preview;
+                target.innerHTML = `<div class="ttd-canvas-placeholder" onclick="openSign('${ttdId}', '${label}')"></div>`;
+
+                // Slot ini tidak lagi ditandatangani, jadi pointer QR-nya berhenti
+                // menunjuk apa pun. Tanpa ini QR tetap terlihat di layar setelah
+                // tanda tangannya dihapus, dan yang memindai akan mendapat
+                // "tanda tangan tidak dikenal" tanpa ada yang tahu kenapa.
+                const qrArea = document.getElementById('ttd_area_qr_' + ttdId);
+                if (qrArea) {
+                    qrArea.dataset.ttdSigned = '0';
+                    const qrPreview = document.getElementById('ttd_qr_preview_' + ttdId);
+                    const qrContent = (document.getElementById('ttd_qr_content_' + ttdId)?.value || '').trim();
+                    const qrTpl = document.getElementById('ttd_qr_data_' + ttdId)?.value || '';
+                    if (qrPreview && !qrContent && !qrTpl) {
+                        qrPreview.innerHTML = `<button type="button" class="ttd-qr-sign-cta" onclick="openSign('${ttdId}', '${label}')">`
+                            + `<span class="ttd-qr-sign-cta-icon">&#10003;</span>`
+                            + `<span>${t('ttd.sign_with_qr', {}, 'Sign with QR')}</span></button>`;
+                    } else {
+                        generateTtdQr(ttdId);
+                    }
                 }
             }
             if (typeof triggerDirty === 'function') triggerDirty();
@@ -1626,16 +1682,28 @@
             const preview = document.getElementById('ttd_qr_preview_' + ttdId);
             if (!preview) return;
 
+            // Urutan resolusi — harus sama dengan sisi server (generate.php),
+            // kalau tidak QR yang dilihat petugas berbeda dari yang tercetak:
+            //   1. isi tersimpan  2. pattern template  3. pointer per tanda tangan
+
             // Priority 1: user-typed per-document content
             let qrData = (document.getElementById('ttd_qr_content_' + ttdId)?.value || '').trim();
 
+            // Priority 3 disiapkan dulu supaya cabang di bawah bisa memilih.
+            // Nilainya dihitung server dari slug + ttd_id, jadi tidak berubah saat
+            // form diedit — tidak perlu ikut regenerasi per-field.
+            const area = document.getElementById('ttd_area_qr_' + ttdId);
+            const ttdVerifyUrl = (area?.dataset.ttdVerifyUrl || '').trim();
+            const qrDataTpl = document.getElementById('ttd_qr_data_' + ttdId)?.value || '';
+
+            // Slot belum ditandatangani dan tidak ada apa pun yang dikonfigurasi:
+            // server merender tombol tanda tangan di sini. Jangan ditimpa dengan
+            // pesan status — tombol itu satu-satunya jalan maju yang ada.
+            const isSigned = area?.dataset.ttdSigned === '1';
+            if (!qrData && !qrDataTpl && !isSigned) return;
+
             // Priority 2: resolve template pattern with current form field values
-            if (!qrData) {
-                const qrDataTpl = document.getElementById('ttd_qr_data_' + ttdId)?.value || '';
-                if (!qrDataTpl) {
-                    preview.innerHTML = '<small class="text-gray-400 text-[10px]">' + t('ttd.fill_or_set_pattern', {}, 'Fill in QR content or set a pattern in the template') + '</small>';
-                    return;
-                }
+            if (!qrData && qrDataTpl) {
                 qrData = qrDataTpl.replace(/\{([^}]+)\}/g, (_, fieldName) => {
                     const input = document.querySelector(`input[name="${fieldName}"], select[name="${fieldName}"]`);
                     if (input) return input.value || '';
@@ -1643,10 +1711,28 @@
                     if (editable) return editable.textContent || '';
                     return '';
                 }).trim();
+
+                // Pattern disetel template tapi field-nya masih kosong. Jangan
+                // diganti diam-diam dengan pointer verifikasi — itu menampilkan
+                // sesuatu yang artinya lain dari yang template minta.
+                if (!qrData) {
+                    preview.innerHTML = '<small class="text-gray-400 text-[10px]">' + t('ttd.fill_field_first', {}, 'Fill in the field first') + '</small>';
+                    return;
+                }
             }
 
+            // Priority 3: tidak ada isi tersimpan, tidak ada pattern → pointer ke
+            // tanda tangan slot ini. Ini yang membuat mode QR punya arti: yang
+            // memindai mendarat di record tanda tangan ini, bukan di teks yang
+            // siapa pun bisa mengarang.
+            //
+            // Syaratnya slot sudah ditandatangani. Pointer ke record yang belum
+            // ada adalah klaim palsu — kertasnya terlihat bertanda tangan, tapi
+            // yang memindai dapat "tanda tangan tidak dikenal".
+            if (!qrData && isSigned) qrData = ttdVerifyUrl;
+
             if (!qrData) {
-                preview.innerHTML = '<small class="text-gray-400 text-[10px]">' + t('ttd.fill_field_first', {}, 'Fill in the field first') + '</small>';
+                preview.innerHTML = '<small class="text-gray-400 text-[10px]">' + t('ttd.save_first', {}, 'Save document first') + '</small>';
                 return;
             }
 
@@ -1656,7 +1742,14 @@
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
-                        preview.innerHTML = `<img src="${data.qr}" class="w-[100px] h-[100px] max-w-[none] max-h-[none] object-contain block" alt="${t('ttd.qr_alt', {}, 'Signature QR')}" title="${qrData.replace(/"/g, '&quot;')}">`;
+                        // Keterangan hanya kalau isinya benar-benar pointer
+                        // verifikasi. QR berisi pattern template bisa berisi apa
+                        // saja, dan "pindai untuk verifikasi" di bawahnya akan
+                        // jadi janji yang tidak dipenuhi.
+                        const caption = (ttdVerifyUrl && qrData === ttdVerifyUrl)
+                            ? `<div class="text-[9px] text-gray-500 mt-0.5">${t('ttd.scan_to_verify', {}, 'Scan to verify')}</div>`
+                            : '';
+                        preview.innerHTML = `<img src="${data.qr}" class="w-[100px] h-[100px] max-w-[none] max-h-[none] object-contain block" alt="${t('ttd.qr_alt', {}, 'Signature QR')}" title="${qrData.replace(/"/g, '&quot;')}">` + caption;
                     } else {
                         preview.innerHTML = `<small class="text-red-700 text-[10px]">${t('ttd.qr_failed', {error: data.message || 'error'}, 'QR failed: {error}')}</small>`;
                     }
@@ -1671,8 +1764,28 @@
             const input = document.getElementById('ttd_qr_content_' + ttdId);
             if (!input) return;
             const current = input.value || '';
-            const patternHint = resolvedPattern ? t('ttd.edit_qr_prompt_default_hint', {pattern: resolvedPattern}, '\n\nDefault template: {pattern}\n(Leave empty to use the default template)') : '';
-            const newVal = prompt(t('ttd.edit_qr_prompt_label', {}, 'QR content for this signature:') + patternHint, current);
+
+            // Jalan pulang. Nilai yang pernah diketik menang atas apa pun, jadi
+            // tanpa keterangan ini sebuah "123" yang diisi sekali akan bertahan
+            // selamanya tanpa cara terlihat untuk mengembalikannya ke otomatis.
+            //
+            // Keterangannya menyebut apa yang sebenarnya kembali kalau dikosongkan
+            // — pattern template kalau template menyetelnya, kalau tidak pointer
+            // ke tanda tangan ini — supaya tidak menjanjikan hal yang salah.
+            let hint = '';
+            if (resolvedPattern) {
+                hint = t('ttd.edit_qr_prompt_default_hint', {pattern: resolvedPattern},
+                    '\n\nDefault template: {pattern}\n(Leave empty to use the default template)');
+            } else {
+                const area = document.getElementById('ttd_area_qr_' + ttdId);
+                const ttdVerifyUrl = (area?.dataset.ttdVerifyUrl || '').trim();
+                if (ttdVerifyUrl) {
+                    hint = t('ttd.edit_qr_prompt_verify_hint', {url: ttdVerifyUrl},
+                        '\n\nAutomatic: {url}\n(Leave empty to go back to this verification link)');
+                }
+            }
+
+            const newVal = prompt(t('ttd.edit_qr_prompt_label', {}, 'QR content for this signature:') + hint, current);
             if (newVal === null) return; // user batal
             input.value = newVal.trim();
             markDirty && markDirty();

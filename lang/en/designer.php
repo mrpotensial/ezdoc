@@ -74,6 +74,7 @@ return [
         'locked_fields_change' => "This template is LOCKED. The following fields will disappear/be renamed:\n\n{fields}\n\nContinue? (recommended: use \"Inspect Fields\" to rename/migrate first)",
         'delete_field' => 'Delete field {{{name}}}?',
         'delete_qr' => 'Delete QR "{name}"?',
+        'delete_logo' => 'Delete logo "{name}"?',
         'delete_materai' => 'Delete this stamp duty placeholder?',
         'delete_ttd' => 'Delete this signature?',
         'delete_template' => 'Delete template "{name}"?',
@@ -85,7 +86,10 @@ return [
         'sql_empty' => 'SQL is empty',
         'query_saved' => 'Query "{ns}" saved',
         'query_deleted' => 'Query "{ns}" deleted',
-        'save_failed' => 'Failed to save: {error}',
+        // {message}, bukan {error} — satu-satunya pemanggilnya
+        // (designer_scripts.php) mengirim `message`. Dengan {error}, kurung
+        // kurawalnya tercetak apa adanya ke pengguna berbahasa Inggris.
+        'save_failed' => 'Failed to save: {message}',
         'url_copied' => 'URL copied',
         'rename_success' => 'Rename successful. {count} document(s) updated.',
         'cleanup_done' => 'Cleanup done. {count} document(s) updated. Keys removed: {keys}',

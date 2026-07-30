@@ -1147,6 +1147,26 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         $savedMode = $pick('_ttd_mode_' . $ttdId);
         $activeMode = $savedMode ?: ($hasImage ? 'image' : 'qr');
 
+        // ─── Verify QR mode (dokumen-level) ───
+        // Artinya: "pakai mode QR untuk semua slot sekaligus". Dulu ia jalur
+        // render ketiga yang menimpa tiap slot dengan URL verifikasi dokumen —
+        // nilai yang sama untuk semua slot, jadi tidak ada cara tahu QR yang mana
+        // milik siapa. Sekarang ia cuma memaksa modenya; isinya ikut jalur
+        // per-tanda-tangan yang sama seperti toggle per slot.
+        //
+        // Alasan mode ini tetap ada: ia menyembunyikan SEMUA gambar tanda tangan.
+        // Gambar bisa disalin ke dokumen lain; pointer ke record server tidak.
+        // Karena itu ia memaksa QR bahkan pada slot yang template-nya cuma
+        // mengizinkan gambar — kalau tidak, satu gambar tetap tampil dan gunanya
+        // hilang.
+        $showVerifyQrMode = ($dbFields['_show_verify_qr'] ?? '') === '1'
+            || ($_POST['_show_verify_qr'] ?? '') === '1'
+            || ($_GET['_show_verify_qr'] ?? '') === '1';
+        if ($showVerifyQrMode) {
+            $activeMode = 'qr';
+            $hasQr = true;
+        }
+
         // Mode toggle buttons (only if both modes available)
         $modeToggle = '';
         if ($hasBoth) {
@@ -1156,20 +1176,25 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             </div>';
         }
 
+        // Nilai slot bisa berupa gambar ATAU penanda tindakan mode QR. Yang kedua
+        // tidak boleh masuk ke atribut src — lihat Ezdoc\Signature\SignatureValue.
+        $ttdIsImage = \Ezdoc\Signature\SignatureValue::isImage($ttdImg);
+        $ttdIsSigned = \Ezdoc\Signature\SignatureValue::isSigned($ttdImg);
+
         // Image area — kalau user tidak allowed sign, disable interaksi + tampil badge lock
         if ($canSignThisTtd) {
             $actionsHtml = '<div class="ttd-actions">
                 <button type="button" class="btn-edit" onclick="openSign(\'' . h($ttdId) . '\', \'' . h($label) . '\')">&#9998; ' . h(t('actions.edit', [], 'Edit')) . '</button>
                 <button type="button" class="btn-delete" onclick="clearTtd(\'' . h($ttdId) . '\')">&#10005; ' . h(t('actions.delete', [], 'Delete')) . '</button>
             </div>';
-            $imgContent = $ttdImg
+            $imgContent = $ttdIsImage
                 ? '<img src="' . h($ttdImg) . '" class="ttd-signature" alt="TTD">' . $actionsHtml
                 : '<div class="ttd-canvas-placeholder" onclick="openSign(\'' . h($ttdId) . '\', \'' . h($label) . '\')"></div>';
         } else {
             // Not allowed — read-only display, no edit button, no clickable canvas
             $rolesHint = $allowedRolesRaw !== '' ? ' (' . h($allowedRolesRaw) . ')' : '';
             $lockBadge = '<div class="ttd-locked-badge" style="position:absolute;top:2px;right:2px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:600;z-index:5;pointer-events:none;" title="' . h(t('title.no_sign_permission', ['roles' => $rolesHint], 'Not authorized to sign{roles}')) . '"><i class="fa fa-lock"></i></div>';
-            $imgContent = $ttdImg
+            $imgContent = $ttdIsImage
                 ? '<img src="' . h($ttdImg) . '" class="ttd-signature" alt="TTD">' . $lockBadge
                 : '<div class="ttd-canvas-placeholder ttd-locked" style="cursor:not-allowed;background:#f3f4f6;position:relative;" title="' . h(t('title.no_sign_permission_as', ['label' => $label, 'roles' => $rolesHint], 'Not authorized to sign as {label}{roles}')) . '">' . $lockBadge . '</div>';
         }
@@ -1180,26 +1205,36 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         // Key convention: <namaField>_qr (mengikuti nama TTD yang user set, cukup suffix _qr di URL)
         $qrContentKey = $namaField . '_qr';
         $qrContent = $pick($qrContentKey);
-        // Auto-heal stale verify URL (kalau stored value pakai base local lama)
-        if ($qrContent !== '' && function_exists('doc_verify_resolve_qr_value') && function_exists('doc_verify_ensure_slug')) {
-            $__slugTtd = doc_verify_ensure_slug($conn, (int)$doc_id);
-            if ($__slugTtd) $qrContent = doc_verify_resolve_qr_value($qrContent, $__slugTtd);
+
+        // Per-signature verification pointer.
+        //
+        // A signature QR carries a pointer to *this signature*, not to the
+        // document. Four signers on one page must not produce four identical
+        // codes — a reader scanning "Head of Unit" has to land on the record for
+        // Head of Unit, with the signer, the role, and the time it was signed.
+        //
+        // Signed content stays out of the code deliberately. Anything printed
+        // inside a QR is unauthenticated text: a name or a timestamp in there
+        // proves nothing, because anyone can generate a code saying anything.
+        // The pointer is the only part that gains its meaning from the server.
+        //
+        // This is not a template pattern, and it is not the standalone QR's
+        // `{verify_url}` marker. Those two exist for different jobs and answering
+        // both from one value is what made the earlier attempt wrong.
+        $ttdVerifyUrl = '';
+        $__slugTtd = '';
+        if (function_exists('doc_verify_ensure_slug') && (int) $doc_id > 0) {
+            $__slugTtd = (string) doc_verify_ensure_slug($conn, (int) $doc_id);
+            if ($__slugTtd !== '' && function_exists('doc_verify_build_url')) {
+                $ttdVerifyUrl = doc_verify_build_url($__slugTtd, $ttdId);
+            }
         }
-        // A signature QR with no pattern used to do nothing until somebody
-        // typed a value into it by hand — which defeats the point: the whole
-        // reason to sign with a QR is that the reader can check the signature,
-        // and a hand-typed string proves nothing.
-        //
-        // So an unconfigured QR defaults to the document's verification URL.
-        // That is what the mode is for, and it is the convention every
-        // document-signing system that expects a phone camera on the other end
-        // follows: the code carries a pointer, not the data. Revocation keeps
-        // working, capacity is a non-issue, and the truth stays server-side.
-        //
-        // A template that sets `data-ttd-qr-data` still wins — this only fills
-        // the gap where nothing was configured.
-        if ($qrDataTpl === '') {
-            $qrDataTpl = '{verify_url}';
+
+        // Auto-heal nilai tersimpan: base URL yang berubah, atau kunci HMAC yang
+        // dirotasi, membuat QR tercetak gagal diverifikasi. Keduanya sembuh
+        // dengan membangun ulang URL-nya untuk slot ini.
+        if ($qrContent !== '' && $__slugTtd !== '' && function_exists('doc_verify_resolve_qr_value')) {
+            $qrContent = doc_verify_resolve_qr_value($qrContent, $__slugTtd, $ttdId);
         }
 
         // Compute resolved pattern (used as placeholder hint, and also fallback when user leaves input empty)
@@ -1225,45 +1260,45 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         if ($hasQr) {
             $qrDisplay = $activeMode === 'qr' ? '' : 'display:none;';
             $patternForJs = addslashes($resolvedPattern);
-            $qrArea = '<div class="ttd-area-qr" id="ttd_area_qr_' . h($ttdId) . '" style="' . $qrDisplay . '">
-                <div class="ttd-qr-preview" id="ttd_qr_preview_' . h($ttdId) . '"></div>
+
+            // Pointer otomatis hanya boleh muncul kalau slot ini SUDAH
+            // ditandatangani. QR yang menunjuk record yang belum ada adalah
+            // klaim palsu: yang memindai mendapat "tanda tangan tidak dikenal",
+            // padahal kertasnya terlihat sudah bertanda tangan.
+            //
+            // Isi tersimpan dan pattern template tidak ikut aturan ini. Keduanya
+            // nilai yang sengaja diisi orang atau ditetapkan template, dan tidak
+            // pernah mengklaim ada record di server — cuma pointer otomatis yang
+            // mengklaim itu. Aturan ini juga yang membuat dokumen lama dengan QR
+            // yang diisi tangan tetap tampil apa adanya.
+            $qrNeedsSigning = !$ttdIsSigned && $qrContent === '' && $qrDataTpl === '';
+
+            // `data-ttd-verify-url` adalah pilihan terakhir saat tidak ada isi
+            // tersimpan dan template tidak menyetel pattern. Ditaruh di atribut,
+            // bukan di input tersembunyi, supaya tidak pernah ikut terkirim dan
+            // membeku jadi nilai tersimpan — nilainya selalu dihitung ulang dari
+            // slug + ttd_id di setiap render.
+            $qrArea = '<div class="ttd-area-qr" id="ttd_area_qr_' . h($ttdId) . '" style="' . $qrDisplay . '"'
+                . ' data-ttd-verify-url="' . h($ttdVerifyUrl) . '"'
+                . ' data-ttd-signed="' . ($ttdIsSigned ? '1' : '0') . '">
+                <div class="ttd-qr-preview" id="ttd_qr_preview_' . h($ttdId) . '">' . (
+                    $qrNeedsSigning
+                        ? ($canSignThisTtd
+                            ? '<button type="button" class="ttd-qr-sign-cta" onclick="openSign(\'' . h($ttdId) . '\', \'' . h($label) . '\')">'
+                                . '<span class="ttd-qr-sign-cta-icon">&#10003;</span>'
+                                . '<span>' . h(t('ttd.sign_with_qr', [], 'Sign with QR')) . '</span></button>'
+                            : '<small style="color:#9ca3af;font-size:10px;">' . h(t('ttd.not_signed_yet', [], 'Not signed yet')) . '</small>')
+                        : ''
+                ) . '</div>
                 <input type="hidden" class="ttd-qr-content-input" name="' . h($qrContentKey) . '" id="ttd_qr_content_' . h($ttdId) . '" value="' . h($qrContent) . '">
                 <button type="button" class="btn-edit-qr-content" onclick="editQrContent(\'' . h($ttdId) . '\', \'' . h($patternForJs) . '\')" title="' . h(t('title.edit_qr_content', [], 'Edit QR content')) . '">&#9998; ' . h(t('ttd.edit_qr_button', [], 'Edit QR')) . '</button>
             </div>';
         }
 
-        // ─── Verify QR mode (dokumen-level) — override TTD gambar dengan QR verify saat toggle ON ───
-        // Flag berasal dari data_fields (`_show_verify_qr` = '1'), atau GET/POST, atau auto-fill.
-        $showVerifyQrMode = ($dbFields['_show_verify_qr'] ?? '') === '1'
-            || ($_POST['_show_verify_qr'] ?? '') === '1'
-            || ($_GET['_show_verify_qr'] ?? '') === '1';
-        // Verify URL — kalau doc sudah saved akan ada, kalau belum akan kosong (JS handle auto-save)
-        // Prioritas: $doc_id dari renderContent param (paling akurat), fallback GET/POST
-        $verifyUrlForTtd = '';
-        $docIdForVerify = (int)($doc_id > 0 ? $doc_id : ($_GET['doc_id'] ?? $_POST['_doc_id'] ?? 0));
-        if ($docIdForVerify > 0 && function_exists('doc_verify_ensure_slug')) {
-            $__slug = doc_verify_ensure_slug($conn, $docIdForVerify);
-            if ($__slug) $verifyUrlForTtd = doc_verify_build_url($__slug);
-        }
-        // Pre-render verify QR area — hidden kalau flag OFF, shown kalau ON
-        // Content akan diisi oleh JS via /generate_qr endpoint (client-side)
-        $verifyQrDisplay = $showVerifyQrMode ? '' : 'display:none;';
-        $imgDisplayOverride = $showVerifyQrMode ? 'display:none;' : $imgDisplay;
-        // Rebuild imgArea dengan display override
-        $imgArea = '<div class="ttd-area-image" id="ttd_area_image_' . h($ttdId) . '" style="' . $imgDisplayOverride . '">' . $imgContent . '</div>';
-        $verifyQrArea = '<div class="ttd-area-verify-qr" id="ttd_area_verify_qr_' . h($ttdId) . '" style="' . $verifyQrDisplay . 'text-align:center;">'
-            . '<div class="ttd-verify-qr-preview" id="ttd_verify_qr_preview_' . h($ttdId) . '" data-verify-url="' . h($verifyUrlForTtd) . '">'
-            . ($verifyUrlForTtd === ''
-                ? '<small style="color:#f59e0b;font-size:10px;">' . h(t('ttd.save_first', [], 'Save document first')) . '</small>'
-                : '<small style="color:#888;font-size:10px;">' . h(t('ttd.loading_qr', [], 'Loading QR...')) . '</small>')
-            . '</div>'
-            . '<div style="font-size:9px;color:#666;margin-top:2px;">' . h(t('ttd.scan_to_verify', [], 'Scan to verify')) . '</div>'
-            . '</div>';
-
         return '<div class="' . $ttdClass . '" style="' . $style . '">
             <div class="ttd-label">' . h($label) . '</div>
             ' . $modeToggle . '
-            <div class="ttd-img" id="preview_' . h($ttdId) . '">' . $imgArea . $qrArea . $verifyQrArea . '</div>
+            <div class="ttd-img" id="preview_' . h($ttdId) . '">' . $imgArea . $qrArea . '</div>
             <div class="ttd-name">(<span class="f" contenteditable="true" data-field="' . h($namaField) . '">' . ($namaValue ?: '') . '</span><input type="hidden" name="' . h($namaField) . '" value="' . $namaValue . '">)</div>
             <input type="hidden" name="' . h($ttdId) . '" id="ttd_' . h($ttdId) . '" value="' . h($ttdImg) . '">
             <input type="hidden" name="_ttd_mode_' . h($ttdId) . '" id="ttd_mode_' . h($ttdId) . '" value="' . h($activeMode) . '">
@@ -1940,53 +1975,47 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
         $savedMode = $pickPdf('_ttd_mode_' . $ttdId);
         $activeMode = $savedMode ?: ($hasImage ? 'image' : 'qr');
 
-        // ─── Verify QR mode (dokumen-level) — override semua TTD dengan verify QR ───
-        // Dari data_fields JSON / POST / GET.
+        // ─── Verify QR mode (dokumen-level) ───
+        // Artinya sekarang: "pakai mode QR untuk semua slot sekaligus".
+        //
+        // Dulu ia merender jalur sendiri dengan URL verifikasi dokumen — nilai
+        // yang sama untuk setiap slot, jadi empat penanda tangan menghasilkan
+        // empat QR identik dan tidak ada cara tahu QR yang mana milik siapa.
+        // Sekarang ia hanya memaksa modenya, dan isinya ikut jalur
+        // per-tanda-tangan yang sama seperti toggle per slot.
+        //
+        // Yang dipertahankan dari mode ini: ia menyembunyikan SEMUA gambar tanda
+        // tangan. Gambar bisa disalin ke dokumen lain; pointer ke record server
+        // tidak bisa. Karena itu mode ini memaksa QR bahkan pada slot yang
+        // template-nya cuma mengizinkan gambar — kalau tidak, satu gambar tetap
+        // tercetak dan gunanya hilang.
         $showVerifyQrModePdf = ($dbFields['_show_verify_qr'] ?? '') === '1'
             || ($_POST['_show_verify_qr'] ?? '') === '1'
             || ($_GET['_show_verify_qr'] ?? '') === '1';
         if ($showVerifyQrModePdf) {
-            // Force render verify QR — abaikan TTD image/mode template
-            // Prioritas: $doc_id dari renderContentForPdf param, fallback GET/POST
-            $docId = (int)($doc_id > 0 ? $doc_id : ($_GET['doc_id'] ?? $_POST['_doc_id'] ?? 0));
-            $verifyUrlPdf = '';
-            if ($docId > 0 && function_exists('doc_verify_ensure_slug')) {
-                $slug = doc_verify_ensure_slug($conn, $docId);
-                if ($slug) $verifyUrlPdf = doc_verify_build_url($slug);
-            }
-            if ($verifyUrlPdf !== '') {
-                try {
-                    $qrSrc = generateQrForDompdf($verifyUrlPdf, 250, 6);
-                    $contentHtml = '<img src="' . $qrSrc . '" style="width:100px;height:100px;max-width:none;max-height:none;" alt="' . h(t('ttd.verify_qr_alt', [], 'Verification QR')) . '">'
-                        . '<div style="font-size:9px;color:#666;margin-top:2px;">' . h(t('ttd.scan_to_verify', [], 'Scan to verify')) . '</div>';
-                } catch (Exception $e) {
-                    $contentHtml = '<div style="height:100px;"></div>';
-                }
-            } else {
-                $contentHtml = '<div style="height:100px;"></div>';
-            }
-            return '<div class="' . $ttdClass . '" style="' . $style . '">
-                <div class="ttd-label">' . h($label) . '</div>
-                <div class="ttd-img">' . $contentHtml . '</div>
-                <div class="ttd-name">(' . ($namaValue !== '' ? $namaValue : '..................') . ')</div>
-            </div>';
+            $activeMode = 'qr';
+            $hasQr = true;
         }
 
         // Render based on active mode
         if ($activeMode === 'qr' && $hasQr) {
-            // Per-document QR content takes priority; fallback to template pattern.
-            // Key: <namaField>_qr (stored in data_fields JSON / POST / GET)
-            $qrData = $pickPdf($namaField . '_qr');
-            // Auto-heal stale verify URL supaya PDF juga pakai base URL current
-            if ($qrData !== '' && function_exists('doc_verify_resolve_qr_value') && function_exists('doc_verify_ensure_slug')) {
-                $__slugPdfTtd = doc_verify_ensure_slug($conn, (int)$doc_id);
-                if ($__slugPdfTtd) $qrData = doc_verify_resolve_qr_value($qrData, $__slugPdfTtd);
+            // Pointer per tanda tangan — lihat penjelasan panjangnya di
+            // renderContent(). Dihitung ulang tiap render, tidak pernah disimpan.
+            $ttdVerifyUrlPdf = '';
+            $__slugPdfTtd = '';
+            if (function_exists('doc_verify_ensure_slug') && (int) $doc_id > 0) {
+                $__slugPdfTtd = (string) doc_verify_ensure_slug($conn, (int) $doc_id);
+                if ($__slugPdfTtd !== '' && function_exists('doc_verify_build_url')) {
+                    $ttdVerifyUrlPdf = doc_verify_build_url($__slugPdfTtd, $ttdId);
+                }
             }
-            // Same default as the screen render: an unconfigured signature QR
-            // points at the document's verification URL. Without this the QR
-            // would appear on screen and vanish from the printed copy.
-            if ($qrDataTpl === '') {
-                $qrDataTpl = '{verify_url}';
+
+            // Urutannya harus sama dengan layar, kalau tidak QR yang dilihat
+            // petugas berbeda dari yang tercetak:
+            //   1. isi tersimpan  2. pattern template  3. pointer per tanda tangan
+            $qrData = $pickPdf($namaField . '_qr');
+            if ($qrData !== '' && $__slugPdfTtd !== '' && function_exists('doc_verify_resolve_qr_value')) {
+                $qrData = doc_verify_resolve_qr_value($qrData, $__slugPdfTtd, $ttdId);
             }
             if ($qrData === '' && $qrDataTpl !== '') {
                 $qrData = preg_replace_callback('/\{([^}]+)\}/', function($pm) use ($pickPdf, $conn) {
@@ -2003,6 +2032,18 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
                     return $pickPdf($key);
                 }, $qrDataTpl);
             }
+            // Pattern yang disetel template tapi field-nya masih kosong tidak
+            // diganti diam-diam dengan pointer — itu akan mencetak sesuatu yang
+            // artinya lain dari yang template minta. Pointer hanya mengisi
+            // kekosongan saat memang tidak ada yang dikonfigurasi.
+            //
+            // Dan pointer hanya boleh dicetak kalau slot ini SUDAH ditandatangani.
+            // Kertas beredar tanpa bisa ditarik: QR tercetak yang menunjuk record
+            // yang belum ada akan selamanya menjawab "tanda tangan tidak dikenal".
+            if (trim((string) $qrData) === '' && $qrDataTpl === ''
+                && \Ezdoc\Signature\SignatureValue::isSigned($ttdImg)) {
+                $qrData = $ttdVerifyUrlPdf;
+            }
             if (trim($qrData) !== '') {
                 try {
                     // Size 250px (up dari 150) + margin 6 supaya scannable saat di-print
@@ -2010,6 +2051,14 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
                     // Display size 100x100px — cukup besar untuk scan HP dari jarak wajar
                     // max-width/max-height none supaya tidak kena override dari CSS parent
                     $contentHtml = '<img src="' . $qrSrc . '" style="width:100px;height:100px;max-width:none;max-height:none;" alt="QR">';
+                    // Keterangan hanya saat isinya benar-benar pointer verifikasi.
+                    // QR berisi pattern template bisa berisi apa saja — nomor
+                    // barcode, kode antrian — dan "pindai untuk verifikasi" di
+                    // bawahnya akan jadi janji yang tidak dipenuhi.
+                    if ($qrData === $ttdVerifyUrlPdf && $ttdVerifyUrlPdf !== '') {
+                        $contentHtml .= '<div style="font-size:9px;color:#666;margin-top:2px;">'
+                            . h(t('ttd.scan_to_verify', [], 'Scan to verify')) . '</div>';
+                    }
                 } catch (Exception $e) {
                     $contentHtml = '<div style="height:100px;"></div>';
                 }
@@ -2017,7 +2066,9 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
                 $contentHtml = '<div style="height:100px;"></div>';
             }
         } else {
-            $contentHtml = $ttdImg
+            // Penanda mode QR bukan gambar — tanpa pemeriksaan ini ia masuk ke
+            // atribut src dan yang tercetak adalah gambar rusak.
+            $contentHtml = \Ezdoc\Signature\SignatureValue::isImage($ttdImg)
                 ? '<img src="' . h($ttdImg) . '" class="ttd-signature" alt="TTD">'
                 : '<div style="height:50px;"></div>';
         }
@@ -2568,6 +2619,27 @@ function renderFieldForPdf($name, $type, $val, $label) {
             <div class="modal-body" id="signCanvasArea">
                 <div class="w-full relative">
                     <canvas id="signCanvas" width="850" height="400"></canvas>
+
+                    <?php // Mode QR memakai modal yang SAMA, cuma menukar isi tengahnya.
+                    // Ditulis begini supaya OTP, RBAC, cek dokumen terkunci, dan pengelolaan
+                    // sign token tetap satu jalur — bukan alur kedua yang harus dijaga sejajar.
+                    // Tidak ada yang digambar di mode ini: yang mengikat adalah recordnya,
+                    // gambarnya cuma tampilan. Sama seperti tanda tangan tak terlihat di PAdES. ?>
+                    <div id="signQrConfirmArea" class="hidden py-10 px-6 text-center">
+                        <div class="w-12 h-12 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xl mb-3 mx-auto">
+                            <i class="bi bi-qr-code"></i>
+                        </div>
+                        <h6 class="text-sm font-semibold text-slate-800 mb-1.5"><?= h(t('modal.sign_qr.title', [], 'Sign with QR')) ?></h6>
+                        <p class="text-xs text-slate-500 max-w-md mx-auto mb-4"><?= h(t('modal.sign_qr.desc', [], 'A QR code is placed in this slot. Scanning it opens the verification page for this signature — showing who signed, in what role, and when.')) ?></p>
+                        <dl class="inline-grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-left text-xs">
+                            <dt class="text-slate-400"><?= h(t('modal.sign_qr.as_label', [], 'Signing as')) ?></dt>
+                            <dd class="text-slate-700 font-medium" id="signQrAs">—</dd>
+                            <dt class="text-slate-400"><?= h(t('modal.sign_qr.slot_label', [], 'Slot')) ?></dt>
+                            <dd class="text-slate-700 font-medium" id="signQrSlot">—</dd>
+                        </dl>
+                        <p class="text-[11px] text-slate-400 mt-4 max-w-md mx-auto"><?= h(t('modal.sign_qr.commit_note', [], 'Signing saves the document — a signature has no draft state.')) ?></p>
+                    </div>
+
                     <div id="signCanvasOverlay" class="hidden absolute inset-0 bg-slate-100/90 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center p-6 text-center">
                         <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xl mb-2">
                             <i class="bi bi-lock-fill"></i>
@@ -2575,11 +2647,11 @@ function renderFieldForPdf($name, $type, $val, $label) {
                         <h6 class="text-sm font-bold text-slate-800 mb-1"><?= h(t('modal.otp.step1_title', [], 'Verifikasi OTP Pasien')) ?></h6>
                         <p class="text-xs text-slate-500 max-w-sm"><?= h(t('modal.otp.step1_desc', [], 'Silakan selesaikan pengiriman dan verifikasi kode OTP di atas untuk mengaktifkan canvas tanda tangan.')) ?></p>
                     </div>
-                    <div class="sign-hint"><?= h(t('modal.sign.hint', [], 'Gambar tanda tangan di area di atas menggunakan mouse atau sentuhan layar')) ?></div>
+                    <div class="sign-hint" id="signCanvasHint"><?= h(t('modal.sign.hint', [], 'Gambar tanda tangan di area di atas menggunakan mouse atau sentuhan layar')) ?></div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="bg-red-500 text-white" type="button" onclick="clearSign()"><?= h(t('actions.delete', [], 'Delete')) ?></button>
+                <button class="bg-red-500 text-white" type="button" id="btnClearSign" onclick="clearSign()"><?= h(t('actions.delete', [], 'Delete')) ?></button>
                 <button class="bg-green-500 text-white" type="button" id="btnSaveSign" onclick="saveSign()"><?= h(t('actions.save', [], 'Save')) ?></button>
                 <button class="bg-gray-500 text-white" type="button" onclick="closeSign()"><?= h(t('actions.close', [], 'Close')) ?></button>
             </div>
@@ -2629,10 +2701,13 @@ function renderFieldForPdf($name, $type, $val, $label) {
             </div>
             <div class="modal-body p-5">
                 <div id="verifyQrModalMain">
-                    <p style="margin:0 0 12px;"><?= t('modal.verify_qr.main_desc_1', [], 'All <strong>signature images</strong> in this document will be replaced with a <strong>Verification QR</strong>.') ?></p>
-                    <p class="text-xs text-gray-500" style="margin:0 0 12px;"><?= h(t('modal.verify_qr.main_desc_2', [], 'Useful for sharing PDF/print — recipients scan the QR → directed to the official verification page to check document authenticity.')) ?></p>
-                    <label class="text-xs text-gray-700 font-semibold"><?= h(t('modal.verify_qr.url_label', [], 'Verification URL:')) ?></label>
-                    <input class="w-full text-[11px] p-1.5 bg-gray-100 border border-gray-300 rounded mt-1" type="text" readonly id="verifyQrModalUrl" value="">
+                    <p style="margin:0 0 12px;"><?= t('modal.verify_qr.main_desc_1', [], 'Every <strong>signature image</strong> in this document is replaced with a <strong>QR code</strong>.') ?></p>
+                    <p class="text-xs text-gray-500" style="margin:0 0 8px;"><?= h(t('modal.verify_qr.main_desc_2', [], 'Each QR points at its own signature — whoever scans it sees who signed, in what role, and when.')) ?></p>
+                    <p class="text-xs text-gray-500" style="margin:0 0 12px;"><?= h(t('modal.verify_qr.main_desc_3', [], 'A signature image can be copied into another document; a pointer to the record on the server cannot.')) ?></p>
+                    <?php // Dulu di sini ada input readonly "URL Verifikasi" berisi URL dokumen.
+                    // Setelah tiap slot punya pointer-nya sendiri, URL itu tidak ada di QR mana
+                    // pun — menampilkannya cuma memberi kesan salah tentang apa yang dipindai.
+                    // Keadaan "belum disimpan" tetap disampaikan lewat kotak peringatan di bawah. ?>
                     <div class="hidden text-amber-700 text-xs mt-2.5 p-2 bg-amber-100 rounded" id="verifyQrModalWarn">
                         <i class="bi bi-exclamation-triangle-fill"></i>
                         <span id="verifyQrModalWarnMsg"><?= h(t('modal.verify_qr.warn_not_saved', [], 'Document not saved yet. Click "Save & Activate" to save first, then activate.')) ?></span>
@@ -2667,6 +2742,15 @@ function renderFieldForPdf($name, $type, $val, $label) {
     <script>
         // spec: ezdoc-spec/js/url_bag.md — endpoint URLs injected server-side, JS reads from EZDOC_URLS
         window.EZDOC_URLS = <?= json_encode($ezdocUrls, JSON_UNESCAPED_SLASHES) ?>;
+
+        <?php // Identitas penanda tangan, untuk konfirmasi mode QR. Id dan role saja:
+        // itu yang benar-benar diketahui library, dan itu juga yang masuk ke record
+        // tanda tangan. Menampilkan nama akan menuntut library tahu tabel pegawai
+        // milik aplikasi pemakainya. ?>
+        window.EZDOC_SIGNER = {
+            id: <?= json_encode((string) (function_exists('ezdoc_current_user_id') ? ezdoc_current_user_id() : 0)) ?>,
+            roles: <?= json_encode(function_exists('ezdoc_current_user_roles') ? array_values(ezdoc_current_user_roles()) : []) ?>
+        };
 
         // i18n dictionary — mirrors EZDOC_URLS above. spec: docs/I18N.md
         window.EZDOC_I18N = <?= json_encode($translator->all(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;

@@ -1161,7 +1161,10 @@
                         document.getElementById('newVarDesc').value = '';
                         loadVars();
                     } else {
-                        ezdocAlert(data.message || t('alert.generic_failed', {}, 'Failed'), { title: 'Error', variant: 'error' });
+                        // `alert.generic_failed` membawa placeholder {reason}. Dipanggil
+                        // tanpa parameter, kurung kurawalnya tercetak apa adanya ke
+                        // pengguna. Pakai kunci yang memang untuk membawa pesan server.
+                        ezdocAlert(t('alert.generic_failed_message', {message: data.message || 'error'}, 'Failed: {message}'), { title: 'Error', variant: 'error' });
                     }
                 });
         }
