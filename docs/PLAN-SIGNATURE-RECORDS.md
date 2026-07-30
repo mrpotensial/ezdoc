@@ -284,7 +284,92 @@ lossy meninggalkan artefak pada garis tipis, dan ini artefak yang orang anggap
 bukti. Penghematannya tidak sebanding dengan pertanyaan "kenapa tanda tangan
 saya kelihatan beda".
 
-### Keputusan (2026-07-30): nomor 1, 2, dan 4
+### Revisi keputusan (2026-07-30, sesudah S2): abstraksi dulu, backend jadi config
+
+Keputusan di bawah (nomor 4, file di disk) **direvisi**. Dua hal mengubahnya, dan
+keduanya baru terlihat setelah S2 diukur.
+
+**(a) S2 justru membuat scan daftar lebih berat.** `ezdoc_documents` pakai
+`ROW_FORMAT=Dynamic`, page 16 KB, MySQL 8.0.33 — terverifikasi, bukan asumsi. Di
+format itu kolom variabel dipindah off-page hanya kalau barisnya melebihi separuh
+page (~8126 byte):
+
+| | avg `signature_values` | Baris | Penyimpanan |
+|---|---|---|---|
+| Sebelum S2 | 17.664 B | ~18 KB | off-page — inline cuma pointer 20 byte |
+| Sesudah S2 | ~3.500 B | ~4 KB | **inline di clustered index** |
+
+`EXPLAIN` query daftar: `type=ref key=idx_deleted, Backward index scan` — index
+sekunder lalu ambil baris dari clustered index satu per satu. Lebar baris langsung
+menentukan berapa page dibaca. Jadi S1 saja tidak cukup lagi: gambarnya ikut
+terbaca walau tidak di-SELECT.
+
+**(b) Standar industri memang disk — tapi ada ambangnya, dan 3,5 KB di sisi yang
+salah.** Rails ActiveStorage, Django `FileField`, Laravel `Storage`, Symfony
+VichUploader: semuanya menaruh byte di luar DB. Tapi referensi kanoniknya,
+**"To BLOB or Not To BLOB"** (Sears, van Ingen, Gray — Microsoft Research, 2006),
+mengukurnya: objek **di bawah ~256 KB lebih baik di database**, di atas ~1 MB
+lebih baik di filesystem. Tanda tangan 3,5 KB ada 70× di bawah ambang itu — NTFS
+cluster 4 KB berarti file 3,5 KB memakai lebih banyak ruang daripada kolom yang
+dipadatkan, dan tiap baca jadi open/read/close sendiri.
+
+Satu keberatan yang dipakai sebelumnya **gugur**: "file yatim" bukan alasan
+menolak disk. ActiveStorage punya masalah yang sama dan menyelesaikannya dengan
+purge job terjadwal (`Blob.unattached`), bukan dengan menghindari disk.
+
+**Yang sebenarnya diajarkan standar itu bukan "disk", tapi bentuknya:** satu baris
+blob yang jadi sumber kebenaran identitas (`key`, `checksum`, `byte_size`,
+`content_type`) dan service yang bisa ditukar. Dengan bentuk itu, "disk atau
+tabel" berhenti jadi percabangan arsitektur dan jadi pilihan config.
+
+Untuk tanda tangan, tujuan akhir industri sebenarnya bukan disk maupun tabel —
+DocuSign dan Adobe Sign menanam tampilannya **di dalam PDF yang ditandatangani**
+(appearance stream PAdES), DB cuma menyimpan jejak audit. Di luar lingkup rencana
+ini, tapi ia menjelaskan kenapa jangan terlalu banyak diinvestasikan pada
+"di mana PNG-nya disimpan".
+
+#### Keputusan (2026-07-30)
+
+| | |
+|---|---|
+| Bentuk | Tabel `ezdoc_blobs` + `BlobStore` yang bisa ditukar |
+| Default | **backend database** — yang diukur lebih baik di 3,5 KB |
+| Disk | **dibangun dan siap pakai**, dipilih lewat config |
+| Akses file (disk) | Di luar webroot, dilayani action PHP yang memeriksa hak akses. Tanda tangan bukan aset publik: sebagai file statis, siapa pun yang punya URL bisa melihatnya, dan URL bocor lewat riwayat browser, log proxy, dan referer |
+| Nomor 4 (file di disk sebagai satu-satunya jalan) | **Dibatalkan** — jadi salah satu backend, bukan arsitekturnya |
+
+#### Kunci = isi, dan kenapa itu wajib
+
+`key` adalah SHA-256 byte-nya. Bukan pilihan gaya: hash tanda tangan (§5)
+mencakup `ttd_value`, dan begitu gambarnya keluar dari baris dokumen `ttd_value`
+jadi referensi. Referensi yang menyebut **lokasi** bisa menunjuk byte lain besok;
+yang menyebut **isi** tidak bisa. Ini persis syarat (a) di bawah — "simpan hash
+gambar di DB" — terpenuhi dengan sendirinya, karena kuncinya sudah checksum-nya.
+
+Konsekuensi lain yang ikut gratis: byte identik yang disimpan dua kali menempati
+satu baris, dan file yang ditukar **tidak bisa** lolos `get()` — mismatch dibaca
+sebagai *tidak ada*, bukan sebagai byte lain yang diam-diam dilayani.
+
+#### Status implementasi
+
+| | |
+|---|---|
+| S3a — `Blob`, `BlobStore`, `DatabaseBlobStore`, `DiskBlobStore` | ✅ 51 test, satu kontrak dijalankan ke **kedua** backend |
+| S3b — migrasi `ezdoc_blobs` (MySQL + SQLite) | ✅ paritas ditulis bersamaan, bukan menyusul |
+| S3c — wiring config + resolusi backend | ⏳ |
+| S3d — jalur simpan: gambar jadi referensi | ⏳ |
+| S3e — jalur baca: layar + PDF | ⏳ |
+| S3f — backfill + purge yatim | ⏳ |
+
+Kontraknya dijalankan ke kedua backend dengan tuntutan yang sama, sengaja: janji
+"pindah backend cuma config" hanya berlaku kalau keduanya menjawab tuntutan yang
+sama. Suite terpisah per backend akan menyimpang, dan penyimpangannya muncul
+sebagai "tadinya jalan sebelum kita pindah".
+
+Sampai S3c, **tidak ada perilaku yang berubah** — kelas-kelasnya belum terpasang
+ke jalur mana pun. Migrasinya bisa dijalankan lebih dulu dengan aman.
+
+### Keputusan LAMA (2026-07-30): nomor 1, 2, dan 4 — lihat revisi di atas
 
 Kerjakan **1** (projeksi daftar), **2** (normalisasi), dan **4** (file di disk).
 Nomor 3 tidak lagi diperlukan kalau 4 dikerjakan.
