@@ -12,15 +12,20 @@ penyimpanan yang muncul dari arah lain namun berakar di tempat yang sama.
 
 ## 1. Ringkasan
 
-Ada dua QR di ezdoc, dan membedakannya menentukan segalanya:
+Ada **tiga** jalur QR di ezdoc, dan membedakannya menentukan segalanya:
 
-| | Untuk apa | Isinya |
+| | Untuk apa | Isinya sekarang |
 |---|---|---|
 | **QR terpisah** (`qr-placeholder`, `data-qr="<field>"`) | Multifungsi — QR dari field apa pun, termasuk `{verify_url}` dokumen | Sudah benar, tidak diubah |
-| **QR mode TTD** | QR **adalah tanda tangannya** | Belum bisa berisi apa pun yang bermakna |
+| **QR mode TTD** (toggle per slot) | QR **adalah tanda tangannya** | Belum bisa berisi apa pun yang bermakna |
+| **Mode verify QR** (toggle dokumen, tombol "QR: ON/OFF") | Sembunyikan semua gambar TTD, ganti QR yang bisa dipindai | Verify URL dokumen — **sama untuk semua slot** |
 
 QR mode TTD seharusnya menunjuk ke **tanda tangan itu**. Masalahnya: tanda
 tangan belum berupa record apa pun. Tidak ada yang bisa ditunjuk.
+
+Mode verify QR sudah punya alur interaksi yang benar (tombol → konfirmasi →
+simpan → QR muncul) tapi isinya satu URL untuk semua. Setelah tanda tangan jadi
+record, keduanya menyatu — lihat §6.
 
 ## 2. Keadaan sekarang (terverifikasi, bukan asumsi)
 
@@ -162,6 +167,45 @@ yang bisa dipercaya ada dua tingkat: `signed_at` di record (dijamin oleh kontrol
 atas server), dan token RFC 3161 dari TSA (mengikat bahkan kalau server tidak
 dipercaya). Klien TSA sudah ada di `HttpTimestampClient`, kolomnya sudah ada,
 tapi belum pernah dipanggil.
+
+### Tiga jalur QR menyatu jadi dua
+
+Ada **tiga** jalur QR di generate.php, bukan dua. Yang ketiga terlewat pada
+tinjauan pertama:
+
+| | Pemicu | Isi sekarang |
+|---|---|---|
+| QR terpisah | `qr-placeholder` `data-qr="<field>"` | field apa pun, termasuk `{verify_url}` |
+| TTD QR mode | toggle per slot (`_ttd_mode_<id>`) | pattern template / teks manual — **tanpa makna verifikasi** |
+| **Verify QR mode** | toggle dokumen (`_show_verify_qr`), tombol toolbar "QR: ON/OFF" | verify URL dokumen — **sama untuk semua slot**, seperti diakui komentarnya sendiri |
+
+**Mode verify QR sudah punya alur interaksi yang dicari:** tombol → modal
+konfirmasi → simpan → reload → QR muncul. Sudah jalan, sudah ada modalnya.
+Yang salah hanya isinya.
+
+Jadi jangan dipensiunkan — **naikkan isinya, lalu keduanya menyatu:**
+
+| | Setelah Fase 3 |
+|---|---|
+| TTD QR mode | pointer ke tanda tangan **slot ini** |
+| Verify QR mode | **"ubah semua slot ke mode QR sekaligus"** |
+
+Isinya datang dari satu tempat. Verify QR mode berhenti jadi fitur terpisah dan
+jadi tombol kenyamanan: sekali klik untuk semua slot alih-alih satu per satu.
+
+Yang berkurang: satu jalur render (`$verifyQrArea`), satu logika override
+(`$imgDisplayOverride`), satu fungsi JS (`generateVerifyQr`). **Tidak ada fitur
+yang hilang.**
+
+**Alur modalnya dipakai ulang, bukan ditulis ulang.** Fase 3 tidak perlu
+mengarang UI baru — `toggleVerifyQrMode()` + `confirmVerifyQrMode()` sudah
+melakukan konfirmasi, simpan, dan reload. Yang berubah: apa yang disetelnya.
+
+**Alasan yang harus dipertahankan:** mode ini menyembunyikan **semua** gambar
+tanda tangan. Gambar bisa disalin dan ditempel ke dokumen lain; QR yang menunjuk
+record server tidak bisa. Jadi "sembunyikan gambar, tampilkan QR" adalah pilihan
+anti-pemalsuan yang sah, dan layak tetap ada sebagai toggle massal — bukan
+sekadar sisa arsitektur lama.
 
 ### Yang ditampilkan halaman verify saat `?ttd=`
 
@@ -388,10 +432,17 @@ Itu harga yang layak dibanding membatalkan bukti yang sudah dikeluarkan.
 - Terima `?ttd=`, tampilkan tabel §6
 - Tanpa ini, Fase 1 mengumpulkan data yang belum bisa dilihat
 
-### Fase 3 — QR TTD + alur klik
+### Fase 3 — QR TTD + alur klik + penyatuan tiga jalur QR
 
 - HMAC diperluas ke `slug|ttd_id`, URL lama tetap lolos
-- Alur: klik mode QR → konfirmasi → OTP kalau slot minta → tercatat → QR muncul
+- Alur: klik mode QR → konfirmasi → OTP kalau slot minta → tercatat → QR muncul.
+  **Pakai ulang** `toggleVerifyQrMode()` / `confirmVerifyQrMode()` yang sudah
+  melakukan konfirmasi-simpan-reload; jangan tulis UI baru
+- Verify QR mode berubah arti: dari "override semua slot dengan verify URL
+  dokumen" jadi "ubah semua slot ke mode QR sekaligus". Isinya ikut jalur
+  per-tanda-tangan yang sama
+- Hapus jalur render duplikat: `$verifyQrArea`, `$imgDisplayOverride`,
+  `generateVerifyQr()`
 - Batalkan default `{verify_url}` untuk QR TTD (keliru — itu tugas QR terpisah)
 - Beri jalan pulang untuk nilai manual yang membeku: konten tersimpan menang
   atas pattern, jadi nilai yang pernah diketik bertahan selamanya tanpa cara
