@@ -273,6 +273,21 @@ Kopling ke konvensi host terkurung di satu kelas shim.
  sekali per proses, dan membedakan "auth belum diwiring" dari "role ada tapi
  identitas tidak" — asimetri kedua itu yang paling menipu.
 
+### 3.9b Tanda tangan belum berupa record — lihat `docs/PLAN-SIGNATURE-RECORDS.md`
+
+`ezdoc_signatures` lengkap (`signer_id`, `signer_role`, `signed_at DATETIME(3)`,
+`content_hash`, `tsa_response`, `verify_status`) dan **tidak ada satu baris pun
+ditulis ke sana**. `SignatureRepository::insert()` dan `HmacProvider` sama-sama
+tidak dipanggil dari jalur mana pun. TTD yang digambar petugas hanya tersimpan
+sebagai base64 di `ezdoc_documents.signature_values` — itu gambar, bukan tanda
+tangan yang bisa diverifikasi.
+
+Konsekuensi yang muncul saat mendesain QR mode TTD: QR itu seharusnya menunjuk
+ke tanda tangan tertentu, tapi tidak ada yang bisa ditunjuk. Rencana lengkap
+beserta dua bug yang ditemukan sambil menelusuri (hash dokumen tidak
+dikanonikalisasi; tanda tangan tidak boleh menutup tanda tangan lain) dan
+masalah pertumbuhan penyimpanan ada di `docs/PLAN-SIGNATURE-RECORDS.md`.
+
 ### 3.10 Pintu `public/` — syarat mount, ditemukan 2026-07-29
 
 `Ezdoc\App::run()` dijual sebagai "1-line mount" (§2, §6 v0.9.8). Yang tidak
