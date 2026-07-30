@@ -581,11 +581,29 @@ try {
                 $newValue
             );
 
+            // Nama yang tercetak di bawah tanda tangan, ditangkap ke dalam
+            // recordnya.
+            //
+            // Nilainya sudah ada di `fields`, jadi hash-nya sudah mengikatnya —
+            // ini bukan soal integritas, tapi soal record yang bisa dibaca sendiri.
+            // Tanpa ini, satu baris `ezdoc_signatures` cuma menyebut slot mana yang
+            // ditandatangani; halaman verify harus membuka JSON dokumen untuk tahu
+            // nama siapa yang tercetak di sana.
+            $signerNameField = $ttdCfg['nama_field'] ?? ('nama_' . $tid);
+            $signerName = trim((string) ($fieldData[$signerNameField] ?? ''));
+
+            $sigMetadata = [
+                'ttd_id'      => $tid,
+                'ttd_label'   => $ttdCfg['label'] ?? $tid,
+                'signer_name' => $signerName !== '' ? $signerName : null,
+                'replaced'    => $oldValue !== '',
+            ];
+
             $signResult = $provider->sign(new \Ezdoc\Signature\SignRequest([
                 'contentBytes' => $contentHash,
                 'contentHash'  => $contentHash,
                 'signerId'     => $signerId,
-                'metadata'     => ['ttd_id' => $tid, 'ttd_label' => $ttdCfg['label'] ?? $tid],
+                'metadata'     => $sigMetadata,
             ]));
 
             $sigRepo->insert([
@@ -609,11 +627,7 @@ try {
                 // akan kehilangan urutannya.
                 'signed_at'               => (new \DateTimeImmutable())->format('Y-m-d H:i:s.v'),
                 'verify_status'           => 'valid',
-                'metadata'                => [
-                    'ttd_id'    => $tid,
-                    'ttd_label' => $ttdCfg['label'] ?? $tid,
-                    'replaced'  => $oldValue !== '',
-                ],
+                'metadata'                => $sigMetadata,
             ]);
             $recorded++;
         }

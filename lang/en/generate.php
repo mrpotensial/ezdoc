@@ -57,6 +57,7 @@ return [
         'delete_version' => 'Delete this version',
         'restore_slot' => 'Restore this slot',
         'no_sign_permission' => 'Not authorized to sign{roles}',
+        'name_locked_after_signing' => 'Already signed — the name is part of what the signature covers. Create a new version to revise.',
         'no_sign_permission_as' => 'Not authorized to sign as {label}{roles}',
         'edit_qr_content' => 'Edit QR content',
         'click_edit_qr' => 'Click to edit QR content',
@@ -129,8 +130,13 @@ return [
         // addressing that same document, even when the screen says "new".
         'locked_slot_title' => 'Slot already taken',
         'locked_slot_detail' => 'Document #{id} (version {version}) already occupies this slot — MR {norm}, Reg {nopen}, label "{label}".',
+        'frozen_title' => 'Document already signed',
+        'frozen_changed_detail' => 'Frozen fields that changed: {fields}',
     ],
     'confirm' => [
+        'sign_without_name' => 'The name under this signature is empty. It cannot be filled in after signing — only by creating a new version. Sign anyway?',
+        'sign_anyway' => 'Sign anyway',
+        'fill_name_first' => 'Fill the name first',
         'delete_version' => 'Delete version v{version}? This cannot be undone.',
         'lock_final' => "Lock this version as FINAL?\n\nOnce locked, this version cannot be edited. Only a superadmin can unlock it. Create a new version to revise.",
         'unlock_version' => 'Unlock this version? (superadmin access)',
@@ -210,6 +216,10 @@ return [
         ],
         'sign' => [
             'hint' => 'Draw your signature in the area above using your mouse or touchscreen',
+            'name_label' => 'Name printed under the signature',
+            'name_placeholder' => 'e.g. Dr. Budi Santoso',
+            'name_hint' => 'Part of what the signature covers — it cannot be changed after signing.',
+            'name_missing_title' => 'Name is empty',
         ],
         'otp' => [
             'step1_title'        => 'Patient OTP Verification',

@@ -133,6 +133,18 @@ final class DocumentSignatureVerifier
             'ttd_label'   => (string) ($meta['ttd_label'] ?? $ttdId),
             'slot'        => (int) ($row['signature_id_within_doc'] ?? 0),
             'signer_id'   => (string) ($row['signer_id'] ?? ''),
+            // The name printed under the signature, as it was when signed.
+            //
+            // Read from the record rather than from the document, deliberately.
+            // The document says what it says now; this says what was signed. When
+            // the two disagree the content hash already reports it, and having
+            // both is what makes the disagreement legible instead of just failed.
+            //
+            // Null for signatures recorded before this was captured — absent, not
+            // empty, so a reader can tell "no name" from "not recorded".
+            'signer_name' => isset($meta['signer_name']) && $meta['signer_name'] !== ''
+                ? (string) $meta['signer_name']
+                : null,
             'signer_role' => $row['signer_role'] !== null ? (string) $row['signer_role'] : null,
             'signed_at'   => (string) ($row['signed_at'] ?? ''),
             'provider'    => (string) ($row['provider'] ?? ''),

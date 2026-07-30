@@ -1299,11 +1299,34 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             </div>';
         }
 
+        // Nama di bawah tanda tangan tidak bisa diedit setelah slot ini
+        // ditandatangani.
+        //
+        // Bukan pengetatan sewenang-wenang: hash tanda tangan mencakup seluruh
+        // `fields`, dan nama ini salah satunya. Kalau bisa diubah sesudahnya,
+        // tanda tangan yang sama bisa diatributkan ke orang lain — dan verifikasi
+        // akan melaporkan `tampered` untuk perubahan yang aplikasinya sendiri
+        // mengizinkan. Yang lebih buruk dari melarang adalah membolehkan lalu
+        // menyebutnya palsu.
+        //
+        // Sebelum ini field-nya tetap terlihat bisa diedit, jadi petugas mengetik
+        // namanya, menekan simpan, dan ditolak — tanpa jalan maju, karena nama
+        // yang benar tidak akan pernah bisa masuk. Sekarang namanya diminta di
+        // dalam modal tanda tangan, jadi ia sudah selesai saat menandatangani.
+        // Pola yang sama dipakai DocuSign dan Adobe Sign: nama penanda tangan
+        // ditangkap di dialog penandatanganan, bukan sebagai isi dokumen yang
+        // diedit belakangan.
+        $namaEditable = $ttdIsSigned ? 'false' : 'true';
+        $namaClass = $ttdIsSigned ? 'f ttd-name-locked' : 'f';
+        $namaTitle = $ttdIsSigned
+            ? ' title="' . h(t('title.name_locked_after_signing', [], 'Already signed — the name is part of what the signature covers. Create a new version to revise.')) . '"'
+            : '';
+
         return '<div class="' . $ttdClass . '" style="' . $style . '">
             <div class="ttd-label">' . h($label) . '</div>
             ' . $modeToggle . '
             <div class="ttd-img" id="preview_' . h($ttdId) . '">' . $imgArea . $qrArea . '</div>
-            <div class="ttd-name">(<span class="f" contenteditable="true" data-field="' . h($namaField) . '">' . ($namaValue ?: '') . '</span><input type="hidden" name="' . h($namaField) . '" value="' . $namaValue . '">)</div>
+            <div class="ttd-name">(<span class="' . $namaClass . '" contenteditable="' . $namaEditable . '" data-field="' . h($namaField) . '"' . $namaTitle . '>' . ($namaValue ?: '') . '</span><input type="hidden" name="' . h($namaField) . '" id="ttd_nama_' . h($ttdId) . '" value="' . $namaValue . '">)</div>
             <input type="hidden" name="' . h($ttdId) . '" id="ttd_' . h($ttdId) . '" value="' . h($ttdImg) . '">
             <input type="hidden" name="_ttd_mode_' . h($ttdId) . '" id="ttd_mode_' . h($ttdId) . '" value="' . h($activeMode) . '">
             <input type="hidden" name="_ttd_qr_data_' . h($ttdId) . '" id="ttd_qr_data_' . h($ttdId) . '" value="' . h($qrDataTpl) . '">
@@ -2617,6 +2640,22 @@ function renderFieldForPdf($name, $type, $val, $label) {
                         </button>
                     </div>
                 </div>
+            </div>
+
+            <?php // Nama penanda tangan diminta DI SINI, bukan diedit di dokumen setelahnya.
+            // Hash tanda tangan mencakup seluruh field, nama ini termasuk — jadi setelah
+            // ditandatangani ia tidak bisa berubah tanpa membuat tanda tangannya tidak sah.
+            // Sebelum ini field-nya tetap terlihat bisa diedit, jadi petugas mengetik nama,
+            // menekan simpan, dan ditolak tanpa jalan maju. DocuSign dan Adobe Sign
+            // menangkap nama penanda tangan di dialog penandatanganan untuk alasan yang sama. ?>
+            <div id="signNameRow" class="hidden px-4 pt-3 pb-1">
+                <label class="block text-xs font-semibold text-slate-700 mb-1" for="signNameInput">
+                    <?= h(t('modal.sign.name_label', [], 'Name printed under the signature')) ?>
+                </label>
+                <input type="text" id="signNameInput" maxlength="120"
+                       class="w-full text-sm p-2 border border-slate-300 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                       placeholder="<?= h(t('modal.sign.name_placeholder', [], 'e.g. Dr. Budi Santoso')) ?>">
+                <small class="text-[11px] text-slate-500"><?= h(t('modal.sign.name_hint', [], 'Part of what the signature covers — it cannot be changed after signing.')) ?></small>
             </div>
 
             <!-- Modal Body Canvas -->

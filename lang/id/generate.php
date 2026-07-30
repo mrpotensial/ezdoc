@@ -70,6 +70,7 @@ return [
         'delete_version'         => 'Hapus versi ini',
         'restore_slot'           => 'Pulihkan slot ini',
         'no_sign_permission'     => 'Anda tidak berhak sign{roles}',
+        'name_locked_after_signing' => 'Sudah ditandatangani — nama ini bagian dari yang ditandatangani. Buat versi baru untuk merevisi.',
         'no_sign_permission_as'  => 'Anda tidak berhak sign sebagai {label}{roles}',
         'edit_qr_content'        => 'Edit isi QR',
         'click_edit_qr'          => 'Klik untuk edit isi QR',
@@ -142,8 +143,13 @@ return [
         // berarti menuju dokumen yang sama, walau layarnya bilang "baru".
         'locked_slot_title'  => 'Slot ini sudah terpakai',
         'locked_slot_detail' => 'Dokumen #{id} (versi {version}) sudah menempati slot ini — No RM {norm}, No Pendaftaran {nopen}, label "{label}".',
+        'frozen_title'          => 'Dokumen sudah ditandatangani',
+        'frozen_changed_detail' => 'Field beku yang berubah: {fields}',
     ],
     'confirm' => [
+        'sign_without_name' => 'Nama di bawah tanda tangan ini masih kosong. Setelah menandatangani, nama itu tidak bisa diisi lagi — hanya dengan membuat versi baru. Tetap tanda tangani?',
+        'sign_anyway'       => 'Tetap tanda tangani',
+        'fill_name_first'   => 'Isi namanya dulu',
         'delete_version' => 'Hapus versi v{version}? Aksi ini tidak bisa di-undo.',
         'lock_final'     => "Lock versi ini sebagai FINAL?\n\nSetelah locked, versi ini tidak bisa diedit. Hanya superadmin yang bisa unlock. Untuk revisi, buat versi baru.",
         'unlock_version' => 'Unlock versi ini? (akses superadmin)',
@@ -222,7 +228,11 @@ return [
             'confirm_button'       => 'OK, Isi QR',
         ],
         'sign' => [
-            'hint' => 'Gambar tanda tangan di area di atas menggunakan mouse atau sentuhan layar',
+            'hint'              => 'Gambar tanda tangan di area di atas menggunakan mouse atau sentuhan layar',
+            'name_label'        => 'Nama yang tercetak di bawah tanda tangan',
+            'name_placeholder'  => 'mis. dr. Budi Santoso',
+            'name_hint'         => 'Ikut ditandatangani — tidak bisa diubah setelah menandatangani.',
+            'name_missing_title' => 'Nama masih kosong',
         ],
         'otp' => [
             'step1_title'        => 'Verifikasi OTP Pasien',

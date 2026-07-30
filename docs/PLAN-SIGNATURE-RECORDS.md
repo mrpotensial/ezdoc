@@ -624,6 +624,39 @@ placeholder yang dikirim pemanggil dipakai terjemahannya).
 
 Self-test URL verifikasi: `pengeluaran/doc_verify_selftest.php`, 32 pemeriksaan.
 
+### Fase 3b — nama penanda tangan ditangkap saat menandatangani ✅ 2026-07-30
+
+Ditemukan saat pemakaian: dokumen 37 punya `nama_ttd_1785380818383 = ''` sementara
+slotnya **sudah ditandatangani**. Petugas menandatangani lebih dulu, lalu mengetik
+namanya, lalu ditolak §7b — dan nama yang benar tidak akan pernah bisa masuk.
+Setiap simpan sesudahnya gagal pada field yang sama, termasuk menekan tombol
+"QR: ON→OFF" yang cuma menyetel tampilan tapi ikut mengirim ulang seluruh form.
+Itu satu bug, bukan dua.
+
+Guard-nya benar. Nama di bawah tanda tangan ada di dalam `fields`, jadi ia
+tercakup hash — dan kalau bisa diubah sesudahnya, tanda tangan yang sama bisa
+diatributkan ke orang lain. Mengecualikannya justru lebih buruk: aplikasi
+mengizinkan perubahan yang lalu dilaporkan `tampered` oleh verifier.
+
+Yang salah alurnya. Perbaikannya mengikuti DocuSign dan Adobe Sign — nama
+penanda tangan ditangkap di dialog penandatanganan, bukan sebagai isi dokumen
+yang diedit belakangan:
+
+| | |
+|---|---|
+| Modal tanda tangan | Meminta nama, prefilled dari nilai sekarang, ditulis ke field **sebelum** tanda tangan diambil. Berlaku untuk mode gambar maupun QR |
+| Nama kosong | Dikonfirmasi, tidak diblokir — sebagian slot memang tidak mencetak nama (cap, saksi tanpa identitas). Tapi konfirmasinya menyebut bahwa tidak ada kesempatan kedua |
+| Setelah ditandatangani | Field-nya `contenteditable="false"` dengan penjelasan, jadi tidak ada lagi mengetik ke field beku lalu menabrak dinding |
+| Record | `metadata.signer_name` — recordnya jadi bisa dibaca sendiri, tidak perlu membuka JSON dokumen untuk tahu nama siapa yang tercetak |
+| Halaman verify | Menampilkan nama **dari record**, bukan dari dokumen. Dokumen menyatakan keadaan sekarang; record menyatakan apa yang ditandatangani. Saat keduanya berbeda, hash sudah melaporkannya, dan menampilkan keduanya membuat perbedaan itu terbaca alih-alih cuma "gagal" |
+| Penolakan §7b | Menawarkan "Buat Versi Baru" — remedi yang server sebut di `remedy`. Sebelumnya toast tanpa jalan keluar |
+
+Empat test verifier baru, termasuk pembedaan "tanpa nama" dari "belum dicatat":
+nilai `null`, bukan `''`, karena keduanya fakta yang berbeda.
+
+**Dokumen yang sudah dalam keadaan itu** (mis. #37) tetap perlu versi baru —
+isinya beku dan itu memang aturannya. Yang berubah: sekarang tombolnya ada.
+
 **Belum dikerjakan di fase ini:** flag "wajib tanda tangan" per slot (§9 A).
 Halaman legacy `form_pembuat_surat_cetak_v2/v3.php` punya salinan `renderContent`
 sendiri dan belum tahu `qr:v1` — dokumen yang ditandatangani mode QR akan

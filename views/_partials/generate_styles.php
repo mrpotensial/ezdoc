@@ -382,6 +382,16 @@
             display: block !important;
             aspect-ratio: 1 / 1 !important;
         }
+        /* Nama di bawah tanda tangan yang sudah beku. Hash tanda tangan mencakup
+           nama ini, jadi mengubahnya membuat tanda tangannya tidak sah. Ditandai
+           dengan tenang — bukan disable yang terlihat rusak, tapi kursor dan
+           dekorasi yang menyampaikan "ini bukan tempat mengetik". */
+        .ttd-name-locked {
+            cursor: default;
+            border-bottom: 1px dotted #d1d5db;
+        }
+        .ttd-name-locked:focus { outline: none; }
+
         /* Tombol tanda tangan mode QR — muncul saat slot belum ditandatangani.
            Sengaja tenang: garis putus-putus dan abu-abu, sama bahasanya dengan
            .ttd-canvas-placeholder di mode gambar, supaya jelas ini tempat kosong

@@ -581,6 +581,36 @@
         // yang bisa diklik. Padahal server sudah mengirim slot yang cocok, jadi
         // tautan ke dokumennya bisa dibangun tepat.
         async function handleSaveRejection(data) {
+            // Penolakan §7b: isi dokumen beku karena sudah ada tanda tangan.
+            // Remedinya bukan "buka dokumen lain" — dokumennya sudah terbuka —
+            // tapi membuat versi baru. Toast tidak bisa menawarkan itu, dan tanpa
+            // tawaran itu petugas kehabisan jalan: field yang berubah tidak akan
+            // pernah bisa disimpan di versi ini.
+            if (data.remedy === 'new_version') {
+                const changed = Array.isArray(data.changed_fields) ? data.changed_fields : [];
+                const detail = changed.length
+                    ? t('alert.frozen_changed_detail', {fields: changed.join(', ')},
+                        'Frozen fields that changed: {fields}')
+                    : '';
+
+                const go = await ezdocConfirm(
+                    data.message + (detail ? '\n\n' + detail : ''),
+                    {
+                        title: t('alert.frozen_title', {}, 'Document already signed'),
+                        variant: 'warning',
+                        confirmText: t('modal.new_version.title', {}, 'Create New Version'),
+                        cancelText: t('actions.close', {}, 'Close')
+                    }
+                );
+                if (go && typeof showNewVersionModal === 'function') {
+                    // Versi baru menyalin isi versi ini, jadi apa yang diketik
+                    // petugas tidak hilang — ia pindah ke versi yang belum
+                    // ditandatangani, tempat ia boleh berubah.
+                    await showNewVersionModal();
+                }
+                return;
+            }
+
             const slot = data.matched_slot;
             const lockedId = data.locked_doc_id;
 
@@ -1293,6 +1323,28 @@
                     : t('actions.save', {}, 'Save');
             }
 
+            // Nama penanda tangan diminta di sini, sekali, sebelum tanda tangan
+            // diambil. Setelah slot ditandatangani, nama masuk ke hash dan tidak
+            // bisa berubah — jadi satu-satunya tempat yang masuk akal untuk
+            // mengisinya adalah sebelum menandatangani, bukan sesudahnya.
+            //
+            // Slot yang sudah ditandatangani tidak menampilkan field ini: nilainya
+            // sudah beku, dan menampilkan kotak yang bisa diketik akan menawarkan
+            // sesuatu yang tidak bisa dipenuhi.
+            const nameRow = document.getElementById('signNameRow');
+            const nameInput = document.getElementById('signNameInput');
+            const nameHidden = document.getElementById('ttd_nama_' + id);
+            const alreadySigned = !!(document.getElementById('ttd_' + id)?.value || '').trim();
+
+            if (nameRow && nameInput) {
+                if (alreadySigned || !nameHidden) {
+                    nameRow.classList.add('hidden');
+                } else {
+                    nameRow.classList.remove('hidden');
+                    nameInput.value = nameHidden.value || '';
+                }
+            }
+
             if (isQrMode) {
                 const signer = window.EZDOC_SIGNER || {};
                 const roles = (signer.roles || []).join(', ');
@@ -1554,12 +1606,60 @@
         // dokumennya tersimpan tapi tidak ada record tanda tangan yang tertulis.
         const EZDOC_QR_ACT = 'qr:v1';
 
-        function saveSign() {
+        // Tuliskan nama penanda tangan SEBELUM tanda tangannya diambil.
+        //
+        // Urutannya penting: hash tanda tangan dihitung server dari field yang
+        // dikirim pada simpan yang sama. Kalau namanya menyusul, ia jadi perubahan
+        // isi setelah penandatanganan — ditolak, dan tidak ada nama yang bisa
+        // masuk lagi selamanya.
+        //
+        // Mengembalikan false kalau petugas memilih tidak melanjutkan.
+        function commitSignerName(ttdId) {
+            const nameRow = document.getElementById('signNameRow');
+            const nameInput = document.getElementById('signNameInput');
+            const nameHidden = document.getElementById('ttd_nama_' + ttdId);
+
+            if (!nameRow || nameRow.classList.contains('hidden') || !nameInput || !nameHidden) {
+                return true;
+            }
+
+            const value = nameInput.value.trim();
+            nameHidden.value = value;
+
+            // Span contenteditable-nya yang terlihat di dokumen; keduanya harus
+            // sama, kalau tidak yang tercetak berbeda dari yang ditandatangani.
+            const span = document.querySelector('.f[data-field="' + nameHidden.name + '"]');
+            if (span) span.textContent = value;
+
+            return true;
+        }
+
+        async function saveSign() {
             if (!currentTtdId) { closeSign(); return; }
 
             const isQrMode = (document.getElementById('ttd_mode_' + currentTtdId)?.value === 'qr');
             const hiddenInput = document.getElementById('ttd_' + currentTtdId);
             if (!hiddenInput) { closeSign(); return; }
+
+            // Nama kosong tidak diblokir — sebagian slot memang tidak mencetak nama
+            // (cap, saksi tanpa identitas). Tapi ia dikonfirmasi, karena sesudah ini
+            // tidak ada kesempatan kedua.
+            const nameRow = document.getElementById('signNameRow');
+            const nameInput = document.getElementById('signNameInput');
+            if (nameRow && !nameRow.classList.contains('hidden') && nameInput && nameInput.value.trim() === '') {
+                const proceed = await ezdocConfirm(
+                    t('confirm.sign_without_name', {}, 'The name under this signature is empty. It cannot be filled in after signing — only by creating a new version. Sign anyway?'),
+                    {
+                        title: t('modal.sign.name_missing_title', {}, 'Name is empty'),
+                        variant: 'warning',
+                        confirmText: t('confirm.sign_anyway', {}, 'Sign anyway'),
+                        cancelText: t('confirm.fill_name_first', {}, 'Fill the name first')
+                    }
+                );
+                if (!proceed) { nameInput.focus(); return; }
+            }
+
+            commitSignerName(currentTtdId);
 
             if (isQrMode) {
                 // Yang disimpan penanda tindakan, bukan gambar dan bukan URL QR-nya.

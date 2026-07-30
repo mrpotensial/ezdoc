@@ -144,7 +144,11 @@ final class DocumentSignatureVerifierTest extends TestCase
             $overrides['content_hash_algo'] ?? SignaturePayload::ALGO,
             (new \DateTimeImmutable())->format('Y-m-d H:i:s.v'),
             $overrides['verify_status'] ?? 'valid',
-            (string) json_encode(['ttd_id' => $ttdId, 'ttd_label' => strtoupper($ttdId)]),
+            (string) json_encode(
+                array_key_exists('metadata', $overrides)
+                    ? $overrides['metadata']
+                    : ['ttd_id' => $ttdId, 'ttd_label' => strtoupper($ttdId)]
+            ),
         ]);
     }
 
@@ -386,5 +390,86 @@ final class DocumentSignatureVerifierTest extends TestCase
             ['status' => 'tampered'],
             ['status' => 'untrusted'],
         ]), 'untrusted outranks tampered — one is a revision, the other wants investigating');
+    }
+
+    /**
+     * The name printed under the signature comes from the record, not the
+     * document. That is the point: the document says what it says now, the
+     * record says what was signed.
+     */
+    public function testTheSignerNameComesFromTheRecord(): void
+    {
+        $this->recordSignature('ttd_a', [
+            'metadata' => [
+                'ttd_id'      => 'ttd_a',
+                'ttd_label'   => 'Kepala Unit',
+                'signer_name' => 'dr. Budi Santoso',
+            ],
+        ]);
+
+        $verdicts = $this->verifier->verify($this->docId);
+        self::assertCount(1, $verdicts);
+        self::assertSame('dr. Budi Santoso', $verdicts[0]['signer_name']);
+        self::assertSame('valid', $verdicts[0]['status']);
+    }
+
+    /**
+     * A signature recorded before the name was captured must read as *absent*,
+     * not as an empty name. Rendering an empty string would claim the slot was
+     * signed with no name printed — which is a different fact, and one the
+     * record does not actually contain.
+     */
+    public function testAnUnrecordedSignerNameIsNullNotEmpty(): void
+    {
+        $this->recordSignature('ttd_a'); // metadata default: tanpa signer_name
+
+        $verdicts = $this->verifier->verify($this->docId);
+        self::assertArrayHasKey('signer_name', $verdicts[0]);
+        self::assertNull($verdicts[0]['signer_name']);
+    }
+
+    /**
+     * An explicitly empty name is also absent. Some slots print no name at all —
+     * a stamp, an unnamed witness — and storing '' for those must not become a
+     * blank line the reader mistakes for missing data.
+     */
+    public function testAnEmptySignerNameIsNormalisedToNull(): void
+    {
+        $this->recordSignature('ttd_a', [
+            'metadata' => ['ttd_id' => 'ttd_a', 'ttd_label' => 'Saksi', 'signer_name' => ''],
+        ]);
+
+        self::assertNull($this->verifier->verify($this->docId)[0]['signer_name']);
+    }
+
+    /**
+     * The name is inside `fields`, so the content hash already covers it.
+     * Changing it in the document after signing must surface as tampering — and
+     * the record must keep showing the name that was actually signed, so the two
+     * can be compared.
+     */
+    public function testRenamingTheSignerAfterSigningIsTampering(): void
+    {
+        $this->fields['nama_ttd_a'] = 'dr. Budi Santoso';
+        $this->rewriteDocument($this->fields);
+
+        $this->recordSignature('ttd_a', [
+            'metadata' => [
+                'ttd_id'      => 'ttd_a',
+                'ttd_label'   => 'Kepala Unit',
+                'signer_name' => 'dr. Budi Santoso',
+            ],
+        ]);
+
+        self::assertSame('valid', $this->verifier->verify($this->docId)[0]['status']);
+
+        // Someone re-attributes the signature by editing the document.
+        $this->fields['nama_ttd_a'] = 'dr. Siti Aminah';
+        $this->rewriteDocument($this->fields);
+
+        $after = $this->verifier->verify($this->docId)[0];
+        self::assertSame('tampered', $after['status']);
+        self::assertSame('dr. Budi Santoso', $after['signer_name'],
+            'the record must still name who actually signed, not who the document now claims');
     }
 }
