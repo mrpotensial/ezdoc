@@ -1,6 +1,6 @@
 # Plan — Tanda tangan sebagai record, QR TTD, dan pertumbuhan penyimpanan
 
-Status: **rancangan disepakati, belum dikerjakan** — keputusan §9 sudah diambil
+Status: **Fase 0 selesai** (2026-07-30) — sisanya rancangan disepakati, keputusan §9 diambil
 Tanggal: 2026-07-30
 Pemicu: pertanyaan "QR mode TTD isinya apa supaya standar industri?"
 
@@ -43,7 +43,7 @@ diverifikasi: tidak ada catatan siapa, kapan, atau apa yang ditandatangani.
 
 ## 3. Tiga temuan
 
-### 3.1 Hash dokumen tidak dikanonikalisasi — bug aktif
+### 3.1 Hash dokumen tidak dikanonikalisasi — ✅ diperbaiki Fase 0
 
 `doc_verify_canonical_data()` (sisi host) menyertakan JSON **apa adanya**:
 
@@ -63,6 +63,8 @@ Akibatnya dokumen yang tidak diapa-apakan bisa dilaporkan berubah.
 
 Yang benar: decode → urutkan kunci **rekursif** → encode deterministik → hash.
 Standarnya RFC 8785 (JSON Canonicalization Scheme), padanan C14N untuk XML.
+
+**Diperbaiki di Fase 0** — `Ezdoc\Support\CanonicalJson`, lihat §8.
 
 ### 3.2 Tanda tangan tidak boleh menutup tanda tangan lain
 
@@ -405,20 +407,47 @@ Urutannya bukan sembarang: **S2 sebelum S3**. Memindahkan file yang sudah
 dinormalisasi lebih murah daripada memindahkan yang belum, lalu menormalisasi
 di tempat baru.
 
-### Fase 0 — kanonikalisasi (kecil, memperbaiki bug aktif)
+### Fase 0 — kanonikalisasi ✅ SELESAI 2026-07-30
 
-- Fungsi kanonikalisasi JSON: urutkan kunci rekursif, encode deterministik
-- Pakai di `doc_verify_canonical_data()`
-- Test: urutan kunci berbeda → hash sama; isi berbeda → hash beda
+- **`Ezdoc\Support\CanonicalJson`** — RFC 8785 (JCS): sort kunci rekursif
+  menurut **UTF-16 code unit** (bukan code point — bedanya nyata untuk emoji
+  dan CJK jarang, dan sudah dibuktikan empiris), tanpa whitespace, escaping
+  minimal, non-ASCII literal.
+  `encode()`, `hash()`, `fromJson()`.
+- **Float ditolak**, menyimpang dari §3.2.2.3 dengan sengaja: keluaran float PHP
+  bergantung pada `serialize_precision`, jadi nilai yang sama bisa jadi `0.1` di
+  satu host dan `0.10000000000000001` di host lain. Hash tanda tangan yang
+  berubah karena php.ini lebih buruk daripada yang menolak dihitung. Pesan
+  errornya menyebut path kunci yang bermasalah.
+- **25 test.** Yang diuji sifatnya, bukan string harapan: dua input yang membawa
+  data sama tidak boleh menghasilkan byte berbeda, dan data berbeda tidak boleh
+  bertabrakan. Termasuk bentuk payload per-tanda-tangan §5.
+- `doc_verify_canonical_data()` memakainya — terbukti: urutan kunci tersimpan
+  tidak lagi mengubah hash, isi yang diubah tetap mengubahnya.
 
-**Hash dokumen lama akan berbeda dari yang tersimpan.** Keputusan (§9 #1):
-simpan versi algoritma di `content_hash_algo`, jangan hitung ulang. Dokumen
-lama tetap diverifikasi dengan algoritma lamanya, dokumen baru pakai yang
-kanonik. Alasannya: dokumen yang sudah tercetak mungkin hash-nya tercatat di
-tempat lain, dan menghitung ulang berarti mengubah nilai yang sudah beredar.
+**Regresi yang tertangkap sebelum sampai server:**
+`page/form_pembuat_surat_cetak_v2.php` memanggil
+`doc_verify_compute_and_store_hash()` tanpa pernah memuat autoloader ezdoc —
+halaman itu masih hidup, dirujuk dari `ajax_open_dokumen.php`. Kelas baru itu
+akan membuatnya fatal. `doc_verify_canonical_data()` sekarang memuat
+autoloader-nya sendiri kalau belum ada, jadi file helper itu berdiri sendiri
+apa pun urutan include pemanggilnya.
 
-Konsekuensi yang harus diterima: verifier menyimpan dua jalur hash selamanya.
-Itu harga yang layak dibanding membatalkan bukti yang sudah dikeluarkan.
+**Keputusan §9 #1 gugur — dan ke arah yang lebih sederhana.**
+
+Fakta yang ditemukan saat mengerjakannya: `content_hash` **tidak pernah
+dibandingkan** oleh kode mana pun, dan **tidak pernah ditampilkan** — tidak di
+view, tidak di halaman verify, tidak tercetak. Hanya dihitung, disimpan, dan
+dikembalikan di respons simpan untuk debug.
+
+Jadi jalur ganda tidak diperlukan: mengubah kanonikalisasi tidak punya korban.
+Tidak ada hash tercetak yang jadi tak cocok. 46 baris lama menyimpan nilai yang
+kini basi, dan tidak ada yang membacanya — akan terkoreksi sendiri saat
+dokumennya disimpan berikutnya.
+
+Versioning algoritma tetap relevan, tapi tempatnya di Fase 1:
+`ezdoc_signatures.content_hash_algo` (kolomnya sudah ada), untuk hash
+per-tanda-tangan yang **memang** akan diverifikasi.
 
 ### Fase 1 — tanda tangan jadi record
 
@@ -457,7 +486,7 @@ Masing-masing di atas fondasi ini dan pekerjaan sendiri.
 
 | # | Pertanyaan | Keputusan |
 |---|---|---|
-| 1 | Hash lama: hitung ulang, atau simpan versi algoritma? | **Simpan versi** di `content_hash_algo`. Dokumen lama tetap diverifikasi dengan algoritma lamanya; hash yang sudah beredar tidak diubah. Harganya: verifier menyimpan dua jalur selamanya |
+| 1 | Hash lama: hitung ulang, atau simpan versi algoritma? | **Gugur.** Ternyata `content_hash` tidak pernah dibandingkan maupun ditampilkan di mana pun, jadi tidak ada korban — tidak perlu jalur ganda. Versioning pindah ke Fase 1 di `ezdoc_signatures.content_hash_algo`, tempat hash-nya memang akan diverifikasi |
 | 2 | Mulai dari Fase 0 atau langsung 1? | **Fase 0 dulu.** Fase 1 memakai fungsi kanonikalisasi yang sama, jadi menulisnya sekali dan dites di tempat yang lebih sederhana |
 | 3 | Penyimpanan gambar | **Terukur:** 97,3% dari data adalah gambar TTD, rata-rata 16,5 KB/dokumen. Kerjakan **S1** + **S2** + **S3 (file di disk)**. Syarat S3: hash gambar di DB, kebijakan hapus, backup dua tempat. Kompresi lossy tetap ditolak |
 | 4 | Klik mode QR pada dokumen belum tersimpan | **Simpan otomatis.** Menandatangani adalah tindakan commit — tanda tangan tidak punya konsep draft |
