@@ -36,7 +36,36 @@ function ezdoc_ensure_schema($conn): void
     if ($checked) return;
     $checked = true;
 
-    if (!$conn) return;
+    if (!($conn instanceof \mysqli)) return;
+
+    // Every statement below is best-effort: this function exists to top up an
+    // older install, and an install that does not need topping up must not be
+    // stopped by it.
+    //
+    // `@` is not enough on its own. Under MYSQLI_REPORT_STRICT — which the
+    // migration runner turns on, and many hosts set globally — mysqli raises
+    // mysqli_sql_exception, which `@` does not suppress. Without this catch a
+    // fresh install fatals on the first `SHOW COLUMNS` for a table it was
+    // never supposed to have.
+    try {
+        ezdoc_ensure_schema_inner($conn);
+    } catch (\Throwable $e) {
+        @error_log('[ezdoc:schema] optional schema top-up skipped: ' . $e->getMessage());
+    }
+}
+
+/**
+ * The statements themselves. Split out so the guard above wraps all of them
+ * rather than each one needing its own.
+ *
+ * The tables named here belong to the host application that ezdoc was first
+ * extracted from, not to the library. They are touched only if already
+ * present — a consumer without them is not missing anything.
+ *
+ * @param \mysqli $conn
+ */
+function ezdoc_ensure_schema_inner($conn): void
+{
 
     // ─── surat_template_v2: kolom access_config (RBAC per-template) ───
     $existing = [];

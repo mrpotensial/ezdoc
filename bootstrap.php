@@ -57,7 +57,15 @@ if (EZDOC_AUTO_MIGRATE && isset($GLOBALS['conn']) && $GLOBALS['conn']) {
 // ─── Sanity check ───
 // Kalau EZDOC_STRICT_SETUP=true dan core tables tidak ada setelah migration,
 // tampilkan error page friendly (bukan blank white PHP fatal downstream).
-if (EZDOC_STRICT_SETUP && isset($GLOBALS['conn']) && $GLOBALS['conn']) {
+// `SHOW TABLES LIKE` is MySQL-only and mysqli_query() fatals on a PDO handle,
+// so the check runs only where it makes sense. App::run() accepts PDO, and a
+// bootstrap that dies on one would make that acceptance a lie.
+//
+// Skipping it on other drivers costs nothing here: the check is a nicety that
+// turns "missing table" into a readable page instead of an error further down.
+// Introspecting portably needs SchemaManager, which is not implemented yet
+// (see PRD §3.9).
+if (EZDOC_STRICT_SETUP && isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof \mysqli) {
     $__ezdocConn = $GLOBALS['conn'];
     $__ezdocTables = ['ezdoc_templates', 'ezdoc_documents', 'ezdoc_signatures'];
     $__ezdocMissing = [];

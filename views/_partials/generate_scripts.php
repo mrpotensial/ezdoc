@@ -1281,15 +1281,25 @@
                     document.getElementById('signOtpStep1').classList.remove('hidden');
                     document.getElementById('signOtpStep2').classList.add('hidden');
 
-                    // Resolve phone field
+                    // Resolve phone number, most specific source first.
+                    //
+                    // The DOM is checked before the server value because the
+                    // operator may have just typed a correction that has not
+                    // been saved yet. The server value is the fallback, and it
+                    // is what makes a number passed via GET/POST work at all —
+                    // without a matching field in the template there is nothing
+                    // in the DOM to read, which is why the input used to come
+                    // up empty despite the number being in the URL.
                     const phoneFieldSrc = ttdInfo.otp_phone_source || 'nomor_hp_pasien';
                     let patientPhone = '';
                     const phoneCtrl = document.querySelector(`input[name="${phoneFieldSrc}"], input[name="no_hp"], input[name="nomor_hp"]`);
                     if (phoneCtrl) patientPhone = phoneCtrl.value || '';
-                    else {
+                    if (!patientPhone) {
                         const editable = document.querySelector(`.f[data-field="${phoneFieldSrc}"]`);
                         if (editable) patientPhone = editable.textContent || '';
                     }
+                    if (!patientPhone) patientPhone = ttdInfo.otp_phone_value || '';
+                    patientPhone = patientPhone.trim();
 
                     const phoneInput = document.getElementById('signOtpPhoneInput');
                     if (phoneInput) phoneInput.value = patientPhone;

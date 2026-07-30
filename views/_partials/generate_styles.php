@@ -329,6 +329,30 @@
         .ttd-img .ttd-actions .btn-delete:hover { background: #dc2626; }
         .edit-off .ttd-actions { display: none !important; }
 
+        /* Edit QR — hover-only, sama seperti .ttd-actions di TTD gambar.
+           Sebelumnya selalu tampil dengan inline style, jadi setiap tanda
+           tangan QR membawa tombol yang menempel di dokumen dan ikut terlihat
+           saat orang cuma membaca. Sekarang QR-nya yang terlihat, tombolnya
+           muncul saat dibutuhkan. */
+        .ttd-area-qr { position: relative; }
+        .btn-edit-qr-content {
+            position: absolute;
+            left: 50%;
+            bottom: -2px;
+            transform: translateX(-50%);
+            display: none;
+            font-size: 10px;
+            padding: 2px 8px;
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .ttd-area-qr:hover .btn-edit-qr-content { display: block; }
+        .edit-off .btn-edit-qr-content { display: none !important; }
+
         /* TTD Mode Toggle */
         .ttd-mode-toggle { display: flex; gap: 2px; margin-bottom: 4px; justify-content: center; }
         .ttd-mode-btn { font-size: 10px; padding: 1px 8px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; border-radius: 3px; }
@@ -794,6 +818,9 @@
             .f { border-bottom: none !important; background: transparent !important; }
             .f:empty::before { display: none; }
             .ttd-actions { display: none !important; }
+            /* Dulu tombol ini punya inline display:block, jadi tulisan
+               "Edit QR" ikut tercetak di atas kertas. */
+            .btn-edit-qr-content { display: none !important; }
             .ttd-mode-toggle { display: none !important; }
             .materai-actions { display: none !important; }
             .materai-upload-box { display: none !important; }

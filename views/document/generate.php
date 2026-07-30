@@ -262,6 +262,8 @@ if ($hasTtdPlaceholders) {
         $requireOtpVal = $rom[1] ?? '0';
         $requireOtp = ($requireOtpVal === '1' || $requireOtpVal === 'true');
 
+        $otpPhoneSource = $opsm[1] ?? 'nomor_hp_pasien';
+
         $configTtd[] = [
             'id' => $ttdId,
             'label' => $lm[1] ?? t('fallback.signature', [], 'Signature'),
@@ -269,7 +271,7 @@ if ($hasTtdPlaceholders) {
             'ttd_modes' => $mm[1] ?? 'image',
             'qr_data' => html_entity_decode($qm[1] ?? ''),
             'require_otp' => $requireOtp,
-            'otp_phone_source' => $opsm[1] ?? 'nomor_hp_pasien',
+            'otp_phone_source' => $otpPhoneSource,
             'otp_ttl' => (int)($otm[1] ?? 300)
         ];
     }
@@ -525,6 +527,26 @@ function vRaw($name) {
 // Load whitelisted default variables (extracted to ezdoc/lib/doc_meta_helpers.php)
 // resolveDefault() moved to ezdoc/lib/doc_template_helpers.php — reads $whitelistedVars via global.
 $whitelistedVars = ezdoc_load_whitelisted_vars($conn);
+
+// ─── OTP phone, resolved server-side ───
+// The signing modal looks for the number in the DOM, which only finds it when
+// the phone happens to be one of the template's own fields. A caller that
+// passes it in the request instead — opening the letter from a patient record,
+// say — left the modal with nothing to read, so the operator had to retype a
+// number the application already knew.
+//
+// Resolved here rather than where $configTtd is built: vRaw() reads $dbFields,
+// and that is not populated until the document has been loaded further up.
+// Same precedence as every other field — saved value, then POST, then GET.
+foreach ($configTtd as $__i => $__ttd) {
+    if (empty($__ttd['require_otp'])) {
+        continue;
+    }
+    $configTtd[$__i]['otp_phone_value'] = trim((string) vRaw(
+        $__ttd['otp_phone_source'] ?? 'nomor_hp_pasien'
+    ));
+}
+unset($__i, $__ttd);
 
 // Dynamic Tables config ({{tabledb.ns.selector|format}} enhanced markers)
 // See processTabledbRows() untuk full marker syntax.
@@ -1163,6 +1185,23 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             $__slugTtd = doc_verify_ensure_slug($conn, (int)$doc_id);
             if ($__slugTtd) $qrContent = doc_verify_resolve_qr_value($qrContent, $__slugTtd);
         }
+        // A signature QR with no pattern used to do nothing until somebody
+        // typed a value into it by hand — which defeats the point: the whole
+        // reason to sign with a QR is that the reader can check the signature,
+        // and a hand-typed string proves nothing.
+        //
+        // So an unconfigured QR defaults to the document's verification URL.
+        // That is what the mode is for, and it is the convention every
+        // document-signing system that expects a phone camera on the other end
+        // follows: the code carries a pointer, not the data. Revocation keeps
+        // working, capacity is a non-issue, and the truth stays server-side.
+        //
+        // A template that sets `data-ttd-qr-data` still wins — this only fills
+        // the gap where nothing was configured.
+        if ($qrDataTpl === '') {
+            $qrDataTpl = '{verify_url}';
+        }
+
         // Compute resolved pattern (used as placeholder hint, and also fallback when user leaves input empty)
         $resolvedPattern = '';
         if ($qrDataTpl !== '') {
@@ -1189,7 +1228,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             $qrArea = '<div class="ttd-area-qr" id="ttd_area_qr_' . h($ttdId) . '" style="' . $qrDisplay . '">
                 <div class="ttd-qr-preview" id="ttd_qr_preview_' . h($ttdId) . '"></div>
                 <input type="hidden" class="ttd-qr-content-input" name="' . h($qrContentKey) . '" id="ttd_qr_content_' . h($ttdId) . '" value="' . h($qrContent) . '">
-                <button type="button" class="btn-edit-qr-content" onclick="editQrContent(\'' . h($ttdId) . '\', \'' . h($patternForJs) . '\')" title="' . h(t('title.edit_qr_content', [], 'Edit QR content')) . '" style="display:block;margin:4px auto 0;font-size:10px;padding:2px 8px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;">&#9998; ' . h(t('ttd.edit_qr_button', [], 'Edit QR')) . '</button>
+                <button type="button" class="btn-edit-qr-content" onclick="editQrContent(\'' . h($ttdId) . '\', \'' . h($patternForJs) . '\')" title="' . h(t('title.edit_qr_content', [], 'Edit QR content')) . '">&#9998; ' . h(t('ttd.edit_qr_button', [], 'Edit QR')) . '</button>
             </div>';
         }
 
@@ -1942,6 +1981,12 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
             if ($qrData !== '' && function_exists('doc_verify_resolve_qr_value') && function_exists('doc_verify_ensure_slug')) {
                 $__slugPdfTtd = doc_verify_ensure_slug($conn, (int)$doc_id);
                 if ($__slugPdfTtd) $qrData = doc_verify_resolve_qr_value($qrData, $__slugPdfTtd);
+            }
+            // Same default as the screen render: an unconfigured signature QR
+            // points at the document's verification URL. Without this the QR
+            // would appear on screen and vanish from the printed copy.
+            if ($qrDataTpl === '') {
+                $qrDataTpl = '{verify_url}';
             }
             if ($qrData === '' && $qrDataTpl !== '') {
                 $qrData = preg_replace_callback('/\{([^}]+)\}/', function($pm) use ($pickPdf, $conn) {
