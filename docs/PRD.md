@@ -288,6 +288,35 @@ beserta dua bug yang ditemukan sambil menelusuri (hash dokumen tidak
 dikanonikalisasi; tanda tangan tidak boleh menutup tanda tangan lain) dan
 masalah pertumbuhan penyimpanan ada di `docs/PLAN-SIGNATURE-RECORDS.md`.
 
+### 3.9c Paritas migrasi SQLite belum utuh — ditemukan 2026-07-30
+
+Ditemukan saat menulis test verifier tanda tangan.
+
+| | Keadaan |
+|---|---|
+| `ezdoc_signatures` | **Tidak ada migrasi SQLite** — 4 dari 5 migrasi inti punya padanan, yang ini tidak. Ditulis 2026-07-30 |
+| `ezdoc_documents` | **Divergen secara struktural**, bukan sekadar kurang kolom: MySQL 32 kolom, SQLite 21 |
+
+Divergensi dokumen bukan kolom yang tertinggal — konsepnya berbeda:
+
+| Hanya di MySQL | Hanya di SQLite |
+|---|---|
+| `norm`, `nopen`, `label`, `version`, `signature_values`, `public_slug*`, `published_at`, `content_hash_at` | `reference_number`, `subject_type`, `subject_id`, `rendered_html`, `owner_id` |
+
+Migrasi SQLite mencerminkan desain lama yang generik (`subject_type`/`subject_id`),
+sementara jalur MySQL berkembang ke bentuk spesifik pasien (`norm`/`nopen`).
+**Keduanya bukan tabel yang sama.**
+
+Artinya klaim portabilitas 5 dialect belum berlaku di tingkat skema untuk
+dokumen — grammar-nya bisa meng-*compile* DDL untuk lima dialect (273 test),
+tapi migrasi yang dikirim untuk SQLite tidak menyimpan hal yang sama dengan
+MySQL. Menyatukannya perlu keputusan: mana yang jadi bentuk kanonis, dan apakah
+`norm`/`nopen` (spesifik domain rumah sakit) pantas ada di skema library atau
+mestinya `subject_type`/`subject_id` yang generik.
+
+Belum dikerjakan. Test verifier memakai stand-in minimal yang diberi komentar
+eksplisit, bukan berpura-pura paritasnya ada.
+
 ### 3.10 Pintu `public/` — syarat mount, ditemukan 2026-07-29
 
 `Ezdoc\App::run()` dijual sebagai "1-line mount" (§2, §6 v0.9.8). Yang tidak

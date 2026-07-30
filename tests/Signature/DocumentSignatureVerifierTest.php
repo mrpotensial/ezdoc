@@ -1,0 +1,390 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Ezdoc\Tests\Signature;
+
+use Ezdoc\Db\Pdo\PdoConnection;
+use Ezdoc\Signature\DocumentSignatureVerifier;
+use Ezdoc\Signature\SignaturePayload;
+use Ezdoc\Signature\SigningKey;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * Covers signature verification against a real SQL engine (SQLite in-memory).
+ *
+ * The distinction under test is the one the class exists for: a document edited
+ * after signing and a signature row written to directly are different problems,
+ * and a verifier that reports both as "invalid" tells nobody which happened.
+ *
+ * Rows are inserted directly rather than through the save path — the point here
+ * is what the verifier makes of stored state, including states the save path
+ * would never produce.
+ */
+final class DocumentSignatureVerifierTest extends TestCase
+{
+    private const SECRET = 'secret-uji-verifier-yang-cukup-panjang-32';
+
+    private \PDO $pdo;
+    private PdoConnection $db;
+    private DocumentSignatureVerifier $verifier;
+    private int $docId = 0;
+    private string $docUuid = '0190aaaa-0000-7000-8000-000000000001';
+    private string $tplUuid = '0190bbbb-0000-7000-8000-000000000002';
+
+    /** @var array<string,string> */
+    private array $marks = ['ttd_a' => 'gambar-a', 'ttd_b' => 'gambar-b'];
+
+    /** @var array<string,string> */
+    private array $fields = ['nama' => 'Budi', 'nik' => '123'];
+
+    protected function setUp(): void
+    {
+        if (!extension_loaded('pdo_sqlite')) {
+            self::markTestSkipped('pdo_sqlite is not enabled.');
+        }
+        if (!defined('EZDOC_HMAC_SECRET')) {
+            define('EZDOC_HMAC_SECRET', self::SECRET);
+        }
+        if (constant('EZDOC_HMAC_SECRET') !== self::SECRET) {
+            self::markTestSkipped('EZDOC_HMAC_SECRET already defined with another value.');
+        }
+
+        $this->pdo = new \PDO('sqlite::memory:');
+        $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+
+        // ezdoc_signatures comes from the shipped SQLite migration, so a column
+        // added there and not here shows up as a failure rather than drifting.
+        $this->pdo->exec((string) file_get_contents(
+            dirname(__DIR__, 2) . '/migrations/sqlite/2026_01_01_000005_create_ezdoc_signatures.sql'
+        ));
+
+        // ezdoc_documents is a deliberate stand-in, not the shipped migration.
+        // The SQLite and MySQL document schemas have diverged structurally —
+        // MySQL has norm/nopen/label/signature_values, SQLite has
+        // subject_type/subject_id/rendered_html — so the shipped SQLite version
+        // cannot hold what this test needs. Only the five columns the verifier
+        // reads are declared; widening it would imply a parity that does not
+        // exist. See PRD for the divergence itself.
+        $this->pdo->exec(
+            'CREATE TABLE ezdoc_documents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL,
+                template_uuid TEXT NULL,
+                template_version INTEGER NULL,
+                field_values TEXT NULL,
+                signature_values TEXT NULL
+            )'
+        );
+
+        $this->db = new PdoConnection($this->pdo);
+        $this->verifier = new DocumentSignatureVerifier($this->db);
+        SigningKey::reset();
+
+        $this->docId = $this->insertDocument();
+    }
+
+    protected function tearDown(): void
+    {
+        SigningKey::reset();
+    }
+
+    private function insertDocument(): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ezdoc_documents (uuid, template_uuid, template_version, field_values, signature_values)
+             VALUES (?, ?, 3, ?, ?)'
+        );
+        $stmt->execute([
+            $this->docUuid,
+            $this->tplUuid,
+            (string) json_encode($this->fields),
+            (string) json_encode($this->marks),
+        ]);
+
+        return (int) $this->pdo->lastInsertId();
+    }
+
+    /**
+     * Record a signature the way the save path would.
+     *
+     * @param array<string,mixed> $overrides Force a stored state on purpose
+     */
+    private function recordSignature(string $ttdId, array $overrides = []): void
+    {
+        $key = SigningKey::resolve();
+        self::assertNotNull($key, 'the test secret should resolve');
+
+        $contentHash = $overrides['content_hash'] ?? SignaturePayload::hash(
+            $this->docUuid,
+            $this->tplUuid,
+            3,
+            $this->fields,
+            $ttdId,
+            (string) ($this->marks[$ttdId] ?? '')
+        );
+        $envelope = $overrides['envelope'] ?? bin2hex(hash_hmac('sha256', (string) $contentHash, $key, true));
+
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ezdoc_signatures
+               (uuid, document_id, signature_id_within_doc, signer_id, signer_role,
+                provider, level, envelope_format, envelope, content_hash, content_hash_algo,
+                signed_at, verify_status, metadata)
+             VALUES (?, ?, 0, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([
+            '0190cccc-' . substr(md5($ttdId . mt_rand()), 0, 12),
+            $this->docId,
+            '18',
+            'kepala_unit',
+            'hmac',
+            $overrides['envelope_format'] ?? 'hmac',
+            $envelope,
+            $contentHash,
+            $overrides['content_hash_algo'] ?? SignaturePayload::ALGO,
+            (new \DateTimeImmutable())->format('Y-m-d H:i:s.v'),
+            $overrides['verify_status'] ?? 'valid',
+            (string) json_encode(['ttd_id' => $ttdId, 'ttd_label' => strtoupper($ttdId)]),
+        ]);
+    }
+
+    /**
+     * @param array<string,string> $fields
+     */
+    private function rewriteDocument(?array $fields = null, ?array $marks = null): void
+    {
+        if ($fields !== null) $this->fields = $fields;
+        if ($marks !== null) $this->marks = $marks;
+        $stmt = $this->pdo->prepare('UPDATE ezdoc_documents SET field_values = ?, signature_values = ? WHERE id = ?');
+        $stmt->execute([
+            (string) json_encode($this->fields),
+            (string) json_encode($this->marks),
+            $this->docId,
+        ]);
+    }
+
+    private function statusOf(string $ttdId): string
+    {
+        $verdicts = $this->verifier->verify($this->docId, $ttdId);
+        self::assertCount(1, $verdicts, "expected one verdict for {$ttdId}");
+
+        return (string) $verdicts[0]['status'];
+    }
+
+    // ─── The happy case ───
+
+    public function testAnUntouchedSignatureIsValid(): void
+    {
+        $this->recordSignature('ttd_a');
+
+        self::assertSame(DocumentSignatureVerifier::STATUS_VALID, $this->statusOf('ttd_a'));
+    }
+
+    public function testTheVerdictCarriesWhoSignedAndWhen(): void
+    {
+        $this->recordSignature('ttd_a');
+        $v = $this->verifier->verify($this->docId, 'ttd_a')[0];
+
+        self::assertSame('18', $v['signer_id']);
+        self::assertSame('kepala_unit', $v['signer_role']);
+        self::assertNotSame('', $v['signed_at']);
+        self::assertSame(1, $v['level']);
+        self::assertSame('TTD_A', $v['ttd_label']);
+    }
+
+    // ─── The distinction that matters ───
+
+    /**
+     * An ordinary, expected event: somebody revised the document. The signature
+     * itself is genuine, so reporting it as untrusted would send people looking
+     * for an intruder.
+     */
+    public function testEditingTheDocumentReportsTamperedNotUntrusted(): void
+    {
+        $this->recordSignature('ttd_a');
+
+        $this->rewriteDocument(['nama' => 'DIUBAH', 'nik' => '123']);
+
+        self::assertSame(DocumentSignatureVerifier::STATUS_TAMPERED, $this->statusOf('ttd_a'));
+    }
+
+    /**
+     * A different problem: the signature row itself does not hold up. Either the
+     * database was written to directly or the key changed — worth investigating,
+     * not the same as a revision.
+     */
+    public function testAnAlteredSignatureRowReportsUntrusted(): void
+    {
+        $this->recordSignature('ttd_a', ['envelope' => str_repeat('00', 32)]);
+
+        self::assertSame(DocumentSignatureVerifier::STATUS_UNTRUSTED, $this->statusOf('ttd_a'));
+    }
+
+    /**
+     * Swapping the recorded hash to match edited content does not launder it:
+     * the envelope covers the hash, so changing the hash breaks the envelope.
+     */
+    public function testRewritingTheStoredHashBreaksTheEnvelope(): void
+    {
+        // The attack: someone with database access edits the document, then
+        // rewrites content_hash to match the new content — hoping the signature
+        // will simply agree. Without the signing key they cannot recompute the
+        // envelope, so the old envelope stays behind and no longer covers the
+        // hash it sits next to.
+        //
+        // Note the envelope is computed from the ORIGINAL hash on purpose. Let
+        // the helper derive it from the forged hash and the row becomes
+        // internally consistent, which is a different situation entirely — and
+        // one only reachable by someone who already holds the key.
+        $genuineHash = SignaturePayload::hash(
+            $this->docUuid, $this->tplUuid, 3, $this->fields, 'ttd_a', $this->marks['ttd_a']
+        );
+        $genuineEnvelope = bin2hex(hash_hmac('sha256', $genuineHash, (string) SigningKey::resolve(), true));
+
+        $this->recordSignature('ttd_a', [
+            'content_hash' => hash('sha256', 'isi-karangan'),
+            'envelope'     => $genuineEnvelope,
+        ]);
+
+        self::assertSame(DocumentSignatureVerifier::STATUS_UNTRUSTED, $this->statusOf('ttd_a'));
+    }
+
+    /**
+     * The counterpart, spelled out because the difference is easy to lose: a row
+     * that is internally consistent but describes content the document no longer
+     * has is `tampered`, not `untrusted`. Only the key holder can produce it,
+     * and the honest reading is "this was signed, then the document changed".
+     */
+    public function testAConsistentRowDescribingOtherContentIsTamperedNotUntrusted(): void
+    {
+        $forged = hash('sha256', 'isi-lain');
+        $this->recordSignature('ttd_a', [
+            'content_hash' => $forged,
+            'envelope'     => bin2hex(hash_hmac('sha256', $forged, (string) SigningKey::resolve(), true)),
+        ]);
+
+        self::assertSame(DocumentSignatureVerifier::STATUS_TAMPERED, $this->statusOf('ttd_a'));
+    }
+
+    // ─── Signatures do not affect each other (§5) ───
+
+    /**
+     * The rule the design turns on, checked against stored rows rather than in
+     * the abstract: B signing later must leave A alone.
+     */
+    public function testASecondSignatureLeavesTheFirstValid(): void
+    {
+        $this->recordSignature('ttd_a');
+        self::assertSame(DocumentSignatureVerifier::STATUS_VALID, $this->statusOf('ttd_a'));
+
+        $this->recordSignature('ttd_b');
+
+        self::assertSame(DocumentSignatureVerifier::STATUS_VALID, $this->statusOf('ttd_a'));
+        self::assertSame(DocumentSignatureVerifier::STATUS_VALID, $this->statusOf('ttd_b'));
+    }
+
+    /** Swapping one slot's mark must not implicate the other signer. */
+    public function testSwappingOneMarkBreaksOnlyThatSignature(): void
+    {
+        $this->recordSignature('ttd_a');
+        $this->recordSignature('ttd_b');
+
+        $this->rewriteDocument(null, ['ttd_a' => 'gambar-a', 'ttd_b' => 'gambar-b-palsu']);
+
+        self::assertSame(DocumentSignatureVerifier::STATUS_VALID, $this->statusOf('ttd_a'));
+        self::assertSame(DocumentSignatureVerifier::STATUS_TAMPERED, $this->statusOf('ttd_b'));
+    }
+
+    // ─── States the save path would not produce ───
+
+    public function testARevokedSignatureReportsRevokedRegardlessOfHashes(): void
+    {
+        $this->recordSignature('ttd_a', ['verify_status' => 'revoked']);
+
+        self::assertSame(DocumentSignatureVerifier::STATUS_REVOKED, $this->statusOf('ttd_a'));
+    }
+
+    /**
+     * A signature recorded under a payload shape this version cannot rebuild
+     * must say so, not guess. Guessing would report a false verdict either way.
+     */
+    public function testAnUnknownAlgorithmReportsUnverifiable(): void
+    {
+        $this->recordSignature('ttd_a', ['content_hash_algo' => 'sha256-something-else']);
+
+        self::assertSame(DocumentSignatureVerifier::STATUS_UNVERIFIABLE, $this->statusOf('ttd_a'));
+    }
+
+    public function testANonHmacEnvelopeReportsUnverifiable(): void
+    {
+        $this->recordSignature('ttd_a', ['envelope_format' => 'pkcs7']);
+
+        self::assertSame(DocumentSignatureVerifier::STATUS_UNVERIFIABLE, $this->statusOf('ttd_a'));
+    }
+
+    // ─── Scope ───
+
+    public function testAllSignaturesAreReturnedWhenNoSlotIsNamed(): void
+    {
+        $this->recordSignature('ttd_a');
+        $this->recordSignature('ttd_b');
+
+        self::assertCount(2, $this->verifier->verify($this->docId));
+    }
+
+    /** What a per-signature QR asks for: this slot, not the whole document. */
+    public function testNamingASlotReturnsOnlyThatOne(): void
+    {
+        $this->recordSignature('ttd_a');
+        $this->recordSignature('ttd_b');
+
+        $verdicts = $this->verifier->verify($this->docId, 'ttd_b');
+
+        self::assertCount(1, $verdicts);
+        self::assertSame('ttd_b', $verdicts[0]['ttd_id']);
+    }
+
+    public function testAnUnknownSlotReturnsNothing(): void
+    {
+        $this->recordSignature('ttd_a');
+
+        self::assertSame([], $this->verifier->verify($this->docId, 'ttd_tidak_ada'));
+    }
+
+    public function testAnUnsignedDocumentReturnsNothing(): void
+    {
+        self::assertSame([], $this->verifier->verify($this->docId));
+    }
+
+    public function testAMissingDocumentReturnsNothing(): void
+    {
+        self::assertSame([], $this->verifier->verify(0));
+        self::assertSame([], $this->verifier->verify(999999999));
+    }
+
+    // ─── Document-level summary ───
+
+    /**
+     * A document is not "valid" because most of its signatures are. The worst
+     * verdict has to win, or a summary line hides the one that matters.
+     */
+    public function testTheSummaryTakesTheWorstVerdict(): void
+    {
+        self::assertSame('unsigned', DocumentSignatureVerifier::summarise([]));
+
+        self::assertSame('valid', DocumentSignatureVerifier::summarise([
+            ['status' => 'valid'],
+            ['status' => 'valid'],
+        ]));
+
+        self::assertSame('tampered', DocumentSignatureVerifier::summarise([
+            ['status' => 'valid'],
+            ['status' => 'tampered'],
+        ]));
+
+        self::assertSame('untrusted', DocumentSignatureVerifier::summarise([
+            ['status' => 'tampered'],
+            ['status' => 'untrusted'],
+        ]), 'untrusted outranks tampered — one is a revision, the other wants investigating');
+    }
+}

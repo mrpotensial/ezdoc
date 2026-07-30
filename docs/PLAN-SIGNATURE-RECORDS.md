@@ -1,6 +1,6 @@
 # Plan — Tanda tangan sebagai record, QR TTD, dan pertumbuhan penyimpanan
 
-Status: **Fase 0 + Fase 1 selesai** (2026-07-30) — sisanya rancangan disepakati, keputusan §9 diambil
+Status: **Fase 0, 1 selesai; Fase 2 logika selesai** (2026-07-30) — sisanya rancangan disepakati, keputusan §9 diambil
 Tanggal: 2026-07-30
 Pemicu: pertanyaan "QR mode TTD isinya apa supaya standar industri?"
 
@@ -501,7 +501,32 @@ dari `doc_verify_get_secret()`.
 - Berguna langsung: jejak siapa/kapan, dan perubahan isi setelah tanda tangan
   jadi terdeteksi — bahkan sebelum ada UI apa pun
 
-### Fase 2 — halaman verify per tanda tangan
+### Fase 2 — verifikasi per tanda tangan ✅ LOGIKA SELESAI 2026-07-30
+
+`Ezdoc\Signature\DocumentSignatureVerifier` — 17 test, SQLite in-memory.
+
+Menanyakan **dua hal terpisah** per tanda tangan, dan memisahkannya itu seluruh
+nilainya:
+
+| Pertanyaan | Menjawab |
+|---|---|
+| Amplop HMAC-nya sah? | Apakah *record*-nya asli — ada yang mengedit barisnya? |
+| Isi masih menghasilkan hash sama? | Apakah *dokumennya* berubah setelah ditandatangani? |
+
+Menggabungkannya jadi satu boolean menghilangkan beda yang penting. Dokumen
+yang diedit setelah tanda tangan itu kejadian biasa — seseorang merevisi dan
+seharusnya membuat versi baru. Baris tanda tangan yang amplopnya gagal itu hal
+lain: DB ditulis langsung, atau kuncinya berganti. Yang pertama masalah alur
+kerja, yang kedua perlu diselidiki.
+
+Status: `valid`, `tampered`, `untrusted`, `unverifiable`, `revoked`.
+`summarise()` mengambil verdict terburuk — dokumen tidak jadi "sah" karena
+mayoritas tanda tangannya sah.
+
+**Yang belum:** menampilkannya di `verifikasi/index.php` dan menerima `?ttd=`.
+Logikanya siap dipakai.
+
+### Fase 2 — rincian rencana awal
 
 - Terima `?ttd=`, tampilkan tabel §6
 - Tanpa ini, Fase 1 mengumpulkan data yang belum bisa dilihat
