@@ -79,9 +79,23 @@ final class Document
     private $updatedAt;
 
     /**
+     * Apakah `signature_values` ikut dimuat dari baris asalnya.
+     *
+     * Query daftar sengaja meninggalkannya — gambar tanda tangan 97% muatan
+     * query itu, dan daftarnya tidak menampilkan satu pun. Yang tersisa adalah
+     * bahaya kolom kosong: tanpa flag ini, dokumen yang datang dari daftar akan
+     * menjawab "belum ditandatangani" dengan percaya diri.
+     *
+     * @var bool
+     */
+    private $signatureValuesLoaded;
+
+    /**
      * @param array<string,mixed> $fieldValues
      * @param array<string,mixed> $signatureValues
      * @param array<string,mixed> $metadata
+     * @param bool $signatureValuesLoaded Default true supaya pemanggil lama
+     *   (yang memang menyertakan nilainya) tidak berubah artinya.
      */
     public function __construct(
         int $id,
@@ -102,8 +116,10 @@ final class Document
         int $revision,
         ?int $ownerId,
         ?string $createdAt,
-        ?string $updatedAt
+        ?string $updatedAt,
+        bool $signatureValuesLoaded = true
     ) {
+        $this->signatureValuesLoaded = $signatureValuesLoaded;
         $this->id = $id;
         $this->uuid = $uuid;
         $this->templateId = $templateId;
@@ -168,8 +184,21 @@ final class Document
         }
 
         $fieldValues = self::decodeJsonObject($row['field_values'] ?? null);
-        $signatureValues = self::decodeJsonObject($row['signature_values'] ?? null);
         $metadata = self::decodeJsonObject($row['metadata'] ?? null);
+
+        // `signature_values` sengaja tidak diambil query daftar: gambar tanda
+        // tangan 97% muatannya, dan daftar tidak menampilkan satu pun. Lihat
+        // DocumentRepository::$listCols.
+        //
+        // Yang harus dijaga di sini: kolom yang TIDAK DIMUAT tidak boleh terbaca
+        // sama seperti dokumen yang memang belum ditandatangani. Keduanya akan
+        // jadi `[]`, dan kode yang bertanya "sudah ditandatangani?" akan menjawab
+        // "belum" untuk dokumen yang sudah — jawaban yang salah, diberikan dengan
+        // percaya diri, tanpa satu pun error.
+        $signatureValuesLoaded = array_key_exists('signature_values', $row);
+        $signatureValues = $signatureValuesLoaded
+            ? self::decodeJsonObject($row['signature_values'])
+            : [];
 
         // Promote legacy hospital columns into field_values for read access.
         if (!empty($row['norm']) && !array_key_exists('norm', $fieldValues)) {
@@ -220,7 +249,8 @@ final class Document
             $revision,
             $ownerId,
             $createdAt,
-            $updatedAt
+            $updatedAt,
+            $signatureValuesLoaded
         );
     }
 
@@ -301,9 +331,44 @@ final class Document
         return $this->fieldValues;
     }
 
-    /** @return array<string,mixed> */
+    /**
+     * Sudah dimuat? Panggil ini sebelum getSignatureValues() kalau dokumennya
+     * bisa berasal dari query daftar.
+     */
+    public function hasLoadedSignatureValues(): bool
+    {
+        return $this->signatureValuesLoaded;
+    }
+
+    /**
+     * @return array<string,mixed>
+     *
+     * @throws \LogicException kalau kolomnya tidak ikut dimuat.
+     *
+     * Melempar, bukan mengembalikan array kosong. Array kosong artinya "dokumen
+     * ini belum ditandatangani" — pernyataan yang salah dan tidak bisa dibedakan
+     * dari kebenaran. Lebih baik pemanggilnya gagal keras dan memuat ulang
+     * dokumennya lewat findById() daripada melaporkan dokumen bertanda tangan
+     * sebagai belum ditandatangani.
+     *
+     * Pola yang sama dipakai Doctrine (mengakses properti proxy yang belum
+     * di-inisialisasi melempar) dan Eloquent dengan `preventLazyLoading()`.
+     * Bedanya di sini kami tidak memuat sendiri secara diam-diam: lazy-load akan
+     * menyembunyikan N+1 di halaman daftar, yang justru alasan kolom ini
+     * dikeluarkan.
+     */
     public function getSignatureValues(): array
     {
+        if (!$this->signatureValuesLoaded) {
+            throw new \LogicException(
+                'signature_values was not loaded for document ' . $this->id
+                . '. List queries omit it on purpose — the images are ~97% of the'
+                . ' payload and no list renders them. Load the document with'
+                . ' DocumentRepository::findById() when you need the signatures,'
+                . ' or check hasLoadedSignatureValues() first.'
+            );
+        }
+
         return $this->signatureValues;
     }
 
@@ -366,7 +431,11 @@ final class Document
             'subject_type' => $this->subjectType,
             'subject_id' => $this->subjectId,
             'field_values' => $this->fieldValues,
-            'signature_values' => $this->signatureValues,
+            // `null` saat kolomnya tidak dimuat, bukan `[]`. Ini yang masuk ke
+            // respons JSON dan audit log: `[]` di sana akan tercatat sebagai
+            // "dokumen tanpa tanda tangan", dan catatan audit yang salah lebih
+            // buruk daripada tidak ada catatan.
+            'signature_values' => $this->signatureValuesLoaded ? $this->signatureValues : null,
             'metadata' => $this->metadata,
             'status' => $this->status,
             'content_hash' => $this->contentHash,

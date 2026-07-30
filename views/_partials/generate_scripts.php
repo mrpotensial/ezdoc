@@ -1606,6 +1606,122 @@
         // dokumennya tersimpan tapi tidak ada record tanda tangan yang tertulis.
         const EZDOC_QR_ACT = 'qr:v1';
 
+        // ═══════════════════════════════════════════════════════════════════════
+        // Normalisasi gambar tanda tangan sebelum disimpan
+        // ═══════════════════════════════════════════════════════════════════════
+        //
+        // Canvas-nya 850×400 dan diekspor apa adanya: 340.000 piksel RGBA yang
+        // mayoritasnya kosong. Terukur 16,5 KB per dokumen, dan `signature_values`
+        // jadi 97,3% dari seluruh data dokumen.
+        //
+        // Ditampilkan, gambar itu maksimal 120×60 px (.ttd-signature). Jadi yang
+        // disimpan tujuh kali lebih besar dari yang pernah dilihat siapa pun.
+        //
+        // Dua langkah, keduanya di sisi klien — jadi hemat di jaringan juga, bukan
+        // cuma di disk:
+        //
+        //   1. Pangkas ke kotak tinta. Sisa kanvas tidak membawa informasi.
+        //   2. Turunkan resolusi sampai sisi terpanjang <= MAX_SIDE.
+        //
+        // Tetap PNG. Lossy (WebP/JPEG) ditolak: kompresi lossy meninggalkan
+        // artefak pada garis tipis, dan ini artefak yang orang anggap bukti.
+        // Penghematannya tidak sebanding dengan pertanyaan "kenapa tanda tangan
+        // saya kelihatan beda".
+        const EZDOC_SIG_MAX_SIDE = 400;   // ~3,3x ukuran tampil — cukup untuk cetak
+        const EZDOC_SIG_PAD = 4;          // > lineWidth/2, supaya ujung bulat tidak terpotong
+
+        /**
+         * Kotak tinta dari data piksel, bukan dari pelacakan goresan.
+         *
+         * Alasannya penting: modal ini juga memuat tanda tangan yang sudah ada ke
+         * kanvas untuk diedit. Pelacakan goresan tidak melihat piksel yang datang
+         * dari gambar itu, jadi menyimpan tanpa menggambar apa pun akan memangkas
+         * habis tanda tangan yang sudah ada. Memindai alpha melihat semuanya —
+         * goresan baru, gambar yang dimuat, dan hasil penghapusan.
+         *
+         * Latar putih kanvas berasal dari CSS, bukan dicat ke bitmap-nya, jadi
+         * area kosong benar-benar transparan dan alpha bisa dipercaya.
+         *
+         * @returns {{x:number,y:number,w:number,h:number}|null} null kalau tidak ada tinta
+         */
+        function _ezdocInkBounds(sourceCanvas) {
+            const w = sourceCanvas.width;
+            const h = sourceCanvas.height;
+            const data = sourceCanvas.getContext('2d').getImageData(0, 0, w, h).data;
+
+            let minX = w, minY = h, maxX = -1, maxY = -1;
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    // Alpha saja. Warna goresan tidak diasumsikan — template boleh
+                    // memakai tinta biru, dan memeriksa "bukan putih" akan salah
+                    // menghitung piksel transparan sebagai tinta.
+                    if (data[(y * w + x) * 4 + 3] !== 0) {
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                    }
+                }
+            }
+
+            if (maxX < 0) return null; // kanvas kosong
+
+            const x = Math.max(0, minX - EZDOC_SIG_PAD);
+            const y = Math.max(0, minY - EZDOC_SIG_PAD);
+
+            return {
+                x: x,
+                y: y,
+                w: Math.min(w, maxX + EZDOC_SIG_PAD + 1) - x,
+                h: Math.min(h, maxY + EZDOC_SIG_PAD + 1) - y
+            };
+        }
+
+        /**
+         * PNG yang sudah dipangkas dan diturunkan resolusinya.
+         *
+         * Mengembalikan null kalau kanvasnya kosong — pemanggil yang memutuskan
+         * apa artinya, dan di sini artinya "tidak ada yang ditandatangani".
+         *
+         * Kegagalan apa pun jatuh kembali ke ekspor utuh. Ini optimasi
+         * penyimpanan; kehilangan tanda tangan karenanya akan jadi pertukaran yang
+         * bodoh. `getImageData` bisa melempar kalau kanvasnya ternoda oleh gambar
+         * lintas-asal — tidak terjadi sekarang (semua data URI), tapi menaruh
+         * jaring di bawahnya jauh lebih murah daripada mengetahuinya nanti.
+         */
+        function normaliseSignaturePng(sourceCanvas) {
+            let bounds = null;
+            try {
+                bounds = _ezdocInkBounds(sourceCanvas);
+            } catch (e) {
+                console.warn('[ezdoc:signature] pemindaian kotak tinta gagal, pakai ekspor utuh', e);
+                return sourceCanvas.toDataURL('image/png');
+            }
+
+            if (bounds === null) return null;
+
+            // Jangan pernah memperbesar. Tanda tangan kecil yang di-upscale cuma
+            // menambah byte dan blur, tanpa satu pun detail baru.
+            const scale = Math.min(1, EZDOC_SIG_MAX_SIDE / Math.max(bounds.w, bounds.h));
+            const outW = Math.max(1, Math.round(bounds.w * scale));
+            const outH = Math.max(1, Math.round(bounds.h * scale));
+
+            try {
+                const out = document.createElement('canvas');
+                out.width = outW;
+                out.height = outH;
+                const octx = out.getContext('2d');
+                octx.imageSmoothingEnabled = true;
+                octx.imageSmoothingQuality = 'high';
+                octx.drawImage(sourceCanvas, bounds.x, bounds.y, bounds.w, bounds.h, 0, 0, outW, outH);
+
+                return out.toDataURL('image/png');
+            } catch (e) {
+                console.warn('[ezdoc:signature] normalisasi gagal, pakai ekspor utuh', e);
+                return sourceCanvas.toDataURL('image/png');
+            }
+        }
+
         // Tuliskan nama penanda tangan SEBELUM tanda tangannya diambil.
         //
         // Urutannya penting: hash tanda tangan dihitung server dari field yang
@@ -1690,7 +1806,19 @@
                 return;
             }
 
-            const data = canvas.toDataURL('image/png');
+            // Dipangkas ke kotak tinta dan diturunkan resolusinya — lihat
+            // normaliseSignaturePng(). Tetap PNG lossless.
+            const data = normaliseSignaturePng(canvas);
+
+            // Kanvas kosong. Dulu ini tersimpan sebagai data URI 850×400 penuh
+            // transparansi: sebuah "tanda tangan" yang tidak menggambarkan apa pun,
+            // yang menandai slotnya sudah ditandatangani dan — sejak Fase 1 —
+            // menuliskan record tanda tangan untuk goresan yang tidak ada.
+            if (data === null) {
+                showToast(t('toast.signature_empty', {}, 'Nothing was drawn — the signature was not saved.'), 'error');
+                return;
+            }
+
             hiddenInput.value = data;
 
             const preview = document.getElementById('preview_' + currentTtdId);

@@ -397,6 +397,76 @@ Tiap fase berguna sendiri dan bisa dihentikan di situ.
 Fase S di bawah **tidak bergantung** pada yang lain — bisa dikerjakan lebih
 dulu, sejajar, atau ditunda, tanpa memengaruhi apa pun.
 
+### S1 — projeksi daftar ✅ SELESAI 2026-07-30
+
+`DocumentRepository::$listOmittedCols = ['signature_values']`.
+`findRecent()` / `listByTemplate()` / `listByStatus()` memakai `listCols()`;
+`findById()` / `findByUuid()` / `findByPublicSlug()` tetap penuh. Tanpa migrasi,
+tanpa perubahan skema. Pemisahan projeksi daftar dan ambil-satu itu pola biasa —
+`$hidden` Eloquent, partial DQL Doctrine, `.only()`/`.defer()` Django.
+
+**Yang ditambahkan di atas pola itu, dan inti keamanannya:** `Document` mencatat
+apakah kolomnya ikut dimuat. Tanpa itu, dokumen dari daftar akan menjawab
+"belum ditandatangani" — `[]`, tidak bisa dibedakan dari kebenaran, diberikan
+dengan percaya diri, tanpa satu pun error.
+
+| | |
+|---|---|
+| `hasLoadedSignatureValues()` | Ditanyakan kalau dokumennya bisa berasal dari daftar |
+| `getSignatureValues()` | **Melempar** `LogicException` kalau tidak dimuat, dan pesannya menyebut id dokumen serta remedinya (`findById()`) |
+| `toArray()` | `null`, bukan `[]` — ini yang masuk respons JSON dan audit log, dan catatan audit yang salah lebih buruk daripada tidak ada catatan |
+
+Melempar, bukan lazy-load. Doctrine melempar pada properti proxy yang belum
+di-inisialisasi; Eloquent dengan `preventLazyLoading()` juga. Memuat sendiri
+secara diam-diam akan menyembunyikan N+1 di halaman daftar — justru alasan kolom
+ini dikeluarkan.
+
+21 test baru (`tests/Document/`), area yang sebelumnya nol test. Diverifikasi
+menangkap regresinya: mengosongkan `$listOmittedCols` membuat 5 test gagal.
+
+### S2 — normalisasi gambar ✅ SELESAI 2026-07-30
+
+`normaliseSignaturePng()` di `generate_scripts.php`. Dua langkah, keduanya di
+sisi klien jadi hemat di jaringan juga: pangkas ke kotak tinta, lalu turunkan
+resolusi sampai sisi terpanjang ≤ 400 px. Tetap PNG lossless.
+
+**Terukur pada 37 gambar tanda tangan sungguhan (bukan perkiraan):**
+
+| | |
+|---|---|
+| Sebelum | 580,8 KB — rata-rata **15,7 KB** |
+| Sesudah | 129,6 KB — rata-rata **3,5 KB** |
+| Faktor | **4,48×** |
+
+Rencana memperkirakan 3–4×; hasilnya sedikit lebih baik. Dan dimensinya
+menunjukkan **penghematannya hampir seluruhnya dari pemangkasan**, bukan dari
+penurunan resolusi: 850×400 → 229×325, 172×285, 257×309. Batas 400 px jarang
+tersentuh, jadi mayoritas tanda tangan tidak diresampling sama sekali — lossless
+tanpa syarat, tanpa pelembutan garis. Batas itu tetap ada sebagai plafon untuk
+orang yang menggambar selebar kanvas.
+
+Kotak tintanya dihitung dari **data piksel**, bukan dari pelacakan goresan.
+Modal ini juga memuat tanda tangan yang sudah ada ke kanvas untuk diedit;
+pelacakan goresan tidak melihat piksel dari gambar itu, jadi menyimpan tanpa
+menggambar apa pun akan memangkas habis tanda tangan yang sudah ada. Memindai
+alpha melihat semuanya. (Latar putih kanvas dari CSS, bukan dicat ke bitmap-nya,
+jadi alpha bisa dipercaya.)
+
+**Bonus yang tidak direncanakan:** kanvas kosong sekarang ditolak. Sebelumnya ia
+tersimpan sebagai data URI 850×400 penuh transparansi — "tanda tangan" yang tidak
+menggambarkan apa pun, yang menandai slotnya sudah ditandatangani dan, sejak
+Fase 1, menuliskan record tanda tangan untuk goresan yang tidak ada.
+
+**Gambar lama TIDAK BOLEH diproses ulang.** Ini syarat kebenaran, bukan
+kemudahan: `ttd_value` ada di dalam hash tanda tangan (§5), jadi meng-encode
+ulang byte-nya mengubah hash dan setiap tanda tangan yang sudah tercatat akan
+berubah jadi `tampered`. Penghematan 4,48× berlaku untuk tanda tangan baru saja,
+dan itu memang satu-satunya yang benar.
+
+**Belum ada harness test JS di repo ini** (tidak ada `package.json`).
+`normaliseSignaturePng()` diverifikasi lewat pengukuran terhadap gambar sungguhan,
+bukan lewat unit test. Itu celah nyata yang layak dicatat.
+
 ### Fase S — penyimpanan (lihat §7)
 
 - **S1.** Keluarkan `signature_values` dari projeksi daftar; projeksi terpisah

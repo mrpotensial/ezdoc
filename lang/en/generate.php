@@ -144,6 +144,7 @@ return [
     ],
     'toast' => [
         'invalid_fields' => 'Some fields are invalid. Check the red highlights.',
+        'signature_empty' => 'Nothing was drawn — the signature was not saved.',
         'save_failed' => 'Failed to save: {error}',
         'verify_url_not_ready' => 'Verification URL not available yet. Save the document first.',
         'qr_content_required' => 'QR content cannot be empty',

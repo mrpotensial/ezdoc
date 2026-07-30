@@ -58,6 +58,27 @@ final class DocumentRepository
     ];
 
     /**
+     * Kolom yang TIDAK diambil query daftar.
+     *
+     * `signature_values` menyimpan gambar tanda tangan base64 — terukur **97,3%**
+     * dari data dokumen, rata-rata 16,5 KB per dokumen. Tidak satu pun daftar
+     * menampilkannya, tapi `findRecent()` melayani sampai 1000 baris, jadi setiap
+     * pemuatan daftar menarik ~16 MB gambar untuk dibuang.
+     *
+     * Ukuran disk tumbuh perlahan; biaya ini dibayar terus-menerus. Karena itu
+     * inilah perbaikan penyimpanan dengan rasio manfaat/risiko terbaik: tanpa
+     * migrasi, tanpa perubahan skema.
+     *
+     * Pemisahan projeksi daftar dan ambil-satu adalah pola biasa — `$hidden` di
+     * Eloquent, partial DQL di Doctrine, `.only()`/`.defer()` di Django. Yang
+     * ditambahkan di sini: Document mencatat kolom mana yang tidak ikut, jadi
+     * membacanya melempar alih-alih menjawab "belum ditandatangani".
+     *
+     * @var list<string>
+     */
+    private static $listOmittedCols = ['signature_values'];
+
+    /**
      * @param Connection|mysqli $db Ezdoc\Db\Connection instance (preferred) atau
      *   raw mysqli (backward-compat, auto-wrap ke MysqliConnection).
      */
@@ -83,6 +104,17 @@ final class DocumentRepository
     private function selectCols(): string
     {
         $existing = $this->introspector->intersect('ezdoc_documents', self::$desiredCols);
+        return implode(', ', $existing);
+    }
+
+    /**
+     * Projeksi untuk query yang mengembalikan banyak baris — lihat
+     * `$listOmittedCols` untuk alasannya.
+     */
+    private function listCols(): string
+    {
+        $desired = array_values(array_diff(self::$desiredCols, self::$listOmittedCols));
+        $existing = $this->introspector->intersect('ezdoc_documents', $desired);
         return implode(', ', $existing);
     }
 
@@ -130,7 +162,7 @@ final class DocumentRepository
         $offset = max(0, $offset);
 
         $rows = $this->db->fetchAll(
-            'SELECT ' . $this->selectCols()
+            'SELECT ' . $this->listCols()
             . ' FROM ezdoc_documents WHERE template_id = ? AND deleted_at IS NULL'
             . ' ORDER BY id DESC LIMIT ? OFFSET ?',
             [$templateId, $limit, $offset]
@@ -147,7 +179,7 @@ final class DocumentRepository
         $limit = max(1, min($limit, 1000));
 
         $rows = $this->db->fetchAll(
-            'SELECT ' . $this->selectCols()
+            'SELECT ' . $this->listCols()
             . ' FROM ezdoc_documents WHERE status = ? AND deleted_at IS NULL'
             . ' ORDER BY id DESC LIMIT ?',
             [$status, $limit]
@@ -182,7 +214,7 @@ final class DocumentRepository
         $params[] = $limit;
 
         $rows = $this->db->fetchAll(
-            'SELECT ' . $this->selectCols()
+            'SELECT ' . $this->listCols()
             . ' FROM ezdoc_documents WHERE ' . implode(' AND ', $where)
             . ' ORDER BY id DESC LIMIT ?',
             $params

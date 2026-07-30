@@ -157,6 +157,7 @@ return [
     ],
     'toast' => [
         'invalid_fields'           => 'Ada field yang belum valid. Periksa highlight merah.',
+        'signature_empty'          => 'Belum ada yang digambar — tanda tangan tidak disimpan.',
         'save_failed'              => 'Gagal menyimpan: {error}',
         'verify_url_not_ready'     => 'URL Verifikasi belum tersedia. Simpan dokumen dulu.',
         'qr_content_required'      => 'Isi QR tidak boleh kosong',
