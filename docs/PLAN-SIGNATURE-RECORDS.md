@@ -356,10 +356,44 @@ sebagai *tidak ada*, bukan sebagai byte lain yang diam-diam dilayani.
 |---|---|
 | S3a — `Blob`, `BlobStore`, `DatabaseBlobStore`, `DiskBlobStore` | ✅ 51 test, satu kontrak dijalankan ke **kedua** backend |
 | S3b — migrasi `ezdoc_blobs` (MySQL + SQLite) | ✅ paritas ditulis bersamaan, bukan menyusul |
-| S3c — wiring config + resolusi backend | ⏳ |
-| S3d — jalur simpan: gambar jadi referensi | ⏳ |
-| S3e — jalur baca: layar + PDF | ⏳ |
-| S3f — backfill + purge yatim | ⏳ |
+| S3c — `BlobStoreFactory` | ✅ konstanta lalu env (preseden `SigningKey`), default `database` |
+| S3d — jalur simpan | ✅ `SignatureImageStore::valueToPersist()` |
+| S3e — jalur baca | ✅ `ezdoc_resolve_signature_image()`, layar + PDF |
+| S3f — backfill + purge | ✅ dua CLI, dry-run terverifikasi ke server |
+
+#### Koreksi: "memindahkan byte apa adanya menjaga hash" — SALAH
+
+Ditulis di revisi di atas dan tidak benar. Byte-nya memang tidak berubah, tapi
+yang masuk hash adalah **nilai slot di dokumen**, bukan byte-nya. Mengganti data
+URI dengan referensi mengubah `ttd_value`, jadi tanda tangan yang sudah tercatat
+akan menghitung ulang ke hash lain dan terbaca `tampered`.
+
+Konsekuensinya berlaku di dua tempat, dan keduanya dijaga dengan aturan yang sama:
+
+| | |
+|---|---|
+| Jalur simpan | `valueToPersist()` mengembalikan nilai apa adanya kalau sama dengan yang tersimpan. Form mengirim ulang setiap tanda tangan pada tiap simpan — tanpa aturan ini, penyimpanan pertama setelah fitur aktif akan menulis ulang **setiap** slot dan membatalkan setiap tanda tangan di dokumen itu |
+| Backfill | Slot yang punya record tanda tangan dilewati, dan dilaporkan. Gambarnya tetap inline sampai dokumennya dapat versi baru — dan itu memang gunanya versi baru |
+
+Terukur di server (dry-run, 2026-07-30): **36 gambar (756,8 KB) bisa dipindah,
+1 gambar (18,5 KB) harus tetap** karena slotnya sudah punya record.
+
+Jalan keluar untuk yang tersisa, kalau nanti diperlukan: versi payload baru yang
+mengkanonikalisasi `ttd_value` jadi hash byte gambarnya, sehingga data URI dan
+referensi menghasilkan hash yang sama. `content_hash_algo` sudah menamai bentuk
+payload, jadi v1 dan v2 bisa hidup berdampingan. Di luar lingkup sekarang.
+
+#### Keputusan yang diambil saat implementasi
+
+| | |
+|---|---|
+| Gambar dibuka **inline ke halaman**, bukan dilayani URL tersendiri | URL gambar tanda tangan yang bisa diambil sendiri bocor lewat riwayat browser, log proxy, dan header referer. Di dalam halaman, byte-nya ikut kontrol akses halaman itu. Jalur PDF menuntut hal sama karena alasan lain: dompdf tidak membawa sesi |
+| Input tersembunyi tetap membawa **referensi mentah**, bukan gambar hasil resolusi | Kalau tidak, tiap simpan akan terlihat seperti perubahan nilai slot — dan lihat koreksi di atas |
+| Consumer tanpa tabel `ezdoc_blobs` tetap jalan | Diperiksa sekali per request; gambar tetap inline seperti sebelumnya. Menggagalkan penyimpanan karena optimasi penyimpanan belum dipasang adalah pertukaran yang tidak masuk akal |
+| Backfill membaca ulang sebelum menulis dokumen | Backfill yang menulis dokumen dulu lalu menemukan masalah sudah kehilangan satu-satunya salinan |
+| Purge punya masa tenggang (default 48 jam) | Tanda tangan disimpan saat menyimpan dokumen yang masih bisa **ditolak** sesudahnya — oleh guard §7b, oleh validasi. Purge di jendela itu akan menghapus objek yang percobaan berikutnya akan rujuk |
+| Dokumen soft-deleted dihitung merujuk | Soft delete bisa dibatalkan; membuang gambarnya membuatnya diam-diam tidak bisa |
+| Tanpa FK dari blob ke dokumen | Satu objek bisa dirujuk banyak dokumen (isi sama → kunci sama), jadi tidak ada satu induk. Keterjangkauan dihitung dengan memindai referensi — pola `Blob.unattached` ActiveStorage |
 
 Kontraknya dijalankan ke kedua backend dengan tuntutan yang sama, sengaja: janji
 "pindah backend cuma config" hanya berlaku kalau keduanya menjawab tuntutan yang

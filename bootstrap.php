@@ -34,6 +34,7 @@ require_once EZDOC_LIB . '/authorization.php';
 require_once EZDOC_LIB . '/schema.php';
 require_once EZDOC_LIB . '/migrations.php';
 require_once EZDOC_LIB . '/audit.php';
+require_once EZDOC_LIB . '/signature_image.php';
 
 // Auto-run migrations (menggunakan Ezdoc\Migrations\Runner via wrapper)
 if (EZDOC_AUTO_MIGRATE && isset($GLOBALS['conn']) && $GLOBALS['conn']) {

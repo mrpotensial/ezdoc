@@ -180,6 +180,23 @@ $pendingSignTokens = [];
 // signature on each save, so this is what tells an actual new signature apart
 // from an unchanged one — the difference between demanding a fresh OTP and
 // letting an ordinary field edit through.
+// Penyimpan gambar tanda tangan, kalau tabel objeknya sudah ada.
+//
+// Null berarti "biarkan gambar inline seperti sebelumnya". Consumer yang belum
+// menjalankan migrasi `ezdoc_blobs` harus tetap bisa menyimpan dokumen —
+// menggagalkan penyimpanan karena optimasi penyimpanan belum dipasang akan jadi
+// pertukaran yang tidak masuk akal. Diperiksa sekali, bukan per slot.
+$signatureImages = null;
+try {
+    if ((new \Ezdoc\Db\Schema\ColumnIntrospector($db))->columns('ezdoc_blobs') !== []) {
+        $signatureImages = new \Ezdoc\Storage\SignatureImageStore(
+            \Ezdoc\Storage\BlobStoreFactory::make($db)
+        );
+    }
+} catch (\Throwable $e) {
+    @error_log('[ezdoc:storage] penyimpanan objek tidak aktif: ' . $e->getMessage());
+}
+
 $existingTtdValues = [];
 if ($doc_id > 0) {
     $existingRow = $db->fetchOne(
@@ -207,9 +224,16 @@ foreach ($configTtd as $ttd) {
     //
     // Sebelum ini penanda QR tersaring di sini tanpa pesan apa pun: mode QR
     // terlihat menandatangani, tapi tidak ada satu pun record yang tertulis.
+    //
+    // Bentuk ketiga menyusul: referensi ke objek tersimpan. Ia muncul di sini
+    // karena form mengirim ulang setiap tanda tangan tersimpan pada tiap simpan —
+    // jadi dokumen yang gambarnya sudah jadi objek akan mengirim balik
+    // referensinya, dan menolaknya di gerbang ini akan membuat tanda tangannya
+    // hilang pada penyimpanan berikutnya.
     $isImageValue = (bool) preg_match('#^data:image/(png|jpe?g|gif);base64,#', (string) $tv);
     $isQrActValue = ($tv === \Ezdoc\Signature\SignatureValue::QR_ACT);
-    if (!$isImageValue && !$isQrActValue) continue;
+    $isBlobRef    = \Ezdoc\Storage\Blob::isReference((string) $tv);
+    if (!$isImageValue && !$isQrActValue && !$isBlobRef) continue;
 
     $ttdRbac = $ttd['rbac'] ?? ['roles' => [], 'users' => []];
     if (!ezdoc_can_sign_ttd($ttdRbac)) {
@@ -277,7 +301,21 @@ foreach ($configTtd as $ttd) {
         }
     }
 
-    $ttdData[$tid] = $tv;
+    // Gambar BARU dipindahkan ke objek tersimpan; sisanya lewat apa adanya.
+    //
+    // Perbandingan dengan nilai tersimpan yang menentukan, bukan sebuah flag.
+    // Form mengirim ulang setiap tanda tangan tersimpan pada tiap simpan, jadi
+    // tanpa perbandingan itu penyimpanan pertama setelah fitur ini aktif akan
+    // menulis ulang SETIAP slot di dokumen — dan hash tanda tangan mencakup nilai
+    // slot, jadi setiap tanda tangan yang sah berubah jadi `tampered`. Aplikasi
+    // membatalkan buktinya sendiri.
+    //
+    // Efek sampingnya justru yang diinginkan: gambar inline lama tetap inline
+    // selama dokumennya hidup. Memindahkannya adalah operasi tersendiri yang
+    // memindahkan byte apa adanya, bukan efek samping menyimpan.
+    $ttdData[$tid] = $signatureImages !== null
+        ? $signatureImages->valueToPersist((string) $tv, (string) ($existingTtdValues[$tid] ?? ''))
+        : $tv;
 }
 
 $jsonFields = json_encode($fieldData, JSON_UNESCAPED_UNICODE);

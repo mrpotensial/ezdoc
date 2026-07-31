@@ -1176,9 +1176,18 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             </div>';
         }
 
-        // Nilai slot bisa berupa gambar ATAU penanda tindakan mode QR. Yang kedua
-        // tidak boleh masuk ke atribut src — lihat Ezdoc\Signature\SignatureValue.
-        $ttdIsImage = \Ezdoc\Signature\SignatureValue::isImage($ttdImg);
+        // Nilai slot bisa berupa gambar inline, referensi ke objek tersimpan, atau
+        // penanda tindakan mode QR. Cuma yang pertama boleh langsung masuk ke
+        // atribut src — lihat Ezdoc\Signature\SignatureValue dan
+        // Ezdoc\Storage\SignatureImageStore.
+        //
+        // Gambarnya dibuka jadi data URI di sisi server, bukan dilayani lewat URL
+        // tersendiri. Alasannya bukan kesederhanaan: URL gambar tanda tangan yang
+        // bisa diambil sendiri akan bocor lewat riwayat browser, log proxy, dan
+        // header referer. Di dalam halaman, byte-nya ikut kontrol akses halaman
+        // itu. Jalur PDF juga menuntut byte inline — dompdf tidak membawa sesi.
+        $ttdDisplaySrc = ezdoc_resolve_signature_image($conn, $ttdImg);
+        $ttdIsImage = $ttdDisplaySrc !== '';
         $ttdIsSigned = \Ezdoc\Signature\SignatureValue::isSigned($ttdImg);
 
         // Image area — kalau user tidak allowed sign, disable interaksi + tampil badge lock
@@ -1188,14 +1197,14 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
                 <button type="button" class="btn-delete" onclick="clearTtd(\'' . h($ttdId) . '\')">&#10005; ' . h(t('actions.delete', [], 'Delete')) . '</button>
             </div>';
             $imgContent = $ttdIsImage
-                ? '<img src="' . h($ttdImg) . '" class="ttd-signature" alt="TTD">' . $actionsHtml
+                ? '<img src="' . h($ttdDisplaySrc) . '" class="ttd-signature" alt="TTD">' . $actionsHtml
                 : '<div class="ttd-canvas-placeholder" onclick="openSign(\'' . h($ttdId) . '\', \'' . h($label) . '\')"></div>';
         } else {
             // Not allowed — read-only display, no edit button, no clickable canvas
             $rolesHint = $allowedRolesRaw !== '' ? ' (' . h($allowedRolesRaw) . ')' : '';
             $lockBadge = '<div class="ttd-locked-badge" style="position:absolute;top:2px;right:2px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:600;z-index:5;pointer-events:none;" title="' . h(t('title.no_sign_permission', ['roles' => $rolesHint], 'Not authorized to sign{roles}')) . '"><i class="fa fa-lock"></i></div>';
             $imgContent = $ttdIsImage
-                ? '<img src="' . h($ttdImg) . '" class="ttd-signature" alt="TTD">' . $lockBadge
+                ? '<img src="' . h($ttdDisplaySrc) . '" class="ttd-signature" alt="TTD">' . $lockBadge
                 : '<div class="ttd-canvas-placeholder ttd-locked" style="cursor:not-allowed;background:#f3f4f6;position:relative;" title="' . h(t('title.no_sign_permission_as', ['label' => $label, 'roles' => $rolesHint], 'Not authorized to sign as {label}{roles}')) . '">' . $lockBadge . '</div>';
         }
         $imgDisplay = ($activeMode === 'image' || !$hasQr) ? '' : 'display:none;';
@@ -1847,8 +1856,11 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
             $pdfHtml .= '<div class="ttd-item">';
             $pdfHtml .= '<div class="ttd-label">' . $label . '</div>';
             $pdfHtml .= '<div class="ttd-img">';
-            if ($ttdImg) {
-                $pdfHtml .= '<img src="' . h($ttdImg) . '" class="ttd-signature" alt="TTD">';
+            // Byte-nya dibuka inline: dompdf tidak membawa sesi, jadi URL yang
+            // dilindungi kontrol akses tidak akan bisa diambilnya.
+            $ttdSrcPdf = ezdoc_resolve_signature_image($conn ?? null, (string) $ttdImg);
+            if ($ttdSrcPdf !== '') {
+                $pdfHtml .= '<img src="' . h($ttdSrcPdf) . '" class="ttd-signature" alt="TTD">';
             } else {
                 $pdfHtml .= '<div style="height:50px;"></div>';
             }
@@ -2093,10 +2105,12 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
                 $contentHtml = '<div style="height:100px;"></div>';
             }
         } else {
-            // Penanda mode QR bukan gambar — tanpa pemeriksaan ini ia masuk ke
-            // atribut src dan yang tercetak adalah gambar rusak.
-            $contentHtml = \Ezdoc\Signature\SignatureValue::isImage($ttdImg)
-                ? '<img src="' . h($ttdImg) . '" class="ttd-signature" alt="TTD">'
+            // Penanda mode QR bukan gambar, dan referensi objek harus dibuka dulu.
+            // Tanpa ini keduanya masuk ke atribut src dan yang tercetak adalah
+            // gambar rusak di tempat tanda tangan.
+            $ttdSrcPdf = ezdoc_resolve_signature_image($conn, $ttdImg);
+            $contentHtml = $ttdSrcPdf !== ''
+                ? '<img src="' . h($ttdSrcPdf) . '" class="ttd-signature" alt="TTD">'
                 : '<div style="height:50px;"></div>';
         }
 
