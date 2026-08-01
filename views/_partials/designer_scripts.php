@@ -2021,6 +2021,7 @@
                 }
                 .field-placeholder[data-type="number"] { background: #fef3c7; outline-color: #fbbf24; color: #92400e; }
                 .field-placeholder[data-type="date"] { background: #e0e7ff; outline-color: #818cf8; color: #3730a3; }
+                .field-placeholder[data-type="time"] { background: #e0e7ff; outline-color: #6366f1; color: #312e81; }
                 .field-placeholder[data-type="checkbox"] { background: #dcfce7; outline-color: #22c55e; color: #166534; }
                 .field-placeholder[data-type="radio"] { background: #fce7f3; outline-color: #ec4899; color: #9d174d; }
                 .field-placeholder[data-type="select"] { background: #f3e8ff; outline-color: #a855f7; color: #6b21a8; }
@@ -2468,6 +2469,7 @@
                             { type: 'menuitem', text: t('toolbar_insert.field_type_text', {}, 'Text (default)'), onAction: () => insertFieldPrompt('text') },
                             { type: 'menuitem', text: t('field_type.number', {}, 'Number'), onAction: () => insertFieldPrompt('number') },
                             { type: 'menuitem', text: t('field_type.date', {}, 'Date'), onAction: () => insertFieldPrompt('date') },
+                            { type: 'menuitem', text: t('field_type.time', {}, 'Time'), onAction: () => insertFieldPrompt('time') },
                             { type: 'menuitem', text: t('field_type.checkbox', {}, 'Checkbox'), onAction: () => insertFieldPrompt('checkbox') },
                             { type: 'menuitem', text: t('toolbar_insert.field_type_radio', {}, 'Radio (single choice)'), onAction: () => insertFieldPrompt('radio') },
                             { type: 'menuitem', text: t('toolbar_insert.field_type_select', {}, 'Select (dropdown)'), onAction: () => insertFieldPrompt('select') }
@@ -3498,6 +3500,7 @@
                 'text': t('field_type.text', {}, 'Text'),
                 'number': t('field_type.number', {}, 'Number'),
                 'date': t('field_type.date', {}, 'Date'),
+                'time': t('field_type.time', {}, 'Time'),
                 'checkbox': t('field_type.checkbox', {}, 'Checkbox'),
                 'radio': t('field_type.radio', {}, 'Radio'),
                 'select': t('field_type.select', {}, 'Select')
@@ -3508,6 +3511,7 @@
                 'text':     'bg-blue-50 text-blue-700 ring-blue-200',
                 'number':   'bg-amber-50 text-amber-700 ring-amber-200',
                 'date':     'bg-violet-50 text-violet-700 ring-violet-200',
+                'time':     'bg-indigo-50 text-indigo-700 ring-indigo-200',
                 'checkbox': 'bg-emerald-50 text-emerald-700 ring-emerald-200',
                 'radio':    'bg-pink-50 text-pink-700 ring-pink-200',
                 'select':   'bg-purple-50 text-purple-700 ring-purple-200'
@@ -3518,6 +3522,7 @@
                 'text':     'from-blue-50/70 to-white',
                 'number':   'from-amber-50/70 to-white',
                 'date':     'from-violet-50/70 to-white',
+                'time':     'from-indigo-50/70 to-white',
                 'checkbox': 'from-emerald-50/70 to-white',
                 'radio':    'from-pink-50/70 to-white',
                 'select':   'from-purple-50/70 to-white'
@@ -3527,6 +3532,7 @@
                 'text':     'before:bg-blue-400',
                 'number':   'before:bg-amber-400',
                 'date':     'before:bg-violet-400',
+                'time':     'before:bg-indigo-400',
                 'checkbox': 'before:bg-emerald-400',
                 'radio':    'before:bg-pink-400',
                 'select':   'before:bg-purple-400'
@@ -3535,6 +3541,7 @@
                 'text':     'bi-fonts',
                 'number':   'bi-123',
                 'date':     'bi-calendar-event',
+                'time':     'bi-clock',
                 'checkbox': 'bi-check-square',
                 'radio':    'bi-record-circle',
                 'select':   'bi-chevron-expand'
@@ -3577,6 +3584,7 @@
                                     <option value="text" ${field.type === 'text' ? 'selected' : ''}>${t('field_type.text', {}, 'Text')}</option>
                                     <option value="number" ${field.type === 'number' ? 'selected' : ''}>${t('field_type.number', {}, 'Number')}</option>
                                     <option value="date" ${field.type === 'date' ? 'selected' : ''}>${t('field_type.date', {}, 'Date')}</option>
+                                    <option value="time" ${field.type === 'time' ? 'selected' : ''}>${t('field_type.time', {}, 'Time')}</option>
                                     <option value="checkbox" ${field.type === 'checkbox' ? 'selected' : ''}>${t('field_type.checkbox', {}, 'Checkbox')}</option>
                                     <option value="radio" ${field.type === 'radio' ? 'selected' : ''}>${t('field_type.radio', {}, 'Radio')}</option>
                                     <option value="select" ${field.type === 'select' ? 'selected' : ''}>${t('field_type.select', {}, 'Select')}</option>
@@ -3586,7 +3594,7 @@
                         <!-- Row 2: Default value — full width -->
                         <div>
                             <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field.default_label', {}, 'Default')}</label>
-                            <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${eDefault}" onchange="updateFieldDefault('${eName}', this.value)" placeholder="text, date:d F Y, \$author_nama">
+                            <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${eDefault}" onchange="updateFieldDefault('${eName}', this.value)" placeholder="text, date:d F Y, time:H:i, \$author_nama">
                         </div>
                         <!-- Row 3: Conditional (Label / Opsi) -->
                         ${needsLabel ? `

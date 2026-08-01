@@ -138,7 +138,7 @@
         }
 
         /* Field types */
-        .field-date, .field-select {
+        .field-date, .field-time, .field-select {
             font-family: inherit;
             font-size: inherit;
             border: none;
@@ -152,6 +152,7 @@
             background: rgba(254, 243, 199, 0.3);
         }
         .field-date { width: 140px; }
+        .field-time { width: 92px; }
         .field-select {
             padding: 3px 6px;
             border-radius: 3px;
@@ -187,6 +188,7 @@
             cursor: pointer;
         }
         .edit-off .field-date,
+        .edit-off .field-time,
         .edit-off .field-select {
             border: none;
             background: transparent;
@@ -203,7 +205,8 @@
             pointer-events: none;
         }
         @media print {
-            .field-date {
+            .field-date,
+            .field-time {
                 border: none !important;
                 background: transparent !important;
             }
@@ -593,7 +596,7 @@
 
         /* Field validation (#6) */
         .field-required-mark { color: #dc2626; font-weight: bold; margin-left: 2px; user-select: none; }
-        .f-wrap.field-invalid > .f, .f-wrap.field-invalid > input[type="date"], .f-wrap.field-invalid > select {
+        .f-wrap.field-invalid > .f, .f-wrap.field-invalid > input[type="date"], .f-wrap.field-invalid > input[type="time"], .f-wrap.field-invalid > select {
             background: #fee2e2 !important;
             border-bottom-color: #dc2626 !important;
         }

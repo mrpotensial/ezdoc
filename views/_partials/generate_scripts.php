@@ -238,7 +238,7 @@
                 // Set readonly on text/date/number inputs inside the content area + QR inputs
                 const page = document.querySelector('.page');
                 if (page) {
-                    page.querySelectorAll('input[type="text"], input[type="date"], input[type="number"], input.qr-field, input.ttd-qr-content-input, textarea').forEach(el => {
+                    page.querySelectorAll('input[type="text"], input[type="date"], input[type="time"], input[type="number"], input.qr-field, input.ttd-qr-content-input, textarea').forEach(el => {
                         el.readOnly = true;
                     });
                     // Disable select, checkbox, radio (readonly doesn't work on these)
@@ -385,7 +385,7 @@
                 const editable = wrap.querySelector('.f[data-field]');
                 if (editable) val = (editable.innerText || '').trim();
                 else {
-                    const ctrl = wrap.querySelector('input[type="date"], input[type="text"], input[type="number"], select, input[type="hidden"]');
+                    const ctrl = wrap.querySelector('input[type="date"], input[type="time"], input[type="text"], input[type="number"], select, input[type="hidden"]');
                     if (ctrl) val = (ctrl.value || '').trim();
                 }
 

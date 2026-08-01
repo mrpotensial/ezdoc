@@ -1609,6 +1609,13 @@ function renderFieldInput($name, $type, $val, $options, $label, $validation = []
         case 'date':
             return '<span class="f-wrap"' . $vAttrs . '><input type="date" class="field-date" name="' . $hName . '" value="' . $hVal . '" data-field="' . $hName . '">' . $reqMark . '</span>';
 
+        case 'time':
+            // `type="time"` menyimpan dan mengirim HH:MM 24 jam apa pun locale
+            // browsernya, sementara yang ditampilkan mengikuti setelan pengguna.
+            // Itu yang membuat nilai tersimpan tidak berubah arti saat dokumen
+            // yang sama dibuka di perangkat dengan format jam berbeda.
+            return '<span class="f-wrap"' . $vAttrs . '><input type="time" class="field-time" name="' . $hName . '" value="' . $hVal . '" data-field="' . $hName . '">' . $reqMark . '</span>';
+
         case 'checkbox':
             $checked = ($val === '1' || $val === 'true' || $val === 'yes' || $val === 'Ya') ? ' checked' : '';
             $labelHtml = $label !== '' ? ' ' . h($label) : '';
@@ -2314,6 +2321,19 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 }
             }
             return '<span class="f-pdf">' . ($hVal ?: '........') . '</span>';
+
+        case 'time':
+            // `strtotime('14:30')` mengembalikan jam itu HARI INI, jadi hasilnya
+            // benar untuk format 'H:i' dan tidak bergantung pada tanggal apa pun.
+            // Nilai yang tersimpan sudah 24 jam, tapi tetap dilewatkan formatter
+            // supaya 'HH:MM:SS' dari sumber lain ikut tercetak rapi.
+            if ($val) {
+                $timestamp = strtotime($val);
+                if ($timestamp) {
+                    $hVal = date('H:i', $timestamp);
+                }
+            }
+            return '<span class="f-pdf">' . ($hVal ?: '.....') . '</span>';
 
         case 'number':
         case 'radio':

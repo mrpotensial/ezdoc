@@ -46,6 +46,16 @@ if (!function_exists('resolveDefault')) {
             return $formatted; // last resort: raw English
         }
 
+        // Time format: time:FORMAT
+        //
+        // Dipisah dari `date:` bukan karena kerapian, tapi karena `date:`
+        // melewatkan hasilnya ke pelokalan yang menerjemahkan nama bulan dan hari.
+        // Jam tidak punya nama untuk diterjemahkan, dan melewatkannya ke sana cuma
+        // membuka peluang "Mei" muncul di tengah "14:30" kalau formatnya campur.
+        if (strncmp($default, 'time:', 5) === 0) {
+            return date(substr($default, 5));
+        }
+
         // PHP variable: $varname (must be in whitelist)
         if (isset($default[0]) && $default[0] === '$') {
             $varName = substr($default, 1);
