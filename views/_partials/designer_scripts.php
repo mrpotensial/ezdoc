@@ -2094,17 +2094,34 @@
                     background: #dbeafe;
                     border-color: #60a5fa;
                 }
-                .tabledb-marker-raw::before { content: '\f0ce'; color: #1e40af; }
+                <?php // Glyph Font Awesome di bawah ini WAJIB ditulis dengan DUA
+                // backslash. Blok ini template literal JS, dan satu backslash
+                // diikuti huruf f adalah escape form feed di sana.
+                //
+                // CSS menghitung form feed sebagai baris baru, dan string CSS tidak
+                // boleh memuat baris baru. Jadi parser menghasilkan bad-string, lalu
+                // sisa glyph-nya membuka string BARU yang menelan "; color: ...; }"
+                // sampai akhir baris — TERMASUK kurung tutupnya. Bloknya tidak pernah
+                // tertutup, dan aturan CSS berikutnya ikut termakan.
+                //
+                // Empat baris seperti ini pernah menelan .ttd-placeholder,
+                // .logo-placeholder, dan tiga aturan tabledb: dari 52 aturan hanya 19
+                // yang sampai ke browser. Akibatnya placeholder tanda tangan di editor
+                // kehilangan display:inline-block dan text-align:center — label dan
+                // namanya rata kiri, kotaknya melebar sehalaman.
+                //
+                // Tidak ada error di konsol. Yang terlihat cuma tata letak yang aneh. ?>
+                .tabledb-marker-raw::before { content: '\\f0ce'; color: #1e40af; }
                 .tabledb-marker-formula {
                     background: #e0e7ff;
                     border-color: #818cf8;
                 }
-                .tabledb-marker-formula::before { content: '\f1ec'; color: #3730a3; }
+                .tabledb-marker-formula::before { content: '\\f1ec'; color: #3730a3; }
                 .tabledb-marker-aggregate {
                     background: #f3e8ff;
                     border-color: #c084fc;
                 }
-                .tabledb-marker-aggregate::before { content: '\f668'; color: #6b21a8; }
+                .tabledb-marker-aggregate::before { content: '\\f668'; color: #6b21a8; }
                 .tabledb-marker.tabledb-selected {
                     outline: 2px solid #ef4444;
                     outline-offset: 1px;
@@ -2114,7 +2131,7 @@
                     background: #fee2e2;
                     border-color: #f87171;
                 }
-                .tabledb-marker[data-invalid="1"]::before { content: '\f071'; color: #991b1b; }
+                .tabledb-marker[data-invalid="1"]::before { content: '\\f071'; color: #991b1b; }
                 /* Inline logo — layout-transparent (outline, no padding/border/min-width).
                    Non-floating placeholder tanpa image renders sebagai text label;
                    dgn image renders at natural image dimensions (matches print
