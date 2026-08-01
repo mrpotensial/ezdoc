@@ -138,6 +138,68 @@ Slot lain tidak masuk sama sekali. Hasilnya:
 | Gambar A ditukar | **berubah** |
 | Gambar B ditukar | A aman, B berubah |
 
+### Koreksi (2026-08-01): aturan di atas mustahil untuk lebih dari satu penanda tangan
+
+Tabel di atas menjaga **tanda** slot lain di luar hash, tapi melewatkan hal yang
+lebih sering berubah: **nama** dan **isi QR** slot lain hidup di dalam `fields`,
+jadi tetap tercakup.
+
+Akibatnya di lapangan: A menandatangani. B mengisi nama di bawah tanda
+tangannya **sendiri**. Field itu dicakup tanda tangan A, jadi A jadi `tampered`
+— dan guard §7b menolak simpannya bahkan sebelum sampai ke sana. **Orang kedua
+tidak akan pernah bisa menandatangani.** Dokumen tiga penanda tangan tidak
+mungkin selesai.
+
+Ini bukan pilihan kebijakan yang bisa dilonggarkan; aturannya memang salah.
+
+**Jawaban industrinya sudah disebut di dokumen ini sendiri:** PDF memakai
+*incremental update* — tanda tangan berikutnya ditambahkan tanpa membatalkan
+yang sebelumnya, dan tiap tanda tangan menutup rentang byte miliknya. PAdES
+merekam rentang itu (`/ByteRange`) **di dalam** struktur yang ditandatangani.
+DocMDP bahkan menyatakan secara eksplisit bahwa "mengisi form dan menandatangani"
+adalah perubahan yang diizinkan.
+
+#### `sha256-jcs-v2`
+
+```
+content_hash = SHA256( canonical({
+    document_uuid, template_uuid, template_version,
+    covered_fields: <daftar kunci, terurut>,
+    fields:         <field_values dibatasi ke covered_fields>,
+    ttd_id, ttd_value
+}) )
+```
+
+Yang dikeluarkan dari cakupan tiap tanda tangan:
+
+| | Alasan |
+|---|---|
+| `nama_field` dan `<nama_field>_qr` milik slot **lain** | Itu yang diisi orang lain saat giliran mereka. Bukan urusan tanda tangan ini |
+| `_ttd_mode_*`, semua slot termasuk sendiri | Tampilan. Apakah tanda tangan tampil sebagai gambar atau QR tidak mengubah siapa menandatangani apa — garis yang sama ditarik PAdES di sekitar appearance stream |
+
+Nama dan QR milik slot **sendiri** tetap tercakup. Itu bagian dari yang orang
+ini bubuhi namanya.
+
+**`covered_fields` ada DI DALAM payload, bukan cuma di sebelahnya.** Verifier
+perlu diberi tahu field mana yang dihitung ulang; kalau petunjuk itu di luar data
+yang ditandatangani, siapa pun yang bisa mengeditnya bisa menyempitkan cakupan
+dan tanda tangannya tetap lolos. Di dalam, menyempitkannya mengubah hash. Alasan
+yang sama membuat PAdES menaruh `/ByteRange` di dalam struktur bertanda tangan.
+
+Kunci yang **hilang** dicatat sebagai `null`, bukan dilewati — kalau dilewati,
+menghapus field akan lolos seolah tidak terjadi apa-apa.
+
+#### Konsekuensi untuk tanda tangan v1 yang sudah ada
+
+v1 memang mencakup seluruh field, jadi guard §7b tetap membekukan **semuanya**
+untuk dokumen yang punya tanda tangan v1. Itu bukan kelalaian: menyempitkan
+cakupan tanda tangan yang sudah tercatat secara surut berarti menghapus arti
+tanda tangan itu.
+
+Dokumen yang sudah terlanjur ditandatangani di bawah v1 **tetap tidak bisa
+menerima penanda tangan kedua** — jalan keluarnya versi baru. Dokumen baru
+menandatangani di bawah v2 dan tidak punya masalah ini.
+
 ### Dua hash, dua tujuan
 
 | | Cakupan | Berubah saat |

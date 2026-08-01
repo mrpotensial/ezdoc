@@ -115,14 +115,28 @@ final class DocumentSignatureVerifierTest extends TestCase
         $key = SigningKey::resolve();
         self::assertNotNull($key, 'the test secret should resolve');
 
-        $contentHash = $overrides['content_hash'] ?? SignaturePayload::hash(
-            $this->docUuid,
-            $this->tplUuid,
-            3,
-            $this->fields,
-            $ttdId,
-            (string) ($this->marks[$ttdId] ?? '')
-        );
+        // Default: v1 shape, since most cases here predate the split and describe
+        // behaviour that is the same either way. `covered` opts a case into v2.
+        $covered = $overrides['covered'] ?? null;
+
+        $contentHash = $overrides['content_hash'] ?? ($covered === null
+            ? SignaturePayload::hashV1(
+                $this->docUuid,
+                $this->tplUuid,
+                3,
+                $this->fields,
+                $ttdId,
+                (string) ($this->marks[$ttdId] ?? '')
+            )
+            : SignaturePayload::hash(
+                $this->docUuid,
+                $this->tplUuid,
+                3,
+                $this->fields,
+                $ttdId,
+                (string) ($this->marks[$ttdId] ?? ''),
+                $covered
+            ));
         $envelope = $overrides['envelope'] ?? bin2hex(hash_hmac('sha256', (string) $contentHash, $key, true));
 
         $stmt = $this->pdo->prepare(
@@ -141,13 +155,15 @@ final class DocumentSignatureVerifierTest extends TestCase
             $overrides['envelope_format'] ?? 'hmac',
             $envelope,
             $contentHash,
-            $overrides['content_hash_algo'] ?? SignaturePayload::ALGO,
+            $overrides['content_hash_algo']
+                ?? ($covered === null ? SignaturePayload::ALGO_V1 : SignaturePayload::ALGO),
             (new \DateTimeImmutable())->format('Y-m-d H:i:s.v'),
             $overrides['verify_status'] ?? 'valid',
             (string) json_encode(
                 array_key_exists('metadata', $overrides)
                     ? $overrides['metadata']
-                    : ['ttd_id' => $ttdId, 'ttd_label' => strtoupper($ttdId)]
+                    : (['ttd_id' => $ttdId, 'ttd_label' => strtoupper($ttdId)]
+                        + ($covered === null ? [] : ['covered_fields' => $covered]))
             ),
         ]);
     }
@@ -240,7 +256,7 @@ final class DocumentSignatureVerifierTest extends TestCase
         // the helper derive it from the forged hash and the row becomes
         // internally consistent, which is a different situation entirely — and
         // one only reachable by someone who already holds the key.
-        $genuineHash = SignaturePayload::hash(
+        $genuineHash = SignaturePayload::hashV1(
             $this->docUuid, $this->tplUuid, 3, $this->fields, 'ttd_a', $this->marks['ttd_a']
         );
         $genuineEnvelope = bin2hex(hash_hmac('sha256', $genuineHash, (string) SigningKey::resolve(), true));
@@ -390,6 +406,93 @@ final class DocumentSignatureVerifierTest extends TestCase
             ['status' => 'tampered'],
             ['status' => 'untrusted'],
         ]), 'untrusted outranks tampered — one is a revision, the other wants investigating');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Two signers on one document
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * The case that could not happen before.
+     *
+     * A signs. B then fills in the name printed under *their own* signature and
+     * signs. Under v1 that field was covered by A's signature too, so A turned
+     * `tampered` — punished for a colleague doing their job. On a three-signer
+     * document nobody past the first could ever complete it.
+     */
+    public function testASecondSignerDoesNotTamperWithTheFirst(): void
+    {
+        $this->rewriteDocument(['nama' => 'Budi', 'nama_ttd_a' => 'dr. Budi', 'pernyataan_oleh' => '']);
+
+        $coveredA = ['nama', 'nama_ttd_a'];   // milik B (pernyataan_oleh) tidak ikut
+        $this->recordSignature('ttd_a', ['covered' => $coveredA]);
+
+        self::assertSame(DocumentSignatureVerifier::STATUS_VALID, $this->statusOf('ttd_a'));
+
+        // B mengisi namanya sendiri lalu menandatangani.
+        $this->rewriteDocument(['nama' => 'Budi', 'nama_ttd_a' => 'dr. Budi', 'pernyataan_oleh' => 'Siti']);
+        $this->recordSignature('ttd_b', ['covered' => ['nama', 'pernyataan_oleh']]);
+
+        self::assertSame(DocumentSignatureVerifier::STATUS_VALID, $this->statusOf('ttd_a'),
+            "the first signature must survive the second signer filling in their own name");
+        self::assertSame(DocumentSignatureVerifier::STATUS_VALID, $this->statusOf('ttd_b'));
+    }
+
+    /** Shared content still binds both of them. */
+    public function testEditingSharedContentBreaksBothSignatures(): void
+    {
+        $this->rewriteDocument(['nama' => 'Budi', 'nama_ttd_a' => 'dr. Budi', 'pernyataan_oleh' => 'Siti']);
+        $this->recordSignature('ttd_a', ['covered' => ['nama', 'nama_ttd_a']]);
+        $this->recordSignature('ttd_b', ['covered' => ['nama', 'pernyataan_oleh']]);
+
+        $this->rewriteDocument(['nama' => 'ORANG LAIN', 'nama_ttd_a' => 'dr. Budi', 'pernyataan_oleh' => 'Siti']);
+
+        self::assertSame(DocumentSignatureVerifier::STATUS_TAMPERED, $this->statusOf('ttd_a'));
+        self::assertSame(DocumentSignatureVerifier::STATUS_TAMPERED, $this->statusOf('ttd_b'));
+    }
+
+    /**
+     * Shrinking the recorded coverage must not quietly narrow what is checked.
+     * The list is inside the hashed payload, so editing the copy in metadata
+     * changes the recomputed hash instead of being obeyed.
+     */
+    public function testEditingTheRecordedCoverageReadsAsTampering(): void
+    {
+        $this->rewriteDocument(['nama' => 'Budi', 'rahasia' => 'asli']);
+        $this->recordSignature('ttd_a', ['covered' => ['nama', 'rahasia']]);
+        self::assertSame(DocumentSignatureVerifier::STATUS_VALID, $this->statusOf('ttd_a'));
+
+        // Penyerang membuang `rahasia` dari daftar cakupan supaya bisa mengubahnya.
+        $stmt = $this->pdo->prepare('UPDATE ezdoc_signatures SET metadata = ? WHERE 1');
+        $stmt->execute([(string) json_encode(['ttd_id' => 'ttd_a', 'covered_fields' => ['nama']])]);
+        $this->rewriteDocument(['nama' => 'Budi', 'rahasia' => 'diubah']);
+
+        self::assertSame(DocumentSignatureVerifier::STATUS_TAMPERED, $this->statusOf('ttd_a'),
+            'narrowing the coverage must change the hash, not the answer');
+    }
+
+    /** v2 without its coverage list cannot be recomputed, and must say so. */
+    public function testV2WithoutItsCoverageListIsUnverifiable(): void
+    {
+        $this->recordSignature('ttd_a', [
+            'content_hash_algo' => SignaturePayload::ALGO,
+            'metadata'          => ['ttd_id' => 'ttd_a'],
+        ]);
+
+        $v = $this->verifier->verify($this->docId, 'ttd_a')[0];
+        self::assertSame(DocumentSignatureVerifier::STATUS_UNVERIFIABLE, $v['status']);
+        self::assertStringContainsString('covered-field list', $v['reason']);
+    }
+
+    /** Signatures written under v1 keep verifying. Nothing was rewritten. */
+    public function testV1SignaturesStillVerify(): void
+    {
+        $this->recordSignature('ttd_a'); // default: v1
+
+        self::assertSame(DocumentSignatureVerifier::STATUS_VALID, $this->statusOf('ttd_a'));
+
+        $this->rewriteDocument(['nama' => 'diubah']);
+        self::assertSame(DocumentSignatureVerifier::STATUS_TAMPERED, $this->statusOf('ttd_a'));
     }
 
     /**

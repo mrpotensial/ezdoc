@@ -425,6 +425,9 @@ if ($doc_id > 0) {
 // berubah, atau tanda tangan yang sudah ada ditukar — dan tidak menghalangi
 // penyimpanan atas hal yang belum tentu suntingan.
 $signedSlots = [];
+// Gabungan field yang dicakup SEMUA tanda tangan yang sudah ada. Hanya inilah
+// yang beku — bukan seluruh isi dokumen.
+$frozenFields = [];
 if ($doc_id > 0) {
     $signedRows = $db->fetchAll(
         'SELECT `metadata` FROM `ezdoc_signatures` WHERE `document_id` = ? AND `deleted_at` IS NULL',
@@ -432,8 +435,21 @@ if ($doc_id > 0) {
     );
     foreach ($signedRows as $sr) {
         $sm = json_decode((string) ($sr['metadata'] ?? ''), true);
-        if (is_array($sm) && !empty($sm['ttd_id'])) {
-            $signedSlots[(string) $sm['ttd_id']] = true;
+        if (!is_array($sm) || empty($sm['ttd_id'])) {
+            continue;
+        }
+        $signedSlots[(string) $sm['ttd_id']] = true;
+
+        if (isset($sm['covered_fields']) && is_array($sm['covered_fields'])) {
+            foreach ($sm['covered_fields'] as $ck) {
+                $frozenFields[(string) $ck] = true;
+            }
+        } else {
+            // Tanda tangan v1 tidak mencatat cakupannya, dan v1 memang mencakup
+            // SELURUH field. Null di sini berarti "semuanya" — dinyatakan, bukan
+            // disimpulkan dari daftar kosong.
+            $frozenFields = null;
+            break;
         }
     }
 }
@@ -442,10 +458,19 @@ if ($signedSlots !== []) {
     // Nilai field tersimpan yang berubah atau hilang. Field BARU dibiarkan
     // lewat: itu bisa jadi template yang bertambah kolom, bukan orang mengubah
     // pernyataan yang sudah ditandatangani. Verifikasi tetap menangkapnya.
+    //
+    // Yang diperiksa hanya field yang benar-benar DICAKUP tanda tangan yang ada.
+    // Sebelumnya seluruh isi dokumen dibekukan begitu ada satu tanda tangan, dan
+    // itu membuat dokumen dua penanda tangan mustahil: orang kedua mengisi nama
+    // di bawah tanda tangannya sendiri, guard melihat field berubah, dan
+    // menolaknya. Dokumen dengan tiga slot tidak akan pernah bisa lengkap.
     $changedFields = [];
     foreach ($fieldsBeforeSave as $fname => $fvalue) {
         if (!array_key_exists($fname, $fieldData)) {
             continue; // form tidak mengirimnya — bukan bukti suntingan
+        }
+        if ($frozenFields !== null && !isset($frozenFields[(string) $fname])) {
+            continue; // milik slot lain, atau tampilan saja — tidak ditandatangani siapa pun
         }
         if ((string) $fieldData[$fname] !== (string) $fvalue) {
             $changedFields[] = (string) $fname;
@@ -618,6 +643,15 @@ try {
         // dokumen tetap menunjukkan jabatan saat menandatangani.
         $signerRole = !empty($signerRoles) ? substr(implode(',', $signerRoles), 0, 64) : null;
 
+        // Field mana milik slot mana. Dipakai untuk mengeluarkan field milik
+        // penanda tangan LAIN dari cakupan tiap tanda tangan — lihat
+        // SignaturePayload::coveredKeysFor().
+        $slotFieldMap = [];
+        foreach ($configTtd as $c) {
+            $slotFieldMap[(string) $c['id']] = [(string) ($c['nama_field'] ?? ('nama_' . $c['id']))];
+        }
+        $allFieldKeys = array_map('strval', array_keys($fieldData));
+
         $slotIndex = 0;
         $recorded = 0;
         foreach ($configTtd as $ttdCfg) {
@@ -634,13 +668,25 @@ try {
                 continue;
             }
 
+            // Cakupan tanda tangan ini: seluruh isi dokumen KECUALI field milik
+            // slot orang lain. Tanpa pengecualian itu, orang kedua yang mengisi
+            // namanya sendiri akan merusak tanda tangan orang pertama — dan pada
+            // dokumen dua penanda tangan, orang kedua sama sekali tidak bisa
+            // menandatangani.
+            $coveredKeys = \Ezdoc\Signature\SignaturePayload::coveredKeysFor(
+                (string) $tid,
+                $allFieldKeys,
+                $slotFieldMap
+            );
+
             $contentHash = \Ezdoc\Signature\SignaturePayload::hash(
                 $docUuid,
                 (string) $templateUuid,
                 (int) $templateVersion,
                 $fieldData,
                 $tid,
-                $newValue
+                $newValue,
+                $coveredKeys
             );
 
             // Nama yang tercetak di bawah tanda tangan, ditangkap ke dalam
@@ -658,6 +704,11 @@ try {
                 'ttd_id'      => $tid,
                 'ttd_label'   => $ttdCfg['label'] ?? $tid,
                 'signer_name' => $signerName !== '' ? $signerName : null,
+                // Verifier butuh daftar ini untuk menghitung ulang. Ia juga ada DI
+                // DALAM payload yang di-hash, jadi mengubahnya di sini tidak
+                // melebarkan atau menyempitkan yang diperiksa — ia mengubah hasil
+                // hitungannya dan muncul sebagai perubahan.
+                'covered_fields' => $coveredKeys,
                 'replaced'    => $oldValue !== '',
             ];
 

@@ -161,11 +161,29 @@ final class DocumentSignatureVerifier
         }
 
         $algo = (string) ($row['content_hash_algo'] ?? '');
-        if ($algo !== SignaturePayload::ALGO) {
+        if ($algo !== SignaturePayload::ALGO && $algo !== SignaturePayload::ALGO_V1) {
             return $verdict + [
                 'status' => self::STATUS_UNVERIFIABLE,
                 'reason' => "recorded under '{$algo}', which this version cannot recompute",
             ];
+        }
+
+        // v2 records which fields it covers. Without that list there is nothing to
+        // recompute over, and guessing would either check too much (reporting
+        // honest documents as altered) or too little (accepting edits the
+        // signature did cover).
+        $coveredFields = null;
+        if ($algo === SignaturePayload::ALGO) {
+            $coveredFields = isset($meta['covered_fields']) && is_array($meta['covered_fields'])
+                ? array_values(array_map('strval', $meta['covered_fields']))
+                : null;
+
+            if ($coveredFields === null) {
+                return $verdict + [
+                    'status' => self::STATUS_UNVERIFIABLE,
+                    'reason' => 'recorded under ' . $algo . ' but its covered-field list is missing',
+                ];
+            }
         }
 
         if ((string) ($row['envelope_format'] ?? '') !== 'hmac') {
@@ -192,14 +210,29 @@ final class DocumentSignatureVerifier
         }
 
         // Question 2: does the document still say what was signed?
-        $recomputed = SignaturePayload::hash(
-            (string) ($doc['uuid'] ?? ''),
-            (string) ($doc['template_uuid'] ?? ''),
-            (int) ($doc['template_version'] ?? 0),
-            $fields,
-            $ttdId,
-            (string) ($marks[$ttdId] ?? '')
-        );
+        //
+        // The covered-field list comes from metadata, but it is also inside the
+        // hashed payload — so editing it there does not quietly widen or narrow
+        // what gets checked; it changes the recomputed hash and shows up as
+        // tampering.
+        $recomputed = $coveredFields === null
+            ? SignaturePayload::hashV1(
+                (string) ($doc['uuid'] ?? ''),
+                (string) ($doc['template_uuid'] ?? ''),
+                (int) ($doc['template_version'] ?? 0),
+                $fields,
+                $ttdId,
+                (string) ($marks[$ttdId] ?? '')
+            )
+            : SignaturePayload::hash(
+                (string) ($doc['uuid'] ?? ''),
+                (string) ($doc['template_uuid'] ?? ''),
+                (int) ($doc['template_version'] ?? 0),
+                $fields,
+                $ttdId,
+                (string) ($marks[$ttdId] ?? ''),
+                $coveredFields
+            );
 
         if (!hash_equals((string) $row['content_hash'], $recomputed)) {
             return $verdict + [
