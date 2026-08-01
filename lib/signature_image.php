@@ -65,6 +65,58 @@ if (!function_exists('ezdoc_resolve_signature_image')) {
     }
 }
 
+if (!function_exists('ezdoc_recorded_signature_slots')) {
+    /**
+     * Id slot yang sudah punya baris di `ezdoc_signatures` untuk dokumen ini.
+     *
+     * Dipakai jalur render untuk memutuskan slot mana yang tidak boleh lagi
+     * menawarkan ubah/hapus. Sengaja dibedakan dari "slotnya ada isinya": slot
+     * bisa berisi gambar tanpa record — dokumen yang dibuat sebelum pencatatan
+     * diaktifkan, atau tanda tangan yang belum sempat tersimpan. Yang membuat
+     * server menolak perubahan adalah recordnya, jadi itu juga yang harus
+     * menentukan tampilannya.
+     *
+     * Gagal apa pun mengembalikan daftar kosong: dokumen tetap bisa dibuka, dan
+     * batas sebenarnya tetap dijaga guard §7b di sisi simpan.
+     *
+     * @param mixed $conn
+     * @return list<string>
+     */
+    function ezdoc_recorded_signature_slots($conn, int $docId): array
+    {
+        if ($docId <= 0) {
+            return [];
+        }
+
+        // Tanpa cache, sengaja. Fungsi ini dipanggil sekali per render — bukan
+        // per slot — jadi cache tidak menghemat apa pun di jalur normal, tapi
+        // membuat hasilnya bertahan lebih lama dari yang seharusnya: satu
+        // request yang menyimpan lalu merender ulang akan melihat keadaan
+        // sebelum simpan. Satu query berindeks lebih murah daripada kelas bug itu.
+        $slots = [];
+        try {
+            $db = $conn instanceof \Ezdoc\Db\Connection
+                ? $conn
+                : \Ezdoc\Context::default()->connection();
+
+            $rows = $db->fetchAll(
+                'SELECT `metadata` FROM `ezdoc_signatures` WHERE `document_id` = ? AND `deleted_at` IS NULL',
+                [$docId]
+            );
+            foreach ($rows as $row) {
+                $meta = json_decode((string) ($row['metadata'] ?? ''), true);
+                if (is_array($meta) && !empty($meta['ttd_id'])) {
+                    $slots[] = (string) $meta['ttd_id'];
+                }
+            }
+        } catch (\Throwable $e) {
+            @error_log('[ezdoc:signature] gagal membaca slot bertanda tangan: ' . $e->getMessage());
+        }
+
+        return array_values(array_unique($slots));
+    }
+}
+
 if (!function_exists('ezdoc_signature_image_store')) {
     /**
      * Penyimpan gambar untuk request ini, atau null kalau belum tersedia.

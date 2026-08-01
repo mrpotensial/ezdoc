@@ -385,6 +385,23 @@
             display: block !important;
             aspect-ratio: 1 / 1 !important;
         }
+        /* Lencana pada tanda tangan yang sudah tercatat. Tenang dan kecil — ia
+           menjelaskan kenapa tidak ada tombol, bukan meminta perhatian. Tanpa
+           penjelasan, "tidak bisa diklik" terbaca sebagai rusak. */
+        .ttd-sealed-badge {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: #f3f4f6;
+            color: #6b7280;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 9px;
+            z-index: 5;
+            pointer-events: none;
+        }
+        .edit-off .ttd-sealed-badge { display: none; }
+
         /* Nama di bawah tanda tangan yang sudah beku. Hash tanda tangan mencakup
            nama ini, jadi mengubahnya membuat tanda tangannya tidak sah. Ditandai
            dengan tenang — bukan disable yang terlihat rusak, tapi kursor dan

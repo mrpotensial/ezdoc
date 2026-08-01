@@ -1088,7 +1088,15 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
     // Replace TTD placeholders with signature areas
     //
     // Note: TTD placeholder has 3 nested divs inside, so we match each inner div pair then outer close
-    $html = preg_replace_callback('/<div([^>]*class="[^"]*ttd-placeholder[^"]*"[^>]*)>\s*<div[^>]*>.*?<\/div>\s*<div[^>]*>.*?<\/div>\s*<div[^>]*>.*?<\/div>\s*<\/div>/s', function($m) use ($configTtd, $ttdValues, $dbFields, $posOffsetTTD, $conn, $doc_id) {
+    // Slot mana yang sudah punya BARIS di ezdoc_signatures.
+    //
+    // Dibedakan dari "ada nilainya": slot bisa berisi gambar tanpa record —
+    // dokumen yang dibuat sebelum pencatatan diaktifkan, atau tanda tangan yang
+    // belum tersimpan. Yang mengunci UI harus recordnya, karena itu yang membuat
+    // server menolak perubahan.
+    $signedTtdIds = ezdoc_recorded_signature_slots($conn, (int) $doc_id);
+
+    $html = preg_replace_callback('/<div([^>]*class="[^"]*ttd-placeholder[^"]*"[^>]*)>\s*<div[^>]*>.*?<\/div>\s*<div[^>]*>.*?<\/div>\s*<div[^>]*>.*?<\/div>\s*<\/div>/s', function($m) use ($configTtd, $ttdValues, $dbFields, $posOffsetTTD, $conn, $doc_id, $signedTtdIds) {
         $tag = $m[1];
         // Parse all needed attributes from the opening tag
         preg_match('/class="([^"]*)"/', $tag, $cm); $classes = $cm[1] ?? '';
@@ -1190,8 +1198,22 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         $ttdIsImage = $ttdDisplaySrc !== '';
         $ttdIsSigned = \Ezdoc\Signature\SignatureValue::isSigned($ttdImg);
 
+        // Tanda tangan yang SUDAH TERCATAT tidak boleh menawarkan ubah maupun
+        // hapus.
+        //
+        // Bukan sekadar kerapian UI: keduanya ditolak server (§7b) karena hash
+        // tanda tangan mencakup nilai slot. Menawarkan tombol yang pasti ditolak
+        // hanya memancing petugas ke dinding — persis seperti field nama sebelum
+        // diperbaiki.
+        //
+        // Ini juga yang dilakukan setiap sistem tanda tangan: begitu ditandatangani,
+        // yang tersedia adalah "buat versi baru", bukan "edit". Adobe Sign dan
+        // DocuSign tidak punya tombol edit pada dokumen yang sudah ditandatangani
+        // sama sekali.
+        $ttdRecorded = $ttdIsSigned && in_array($ttdId, $signedTtdIds, true);
+
         // Image area — kalau user tidak allowed sign, disable interaksi + tampil badge lock
-        if ($canSignThisTtd) {
+        if ($canSignThisTtd && !$ttdRecorded) {
             $actionsHtml = '<div class="ttd-actions">
                 <button type="button" class="btn-edit" onclick="openSign(\'' . h($ttdId) . '\', \'' . h($label) . '\')">&#9998; ' . h(t('actions.edit', [], 'Edit')) . '</button>
                 <button type="button" class="btn-delete" onclick="clearTtd(\'' . h($ttdId) . '\')">&#10005; ' . h(t('actions.delete', [], 'Delete')) . '</button>
@@ -1199,6 +1221,13 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             $imgContent = $ttdIsImage
                 ? '<img src="' . h($ttdDisplaySrc) . '" class="ttd-signature" alt="TTD">' . $actionsHtml
                 : '<div class="ttd-canvas-placeholder" onclick="openSign(\'' . h($ttdId) . '\', \'' . h($label) . '\')"></div>';
+        } elseif ($ttdRecorded) {
+            // Tercatat: tampilkan apa adanya, dengan lencana yang menyebut
+            // ALASANNYA. "Tidak bisa diklik" tanpa penjelasan terbaca sebagai rusak.
+            $sealBadge = '<div class="ttd-sealed-badge" title="' . h(t('title.signature_sealed', [], 'Already signed and recorded — create a new version to revise')) . '"><i class="fa fa-lock"></i></div>';
+            $imgContent = $ttdIsImage
+                ? '<img src="' . h($ttdDisplaySrc) . '" class="ttd-signature" alt="TTD">' . $sealBadge
+                : '<div class="ttd-canvas-placeholder ttd-locked" style="cursor:default;background:#f9fafb;position:relative;">' . $sealBadge . '</div>';
         } else {
             // Not allowed — read-only display, no edit button, no clickable canvas
             $rolesHint = $allowedRolesRaw !== '' ? ' (' . h($allowedRolesRaw) . ')' : '';
@@ -1303,8 +1332,17 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
                             : '<small style="color:#9ca3af;font-size:10px;">' . h(t('ttd.not_signed_yet', [], 'Not signed yet')) . '</small>')
                         : ''
                 ) . '</div>
-                <input type="hidden" class="ttd-qr-content-input" name="' . h($qrContentKey) . '" id="ttd_qr_content_' . h($ttdId) . '" value="' . h($qrContent) . '">
-                <button type="button" class="btn-edit-qr-content" onclick="editQrContent(\'' . h($ttdId) . '\', \'' . h($patternForJs) . '\')" title="' . h(t('title.edit_qr_content', [], 'Edit QR content')) . '">&#9998; ' . h(t('ttd.edit_qr_button', [], 'Edit QR')) . '</button>
+                <input type="hidden" class="ttd-qr-content-input" name="' . h($qrContentKey) . '" id="ttd_qr_content_' . h($ttdId) . '" value="' . h($qrContent) . '">' . (
+                    // Isi QR hidup di `<namaField>_qr`, yang ada di dalam
+                    // `field_values` — jadi ia ikut hash tanda tangan. Setelah
+                    // slotnya tercatat, mengubahnya ditolak server, dan yang lebih
+                    // penting: kalau bisa diubah, QR pada dokumen yang SUDAH
+                    // ditandatangani bisa diarahkan ke mana saja dengan diketik
+                    // ulang. Itu bukan soal kerapian.
+                    $ttdRecorded
+                        ? ''
+                        : '<button type="button" class="btn-edit-qr-content" onclick="editQrContent(\'' . h($ttdId) . '\', \'' . h($patternForJs) . '\')" title="' . h(t('title.edit_qr_content', [], 'Edit QR content')) . '">&#9998; ' . h(t('ttd.edit_qr_button', [], 'Edit QR')) . '</button>'
+                ) . '
             </div>';
         }
 

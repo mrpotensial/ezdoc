@@ -101,6 +101,7 @@ return [
         // tetap bisa diisi — yang beku isinya.
         'document_signed_fields_frozen' => 'Dokumen ini sudah ditandatangani, jadi isinya tidak bisa lagi berubah. Buat versi baru untuk merevisi. Yang berubah: {fields}',
         'signature_replace_needs_new_version' => 'Tanda tangan "{ttd}" sudah tercatat dan tidak bisa diganti lewat penyimpanan. Buat versi baru.',
+        'signature_removal_needs_new_version' => 'Tanda tangan "{ttd}" sudah tercatat dan tidak bisa dihapus lewat penyimpanan. Buat versi baru.',
         'save_failed'                 => 'Gagal: {error}',
         'document_saved'              => 'Dokumen berhasil disimpan',
 

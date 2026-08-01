@@ -59,6 +59,7 @@ return [
         'no_sign_permission' => 'Not authorized to sign{roles}',
         'name_locked_after_signing' => 'Already signed — the name is part of what the signature covers. Create a new version to revise.',
         'no_sign_permission_as' => 'Not authorized to sign as {label}{roles}',
+        'signature_sealed' => 'Already signed and recorded — create a new version to revise',
         'edit_qr_content' => 'Edit QR content',
         'click_edit_qr' => 'Click to edit QR content',
         'click_generate_qr' => 'Click to generate QR (default: verification URL)',

@@ -72,6 +72,7 @@ return [
         'no_sign_permission'     => 'Anda tidak berhak sign{roles}',
         'name_locked_after_signing' => 'Sudah ditandatangani — nama ini bagian dari yang ditandatangani. Buat versi baru untuk merevisi.',
         'no_sign_permission_as'  => 'Anda tidak berhak sign sebagai {label}{roles}',
+        'signature_sealed'       => 'Sudah ditandatangani dan tercatat — buat versi baru untuk merevisi',
         'edit_qr_content'        => 'Edit isi QR',
         'click_edit_qr'          => 'Klik untuk edit isi QR',
         'click_generate_qr'      => 'Klik untuk generate QR (default: URL verifikasi)',

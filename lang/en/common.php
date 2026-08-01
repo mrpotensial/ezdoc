@@ -63,6 +63,7 @@ return [
         // fillable — it is the content that freezes.
         'document_signed_fields_frozen' => 'This document has been signed, so its content can no longer change. Create a new version to revise it. Changed: {fields}',
         'signature_replace_needs_new_version' => 'Signature "{ttd}" is already recorded and cannot be replaced by saving. Create a new version instead.',
+        'signature_removal_needs_new_version' => 'Signature "{ttd}" is already recorded and cannot be removed by saving. Create a new version instead.',
         'save_failed' => 'Failed: {error}',
         'document_saved' => 'Document saved successfully',
         'document_locked' => 'Document locked',

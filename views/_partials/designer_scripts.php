@@ -3490,10 +3490,10 @@
 
             // Preserve open state of <details> validation panels + active focus
             // Keys are field names so they survive re-render.
-            const openDetails = new Set();
-            list.querySelectorAll('details[data-field-details]').forEach(d => {
-                if (d.open) openDetails.add(d.getAttribute('data-field-details'));
-            });
+            // Bagian open-state pakai helper bersama dgn panel TTD — satu masalah,
+            // satu implementasi. Pemulihan fokus + seleksi di bawah tetap khusus
+            // panel ini, karena hanya di sini ada input yang diedit saat render ulang.
+            const openDetails = _openSections(list, 'data-field-details');
             const activeEl = document.activeElement;
             const activeFieldName = (activeEl && list.contains(activeEl))
                 ? activeEl.closest('[data-field-details], [data-field-row]')?.getAttribute('data-field-details')
@@ -3665,9 +3665,7 @@
             }).join('');
 
             // Restore previously-open <details> + focus + selection
-            list.querySelectorAll('details[data-field-details]').forEach(d => {
-                if (openDetails.has(d.getAttribute('data-field-details'))) d.open = true;
-            });
+            _restoreOpenSections(list, 'data-field-details', openDetails);
             if (activeAttr) {
                 const restoreEl = list.querySelector(`[data-validate-key="${activeAttr}"]`);
                 if (restoreEl) {
@@ -5552,11 +5550,73 @@
             editor.setContent(content);
         }
 
+        /**
+         * Apakah sebuah flag menyala, untuk nilai yang bisa berupa boolean MAUPUN
+         * string.
+         *
+         * `!!` tidak cukup, dan bedanya tidak kelihatan sampai ada yang mencoba
+         * mematikan flag-nya: di JavaScript `!!'0'` adalah **true**, karena string
+         * tak-kosong selalu truthy. Nilai flag TTD datang dari dua arah dengan tipe
+         * berbeda — handler checkbox mengirim string '1'/'0', sementara
+         * scanTtdPlaceholders() menghasilkan boolean dari atribut editor. Yang
+         * pertama membuat "matikan" tidak pernah bisa: kotaknya tercentang lagi
+         * setiap render.
+         *
+         * Menerima keduanya, bukan memaksa satu tipe, karena keduanya sah dan
+         * memaksa berarti memperbaiki satu pemanggil sambil meninggalkan yang lain.
+         */
+        function _isFlagOn(value) {
+            if (typeof value === 'string') {
+                const v = value.trim().toLowerCase();
+                return v !== '' && v !== '0' && v !== 'false' && v !== 'off' && v !== 'no';
+            }
+            return !!value;
+        }
+
+        /**
+         * Seksi <details> mana yang sedang terbuka di dalam sebuah container.
+         *
+         * `open` adalah keadaan yang dipegang DOM, bukan data kita — jadi ia
+         * lenyap begitu innerHTML ditulis ulang. Tanpa ini, MENCENTANG kotak di
+         * dalam seksi membuat seksinya menutup sendiri: handler mengubah state,
+         * panel dirender ulang, dan <details> yang baru lahir tanpa `open`.
+         * Yang terlihat petugas: centang tidak bisa ditekan, malah melipat.
+         *
+         * Dikunci pada `data-section` (identitas yang stabil), bukan pada urutan
+         * elemen — urutan berubah kalau ada TTD ditambah atau dihapus, dan seksi
+         * yang terbuka akan berpindah ke kartu lain.
+         *
+         * Pola yang sama dipakai `data-turbo-permanent` di Turbo dan `hx-preserve`
+         * di htmx: identitas stabil, keadaan dipulihkan setelah render.
+         *
+         * @param {Element|null} container
+         * @param {string} attr Atribut yang membawa identitas stabil
+         * @returns {Set<string>}
+         */
+        function _openSections(container, attr) {
+            const open = new Set();
+            if (!container) return open;
+            container.querySelectorAll(`details[${attr}]`).forEach(d => {
+                if (d.open) open.add(d.getAttribute(attr));
+            });
+            return open;
+        }
+
+        function _restoreOpenSections(container, attr, open) {
+            if (!container || !open || open.size === 0) return;
+            container.querySelectorAll(`details[${attr}]`).forEach(d => {
+                if (open.has(d.getAttribute(attr))) d.open = true;
+            });
+        }
+
         function renderTtd() {
             const list = document.getElementById('ttdList');
             const empty = document.getElementById('ttdEmpty');
             const countBadge = document.getElementById('ttdCount');
             if (!list) return;
+
+            // Direkam SEBELUM innerHTML ditulis ulang — sesudah itu sudah hilang.
+            const _openBefore = _openSections(list, 'data-section');
 
             // Update count badge
             if (countBadge) countBadge.textContent = configTtd.length;
@@ -5582,7 +5642,7 @@
                 const hasQr = ttdModes.includes('qr');
                 const searchText = ((ttd.label || '') + ' ' + (ttd.nama_field || '') + ' ' + mode + ' ' + ttdModes).toLowerCase();
                 const verifyActive = (ttd.qrData || '').includes('{verify_url}');
-                const isRequireOtp = !!(ttd.require_otp);
+                const isRequireOtp = _isFlagOn(ttd.require_otp);
 
                 return `
                 <div class="mb-2 bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm hover:border-gray-300 hover:shadow-md transition-all panel-list-item relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${m.accent} before:content-['']" data-search-text="${escapeHtml(searchText)}" data-focus-target="ttd:${eId}">
@@ -5654,7 +5714,7 @@
                     </div>
 
                     <!-- Card Footer 1: OTP Settings collapsible -->
-                    <details class="border-t border-gray-200 group bg-gray-50/40">
+                    <details data-section="otp:${eId}" class="border-t border-gray-200 group bg-gray-50/40">
                         <summary class="cursor-pointer text-[11px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100/60 flex items-center gap-1.5 pl-3 pr-2 py-1.5 select-none list-none transition-colors">
                             <i class="bi bi-chevron-right text-[10px] text-gray-400 transition-transform group-open:rotate-90"></i>
                             <i class="bi bi-whatsapp text-[10px] text-emerald-600"></i>
@@ -5677,7 +5737,7 @@
                     </details>
 
                     <!-- Card Footer 2: RBAC collapsible -->
-                    <details class="border-t border-gray-200 group bg-gray-50/40">
+                    <details data-section="rbac:${eId}" class="border-t border-gray-200 group bg-gray-50/40">
                         <summary class="cursor-pointer text-[11px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100/60 flex items-center gap-1.5 pl-3 pr-2 py-1.5 select-none list-none transition-colors">
                             <i class="bi bi-chevron-right text-[10px] text-gray-400 transition-transform group-open:rotate-90"></i>
                             <i class="bi bi-lock text-[10px]"></i>
@@ -5696,6 +5756,10 @@
                     </details>
                 </div>`;
             }).join('');
+
+            // Kembalikan seksi yang tadi terbuka. Tanpa ini, mengubah apa pun di
+            // dalam seksi akan menutup seksinya sendiri.
+            _restoreOpenSections(list, 'data-section', _openBefore);
 
             // Re-apply filter if search has value
             const ts = document.getElementById('ttdSearch');

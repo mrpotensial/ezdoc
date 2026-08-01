@@ -471,9 +471,33 @@ if ($signedSlots !== []) {
     // Menandatangani ulang slot yang sudah ditandatangani adalah pencabutan
     // lalu tanda tangan baru. Itu harus tindakan eksplisit, bukan efek samping
     // menyimpan.
+    //
+    // MENGHAPUSNYA juga, dan itu sebelumnya lolos. Syarat lama menuntut
+    // `$submitted !== ''`, jadi menyimpan dengan slot dikosongkan tidak
+    // ditolak apa pun: nilai slot hilang dari dokumen sementara barisnya masih
+    // ada di `ezdoc_signatures`. Verifikasi lalu menghitung ulang hash atas isi
+    // yang sudah tidak memuat tanda tangan itu, tidak cocok, dan melaporkan
+    // `tampered` — untuk perubahan yang aplikasinya sendiri izinkan.
+    //
+    // Menghapus sebenarnya lebih merusak daripada mengganti: yang mengganti
+    // meninggalkan sesuatu untuk diperiksa, yang menghapus meninggalkan record
+    // yang menunjuk ketiadaan.
     foreach (array_keys($signedSlots) as $signedTtd) {
         $submitted = (string) ($ttdData[$signedTtd] ?? '');
         $stored = (string) ($ttdBeforeSave[$signedTtd] ?? '');
+
+        if ($stored !== '' && $submitted === '') {
+            ezdoc_respond_error(
+                t(
+                    'response.signature_removal_needs_new_version',
+                    ['ttd' => $signedTtd],
+                    'Signature "{ttd}" is already recorded and cannot be removed by saving. Create a new version instead.'
+                ),
+                409,
+                ['ttd_id' => $signedTtd, 'remedy' => 'new_version']
+            );
+        }
+
         if ($submitted !== '' && $stored !== '' && $submitted !== $stored) {
             ezdoc_respond_error(
                 t(
