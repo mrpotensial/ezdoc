@@ -663,6 +663,7 @@ try {
 // Seperti audit log, kegagalan di sini tidak boleh menjatuhkan penyimpanan yang
 // sudah berhasil: dokumennya sudah tertulis, dan memberi tahu user bahwa
 // simpannya gagal justru tidak benar.
+$recordedSignatureCount = 0;
 try {
     $signingKey = \Ezdoc\Signature\SigningKey::resolve();
 
@@ -789,6 +790,7 @@ try {
             $recorded++;
         }
 
+        $recordedSignatureCount = $recorded;
         $signatureRecordNote = $recorded > 0 ? "recorded {$recorded}" : 'nothing new to record';
     }
 } catch (\Throwable $e) {
@@ -894,5 +896,16 @@ ezdoc_respond_success([
     'verify_url'   => $verifyUrl,
     'data_hash'    => $hashInfo['hash'] ?? null,
     'data_hash_at' => $hashInfo['hash_at'] ?? null,
+    // Berapa tanda tangan yang baru saja tercatat pada penyimpanan INI.
+    //
+    // Pemanggil butuh ini karena penyimpanan pada dokumen yang sudah ada tidak
+    // memuat ulang halaman — ia memperbarui di tempat. Setelah menandatangani,
+    // markup yang masih di layar berasal dari SEBELUM tanda tangan itu ada:
+    // tombol Edit dan Hapus masih menempel, dan menekannya menghasilkan
+    // penolakan "sudah tercatat" atas tanda tangan yang baru saja dibuat sendiri.
+    //
+    // Angkanya, bukan boolean: nol berarti tidak ada yang berubah dan halaman
+    // tidak perlu diganggu.
+    'signatures_recorded' => $recordedSignatureCount,
     'debug'        => $__ezdocSaveDebug,
 ], t('response.document_saved', [], 'Document saved successfully'));

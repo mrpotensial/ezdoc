@@ -538,6 +538,24 @@
                         });
                     }
 
+                    // Tanda tangan baru tercatat pada penyimpanan ini: muat ulang.
+                    //
+                    // Markup yang masih di layar dirender SEBELUM tanda tangan itu
+                    // ada — tombol Edit dan Hapus masih menempel, field yang kini
+                    // beku masih terlihat bisa diketik, dan nama penanda tangan
+                    // masih bisa diedit. Menekan Edit di situ menghasilkan
+                    // penolakan "sudah tercatat" atas tanda tangan yang baru saja
+                    // dibuat sendiri.
+                    //
+                    // Menambal DOM sepotong-sepotong bisa saja, tapi keadaan yang
+                    // benar sudah dihitung server saat render; memuat ulang
+                    // menjamin layar dan server sepakat alih-alih berharap begitu.
+                    if (data.signatures_recorded > 0) {
+                        window._ezdocSuppressUnload = true;
+                        window.location.href = targetUrl;
+                        return;
+                    }
+
                     if (data.doc_id && !data.isEdit) {
                         // New doc: redirect so page reloads with correct URL (triggers load by id/label)
                         setTimeout(() => { window.location.href = targetUrl; }, 500);
@@ -1888,10 +1906,22 @@
                 // Check if using new area structure
                 const imgArea = preview.querySelector('.ttd-area-image');
                 const target = imgArea || preview;
-                target.innerHTML = `<img src="${data}" class="ttd-signature" alt="TTD">${getActionsHtml(currentTtdId, label)}`;
+                // Tanpa tombol aksi: begitu tersimpan, tanda tangan ini tercatat dan
+                // mengubahnya ditolak server. Menampilkan Edit/Hapus di atasnya cuma
+                // mengundang penolakan atas tanda tangan yang baru saja dibuat sendiri.
+                target.innerHTML = `<img src="${data}" class="ttd-signature" alt="TTD">`;
             }
             if (typeof triggerDirty === 'function') triggerDirty();
             closeSign();
+
+            // Mode gambar ikut menyimpan sendiri, sama seperti mode QR.
+            //
+            // Menandatangani adalah tindakan commit — tanda tangan tidak punya
+            // keadaan draft, dan dua mode untuk satu tindakan yang sama tidak boleh
+            // punya aturan simpan yang berbeda. Sebelumnya mode gambar menunggu
+            // petugas menekan Simpan, jadi ada jendela ketika layar menunjukkan
+            // tanda tangan yang belum ada di mana pun.
+            if (typeof submitForm === 'function') submitForm();
         }
 
         // Clear/delete TTD signature
