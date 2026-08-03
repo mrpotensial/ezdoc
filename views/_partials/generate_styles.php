@@ -386,19 +386,42 @@
             aspect-ratio: 1 / 1 !important;
         }
         /* Field yang isinya sudah dibekukan tanda tangan.
-           Sengaja tenang — garis putus-putus abu-abu, bukan gembok atau spanduk.
-           Yang perlu disampaikan cuma "ini tidak diketik di sini lagi"; alasannya
-           ada di tooltip bagi yang mencoba. Saat dicetak, semua jejaknya hilang:
-           dokumen final tidak boleh menunjukkan keadaan editor. */
-        .field-frozen {
-            border-bottom: 1px dotted #d1d5db;
-            cursor: default;
+
+           Aturannya sengaja SAMA PERSIS dengan `.edit-off` di bawah — mekanisme
+           yang sudah terbukti untuk dokumen terkunci, cuma cakupannya satu field.
+           Membuat tampilan kedua untuk pekerjaan yang sama berarti dua hal yang
+           akan saling tertinggal.
+
+           Efeknya juga yang diinginkan: field beku tampil rata seperti teks cetak,
+           field yang masih bisa diisi tetap tampak seperti input. Bedanya terlihat
+           tanpa perlu dicoba. Dan saat semua tanda tangan lengkap, seluruh dokumen
+           rata dengan sendirinya — tampilan finalnya datang tanpa ada yang menekan
+           tombol apa pun. */
+        .field-frozen .f {
+            border-bottom: none;
+            background: transparent;
+            pointer-events: none;
         }
-        .field-frozen-empty { color: #9ca3af; }
-        .edit-off .field-frozen { border-bottom: none; }
-        @media print {
-            .field-frozen { border-bottom: none !important; }
+        .field-frozen .f:empty::before { content: ''; }
+        .field-frozen .field-date,
+        .field-frozen .field-time,
+        .field-frozen .field-select,
+        .field-frozen input[type="text"],
+        .field-frozen input[type="number"] {
+            border: none;
+            background: transparent;
+            pointer-events: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
         }
+        .field-frozen .field-number { background: transparent; }
+        /* Checkbox dan radio tidak punya `readonly` yang berlaku — CSS yang
+           mematikan interaksinya. Sengaja TIDAK di-disable: input yang disabled
+           tidak ikut terkirim, dan menyimpan akan terbaca sebagai mengosongkan. */
+        .field-frozen .field-checkbox,
+        .field-frozen .field-radio-label input,
+        .field-frozen select { pointer-events: none; }
 
         /* Lencana pada tanda tangan yang sudah tercatat. Tenang dan kecil — ia
            menjelaskan kenapa tidak ada tombol, bukan meminta perhatian. Tanpa

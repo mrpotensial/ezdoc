@@ -1111,6 +1111,32 @@ foreach ($configTtd as $ttd) {
     $ttdValues[$ttdId] = safeSignatureValue((string) $val);
 }
 
+// ─── Keadaan penandatanganan — DIHITUNG, bukan disetel ───
+//
+// Tidak ada tombol yang menentukan ini. Dulu ada ("Lock Final"), dan itu justru
+// sumber kebingungannya: tombol yang mengulang pembekuan yang sudah dikerjakan
+// tanda tangan, sambil merangkap menyatakan selesai.
+//
+// Semua slot dianggap wajib. Kalau nanti ada slot opsional, di sinilah tempat
+// pembedaannya masuk — dan hanya di sini.
+$__recordedSlots = ezdoc_recorded_signature_slots($conn, (int) $doc_id);
+$__slotCount     = count($configTtd);
+$__signedCount   = 0;
+foreach ($configTtd as $__t) {
+    if (in_array((string) $__t['id'], $__recordedSlots, true)) $__signedCount++;
+}
+
+/** 'draft' | 'in_progress' | 'complete' */
+$docSigningState = $__slotCount === 0
+    ? 'draft'
+    : ($__signedCount === 0 ? 'draft' : ($__signedCount >= $__slotCount ? 'complete' : 'in_progress'));
+
+// Selesai berarti tidak ada lagi yang bisa diubah lewat tombol Update: setiap
+// field sudah dicakup tanda tangan, dan setiap slot sudah terisi. Tombolnya
+// dimatikan DI SINI saja — jangan lebih awal, karena penanda tangan kedua
+// menyimpan tanda tangannya lewat tombol yang sama.
+$docSigningComplete = ($docSigningState === 'complete');
+
 // Render HTML: replace placeholders with inputs, logos with images, TTD with signature areas
 function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFields, $dynamicTables = [], $conn = null, $param_norm = '', $param_nopen = '', $param_is_locked = 0, $tableDbQueries = [], $doc_id = 0) {
     // Replace logo placeholders with actual images (handles inline and floating logos)
@@ -1699,34 +1725,40 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
 }
 
 /**
- * Field yang isinya sudah dibekukan tanda tangan.
+ * Bikin satu field yang sudah dirender jadi tidak bisa diisi.
  *
- * Nilainya tetap dikirim lewat input tersembunyi — kalau tidak, menyimpan
- * dokumen akan terbaca sebagai mengosongkan field, dan guard §7b menolaknya
- * justru karena tidak ada yang mengubah apa pun.
+ * Memakai mekanisme yang SAMA dengan dokumen terkunci (`edit-off`), cuma
+ * cakupannya satu field. Itu disengaja: sebelumnya field beku dirender ulang
+ * sebagai teks biasa, dan itu jadi cara KEDUA untuk pekerjaan yang sama —
+ * dengan hasil yang lebih buruk. Field tanggal tampil `2026-08-03` mentah,
+ * padahal input aslinya menampilkan format lokal browser.
  *
- * Tampilannya sengaja tenang: garis putus-putus abu-abu, bukan gembok atau
- * spanduk. Yang perlu disampaikan cuma "ini tidak diketik di sini lagi", dan
- * tooltip-nya menjelaskan alasannya bagi yang mencoba.
+ * Tiga hal yang harus dilakukan bersamaan, karena masing-masing sendirian bisa
+ * dilewati:
+ *   - `readonly` menghentikan pengetikan
+ *   - `contenteditable="false"` untuk field berbasis span
+ *   - `pointer-events: none` (dari CSS) menghentikan klik dan pemilih tanggal
+ *
+ * Nilainya tetap terkirim karena input-nya tetap input — tidak perlu input
+ * tersembunyi tambahan, dan tidak ada nilai yang hilang saat menyimpan.
  */
-function renderFrozenField($name, $type, $val, $options, $label) {
-    $hName = h($name);
-    $hVal = h($val);
-    $title = h(t('title.field_frozen_by_signature', [], 'Already signed — the content can no longer change. Create a new version to revise.'));
+function freezeFieldHtml(string $html, string $title): string
+{
+    $t = ' title="' . h($title) . '"';
 
-    // Checkbox dan radio tidak punya teks untuk ditampilkan; nilainya yang bicara.
-    if ($type === 'checkbox') {
-        $on = ($val === '1' || $val === 'true' || $val === 'yes' || $val === 'Ya');
-        $mark = '<span class="field-frozen" title="' . $title . '">' . ($on ? '&#9745;' : '&#9744;') . '</span>';
-        $labelHtml = $label !== '' ? ' ' . h($label) : '';
+    // Span contenteditable → matikan penyuntingannya, bukan sekadar tampilannya.
+    $html = str_replace('contenteditable="true"', 'contenteditable="false"' . $t, $html);
 
-        return $mark . $labelHtml . '<input type="hidden" name="' . $hName . '" value="' . $hVal . '">';
-    }
+    // Input teks/date/time/number → readonly. `readonly` dipilih daripada
+    // `disabled` karena input yang disabled TIDAK ikut terkirim, dan menyimpan
+    // dokumen akan terbaca sebagai mengosongkan field.
+    $html = preg_replace('/<input(?![^>]*\btype="hidden")/', '<input readonly' . $t, $html);
 
-    $shown = $hVal !== '' ? $hVal : '<span class="field-frozen-empty">&mdash;</span>';
+    // Checkbox, radio, dan select tidak punya `readonly` yang berlaku. CSS yang
+    // mematikan interaksinya; nilainya tetap terkirim karena tidak di-disable.
+    $html = str_replace('<select', '<select' . $t, (string) $html);
 
-    return '<span class="field-frozen" title="' . $title . '" data-field="' . $hName . '">' . $shown . '</span>'
-        . '<input type="hidden" name="' . $hName . '" value="' . $hVal . '">';
+    return '<span class="field-frozen">' . $html . '</span>';
 }
 
 // Render field input based on type. $validation = ['required'=>'1','min'=>...,'max'=>...,'pattern'=>...,'errorMsg'=>...]
@@ -1736,12 +1768,25 @@ function renderFrozenField($name, $type, $val, $options, $label) {
 // datang sebagai kejutan setelah petugas mengetik. Batas sebenarnya tetap di
 // sisi simpan — ini keterlihatan, bukan keamanan.
 function renderFieldInput($name, $type, $val, $options, $label, $validation = [], $frozen = false) {
+    $html = renderFieldInputRaw($name, $type, $val, $options, $label, $validation);
+
+    if (!$frozen) {
+        return $html;
+    }
+
+    // Dibekukan SESUDAH dirender, bukan dirender berbeda. Field beku dan field
+    // biasa harus tetap satu markup — begitu keduanya dibangun terpisah, yang
+    // satu akan tertinggal dari yang lain (dan itu sudah terjadi sekali: versi
+    // teks-biasa menampilkan tanggal mentah `2026-08-03` alih-alih format lokal).
+    return freezeFieldHtml(
+        $html,
+        t('title.field_frozen_by_signature', [], 'Already signed — the content can no longer change. Create a new version to revise.')
+    );
+}
+
+function renderFieldInputRaw($name, $type, $val, $options, $label, $validation = []) {
     $hName = h($name);
     $hVal = h($val);
-
-    if ($frozen) {
-        return renderFrozenField($name, $type, $val, $options, $label);
-    }
 
     // Build validation data attributes (rendered as data-v-* on the span/input)
     $vAttrs = '';
@@ -2632,6 +2677,29 @@ function renderFieldForPdf($name, $type, $val, $label) {
                                     <?php elseif ($param_is_locked): ?><i class="bi bi-lock-fill"></i>
                                     <?php endif; ?>
                                 </span>
+                                <?php // Keadaan penandatanganan — SATU tempat, dan cuma tulisan.
+                                //
+                                // Dulu keadaan yang sama muncul di tiga tempat: indikator ini, label
+                                // tombol Update ("Locked"), dan tombol lock yang mati. Tiga sumber untuk
+                                // satu fakta, masing-masing dengan syarat tampilnya sendiri — jadi bisa
+                                // saling bertentangan.
+                                //
+                                // Tidak ditampilkan kalau belum ada slot tanda tangan sama sekali:
+                                // dokumen tanpa TTD tidak punya keadaan penandatanganan.
+                                if ($__slotCount > 0):
+                                    $__stateText = [
+                                        'draft'       => t('signing_state.draft', [], 'Not signed'),
+                                        'in_progress' => t('signing_state.in_progress', ['signed' => $__signedCount, 'total' => $__slotCount], 'Signed {signed} of {total}'),
+                                        'complete'    => t('signing_state.complete', [], 'Fully signed'),
+                                    ][$docSigningState];
+                                    $__stateCls = [
+                                        'draft'       => 'text-gray-400',
+                                        'in_progress' => 'text-amber-400',
+                                        'complete'    => 'text-emerald-400',
+                                    ][$docSigningState];
+                                ?>
+                                · <span class="<?= $__stateCls ?>" title="<?= h(t('title.signing_state', [], 'Content is frozen for whatever the signatures already cover')) ?>"><?= h($__stateText) ?></span>
+                                <?php endif; ?>
                             <?php else: ?>
                                 · <span class="doc-info new text-amber-400"><?= t('toolbar.new', [], 'New') ?></span>
                             <?php endif; ?>
@@ -2691,8 +2759,20 @@ function renderFieldForPdf($name, $type, $val, $label) {
 
                 <!-- ═══ PRIMARY ROW: Update (2/3) + Print (1/3 icon) ═══ -->
                 <div class="grid grid-cols-3 gap-1 mt-1">
-                    <button type="button" class="btn-success col-span-2 !m-0 !py-1.5 !text-[12px]" onclick="submitForm()" <?= $param_is_locked ? 'disabled title="' . h(t('title.locked_cannot_update', [], 'Locked - cannot update')) . '"' : '' ?>>
-                        <?= $isEditMode ? ($param_is_locked ? h(t('toolbar.locked', [], 'Locked')) : h(t('toolbar.update', [], 'Update'))) : h(t('toolbar.save_new', [], 'Save New')) ?>
+                    <?php // Labelnya tetap kata kerja ("Update"), tidak pernah berubah jadi
+                    // keadaan ("Locked"). Keadaan punya tempatnya sendiri — indikator di atas.
+                    // Tombol mati berlabel keadaan membuat orang menekannya dan bertanya-tanya
+                    // kenapa tidak terjadi apa-apa.
+                    //
+                    // Dimatikan saat SELESAI, bukan saat baru ada satu tanda tangan: penanda
+                    // tangan kedua menyimpan tanda tangannya lewat tombol yang sama.
+                    $__updateOff = $param_is_locked || $docSigningComplete;
+                    $__updateWhy = $docSigningComplete
+                        ? t('title.update_off_all_signed', [], 'Every signature is in place — create a new version to revise')
+                        : t('title.locked_cannot_update', [], 'Locked - cannot update');
+                    ?>
+                    <button type="button" class="btn-success col-span-2 !m-0 !py-1.5 !text-[12px]" onclick="submitForm()" <?= $__updateOff ? 'disabled title="' . h($__updateWhy) . '"' : '' ?>>
+                        <?= $isEditMode ? h(t('toolbar.update', [], 'Update')) : h(t('toolbar.save_new', [], 'Save New')) ?>
                     </button>
                     <button type="button" class="!m-0 !py-1.5 !px-1 !text-[11px]" onclick="window.print()" title="<?= h(t('title.print_shortcut', [], 'Print (Ctrl+P)')) ?>"><i class="bi bi-printer"></i> <?= h(t('toolbar.print', [], 'Print')) ?></button>
                 </div>
@@ -2737,13 +2817,22 @@ function renderFieldForPdf($name, $type, $val, $label) {
                                         <span>QR: <span id="btnToggleVerifyQrLabel"><?= $__showVerifyQrInit ? h(t('toolbar.qr_status_on', [], 'ON')) : h(t('toolbar.qr_status_off', [], 'OFF')) ?></span></span>
                                     </button>
                                     <?php if ($isEditMode): ?>
-                                        <?php if (!$param_is_locked): ?>
-                                            <button class="bg-gray-500" type="button" id="btnDocLock" onclick="toggleDocLock()" title="<?= h(t('title.lock_final', [], 'Lock this version (final)')) ?>"><i class="bi bi-lock"></i><?= h(t('toolbar.lock_final', [], 'Lock Final')) ?></button>
-                                        <?php elseif ($isSuperadmin): ?>
-                                            <button class="bg-amber-500" type="button" id="btnDocLock" onclick="toggleDocLock()" title="<?= h(t('title.unlock_version', [], 'Unlock this version (superadmin)')) ?>"><i class="bi bi-unlock"></i><?= h(t('toolbar.unlock', [], 'Unlock')) ?></button>
-                                        <?php else: ?>
-                                            <button class="bg-gray-600 opacity-60 cursor-not-allowed" type="button" disabled title="<?= h(t('title.locked_superadmin_only', [], 'Locked — only superadmin can unlock')) ?>"><i class="bi bi-lock-fill"></i><?= h(t('toolbar.locked', [], 'Locked')) ?></button>
-                                        <?php endif; ?>
+                                        <?php // Tombol Lock Final / Unlock / Locked dibuang.
+                                        //
+                                        // Namanya menggabungkan dua pekerjaan: "Lock" (bekukan isi) dan
+                                        // "Final" (nyatakan selesai). Yang pertama sudah dikerjakan tanda
+                                        // tangan — isi beku otomatis begitu ada yang menandatangani. Yang
+                                        // kedua bisa dihitung: semua slot terisi berarti selesai.
+                                        //
+                                        // Unlock hanya ada karena Lock ada. Dan tombol "Locked" yang mati
+                                        // itu label KEADAAN yang dipasang sebagai tombol, mengulang apa
+                                        // yang sudah tertulis di indikator status.
+                                        //
+                                        // DocuSign dan Adobe Sign tidak punya tombol kunci sama sekali:
+                                        // tanda tangannya yang jadi kunci, status penyelesaian dihitung.
+                                        //
+                                        // Kolom `is_locked` TIDAK dihapus — masih dipakai merender dokumen
+                                        // terhapus dalam mode baca-saja. Yang hilang cuma tombolnya. ?>
                                         <button class="bg-violet-500" type="button" onclick="showNewVersionModal()" title="<?= h(t('title.new_version', [], 'Create new version')) ?>"><i class="bi bi-plus-circle"></i><?= h(t('toolbar.new_version', [], 'New Version')) ?></button>
                                     <?php endif; ?>
                                     <button class="!bg-slate-600 wide" type="button" onclick="showShortcutsHelp()" title="<?= h(t('title.shortcuts', [], 'Keyboard shortcuts (Ctrl+/)')) ?>"><i class="bi bi-keyboard"></i><?= h(t('toolbar.shortcuts', [], 'Shortcuts')) ?></button>

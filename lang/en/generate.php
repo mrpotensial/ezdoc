@@ -59,6 +59,8 @@ return [
         'restore_slot' => 'Restore this slot',
         'no_sign_permission' => 'Not authorized to sign{roles}',
         'name_locked_after_signing' => 'Already signed — the name is part of what the signature covers. Create a new version to revise.',
+        'update_off_all_signed' => 'Every signature is in place — create a new version to revise',
+        'signing_state' => 'Content is frozen for whatever the signatures already cover',
         'field_frozen_by_signature' => 'Already signed — the content can no longer change. Create a new version to revise.',
         'no_sign_permission_as' => 'Not authorized to sign as {label}{roles}',
         'signature_sealed' => 'Already signed and recorded — create a new version to revise',
@@ -68,6 +70,11 @@ return [
         'click_fill_edit_qr' => 'Click to fill/edit QR',
         'materai_manual_area' => 'Materai area (manual stamp)',
         'materai_not_uploaded' => 'Not uploaded yet',
+    ],
+    'signing_state' => [
+        'draft' => 'Not signed',
+        'in_progress' => 'Signed {signed} of {total}',
+        'complete' => 'Fully signed',
     ],
     'placeholder' => [
         'default_dash' => '- (default)',

@@ -72,6 +72,8 @@ return [
         'restore_slot'           => 'Pulihkan slot ini',
         'no_sign_permission'     => 'Anda tidak berhak sign{roles}',
         'name_locked_after_signing' => 'Sudah ditandatangani — nama ini bagian dari yang ditandatangani. Buat versi baru untuk merevisi.',
+        'update_off_all_signed' => 'Semua tanda tangan sudah lengkap — buat versi baru untuk merevisi',
+        'signing_state'         => 'Isi yang sudah dicakup tanda tangan tidak bisa diubah lagi',
         'field_frozen_by_signature' => 'Sudah ditandatangani — isinya tidak bisa lagi berubah. Buat versi baru untuk merevisi.',
         'no_sign_permission_as'  => 'Anda tidak berhak sign sebagai {label}{roles}',
         'signature_sealed'       => 'Sudah ditandatangani dan tercatat — buat versi baru untuk merevisi',
@@ -81,6 +83,11 @@ return [
         'click_fill_edit_qr'     => 'Klik untuk isi/edit QR',
         'materai_manual_area'    => 'Area materai (tempel manual)',
         'materai_not_uploaded'   => 'Belum di-upload',
+    ],
+    'signing_state' => [
+        'draft'       => 'Belum ditandatangani',
+        'in_progress' => 'Tertandatangani {signed} dari {total}',
+        'complete'    => 'Tanda tangan lengkap',
     ],
     'placeholder' => [
         'default_dash'      => '- (default)',

@@ -1085,6 +1085,12 @@
             window.location.href = '?' + params.toString();
         }
 
+        // Tidak ada lagi tombol yang memanggil ini — Lock Final/Unlock sudah dibuang
+        // dari toolbar. Fungsinya dibiarkan, dan itu keputusan, bukan kelalaian:
+        // action `toggle_lock` di server masih ada dan masih dipakai jalur lain
+        // (mis. dokumen terhapus dirender baca-saja lewat flag yang sama).
+        // Menghapus fungsinya berarti consumer yang memanggilnya dari slot UI
+        // sendiri ikut patah, tanpa peringatan apa pun.
         async function toggleDocLock() {
             if (!CURRENT_DOC_ID) return;
             const currentLocked = <?= (int)$param_is_locked ?>;
