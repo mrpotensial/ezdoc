@@ -110,9 +110,63 @@ if (!function_exists('t')) {
 }
 
 if (!function_exists('safeDataImg')) {
+    /**
+     * Aman untuk dipasang ke `<img src>`.
+     *
+     * Hanya data URI gambar. Dipakai di tempat yang benar-benar mengeluarkan
+     * atribut src — BUKAN untuk menyaring nilai slot tanda tangan, lihat
+     * safeSignatureValue() di bawah.
+     */
     function safeDataImg(string $s): string {
         if ($s === '') return '';
-        return preg_match('#^data:image/(png|jpe?g|gif);base64,#', $s) ? $s : '';
+
+        // Dijangkar di KEDUA ujung, dengan alfabet base64 yang eksplisit.
+        // Sebelumnya hanya awalannya yang diperiksa, jadi apa pun boleh mengikuti
+        // `base64,` — termasuk `AAA" onerror="alert(1)`. Keluarannya selalu lewat
+        // h(), jadi itu bukan XSS yang hidup, tapi "sesuatu yang bukan gambar
+        // diterima sebagai gambar" tetap tidak boleh berhenti pada satu lapis.
+        return preg_match('#^data:image/(png|jpe?g|gif);base64,[A-Za-z0-9+/=\r\n]+$#', $s) ? $s : '';
+    }
+}
+
+if (!function_exists('safeSignatureValue')) {
+    /**
+     * Nilai slot tanda tangan yang dikenali, atau string kosong.
+     *
+     * Dulu penyaringnya safeDataImg(), dan itu benar selama nilai slot cuma bisa
+     * berupa gambar. Kosakatanya bertambah dua kali sejak itu — penanda mode QR
+     * (`qr:v1`) dan referensi objek (`blob:sha256-…`) — dan penyaringnya tidak
+     * ikut diperbarui. Keduanya bukan data URI, jadi keduanya **dihapus diam-diam
+     * saat halaman dirender**.
+     *
+     * Akibatnya dua hal yang terlihat sangat berbeda tapi berakar sama:
+     *
+     *   1. Tanda tangan mode QR "selalu hilang". `qr:v1` tersimpan, lalu lenyap
+     *      di render berikutnya, dan tombol "Tanda tangani (QR)" muncul lagi.
+     *   2. Tombol QR: OFF/ON menolak dengan "tanda tangan tidak bisa dihapus".
+     *      Input tersembunyinya kosong, jadi menyimpan tampilan terbaca sebagai
+     *      MENGHAPUS tanda tangan yang sudah tercatat.
+     *
+     * Yang kedua justru bukti guard §7b bekerja: tanpanya, mengubah tampilan akan
+     * menghapus tanda tangan sungguhan dan meninggalkan recordnya menunjuk
+     * ketiadaan.
+     *
+     * Tetap daftar-putih, bukan "apa saja yang tidak kosong". Nilai ini masuk ke
+     * atribut HTML dan ke `signature_values`; melonggarkannya jadi bebas berarti
+     * apa pun yang bisa di-POST orang bisa mendarat di kedua tempat itu.
+     */
+    function safeSignatureValue(string $s): string {
+        $s = trim($s);
+        if ($s === '') return '';
+
+        // Bentuk data URI-nya dipinjam dari SignatureImageStore, bukan ditulis
+        // ulang: dua pemeriksa dengan pola berbeda untuk nilai yang sama akan
+        // berpisah diam-diam, dan yang longgar jadi jalan masuknya.
+        if (\Ezdoc\Storage\SignatureImageStore::isDataUri($s)) return $s;
+        if ($s === \Ezdoc\Signature\SignatureValue::QR_ACT) return $s;
+        if (\Ezdoc\Storage\Blob::isReference($s)) return $s;
+
+        return '';
     }
 }
 
@@ -992,8 +1046,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['_save'])) {
         $ttdData = [];
         foreach ($configTtd as $ttd) {
             $ttdId = $ttd['id'];
-            $ttdValue = $_POST[$ttdId] ?? '';
-            if ($ttdValue && safeDataImg($ttdValue)) $ttdData[$ttdId] = $ttdValue;
+            // safeSignatureValue(), bukan safeDataImg(): penanda mode QR dan
+            // referensi objek bukan data URI, dan menyaringnya dengan aturan
+            // gambar akan MENGHAPUSNYA dari dokumen tanpa suara.
+            $ttdValue = safeSignatureValue((string) ($_POST[$ttdId] ?? ''));
+            if ($ttdValue !== '') $ttdData[$ttdId] = $ttdValue;
         }
 
         $jsonFields = json_encode($fieldData);
@@ -1047,7 +1104,11 @@ $ttdValues = [];
 foreach ($configTtd as $ttd) {
     $ttdId = $ttd['id'];
     $val = $dbTtd[$ttdId] ?? $_POST[$ttdId] ?? '';
-    $ttdValues[$ttdId] = safeDataImg($val);
+    // Nilai MENTAH yang dikenali — bukan yang sudah aman untuk `src`. Ia harus
+    // kembali utuh ke input tersembunyi, kalau tidak penyimpanan berikutnya
+    // mengirimkannya kosong dan terbaca sebagai penghapusan tanda tangan.
+    // Untuk ditampilkan, ezdoc_resolve_signature_image() yang membukanya.
+    $ttdValues[$ttdId] = safeSignatureValue((string) $val);
 }
 
 // Render HTML: replace placeholders with inputs, logos with images, TTD with signature areas
@@ -2477,8 +2538,11 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 <div class="ttd-item">
                     <div class="ttd-label"><?= h($ttd['label'] ?? t('fallback.signature', [], 'Signature')) ?></div>
                     <div class="ttd-img" id="preview_<?= h($ttd['id']) ?>">
-                        <?php if (!empty($ttdValues[$ttd['id']])): ?>
-                        <img src="<?= h($ttdValues[$ttd['id']]) ?>" alt="TTD">
+                        <?php // Nilai slot dibuka dulu: `qr:v1` dan `blob:sha256-…` bukan
+                        // gambar, dan menaruhnya di `src` mencetak ikon rusak.
+                        $__src = ezdoc_resolve_signature_image($conn, (string) ($ttdValues[$ttd['id']] ?? ''));
+                        if ($__src !== ''): ?>
+                        <img src="<?= h($__src) ?>" alt="TTD">
                         <?php endif; ?>
                     </div>
                     <div class="ttd-name">
