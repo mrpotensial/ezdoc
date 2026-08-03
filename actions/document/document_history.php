@@ -6,7 +6,7 @@ declare(strict_types=1);
  * POST _doc_action=document_history
  *   body: doc_id
  *
- * Riwayat satu dokumen — gabungan DUA sumber, diurutkan waktu.
+ * Riwayat satu dokumen — gabungan DUA sumber, mencakup SELURUH slot.
  *
  * ## Kenapa dua sumber
  *
@@ -19,6 +19,17 @@ declare(strict_types=1);
  * Menyalinnya ke log audit berarti menyimpan fakta yang sama dua kali, dan dua
  * salinan bisa berselisih. Jadi digabung saat dibaca, bukan saat ditulis.
  *
+ * ## Kenapa seluruh slot, bukan satu versi
+ *
+ * Tiap versi punya barisnya sendiri di `ezdoc_documents` dengan id sendiri. Mencari
+ * lewat satu doc_id cuma memberi kejadian pada versi itu — membuka v21 akan
+ * menampilkan satu baris, "versi baru dibuat", seolah tidak pernah ada apa-apa
+ * sebelumnya.
+ *
+ * Yang orang maksud dengan "dokumen ini" adalah slotnya: satu surat untuk satu
+ * pasien, yang kebetulan sudah direvisi beberapa kali. Confluence dan Google Docs
+ * menampilkan riwayat sepanjang halaman, bukan sepanjang satu revisi.
+ *
  * ## Bentuknya
  *
  * Setiap baris dinormalkan ke bentuk yang sama supaya sisi tampilan tidak perlu
@@ -30,7 +41,6 @@ declare(strict_types=1);
  * Response: { success, entries: [...], truncated: bool }
  */
 
-use Ezdoc\Audit\AuditRepository;
 use Ezdoc\Context;
 
 $docId = (int) ($_POST['doc_id'] ?? 0);
@@ -44,7 +54,7 @@ $db = Context::default()->connection();
 // menandatangani apa dan dari IP mana — bukan sesuatu yang dibagikan hanya
 // karena penebak id-nya beruntung.
 $doc = $db->fetchOne(
-    'SELECT d.id, d.template_id, t.access_config
+    'SELECT d.id, d.template_id, d.template_uuid, d.norm, d.nopen, d.label, t.access_config
      FROM ezdoc_documents d
      LEFT JOIN ezdoc_templates t ON t.id = d.template_id
      WHERE d.id = ? LIMIT 1',
@@ -57,16 +67,52 @@ if (!$doc) {
 $accessConfig = ezdoc_parse_access_config($doc['access_config'] ?? null);
 ezdoc_require_on_template($accessConfig, 'view', 'Tidak berhak melihat dokumen dari template ini');
 
-/** Batas atas. Dokumen yang sering disimpan bisa punya ratusan baris. */
+/** Batas atas. Slot yang sering disimpan bisa punya ratusan baris. */
 const EZDOC_HISTORY_LIMIT = 60;
+
+// Semua versi di slot ini. Versi yang sudah dihapus ikut: penghapusan itu sendiri
+// bagian dari riwayat, dan menyembunyikannya membuat garis waktunya berlubang
+// tanpa penjelasan.
+$slotRows = $db->fetchAll(
+    'SELECT id, version FROM ezdoc_documents
+     WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ?
+     ORDER BY version',
+    [$doc['template_uuid'], $doc['norm'], $doc['nopen'], $doc['label']]
+);
+
+/** @var array<int,int> id dokumen => nomor versi */
+$versionOf = [];
+foreach ($slotRows as $row) {
+    $versionOf[(int) $row['id']] = (int) $row['version'];
+}
+if ($versionOf === []) {
+    $versionOf[$docId] = 0;
+}
+
+$ids = array_keys($versionOf);
+$in = implode(',', array_fill(0, count($ids), '?'));
 
 $entries = [];
 
 // ─── Sumber 1: log audit ───
-foreach ((new AuditRepository($db))->findByDocument($docId, EZDOC_HISTORY_LIMIT) as $row) {
+//
+// Diambil lebih banyak dari batas tampilnya, karena dua sumber digabung lalu
+// diurutkan ulang — memotong di sini akan membuang kejadian yang seharusnya
+// muncul setelah penggabungan.
+$auditRows = $db->fetchAll(
+    'SELECT doc_id, occurred_at, event_type, actor_id, actor_roles, ip_address, result, message
+     FROM ezdoc_audit_log
+     WHERE doc_id IN (' . $in . ')
+     ORDER BY occurred_at DESC
+     LIMIT ' . (EZDOC_HISTORY_LIMIT * 2),
+    $ids
+);
+
+foreach ($auditRows as $row) {
     $entries[] = [
         'at'      => (string) ($row['occurred_at'] ?? ''),
         'event'   => (string) ($row['event_type'] ?? ''),
+        'version' => $versionOf[(int) ($row['doc_id'] ?? 0)] ?? null,
         'actor'   => (string) ($row['actor_id'] ?? ''),
         'roles'   => (string) ($row['actor_roles'] ?? ''),
         'ip'      => (string) ($row['ip_address'] ?? ''),
@@ -81,11 +127,11 @@ foreach ((new AuditRepository($db))->findByDocument($docId, EZDOC_HISTORY_LIMIT)
 // ─── Sumber 2: record tanda tangan ───
 try {
     $sigRows = $db->fetchAll(
-        'SELECT `signer_id`, `signer_role`, `signed_at`, `verify_status`, `level`, `metadata`
+        'SELECT `document_id`, `signer_id`, `signer_role`, `signed_at`, `verify_status`, `level`, `metadata`
          FROM `ezdoc_signatures`
-         WHERE `document_id` = ? AND `deleted_at` IS NULL
+         WHERE `document_id` IN (' . $in . ') AND `deleted_at` IS NULL
          ORDER BY `signed_at` DESC',
-        [$docId]
+        $ids
     );
 } catch (\Throwable $e) {
     // Consumer yang belum migrasi tetap dapat riwayatnya, tanpa bagian ini.
@@ -100,6 +146,7 @@ foreach ($sigRows as $row) {
     $entries[] = [
         'at'      => (string) ($row['signed_at'] ?? ''),
         'event'   => 'signature.recorded',
+        'version' => $versionOf[(int) ($row['document_id'] ?? 0)] ?? null,
         'actor'   => (string) ($row['signer_id'] ?? ''),
         'roles'   => (string) ($row['signer_role'] ?? ''),
         'ip'      => '',

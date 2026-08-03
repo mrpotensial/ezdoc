@@ -1,0 +1,648 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Ezdoc\Http;
+
+use Ezdoc\Exceptions\AccessDeniedException;
+use Ezdoc\Exceptions\NotFoundException;
+use Ezdoc\Exceptions\EzdocException;
+use Ezdoc\UI\Config;
+use Ezdoc\UI\Theme;
+
+/**
+ * Ezdoc\Http\Router — internal URL router.
+ *
+ * Reads request query keys (`app.query_key` = default `ezdoc_page`,
+ * `app.asset_key` = default `ezdoc_asset`) plus legacy action-dispatch
+ * signals (`ajax=1&action=X`, `_ajax=1`, `_doc_action=X`, `action=delete`,
+ * `action=generate_qr`) and dispatches to a named handler.
+ *
+ * Opt-in prefix: when no ezdoc_* query key is present AND no legacy signal
+ * matches, {@see match()} returns null and {@see dispatch()} yields
+ * `null` so the consumer's own page keeps rendering. This satisfies PRD
+ * §6.13 anti-pattern #1 (must not force all URLs through Ezdoc).
+ *
+ * PHP 7.4+ compatible.
+ */
+final class Router
+{
+    /** @var Config */
+    private $config;
+
+    /** @var mixed DB handle (mysqli|PDO|null). */
+    private $db;
+
+    /** @var Theme */
+    private $theme;
+
+    /** @var AssetHandler */
+    private $assets;
+
+    /** @var array<string,callable> route-name → handler(RequestContext, ResponseWriter): string|null */
+    private $handlers = [];
+
+    /** @var array<int,string> Whitelisted page names (protects against arbitrary include).
+     *
+     * v1.0-prep: added direct sub-view route names (template_list, template_designer,
+     * generate_list, document_generate) yg mirror the extracted view files structure
+     * (v0.9.11 view separation). Legacy names (designer, generate) retained via
+     * alias forwarding for backward-compat.
+     */
+    private static $PAGE_WHITELIST = [
+        // Core routes
+        'list', 'view', 'download', 'action', 'admin_migrate',
+        // Legacy sub-view dispatch (backward-compat, forward via alias ke direct names)
+        'designer', 'generate', 'new_document',
+        // Direct sub-view routes (v1.0-prep)
+        'template_list', 'template_designer',
+        'generate_list', 'document_generate',
+    ];
+
+    /**
+     * Route alias map: [oldName => canonicalName]. v1.0-prep — direct sub-view
+     * routing dgn backward-compat forwarding.
+     *
+     * Pattern parity: same alias mechanism sebagai SlotRegistry::alias().
+     * Existing consumer URLs (`?ezdoc_page=designer&action=list`) still work
+     * via alias forwarding.
+     *
+     * @var array<string,string>
+     */
+    private $routeAliases = [];
+
+    /**
+     * @param mixed $db mysqli or PDO or null (demo may pass PDO).
+     */
+    public function __construct(Config $config, $db, Theme $theme, AssetHandler $assets)
+    {
+        $this->config = $config;
+        $this->db     = $db;
+        $this->theme  = $theme;
+        $this->assets = $assets;
+        $this->registerDefaults();
+    }
+
+    /**
+     * Register / override a named route.
+     *
+     * @param callable(RequestContext,ResponseWriter):(string|null) $handler
+     */
+    public function register(string $name, callable $handler): void
+    {
+        // Resolve alias so both old + new names map ke same handler storage.
+        $this->handlers[$this->resolveRoute($name)] = $handler;
+    }
+
+    /**
+     * Register alias mapping: when $oldName di-refer, resolve ke $canonicalName.
+     *
+     * v1.0-prep — backward-compat forwarding untuk legacy route names.
+     * Example: `alias('designer', 'template_designer')` — old URLs dgn
+     * `?ezdoc_page=designer` route ke `template_designer` handler.
+     *
+     * Depth-capped cycle detection (max 8 hops).
+     */
+    public function alias(string $oldName, string $canonicalName): void
+    {
+        if ($oldName === '' || $canonicalName === '') {
+            return;
+        }
+        $this->routeAliases[$oldName] = $canonicalName;
+    }
+
+    /**
+     * Resolve alias chain ke canonical route name. Depth-capped defensive.
+     */
+    private function resolveRoute(string $name): string
+    {
+        $seen = [];
+        $cur  = $name;
+        for ($i = 0; $i < 8; $i++) {
+            if (!isset($this->routeAliases[$cur])) return $cur;
+            if (isset($seen[$cur])) return $name; // cycle
+            $seen[$cur] = true;
+            $cur = $this->routeAliases[$cur];
+        }
+        return $cur;
+    }
+
+    /**
+     * Determine which handler (if any) matches this request. Pure — no side effects.
+     */
+    public function match(RequestContext $req): ?string
+    {
+        $qk = (string) $this->config->get('app.query_key', 'ezdoc_page');
+        $ak = (string) $this->config->get('app.asset_key', 'ezdoc_asset');
+
+        // 1. Asset requests short-circuit (highest priority).
+        $assetVal = $req->query($ak, '');
+        if (is_string($assetVal) && $assetVal !== '') {
+            return 'asset';
+        }
+
+        // 2. Explicit page query.
+        $page = (string) $req->query($qk, '');
+        if ($page !== '' && in_array($page, self::$PAGE_WHITELIST, true)) {
+            // Resolve alias — legacy names forward ke canonical handler.
+            return $this->resolveRoute($page);
+        }
+
+        // 3. Legacy action-dispatch signals (backward compat).
+        if ($req->method() === 'POST') {
+            if (isset($req->post['_ajax']) || isset($req->post['_doc_action'])) {
+                return 'action';
+            }
+            if (isset($req->post['ajax']) && isset($req->post['action'])) {
+                return 'action';
+            }
+            if ((string) ($req->post['action'] ?? '') === 'delete' && isset($req->post['delete_id'])) {
+                return 'action';
+            }
+        }
+        if ($req->method() === 'GET' && (string) $req->query('action', '') === 'generate_qr') {
+            return 'action';
+        }
+
+        return null; // passthrough — consumer page keeps rendering
+    }
+
+    /**
+     * Dispatch a request. Returns:
+     *   - string:  page body for consumer to echo / return
+     *   - null:    either no match (opt-in fallthrough) or a streamed response
+     *              already handled via ResponseWriter::stream()
+     */
+    public function dispatch(RequestContext $req, ResponseWriter $res): ?string
+    {
+        $name = $this->match($req);
+        if ($name === null) {
+            return null;
+        }
+        if (!isset($this->handlers[$name])) {
+            $res->status(404)->html('<h1>Not Found</h1><p>Route "' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '" has no handler.</p>', 404);
+            return $res->emit();
+        }
+        try {
+            $ret = ($this->handlers[$name])($req, $res);
+            if ($ret === null) {
+                return $res->emit();
+            }
+            return is_string($ret) ? $ret : $res->emit();
+        } catch (AccessDeniedException $e) {
+            $res->json(['success' => false, 'message' => $e->getMessage()], 403);
+            return $res->emit();
+        } catch (NotFoundException $e) {
+            $res->status(404)->html('<h1>Not Found</h1><p>' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</p>', 404);
+            return $res->emit();
+        } catch (EzdocException $e) {
+            $res->status($e->getStatusCode())->json(['success' => false, 'error' => $e->getMessage()]);
+            return $res->emit();
+        } catch (\Throwable $e) {
+            $res->status(500)->json(['success' => false, 'error' => $e->getMessage()]);
+            return $res->emit();
+        }
+    }
+
+    /**
+     * Build an internal URL for a named route + params.
+     *
+     * @param array<string,scalar> $params
+     */
+    public function url(string $name, array $params = []): string
+    {
+        $base = (string) $this->config->get('app.base_path', '');
+        $qk   = (string) $this->config->get('app.query_key', 'ezdoc_page');
+        $join = (strpos($base, '?') === false) ? '?' : '&';
+        $url  = $base . $join . $qk . '=' . rawurlencode($name);
+        foreach ($params as $k => $v) {
+            $url .= '&' . rawurlencode((string) $k) . '=' . rawurlencode((string) $v);
+        }
+        return $url;
+    }
+
+    /**
+     * Default route table.
+     */
+    private function registerDefaults(): void
+    {
+        // Core routes
+        $this->handlers['list']          = [$this, 'handleList'];
+        $this->handlers['view']          = [$this, 'handleView'];
+        $this->handlers['download']      = [$this, 'handleDownload'];
+        $this->handlers['asset']         = [$this, 'handleAsset'];
+        $this->handlers['action']        = [$this, 'handleAction'];
+        $this->handlers['admin_migrate'] = [$this, 'handleAdminMigrate'];
+
+        // Direct sub-view routes (v1.0-prep) — canonical names matching
+        // extracted view files (v0.9.11 view separation).
+        $this->handlers['template_list']     = [$this, 'handleTemplateList'];
+        $this->handlers['template_designer'] = [$this, 'handleTemplateDesigner'];
+        $this->handlers['generate_list']     = [$this, 'handleGenerateList'];
+        $this->handlers['document_generate'] = [$this, 'handleDocumentGenerate'];
+
+        // Legacy alias forwarding — old sub-view dispatch entry points route
+        // ke canonical handlers. Consumer URLs `?ezdoc_page=designer&action=list`
+        // TETAP works (designer handler internally checks action query).
+        $this->handlers['designer']     = [$this, 'handleDesigner'];
+        $this->handlers['generate']     = [$this, 'handleGenerate'];
+        $this->handlers['new_document'] = [$this, 'handleNewDocument'];
+    }
+
+    /**
+     * Direct route: `?ezdoc_page=template_list` — template list view (extracted
+     * dari designer.php di v0.9.11). Semantically equivalent dgn
+     * `?ezdoc_page=designer&action=list`.
+     *
+     * Currently delegates ke handleDesigner dgn forced action=list. Ke depan
+     * bisa short-circuit langsung ke template_list.php + data prep tanpa
+     * designer.php dispatcher overhead.
+     */
+    public function handleTemplateList(RequestContext $req, ResponseWriter $res): ?string
+    {
+        // Force action=list untuk designer.php internal dispatcher
+        $_GET['action'] = 'list';
+        return $this->handleDesigner($req, $res);
+    }
+
+    /**
+     * Direct route: `?ezdoc_page=template_designer&id={N}` — template editor
+     * (edit or create). Semantically equivalent dgn
+     * `?ezdoc_page=designer&action=edit&id={N}` (or action=create).
+     */
+    public function handleTemplateDesigner(RequestContext $req, ResponseWriter $res): ?string
+    {
+        $action = (string) $req->query('action', '');
+        if (!in_array($action, ['edit', 'create'], true)) {
+            $action = 'edit';
+        }
+        $_GET['action'] = $action;
+        return $this->handleDesigner($req, $res);
+    }
+
+    /**
+     * Direct route: `?ezdoc_page=generate_list` — template picker (extracted
+     * dari generate.php di v0.9.11). Semantically equivalent dgn
+     * `?ezdoc_page=generate` (tanpa template_id).
+     */
+    public function handleGenerateList(RequestContext $req, ResponseWriter $res): ?string
+    {
+        // Force template_id=0 supaya picker branch aktif di generate.php
+        $_GET['template_id'] = 0;
+        return $this->handleGenerate($req, $res);
+    }
+
+    /**
+     * Direct route: `?ezdoc_page=document_generate&template_id={N}` — actual
+     * generate view. Semantically equivalent dgn
+     * `?ezdoc_page=generate&template_id={N}`.
+     */
+    public function handleDocumentGenerate(RequestContext $req, ResponseWriter $res): ?string
+    {
+        // template_id must be provided; delegate ke generate handler
+        return $this->handleGenerate($req, $res);
+    }
+
+    /**
+     * Admin migration dashboard — visual alternative to CLI `migrate.php`.
+     *
+     * Industry-standard precedent: Laravel Nova/Filament admin panels,
+     * Django `/admin/migrations/`, Rails webconsole, WordPress upgrade.php.
+     * Auto-migrate already runs on bootstrap; this view untuk explicit
+     * control + status visibility (untuk yg prefer visual over CLI).
+     *
+     * Auth: superadmin only (destructive DB operations).
+     *
+     * spec: docs/ADMIN-MIGRATE.md (planned)
+     */
+    public function handleAdminMigrate(RequestContext $req, ResponseWriter $res): ?string
+    {
+        return $this->renderView(__DIR__ . '/../../views/admin/migrate.php', [
+            '__ezdoc_fragment' => true,
+        ], $res);
+    }
+
+    // ─── Handlers ────────────────────────────────────────────────────
+
+    /**
+     * @return string|null
+     */
+    public function handleAsset(RequestContext $req, ResponseWriter $res)
+    {
+        $ak       = (string) $this->config->get('app.asset_key', 'ezdoc_asset');
+        $relPath  = (string) $req->query($ak, '');
+        $this->assets->serve($relPath, $req, $res);
+        return $res->emit();
+    }
+
+    public function handleList(RequestContext $req, ResponseWriter $res): ?string
+    {
+        $qParam          = (string) $req->query('q', '');
+        $statusParam     = (string) $req->query('status', '');
+        $templateIdParam = (int) $req->query('template_id', 0);
+        $debugMsg        = '';
+        $templates       = [];  // untuk dropdown filter
+
+        // Priority 1: runtime.documents kalau consumer inject (test/mock scenarios).
+        $documents = $this->config->get('runtime.documents');
+        if (!is_array($documents)) {
+            $documents = [];
+            // Priority 2: kalau db mysqli available, auto-query real docs via Repository.
+            if ($this->db instanceof \mysqli) {
+                try {
+                    // Sanity: apakah tabel exists?
+                    $chk = @mysqli_query($this->db, "SHOW TABLES LIKE 'ezdoc_documents'");
+                    $tableExists = ($chk && mysqli_num_rows($chk) > 0);
+                    if (!$tableExists) {
+                        $debugMsg = 'Table `ezdoc_documents` belum ada — jalankan migrations dulu.';
+                    } else {
+                        $repo = new \Ezdoc\Document\DocumentRepository($this->db);
+                        // Kalau template_id di-filter: query listByTemplate (repo-level).
+                        // Q + status masih di-post-filter PHP-side (findRecent tidak accept
+                        // template_id parameter — extend Repository di v0.9.10 kalau butuh).
+                        if ($templateIdParam > 0) {
+                            $all = $repo->listByTemplate($templateIdParam, 500);
+                            $documents = array_values(array_filter($all, function ($d) use ($qParam, $statusParam) {
+                                if ($statusParam !== '' && $d->getStatus() !== $statusParam) return false;
+                                if ($qParam !== '') {
+                                    $needle = mb_strtolower($qParam);
+                                    $hay = mb_strtolower(($d->getTitle() ?? '') . ' ' . ($d->getReferenceNumber() ?? '') . ' ' . ($d->getSubjectId() ?? ''));
+                                    if (mb_strpos($hay, $needle) === false) return false;
+                                }
+                                return true;
+                            }));
+                        } else {
+                            $documents = $repo->findRecent($statusParam, $qParam, 100);
+                        }
+                        if (empty($documents)) {
+                            $cntRes = @mysqli_query($this->db, "SELECT COUNT(*) c FROM ezdoc_documents WHERE deleted_at IS NULL");
+                            if ($cntRes) {
+                                $cnt = (int)(mysqli_fetch_assoc($cntRes)['c'] ?? 0);
+                                if ($cnt === 0) {
+                                    $debugMsg = 'Belum ada dokumen di database (0 rows di `ezdoc_documents`).';
+                                }
+                            }
+                        }
+
+                        // Load templates untuk dropdown filter — semua active template
+                        // (bukan hanya yg punya document, supaya user tahu template kosong juga).
+                        try {
+                            $tplRepo = new \Ezdoc\Template\TemplateRepository($this->db);
+                            $templates = $tplRepo->listCurrent(500);
+                        } catch (\Throwable $e) {
+                            $templates = []; // silent — filter dropdown just won't show
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    $debugMsg = 'Query error: ' . $e->getMessage();
+                }
+            } else {
+                $debugMsg = 'DB handle bukan mysqli (SQLite/PDO belum di-support di Repository — pending v0.9.9).';
+            }
+        }
+
+        return $this->renderView(__DIR__ . '/../../views/document/list.php', [
+            'documents' => $documents,
+            'templates' => $templates,
+            'filters'   => [
+                'q'           => $qParam,
+                'status'      => $statusParam,
+                'template_id' => $templateIdParam,
+            ],
+            'baseUrl'   => (string) $this->config->get('app.base_path', ''),
+            'debugMsg'  => $debugMsg,
+        ], $res);
+    }
+
+    public function handleDesigner(RequestContext $req, ResponseWriter $res): ?string
+    {
+        $action = (string) $req->query('action', 'list');
+        if (!in_array($action, ['list', 'create', 'edit'], true)) {
+            $action = 'list';
+        }
+        // List mode → fragment (layout.php wraps dengan primary nav).
+        // Editor mode (create/edit) → full page (own layout, no nav).
+        // Industri: Rails render partial / Symfony partial-vs-full toggle.
+        return $this->renderView(__DIR__ . '/../../views/document/designer.php', [
+            'action'           => $action,
+            'id'               => (int) $req->query('id', 0),
+            'message'          => '',
+            'messageType'      => '',
+            '__ezdoc_fragment' => ($action === 'list'),
+        ], $res);
+    }
+
+    public function handleGenerate(RequestContext $req, ResponseWriter $res): ?string
+    {
+        // generate.php inlines dispatcher require — guard with EZDOC_APP_ORCHESTRATED.
+        if (!defined('EZDOC_APP_ORCHESTRATED')) {
+            define('EZDOC_APP_ORCHESTRATED', true);
+        }
+        // Picker mode (template_id <= 0) → fragment. Full render (template_id > 0)
+        // → full page (dompdf-oriented, own layout).
+        $templateId = (int) $req->query('template_id', 0);
+        return $this->renderView(__DIR__ . '/../../views/document/generate.php', [
+            '__ezdoc_fragment' => ($templateId <= 0),
+        ], $res);
+    }
+
+    public function handleNewDocument(RequestContext $req, ResponseWriter $res): ?string
+    {
+        // Alias of generate — new_document is a friendlier route name.
+        return $this->handleGenerate($req, $res);
+    }
+
+    public function handleView(RequestContext $req, ResponseWriter $res): ?string
+    {
+        $uuid = (string) $req->query('uuid', '');
+
+        // Industry-standard: view route resolves doc by uuid, then hands off ke
+        // generate.php (which owns the full render pipeline). Symfony Route + Nova
+        // Resource pattern: route mapping tidak duplicate view logic.
+        if ($uuid !== '' && $this->db instanceof \mysqli) {
+            try {
+                $repo = new \Ezdoc\Document\DocumentRepository($this->db);
+                $doc  = $repo->findByUuid($uuid);
+                if ($doc !== null) {
+                    // Forward vars ke generate.php via $_GET (which generate.php reads).
+                    // spec: ezdoc-spec/routes/view.md#uuid-forward
+                    $_GET['template_id'] = (string) $doc->getTemplateId();
+                    $_GET['doc_id']      = (string) $doc->getId();
+                    // Preserve print/download intent kalau ada
+                    if ($req->query('print') !== null) $_GET['view']     = 'pdf';
+                    if ($req->query('download') !== null) $_GET['download'] = '1';
+                    return $this->handleGenerate($req, $res);
+                }
+            } catch (\Throwable $e) {
+                // fallthrough → stub not-found
+            }
+        }
+
+        // Not found — return 404 dengan explicit message
+        $safeUuid = htmlspecialchars($uuid, ENT_QUOTES, 'UTF-8');
+        $html = '<div class="rounded-lg border border-red-200 bg-red-50 p-6 shadow-sm">'
+              . '<h2 class="text-lg font-semibold text-red-900 mb-2">Document Not Found</h2>'
+              . '<p class="text-sm text-red-700">UUID: <code>' . $safeUuid . '</code></p>'
+              . '<p class="text-xs text-red-600 mt-2">Dokumen tidak ditemukan di database (mungkin sudah di-delete atau uuid salah).</p>'
+              . '</div>';
+        $res->status(404)->html($this->wrapLayout($html, 'Document Not Found'));
+        return $res->emit();
+    }
+
+    public function handleDownload(RequestContext $req, ResponseWriter $res): ?string
+    {
+        // Route through generate with download=1 flag preserved.
+        $_GET['download'] = 1;
+        return $this->handleGenerate($req, $res);
+    }
+
+    /**
+     * @return string|null
+     */
+    public function handleAction(RequestContext $req, ResponseWriter $res)
+    {
+        $dispatcher = __DIR__ . '/../../actions/_dispatcher.php';
+        if (!is_file($dispatcher)) {
+            $res->error('Action dispatcher not found', 500);
+            return $res->emit();
+        }
+        // Expose $config as a plain local var — actions/_dispatcher.php's own
+        // isset($config) fallback only sees THIS method's local scope (it's
+        // require()'d from here, not from renderView()), so without this it
+        // silently builds a fresh empty Config and app.locale reverts to the
+        // Translator default ('id') regardless of what this Router was
+        // actually configured with. Same class of scope-isolation bug as
+        // $dbFields/$GLOBALS in generate.php (commit 1c4a12a) and the
+        // $translator wiring in designer.php/generate.php — see docs/I18N.md.
+        $config = $this->config;
+        // Wire globals expected by legacy action files (~15 files assume $conn + $author_id).
+        if ($this->db !== null) {
+            $GLOBALS['conn'] = $this->db;
+        }
+
+        // Identity and roles travel together or the request is half-wired.
+        //
+        // Only `author_id` used to be carried here, which let a mount end up
+        // with roles resolved but no identity — role checks pass, a superadmin
+        // bypass works, and then anything that asks *who* the user is gets 0.
+        // Audit entries record no actor, and identity guards refuse. The
+        // failure looks like an authorization problem and is not one.
+        $authorId = $this->config->get('app.author_id');
+        if ($authorId !== null) {
+            $GLOBALS['author_id'] = $authorId;
+        }
+        $authorRoles = $this->config->get('app.author_roles');
+        if (is_array($authorRoles)) {
+            $GLOBALS['author_role_array'] = $authorRoles;
+        }
+        // Legacy dispatcher calls exit() inside handlers — capture via ob buffer.
+        // We do not attempt to prevent exit; consumer's after-emit code will not run,
+        // but this route is the terminal in any request cycle anyway.
+        ob_start();
+        try {
+            /** @psalm-suppress UnresolvableInclude */
+            require $dispatcher;
+        } catch (\Throwable $e) {
+            $captured = ob_get_clean();
+            $res->error($e->getMessage(), 500);
+            $emit = $res->emit();
+            return $emit === null ? $captured : ($emit . $captured);
+        }
+        $captured = ob_get_clean();
+        if ($captured !== false && trim($captured) !== '') {
+            return $captured;
+        }
+
+        // The dispatcher returned without matching anything and without writing
+        // a response. Every handler it routes to ends in exit(), so reaching
+        // here means no branch claimed the request.
+        //
+        // This used to return the empty buffer, which reaches the browser as
+        // "200 OK" with nothing in it — and the caller, which does
+        // `await resp.json()`, reports "Unexpected end of JSON input". That
+        // names neither the endpoint nor the missing parameter, and it looks
+        // identical to a crash. The legacy consumer-side mount has always
+        // answered with a diagnostic instead; this is the same answer, so both
+        // doors behave alike.
+        //
+        // The echoed keys are request metadata the caller just sent, not
+        // values — enough to see which branch was missed without quoting the
+        // payload back.
+        $res->status(400)->json([
+            'success'   => false,
+            'message'   => 'No matching action for this request',
+            'method'    => $req->method(),
+            'post_keys' => array_keys($req->post),
+            'get_keys'  => array_keys($req->query),
+        ], 400);
+
+        return $res->emit();
+    }
+
+    // ─── View rendering helpers ───────────────────────────────────────
+
+    /**
+     * Render a view file with the given var scope + wrap in layout.
+     *
+     * @param array<string,mixed> $vars
+     */
+    private function renderView(string $viewFile, array $vars, ResponseWriter $res): ?string
+    {
+        if (!is_file($viewFile)) {
+            $res->status(404)->html('<h1>View missing</h1><p>' . htmlspecialchars(basename($viewFile), ENT_QUOTES, 'UTF-8') . '</p>', 404);
+            return $res->emit();
+        }
+        // Inject standard scope for all views.
+        $config = $this->config;
+        $theme  = $this->theme;
+        // Expose Context::default so views' fallback logic finds a proper ctx.
+        try {
+            $ctx = \Ezdoc\Context::default();
+        } catch (\Throwable $e) {
+            $ctx = null;
+        }
+        extract($vars, EXTR_OVERWRITE);
+
+        ob_start();
+        try {
+            /** @psalm-suppress UnresolvableInclude */
+            include $viewFile;
+        } catch (\Throwable $e) {
+            ob_end_clean();
+            $res->error($e->getMessage(), 500);
+            return $res->emit();
+        }
+        $content = (string) ob_get_clean();
+
+        // If the view already included layout.php itself (like generate.php does
+        // full-page render), we return content as-is. Detect via <html doctype.
+        if (stripos($content, '<!doctype') !== false || stripos($content, '<html') !== false) {
+            $res->html($content);
+            return $res->emit();
+        }
+
+        $res->html($this->wrapLayout($content, (string) $this->config->get('pages.list.title', $this->theme->getAppName())));
+        return $res->emit();
+    }
+
+    /**
+     * Wrap a page body in views/layout.php (which reads $content + $title + $config + $theme).
+     */
+    private function wrapLayout(string $bodyContent, string $title): string
+    {
+        $layout = __DIR__ . '/../../views/layout.php';
+        if (!is_file($layout)) {
+            // Bare fallback — minimal HTML shell.
+            return '<!doctype html><html><head><meta charset="utf-8"><title>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</title></head><body>' . $bodyContent . '</body></html>';
+        }
+        $config  = $this->config;
+        $theme   = $this->theme;
+        $content = $bodyContent;
+
+        ob_start();
+        /** @psalm-suppress UnresolvableInclude */
+        include $layout;
+        $out = ob_get_clean();
+        return $out === false ? $bodyContent : $out;
+    }
+}

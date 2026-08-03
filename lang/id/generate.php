@@ -207,6 +207,7 @@ return [
             'history_loading'       => 'Memuat riwayat…',
             'history_empty'         => 'Belum ada yang tercatat',
             'history_failed'        => 'Riwayat tidak bisa dimuat',
+            'history_bad_response'  => 'Server membalas HTTP {status}, bukan data — lihat konsol browser',
             'history_truncated'     => 'Riwayat yang lebih lama tidak ditampilkan',
             'document_id_label'     => 'Document ID',
             'version_row_label'     => 'Versi',

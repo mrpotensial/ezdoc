@@ -189,6 +189,7 @@ return [
             'history_loading' => 'Loading history…',
             'history_empty' => 'Nothing recorded yet',
             'history_failed' => 'History could not be loaded',
+            'history_bad_response' => 'The server replied with HTTP {status} instead of data — see the browser console',
             'history_truncated' => 'Older entries are not shown',
             'document_id_label' => 'Document ID',
             'version_row_label' => 'Version',

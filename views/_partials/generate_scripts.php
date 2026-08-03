@@ -1067,7 +1067,30 @@
                 fd.append('doc_id', CURRENT_DOC_ID);
 
                 const resp = await fetch(_ezdocEndpoint('docAction'), { method: 'POST', body: fd });
-                const data = await resp.json();
+
+                // Badan respons dibaca sebagai teks dulu, baru diurai.
+                //
+                // `resp.json()` yang gagal melempar SyntaxError, dan pesannya cuma
+                // "Unexpected token <" — tidak menyebut apa yang sebenarnya dikirim
+                // server. Padahal justru itu jawabannya: halaman error PHP, 404, atau
+                // pengalihan ke halaman login semuanya sampai ke sini sebagai HTML,
+                // dan ketiganya perlu penanganan berbeda.
+                const raw = await resp.text();
+                let data;
+                try {
+                    data = JSON.parse(raw);
+                } catch (parseErr) {
+                    console.error('[ezdoc:history] server tidak mengirim JSON', {
+                        status: resp.status,
+                        url: _ezdocEndpoint('docAction'),
+                        body: raw.slice(0, 800)
+                    });
+                    box.className = 'text-[12px] text-red-600 py-3 text-center';
+                    box.textContent = t('modal.doc_info.history_bad_response',
+                        { status: resp.status },
+                        'The server replied with HTTP {status} instead of data — see the browser console');
+                    return;
+                }
 
                 if (!data.success) {
                     box.className = 'text-[12px] text-red-600 py-3 text-center';
@@ -1086,8 +1109,12 @@
                         ? `<div class="text-[10px] text-gray-400 text-center pt-2">${t('modal.doc_info.history_truncated', {}, 'Older entries are not shown')}</div>`
                         : '');
             } catch (e) {
+                // Penyebabnya ikut ke konsol. Pesan umum di layar tanpa jejak apa pun
+                // membuat satu-satunya cara mendiagnosis adalah menebak.
+                console.error('[ezdoc:history] gagal memuat riwayat', e);
                 box.className = 'text-[12px] text-red-600 py-3 text-center';
-                box.textContent = t('modal.doc_info.history_failed', {}, 'History could not be loaded');
+                box.textContent = t('modal.doc_info.history_failed', {}, 'History could not be loaded')
+                    + (e && e.message ? ' — ' + e.message : '');
             }
         }
 
@@ -1147,11 +1174,20 @@
                 ? `#${escapeHtmlSimple(e.actor)}${e.roles ? ' · ' + escapeHtmlSimple(e.roles) : ''}`
                 : t('history_event.unknown_actor', {}, 'unknown');
 
+            // Riwayat mencakup seluruh slot, jadi tiap baris harus menyebut versi
+            // mana yang dimaksud — kalau tidak, sepuluh baris "Dokumen disimpan"
+            // terlihat seperti sepuluh penyimpanan pada versi yang sedang dibuka.
+            // Versi yang sedang dilihat ditandai supaya mudah dicari.
+            const isCurrent = e.version === CURRENT_VERSION;
+            const ver = e.version
+                ? `<span class="inline-block rounded px-1 text-[9px] leading-[14px] ${isCurrent ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}">v${e.version}</span> `
+                : '';
+
             return `
                 <div class="flex gap-2 py-1.5 border-b border-gray-100 last:border-0">
                     <i class="bi ${spec.icon} ${spec.tone} text-[13px] leading-5 flex-shrink-0"></i>
                     <div class="min-w-0 flex-1">
-                        <div class="text-[12px] text-gray-800 leading-tight">${title}${revoked}${failed}</div>
+                        <div class="text-[12px] text-gray-800 leading-tight">${ver}${title}${revoked}${failed}</div>
                         <div class="text-[10px] text-gray-500 leading-tight mt-0.5">
                             ${fmtDate(e.at)} · ${who}${e.ip ? ' · ' + escapeHtmlSimple(e.ip) : ''}
                         </div>

@@ -1,0 +1,115 @@
+# ezdoc/.gitignore — untuk standalone git repo library
+# Package: mrpotensial/ezdoc
+
+# ─── Composer ────────────────────────────────────────────────────────────
+/vendor/
+composer.phar
+
+# Library authors umum-nya TIDAK commit composer.lock — biar consumer resolve
+# sesuai constraint mereka. Untuk aplikasi (bukan library), DO commit lock.
+composer.lock
+
+# ─── PHP tooling ──────────────────────────────────────────────────────────
+.php-cs-fixer.cache
+.phpcs.cache
+.phpunit.result.cache
+.phpunit.cache/
+phpstan.neon.cache
+psalm.log
+.phpstan/
+.psalm/
+
+# ─── Testing / coverage ───────────────────────────────────────────────────
+/coverage/
+/build/
+coverage.xml
+coverage.txt
+clover.xml
+*.cov
+.phpunit.cache
+
+# ─── Node.js (untuk future JS/TS ports & UI packages) ─────────────────────
+/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# ─── Local env & secrets ──────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+!*.example.pem
+config.local.php
+secrets/
+
+# ─── OS files ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+
+# ─── Editor / IDE ─────────────────────────────────────────────────────────
+.idea/
+.vscode/
+!.vscode/settings.recommended.json
+*.sublime-workspace
+*.swp
+*.swo
+.nova/
+.zed/
+
+# ─── Runtime / logs ───────────────────────────────────────────────────────
+*.log
+/logs/
+/tmp/
+/temp/
+/cache/
+
+# ─── Build artifacts (kalau nanti ada compile step: PDF sample, dll) ──────
+/dist/
+/output/
+*.tar.gz
+*.zip
+
+# ─── Docker (kalau nanti ada Dockerfile untuk dev/CI) ─────────────────────
+.docker/
+docker-compose.override.yml
+
+# ─── Language ports staging (kalau di monorepo layout nanti) ──────────────
+/packages/*/vendor/
+/packages/*/node_modules/
+/packages/*/build/
+
+# ─── Test fixtures generated ──────────────────────────────────────────────
+/tests/fixtures/generated/
+/tests/output/
+
+# ─── Blockchain / smart contract build (untuk v0.9.5+) ────────────────────
+/contracts/artifacts/
+/contracts/cache/
+/contracts/typechain/
+/contracts/deployments/local/
+
+# ─── Docs build ───────────────────────────────────────────────────────────
+/docs/_site/
+/docs/.jekyll-cache/
+/docs/_build/
+
+# ─── SFTP config (dari IDE dev, jangan bocor ke public repo) ──────────────
+.vscode/sftp.json
+sftp-config.json
+.ftpconfig
+
+# ─── Backup files ─────────────────────────────────────────────────────────
+*.bak
+*.backup
+*.orig
+*.rej
