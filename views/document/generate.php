@@ -2677,33 +2677,41 @@ function renderFieldForPdf($name, $type, $val, $label) {
                                     <?php elseif ($param_is_locked): ?><i class="bi bi-lock-fill"></i>
                                     <?php endif; ?>
                                 </span>
-                                <?php // Keadaan penandatanganan — SATU tempat, dan cuma tulisan.
-                                //
-                                // Dulu keadaan yang sama muncul di tiga tempat: indikator ini, label
-                                // tombol Update ("Locked"), dan tombol lock yang mati. Tiga sumber untuk
-                                // satu fakta, masing-masing dengan syarat tampilnya sendiri — jadi bisa
-                                // saling bertentangan.
-                                //
-                                // Tidak ditampilkan kalau belum ada slot tanda tangan sama sekali:
-                                // dokumen tanpa TTD tidak punya keadaan penandatanganan.
-                                if ($__slotCount > 0):
-                                    $__stateText = [
-                                        'draft'       => t('signing_state.draft', [], 'Not signed'),
-                                        'in_progress' => t('signing_state.in_progress', ['signed' => $__signedCount, 'total' => $__slotCount], 'Signed {signed} of {total}'),
-                                        'complete'    => t('signing_state.complete', [], 'Fully signed'),
-                                    ][$docSigningState];
-                                    $__stateCls = [
-                                        'draft'       => 'text-gray-400',
-                                        'in_progress' => 'text-amber-400',
-                                        'complete'    => 'text-emerald-400',
-                                    ][$docSigningState];
-                                ?>
-                                · <span class="<?= $__stateCls ?>" title="<?= h(t('title.signing_state', [], 'Content is frozen for whatever the signatures already cover')) ?>"><?= h($__stateText) ?></span>
-                                <?php endif; ?>
                             <?php else: ?>
                                 · <span class="doc-info new text-amber-400"><?= t('toolbar.new', [], 'New') ?></span>
                             <?php endif; ?>
                         </div>
+
+                        <?php // Keadaan penandatanganan — baris sendiri, bukan disambung.
+                        //
+                        // Disambung dengan "·" ia ikut membungkus di tengah kata dan terpotong,
+                        // sementara ini justru satu-satunya keterangan yang menjelaskan kenapa
+                        // sebagian field tidak bisa diketik.
+                        //
+                        // Satu tempat, dan cuma tulisan. Sebelumnya keadaan yang sama muncul di
+                        // tiga tempat — indikator, label tombol Update ("Locked"), dan tombol
+                        // lock yang mati — masing-masing dengan syarat tampilnya sendiri, jadi
+                        // bisa saling bertentangan.
+                        //
+                        // Tidak ditampilkan kalau template tidak punya slot tanda tangan:
+                        // dokumen tanpa TTD tidak punya keadaan penandatanganan.
+                        if ($isEditMode && $__slotCount > 0):
+                            $__stateText = [
+                                'draft'       => t('signing_state.draft', [], 'Not signed'),
+                                'in_progress' => t('signing_state.in_progress', ['signed' => $__signedCount, 'total' => $__slotCount], 'Signed {signed} of {total}'),
+                                'complete'    => t('signing_state.complete', [], 'Fully signed'),
+                            ][$docSigningState];
+                            $__stateCls = [
+                                'draft'       => 'bg-gray-700 text-gray-300',
+                                'in_progress' => 'bg-amber-900/50 text-amber-300',
+                                'complete'    => 'bg-emerald-900/50 text-emerald-300',
+                            ][$docSigningState];
+                        ?>
+                        <div class="mt-0.5">
+                            <span class="inline-block rounded px-1.5 py-0.5 text-[9px] leading-none <?= $__stateCls ?>"
+                                  title="<?= h(t('title.signing_state', [], 'Content is frozen for whatever the signatures already cover')) ?>"><?= h($__stateText) ?></span>
+                        </div>
+                        <?php endif; ?>
                     </div>
                     <?php if ($isEditMode): ?>
                     <button class="!bg-gray-700 !text-gray-300 hover:!bg-gray-600 !rounded-full !w-[18px] !h-[18px] !p-0 !m-0 !text-[10px] !leading-none flex-shrink-0" type="button" onclick="showDocInfo()" title="<?= t('toolbar.document_details', [], 'Document details') ?>">i</button>
@@ -2759,21 +2767,26 @@ function renderFieldForPdf($name, $type, $val, $label) {
 
                 <!-- ═══ PRIMARY ROW: Update (2/3) + Print (1/3 icon) ═══ -->
                 <div class="grid grid-cols-3 gap-1 mt-1">
-                    <?php // Labelnya tetap kata kerja ("Update"), tidak pernah berubah jadi
-                    // keadaan ("Locked"). Keadaan punya tempatnya sendiri — indikator di atas.
-                    // Tombol mati berlabel keadaan membuat orang menekannya dan bertanya-tanya
-                    // kenapa tidak terjadi apa-apa.
+                    <?php
+                    // Kalau tidak ada lagi yang bisa di-update, tombolnya BERGANTI jadi
+                    // aksi yang memang bisa dilakukan — bukan tombol mati.
                     //
-                    // Dimatikan saat SELESAI, bukan saat baru ada satu tanda tangan: penanda
-                    // tangan kedua menyimpan tanda tangannya lewat tombol yang sama.
-                    $__updateOff = $param_is_locked || $docSigningComplete;
-                    $__updateWhy = $docSigningComplete
-                        ? t('title.update_off_all_signed', [], 'Every signature is in place — create a new version to revise')
-                        : t('title.locked_cannot_update', [], 'Locked - cannot update');
-                    ?>
-                    <button type="button" class="btn-success col-span-2 !m-0 !py-1.5 !text-[12px]" onclick="submitForm()" <?= $__updateOff ? 'disabled title="' . h($__updateWhy) . '"' : '' ?>>
-                        <?= $isEditMode ? h(t('toolbar.update', [], 'Update')) : h(t('toolbar.save_new', [], 'Save New')) ?>
-                    </button>
+                    // Tombol mati tidak menjelaskan dirinya. Orang menekannya, tidak terjadi
+                    // apa-apa, dan tooltip cuma muncul kalau kebetulan berhenti di atasnya.
+                    // Pola yang dipakai GitHub pada PR yang sudah di-merge: tombol Merge
+                    // tidak jadi abu-abu, ia digantikan aksi berikutnya.
+                    //
+                    // Dokumen yang tanda tangannya lengkap cuma punya satu langkah maju:
+                    // versi baru. Jadi itu yang ditawarkan.
+                    if ($docSigningComplete && $isEditMode && !$param_is_locked): ?>
+                        <button type="button" class="col-span-2 !m-0 !py-1.5 !text-[12px] !bg-violet-500 hover:!bg-violet-600" onclick="showNewVersionModal()" title="<?= h(t('title.update_off_all_signed', [], 'Every signature is in place — create a new version to revise')) ?>">
+                            <i class="bi bi-plus-circle"></i> <?= h(t('toolbar.new_version', [], 'New Version')) ?>
+                        </button>
+                    <?php else: ?>
+                        <button type="button" class="btn-success col-span-2 !m-0 !py-1.5 !text-[12px]" onclick="submitForm()" <?= $param_is_locked ? 'disabled title="' . h(t('title.locked_cannot_update', [], 'Locked - cannot update')) . '"' : '' ?>>
+                            <?= $isEditMode ? h(t('toolbar.update', [], 'Update')) : h(t('toolbar.save_new', [], 'Save New')) ?>
+                        </button>
+                    <?php endif; ?>
                     <button type="button" class="!m-0 !py-1.5 !px-1 !text-[11px]" onclick="window.print()" title="<?= h(t('title.print_shortcut', [], 'Print (Ctrl+P)')) ?>"><i class="bi bi-printer"></i> <?= h(t('toolbar.print', [], 'Print')) ?></button>
                 </div>
 
@@ -2811,7 +2824,6 @@ function renderFieldForPdf($name, $type, $val, $label) {
                                     <button type="button" id="btnToggleVerifyQr"
                                             onclick="toggleVerifyQrMode()"
                                             title="<?= h(t('title.toggle_verify_qr', [], 'Replace signature image with verification QR')) ?>"
-                                            class="wide"
                                             style="background:<?= $__showVerifyQrInit ? '#0d9488' : '#475569' ?>;color:#fff;">
                                         <i class="bi bi-qr-code"></i>
                                         <span>QR: <span id="btnToggleVerifyQrLabel"><?= $__showVerifyQrInit ? h(t('toolbar.qr_status_on', [], 'ON')) : h(t('toolbar.qr_status_off', [], 'OFF')) ?></span></span>
@@ -2833,9 +2845,17 @@ function renderFieldForPdf($name, $type, $val, $label) {
                                         //
                                         // Kolom `is_locked` TIDAK dihapus — masih dipakai merender dokumen
                                         // terhapus dalam mode baca-saja. Yang hilang cuma tombolnya. ?>
+                                        <?php // Disembunyikan kalau sudah naik ke baris utama — tombol yang
+                                        // sama di dua tempat membuat orang mengira keduanya berbeda.
+                                        if (!$docSigningComplete): ?>
                                         <button class="bg-violet-500" type="button" onclick="showNewVersionModal()" title="<?= h(t('title.new_version', [], 'Create new version')) ?>"><i class="bi bi-plus-circle"></i><?= h(t('toolbar.new_version', [], 'New Version')) ?></button>
+                                        <?php endif; ?>
                                     <?php endif; ?>
-                                    <button class="!bg-slate-600 wide" type="button" onclick="showShortcutsHelp()" title="<?= h(t('title.shortcuts', [], 'Keyboard shortcuts (Ctrl+/)')) ?>"><i class="bi bi-keyboard"></i><?= h(t('toolbar.shortcuts', [], 'Shortcuts')) ?></button>
+                                    <?php // `wide` cuma dipakai saat tombolnya akan tertinggal sendirian di
+                                    // barisnya. Dua tombol per baris, rata — bukan satu setengah lebar
+                                    // dengan ruang kosong di sebelahnya.
+                                    $__shortcutsWide = ($isEditMode && !$docSigningComplete); ?>
+                                    <button class="!bg-slate-600<?= $__shortcutsWide ? ' wide' : '' ?>" type="button" onclick="showShortcutsHelp()" title="<?= h(t('title.shortcuts', [], 'Keyboard shortcuts (Ctrl+/)')) ?>"><i class="bi bi-keyboard"></i><?= h(t('toolbar.shortcuts', [], 'Shortcuts')) ?></button>
                                 </div>
                             </div>
                         </div>
