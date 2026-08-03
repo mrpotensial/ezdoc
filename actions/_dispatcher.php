@@ -108,6 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['_doc_action'])) {
         'restore_slot'    => 'restore_slot.php',
         'send_ttd_otp'    => 'send_ttd_otp.php',
         'verify_ttd_otp'  => 'verify_ttd_otp.php',
+        'document_history'=> 'document_history.php',
     ];
     $action = (string)$_POST['_doc_action'];
     if (isset($whitelist[$action])) {

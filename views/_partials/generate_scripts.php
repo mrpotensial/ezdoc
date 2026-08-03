@@ -1024,6 +1024,15 @@
                         <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.updated_at_label', {}, 'Last updated')}</td><td class="py-1.5 px-0">${fmtDate(meta.updated_at)}</td></tr>
                         ${materaiRows}
                     </table>
+
+                    <div class="mt-5 pt-4 border-t border-gray-200">
+                        <div class="flex items-baseline justify-between mb-2">
+                            <h6 class="m-0 text-[12px] font-semibold text-gray-700">${t('modal.doc_info.history_heading', {}, 'History')}</h6>
+                            <span class="text-[10px] text-gray-400">${t('modal.doc_info.history_newest_first', {}, 'newest first')}</span>
+                        </div>
+                        <div id="docHistoryBody" class="text-[12px] text-gray-400 py-3 text-center">${t('modal.doc_info.history_loading', {}, 'Loading history…')}</div>
+                    </div>
+
                     <div class="text-right mt-4">
                         <button onclick="document.getElementById('docInfoModal').remove()" class="py-1.5 px-4 border-0 bg-blue-500 text-white rounded-md cursor-pointer">${t('actions.close', {}, 'Close')}</button>
                     </div>
@@ -1033,6 +1042,121 @@
             modal.addEventListener('click', function(e) {
                 if (e.target === modal) modal.remove();
             });
+
+            // Dimuat setelah modal tampil, bukan sebelum. Keterangan dokumen sudah
+            // ada di tangan; menahannya sampai riwayat selesai diambil membuat
+            // seluruh panel terasa lambat karena bagian yang paling lambat.
+            loadDocHistory();
+        }
+
+        /**
+         * Riwayat dokumen — gabungan log audit dan record tanda tangan.
+         *
+         * Bentuknya mengikuti Certificate of Completion DocuSign dan panel Activity
+         * Adobe Sign: keterangan dokumen di atas, garis waktu di bawahnya. Untuk
+         * dokumen bertanda tangan ini bukan log teknis — ini yang menjawab "siapa
+         * menandatangani, kapan, dari mana".
+         */
+        async function loadDocHistory() {
+            const box = document.getElementById('docHistoryBody');
+            if (!box || !CURRENT_DOC_ID) return;
+
+            try {
+                const fd = new FormData();
+                fd.append('_doc_action', 'document_history');
+                fd.append('doc_id', CURRENT_DOC_ID);
+
+                const resp = await fetch(_ezdocEndpoint('docAction'), { method: 'POST', body: fd });
+                const data = await resp.json();
+
+                if (!data.success) {
+                    box.className = 'text-[12px] text-red-600 py-3 text-center';
+                    box.textContent = data.message || t('modal.doc_info.history_failed', {}, 'History could not be loaded');
+                    return;
+                }
+                if (!data.entries || data.entries.length === 0) {
+                    box.className = 'text-[12px] text-gray-400 py-3 text-center';
+                    box.textContent = t('modal.doc_info.history_empty', {}, 'Nothing recorded yet');
+                    return;
+                }
+
+                box.className = 'max-h-[240px] overflow-y-auto -mr-1 pr-1';
+                box.innerHTML = data.entries.map(renderHistoryEntry).join('')
+                    + (data.truncated
+                        ? `<div class="text-[10px] text-gray-400 text-center pt-2">${t('modal.doc_info.history_truncated', {}, 'Older entries are not shown')}</div>`
+                        : '');
+            } catch (e) {
+                box.className = 'text-[12px] text-red-600 py-3 text-center';
+                box.textContent = t('modal.doc_info.history_failed', {}, 'History could not be loaded');
+            }
+        }
+
+        /**
+         * Satu baris riwayat.
+         *
+         * Kalimatnya dirakit DI SINI, bukan di server. Server mengirim jenis
+         * kejadian dan datanya; kalau kalimatnya dirakit di sana, riwayat berbahasa
+         * Indonesia akan tetap berbahasa Indonesia saat dibuka dengan antarmuka
+         * bahasa Inggris.
+         */
+        function renderHistoryEntry(e) {
+            // Setiap kunci ditulis utuh, bukan dirakit dari nama kejadian.
+            //
+            // Menempelkan nama kejadian ke sebuah awalan terlihat lebih ringkas,
+            // tapi kunci yang dirakit saat berjalan tidak bisa diperiksa siapa pun:
+            // terjemahan yang hilang baru ketahuan sebagai teks mentah di layar
+            // pengguna. Ditulis utuh, TranslationUsageTest memverifikasi setiap
+            // satunya ada di kedua bahasa. (Tes itu yang menemukan ini.)
+            const EVENTS = {
+                'signature.recorded':  { icon: 'bi-pen-fill',               tone: 'text-emerald-600', label: t('history_event.signature_recorded', {}, 'Signed') },
+                'doc.created':         { icon: 'bi-file-earmark-plus',      tone: 'text-gray-500',    label: t('history_event.doc_created', {}, 'Document created') },
+                'doc.updated':         { icon: 'bi-pencil',                 tone: 'text-gray-500',    label: t('history_event.doc_updated', {}, 'Document saved') },
+                'doc.version_created': { icon: 'bi-layers',                 tone: 'text-violet-600',  label: t('history_event.doc_version_created', {}, 'New version created') },
+                'doc.deleted':         { icon: 'bi-trash',                  tone: 'text-red-600',     label: t('history_event.doc_deleted', {}, 'Document deleted') },
+                'doc.restored':        { icon: 'bi-arrow-counterclockwise', tone: 'text-emerald-600', label: t('history_event.doc_restored', {}, 'Document restored') },
+                'doc.locked':          { icon: 'bi-lock',                   tone: 'text-amber-600',   label: t('history_event.doc_locked', {}, 'Document locked') },
+                'doc.unlocked':        { icon: 'bi-unlock',                 tone: 'text-amber-600',   label: t('history_event.doc_unlocked', {}, 'Document unlocked') },
+                'otp.sent':            { icon: 'bi-whatsapp',               tone: 'text-gray-500',    label: t('history_event.otp_sent', {}, 'OTP code sent') },
+                'otp.verified':        { icon: 'bi-shield-check',           tone: 'text-emerald-600', label: t('history_event.otp_verified', {}, 'OTP verified') },
+                'otp.verify_failed':   { icon: 'bi-shield-exclamation',     tone: 'text-red-600',     label: t('history_event.otp_verify_failed', {}, 'OTP verification failed') },
+            };
+
+            // Kejadian yang tidak dikenali tetap ditampilkan, memakai nama mentahnya.
+            // Menyembunyikannya akan membuat riwayat terlihat lengkap padahal bolong —
+            // dan yang hilang justru kejadian yang paling baru ditambahkan.
+            const spec = EVENTS[e.event] || { icon: 'bi-dot', tone: 'text-gray-400', label: escapeHtmlSimple(e.event) };
+            let title = spec.label;
+
+            if (e.event === 'signature.recorded' && e.detail) {
+                title = t('history_event.signature_recorded_named',
+                    { slot: e.detail.ttd_label || '-' },
+                    'Signed "{slot}"');
+                if (e.detail.signer_name) {
+                    title += ' — ' + escapeHtmlSimple(e.detail.signer_name);
+                }
+            }
+
+            const revoked = e.result === 'revoked'
+                ? ` <span class="text-[10px] text-gray-500">(${t('history_event.revoked_suffix', {}, 'revoked')})</span>`
+                : '';
+            const failed = e.result === 'denied' || e.result === 'error'
+                ? ` <span class="text-[10px] text-red-600">(${t('history_event.failed_suffix', {}, 'failed')})</span>`
+                : '';
+
+            const who = e.actor
+                ? `#${escapeHtmlSimple(e.actor)}${e.roles ? ' · ' + escapeHtmlSimple(e.roles) : ''}`
+                : t('history_event.unknown_actor', {}, 'unknown');
+
+            return `
+                <div class="flex gap-2 py-1.5 border-b border-gray-100 last:border-0">
+                    <i class="bi ${spec.icon} ${spec.tone} text-[13px] leading-5 flex-shrink-0"></i>
+                    <div class="min-w-0 flex-1">
+                        <div class="text-[12px] text-gray-800 leading-tight">${title}${revoked}${failed}</div>
+                        <div class="text-[10px] text-gray-500 leading-tight mt-0.5">
+                            ${fmtDate(e.at)} · ${who}${e.ip ? ' · ' + escapeHtmlSimple(e.ip) : ''}
+                        </div>
+                    </div>
+                </div>`;
         }
 
         function escapeHtmlSimple(s) {

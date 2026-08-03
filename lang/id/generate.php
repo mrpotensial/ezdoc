@@ -84,6 +84,26 @@ return [
         'materai_manual_area'    => 'Area materai (tempel manual)',
         'materai_not_uploaded'   => 'Belum di-upload',
     ],
+    // Nama kejadian di panel riwayat. Dirakit di sisi tampilan, bukan di server:
+    // kalau kalimatnya dirakit saat menulis log, riwayat berbahasa Indonesia akan
+    // tetap berbahasa Indonesia saat dibuka dengan antarmuka bahasa Inggris.
+    'history_event' => [
+        'signature_recorded'       => 'Ditandatangani',
+        'signature_recorded_named' => 'Ditandatangani "{slot}"',
+        'doc_created'              => 'Dokumen dibuat',
+        'doc_updated'              => 'Dokumen disimpan',
+        'doc_version_created'      => 'Versi baru dibuat',
+        'doc_deleted'              => 'Dokumen dihapus',
+        'doc_restored'             => 'Dokumen dipulihkan',
+        'doc_locked'               => 'Dokumen dikunci',
+        'doc_unlocked'             => 'Kunci dokumen dibuka',
+        'otp_sent'                 => 'Kode OTP dikirim',
+        'otp_verified'             => 'OTP terverifikasi',
+        'otp_verify_failed'        => 'Verifikasi OTP gagal',
+        'revoked_suffix'           => 'dicabut',
+        'failed_suffix'            => 'gagal',
+        'unknown_actor'            => 'tidak diketahui',
+    ],
     'signing_state' => [
         'draft'       => 'Belum ditandatangani',
         'in_progress' => 'Tertandatangani {signed} dari {total}',
@@ -182,6 +202,12 @@ return [
     'modal' => [
         'doc_info' => [
             'title'                 => 'Detail Dokumen',
+            'history_heading'       => 'Riwayat',
+            'history_newest_first'  => 'terbaru di atas',
+            'history_loading'       => 'Memuat riwayat…',
+            'history_empty'         => 'Belum ada yang tercatat',
+            'history_failed'        => 'Riwayat tidak bisa dimuat',
+            'history_truncated'     => 'Riwayat yang lebih lama tidak ditampilkan',
             'document_id_label'     => 'Document ID',
             'version_row_label'     => 'Versi',
             'editable_suffix'       => '(Editable)',
