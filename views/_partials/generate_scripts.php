@@ -951,18 +951,26 @@
             window.open('?' + params.toString(), '_blank');
         }
 
+        /**
+         * 'YYYY-MM-DD HH:MM:SS[.mmm]' → 'DD/MM/YYYY HH:MM'.
+         *
+         * Fungsi terpisah, bukan penutup di dalam showDocInfo(). Dulu ia hidup di
+         * sana, lalu renderHistoryEntry() memanggilnya dari luar — dan JavaScript
+         * tidak mengeluh sampai barisnya benar-benar dijalankan. Errornya baru
+         * muncul saat panel riwayat dibuka, bukan saat halaman dimuat.
+         */
+        function fmtDate(s) {
+            if (!s) return '-';
+            const d = new Date(String(s).replace(' ', 'T'));
+            if (isNaN(d)) return s;
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+
         // Show document info modal
         function showDocInfo() {
             const meta = <?= json_encode($docMeta, JSON_UNESCAPED_UNICODE) ?>;
             if (!meta.id) return;
-
-            const fmtDate = (s) => {
-                if (!s) return '-';
-                const d = new Date(s.replace(' ', 'T'));
-                if (isNaN(d)) return s;
-                const pad = (n) => String(n).padStart(2, '0');
-                return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-            };
 
             const createdBy = meta.created_by_name
                 ? `${meta.created_by_name} (ID: ${meta.created_by})`
