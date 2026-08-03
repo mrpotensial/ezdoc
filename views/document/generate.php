@@ -2762,7 +2762,14 @@ function renderFieldForPdf($name, $type, $val, $label) {
                                 <div class="icon-grid mt-1.5">
                                     <button class="!bg-emerald-700 hover:!bg-emerald-600<?= $isEditMode ? '' : ' wide' ?>" type="button" onclick="viewPdfRaw()" title="<?= h(t('title.view_pdf_raw', [], 'View raw PDF output')) ?>"><i class="bi bi-file-earmark-pdf"></i><?= h(t('toolbar.pdf_raw', [], 'PDF Raw')) ?></button>
                                     <?php if ($isEditMode): ?>
-                                        <button type="button" onclick="deleteThisVersion()" class="!bg-red-700 hover:!bg-red-600" <?= $param_is_locked ? 'disabled title="' . h(t('title.delete_version_locked', [], 'Locked - unlock first')) . '"' : 'title="' . h(t('title.delete_version', [], 'Delete this version')) . '"' ?>><i class="bi bi-trash"></i><?= h(t('actions.delete', [], 'Delete')) ?></button>
+                                        <button type="button" onclick="deleteThisVersion()" class="!bg-red-700 hover:!bg-red-600" <?= $param_is_locked ? 'disabled title="' . h(t('title.delete_version_locked', [], 'Locked - unlock first')) . '"' : 'title="' . h(t('title.delete_version', [], 'Delete this version')) . '"' ?>><i class="bi bi-trash"></i><?php
+                                        // "Hapus Versi", bukan "Hapus". Tombolnya menjalankan
+                                        // penghapusan SATU versi, dan label umum menjanjikan
+                                        // dokumennya yang hilang. Kalau ini versi terakhir,
+                                        // alirannya menawarkan hapus dokumen dengan konfirmasi
+                                        // yang menyebut akibatnya.
+                                        echo h(t('toolbar.delete_version', [], 'Delete Version'));
+                                    ?></button>
                                     <?php endif; ?>
                                 </div>
                             </div>

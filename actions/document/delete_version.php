@@ -59,7 +59,31 @@ $cnt = (int) $db->fetchScalar(
     [$doc['template_uuid'], $doc['norm'], $doc['nopen'], $doc['label']]
 );
 if ($cnt <= 1) {
-    ezdoc_respond_error(t('response.last_version_in_slot', [], 'This is the last version in the slot. Use "Delete Slot" to remove the entire slot.'));
+    // Menghapus versi terakhir sama artinya dengan menghapus dokumennya, dan
+    // `delete_version` sengaja tidak melakukan itu — cakupannya satu versi.
+    //
+    // Tapi penolakannya dulu menyebut tombol "Hapus Slot" yang TIDAK ADA di UI
+    // mana pun: satu-satunya pemanggil hapus adalah deleteThisVersion(), dan
+    // `delete_slot` cuma disebut di komentar. Dokumen bervesi tunggal jadi tidak
+    // bisa dihapus sama sekali.
+    //
+    // Sekarang remedinya dikirim terbaca mesin supaya pemanggil bisa
+    // menawarkannya, bukan menyuruh orang mencari tombol yang tidak pernah ada.
+    // Identitas slot ikut, supaya pemanggil tidak perlu menyusunnya sendiri dari
+    // keadaan halaman yang mungkin sudah berbeda.
+    ezdoc_respond_error(
+        t('response.last_version_in_slot', [], 'This is the last version in the slot. Use "Delete Slot" to remove the entire slot.'),
+        409,
+        [
+            'remedy' => 'delete_slot',
+            'slot'   => [
+                'template_id' => (int) ($doc['template_id'] ?? 0),
+                'norm'        => (string) $doc['norm'],
+                'nopen'       => (string) $doc['nopen'],
+                'label'       => (string) $doc['label'],
+            ],
+        ]
+    );
 }
 
 // Soft delete

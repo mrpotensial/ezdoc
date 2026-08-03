@@ -78,6 +78,7 @@ return [
         // ── document/delete_version.php ──
         'version_locked_cannot_delete' => 'Versi locked tidak bisa dihapus. Unlock dulu.',
         'last_version_in_slot'         => 'Ini versi terakhir di slot. Pakai "Hapus Slot" untuk hapus seluruh slot.',
+        'slot_version_conflict'        => 'Dokumen ini baru saja dibuat oleh penyimpanan lain. Muat ulang halaman untuk melanjutkan dari versi yang sudah ada.',
         'version_deleted'              => 'Versi berhasil dihapus (soft delete)',
 
         // ── document/generate_qr.php ──

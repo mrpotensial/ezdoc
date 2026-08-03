@@ -4,8 +4,11 @@
  *   body: template_id, norm, nopen, label, source_version (0 = blank)
  *
  * Buat versi baru dokumen di slot (template_uuid, norm, nopen, label).
- *   - source_version=0: blank (field_values & signature_values = {})
- *   - source_version>0: copy dari versi tersebut
+ *   - source_version=0: blank
+ *   - source_version>0: copy ISI dari versi tersebut
+ *
+ * Versi baru selalu lahir TANPA tanda tangan, apa pun sumbernya. Alasannya ada
+ * di komentar dekat query salinannya.
  *
  * Response: { success, doc_id, version }
  *
@@ -51,18 +54,33 @@ $nextVersion = (int) $db->fetchScalar(
 if ($nextVersion < 1) $nextVersion = 1;
 
 // Copy dari source atau blank
+// Isi disalin. Tanda tangan TIDAK — dan itu pembedaan yang menentukan.
+//
+// Tanda tangan mengikat satu keadaan dokumen tertentu, yang dinyatakan
+// `content_hash` versi asal. Membawanya ke versi baru berarti mengklaim orang itu
+// menandatangani sesuatu yang tidak pernah dilihatnya. Recordnya pun tertinggal:
+// baris di `ezdoc_signatures` menunjuk document_id yang LAMA, jadi versi barunya
+// terlihat bertanda tangan tanpa punya satu pun record.
+//
+// Akibat praktisnya persis kebalikan dari gunanya membuat versi baru: guard §7b
+// melihat slot terisi, membekukan isinya, dan versi yang dibuat untuk merevisi
+// datang dalam keadaan terkunci.
+//
+// Semua sistem menyalin dokumen tanpa menyalin tanda tangannya. "Copy envelope"
+// DocuSign membawa dokumen dan penerimanya, bukan tanda tangan yang sudah
+// dibubuhkan. "Make a copy" Google Docs tidak membawa riwayat maupun persetujuan.
+// Menyalin tanda tangan bukan kenyamanan yang terlewat — itu pemalsuan.
 $newFields = '{}';
 $newTtd = '{}';
 if ($sourceVersion > 0) {
     $src = $db->fetchOne(
-        'SELECT field_values, signature_values FROM ezdoc_documents
+        'SELECT field_values FROM ezdoc_documents
          WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ?
            AND version = ? AND deleted_at IS NULL',
         [$templateUuid, $n, $np, $lb, $sourceVersion]
     );
     if ($src) {
         $newFields = $src['field_values'] ?: '{}';
-        $newTtd    = $src['signature_values'] ?: '{}';
     }
 }
 

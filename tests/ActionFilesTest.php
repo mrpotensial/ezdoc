@@ -191,4 +191,56 @@ final class ActionFilesTest extends TestCase
             . ' without declaring it global — works when required at global scope, null under App::run().'
             . ' Prefer Context::default()->db, or declare the global.');
     }
+
+    /**
+     * Creating a new version must not carry the previous version's signatures.
+     *
+     * A signature binds one document state, named by that version's
+     * `content_hash`. Carrying it over claims somebody signed something they
+     * never saw — and the record does not come with it, since the row in
+     * `ezdoc_signatures` points at the old `document_id`. The new version arrives
+     * looking signed with nothing behind it.
+     *
+     * The practical result is the opposite of what a new version is for: the §7b
+     * guard sees filled slots, freezes the content, and the version created to
+     * revise the document is born locked.
+     *
+     * Every system draws this line — DocuSign's "copy envelope" carries the
+     * documents and recipients but not the signatures; Google Docs' "make a copy"
+     * carries neither history nor approvals.
+     *
+     * Asserted structurally because the alternative needs a database and a full
+     * request. Weak, but it catches the one edit that would bring it back: adding
+     * the column to the source SELECT.
+     */
+    public function testNewVersionDoesNotCopySignatures(): void
+    {
+        $path = dirname(__DIR__) . '/actions/document/new_version.php';
+        self::assertFileExists($path);
+
+        $source = (string) file_get_contents($path);
+
+        // Strip comments — this file explains at length why it does not do it.
+        $code = '';
+        foreach (token_get_all($source) as $token) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $code .= is_array($token) ? $token[1] : $token;
+        }
+
+        self::assertSame(
+            1,
+            preg_match_all('/signature_values/', $code),
+            'new_version.php should mention signature_values exactly once — in the INSERT,'
+            . ' where it writes the empty default. A second mention means it is reading the'
+            . " previous version's signatures and copying them into the new one."
+        );
+
+        self::assertStringNotContainsString(
+            'SELECT field_values, signature_values',
+            $code,
+            'the source SELECT must not fetch signature_values'
+        );
+    }
 }

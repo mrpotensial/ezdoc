@@ -1125,11 +1125,71 @@
                 params.set('nopen', CURRENT_NOPEN);
                 if (CURRENT_LABEL !== '-') params.set('label', CURRENT_LABEL);
                 // Intentional programmatic nav — suppress dirty prompt (Livewire pattern)
+                window._ezdocSuppressUnload = true;
+                window.location.href = '?' + params.toString();
+                return;
+            }
+
+            // Versi terakhir: menghapusnya sama artinya dengan menghapus dokumennya,
+            // dan `delete_version` memang tidak melakukan itu — cakupannya satu versi.
+            // Memisahkan keduanya adalah pola biasa (Google Docs, WordPress, Git:
+            // entitas dan versinya dihapus dengan perintah berbeda).
+            //
+            // Yang tidak biasa adalah menyebut jalan keluar lalu menyembunyikannya.
+            // `delete_slot` tidak pernah punya tombol, jadi dokumen bervesi tunggal
+            // tidak bisa dihapus sama sekali. Ditawarkan di sini, dengan konfirmasi
+            // yang menyebut akibatnya — bukan diam-diam dieskalasi.
+            if (data.remedy === 'delete_slot' && data.slot) {
+                await deleteWholeDocument(data.slot);
+                return;
+            }
+
+            ezdocAlert(t('alert.generic_failed', {reason: data.message || 'error'}, 'Failed: {reason}'), { title: 'Error', variant: 'error' });
+        }
+
+        /**
+         * Hapus dokumen beserta SELURUH versinya.
+         *
+         * Identitas slot datang dari server, bukan disusun ulang dari keadaan
+         * halaman: halaman bisa sudah berbeda dari dokumen yang barusan ditolak.
+         */
+        async function deleteWholeDocument(slot) {
+            const confirmed = await ezdocConfirm(
+                t('confirm.delete_whole_document', {
+                    norm: slot.norm || '-',
+                    nopen: slot.nopen || '-'
+                }, 'This is the only version, so deleting it removes the whole document (MR {norm}, Reg {nopen}) along with every version. Continue?'),
+                {
+                    title: t('confirm.delete_whole_document_title', {}, 'Delete the whole document'),
+                    variant: 'danger',
+                    confirmText: t('confirm.delete_whole_document_yes', {}, 'Delete document'),
+                    cancelText: t('actions.cancel', {}, 'Cancel')
+                }
+            );
+            if (!confirmed) return;
+
+            const fd = new FormData();
+            fd.append('_doc_action', 'delete_slot');
+            fd.append('template_id', slot.template_id);
+            fd.append('norm', slot.norm);
+            fd.append('nopen', slot.nopen);
+            fd.append('label', slot.label || '-');
+
+            const resp = await fetch(_ezdocEndpoint('docAction'), { method: 'POST', body: fd });
+            const data = await resp.json();
+
+            if (!data.success) {
+                ezdocAlert(t('alert.generic_failed', {reason: data.message || 'error'}, 'Failed: {reason}'), { title: 'Error', variant: 'error' });
+                return;
+            }
+
+            // Dokumennya sudah tidak ada — memuat ulang slot yang sama akan
+            // menampilkan form kosong seolah tidak terjadi apa-apa. Kembali ke
+            // daftar, tempat penghapusannya terlihat.
+            const params = _preservedParams();
+            params.set('template_id', templateId);
             window._ezdocSuppressUnload = true;
             window.location.href = '?' + params.toString();
-            } else {
-                ezdocAlert(t('alert.generic_failed', {reason: data.message || 'error'}, 'Failed: {reason}'), { title: 'Error', variant: 'error' });
-            }
         }
 
         // Restore soft-deleted slot from preview mode (superadmin only)

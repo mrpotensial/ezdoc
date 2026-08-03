@@ -577,16 +577,40 @@ try {
     } else {
         $docUuid = ezdoc_uuid_v7();
         $publishedAt = date('Y-m-d H:i:s');
+
+        // Nomor versi berikutnya, MENGHITUNG baris yang sudah di-soft-delete.
+        //
+        // Dulu ini di-hardcode 1, dan itu meledak begitu ada yang menghapus versi
+        // terakhir lalu membuat dokumennya lagi: barisnya masih ada (soft-delete),
+        // masih memegang versi 1, dan unique key `uk_slot_version` tidak memuat
+        // `deleted_at` — jadi INSERT-nya bertabrakan dan errornya sampai ke layar
+        // sebagai "Duplicate entry ... for key uk_slot_version".
+        //
+        // Nomor versi bersifat monoton dan tidak pernah dipakai ulang. Itu bukan
+        // akal-akalan menghindari constraint, itu memang cara sistem berversi
+        // bekerja: menghapus versi 3 di Confluence membuat simpan berikutnya jadi
+        // versi 4, dan version id S3 maupun hash Git tidak pernah didaur ulang.
+        //
+        // new_version.php sudah melakukan ini sejak awal, dengan alasan yang sama
+        // tertulis di komentarnya. Jalur insert ini yang tidak pernah ikut.
+        $nextVersion = (int) $db->fetchScalar(
+            'SELECT COALESCE(MAX(version), 0) + 1
+             FROM ezdoc_documents
+             WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ?',
+            [$templateUuid, $norm, $nopen, $label]
+        );
+        if ($nextVersion < 1) $nextVersion = 1;
+
         $db->execute(
             'INSERT INTO ezdoc_documents
              (uuid, template_id, template_uuid, template_version,
               title, norm, nopen, label, version,
               field_values, signature_values, floating_elements,
               status, published_at, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)',
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 $docUuid, $template_id, $templateUuid, $templateVersion,
-                $computedTitle, $norm, $nopen, $label,
+                $computedTitle, $norm, $nopen, $label, $nextVersion,
                 $jsonFields, $jsonTtd, $docFloatingJson,
                 'published', $publishedAt, $authorId,
             ]
@@ -598,6 +622,26 @@ try {
         '[ezdoc:save] FAILED template_id=%d norm=%s nopen=%s label=%s isEdit=%s err=%s',
         $template_id, $norm, $nopen, $label, $isEdit ? 'yes' : 'no', $e->getMessage()
     ));
+
+    // Tabrakan slot dijelaskan, bukan diteruskan mentah.
+    //
+    // "Duplicate entry '019f5e99-…-1-1---1' for key 'ezdoc_documents.uk_slot_version'"
+    // tidak memberi tahu petugas apa pun yang bisa dilakukannya, dan sekaligus
+    // membocorkan nama tabel serta indeks ke layar. Dua orang menyimpan slot yang
+    // sama pada saat bersamaan bisa sampai ke sini, dan jawabannya sederhana:
+    // muat ulang, karena dokumennya sudah ada.
+    if (stripos($e->getMessage(), 'Duplicate entry') !== false) {
+        ezdoc_respond_error(
+            t(
+                'response.slot_version_conflict',
+                [],
+                'This document was created by another save a moment ago. Reload the page to continue from the existing version.'
+            ),
+            409,
+            ['remedy' => 'reload']
+        );
+    }
+
     ezdoc_respond_error(t('response.save_failed', ['error' => $e->getMessage()], 'Failed: {error}'), 500);
 }
 

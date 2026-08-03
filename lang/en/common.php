@@ -48,6 +48,7 @@ return [
         'slot_deleted' => 'Slot deleted successfully ({count} version(s))',
         'version_locked_cannot_delete' => 'Locked version cannot be deleted. Unlock it first.',
         'last_version_in_slot' => 'This is the last version in the slot. Use "Delete Slot" to remove the entire slot.',
+        'slot_version_conflict' => 'This document was created by another save a moment ago. Reload the page to continue from the existing version.',
         'version_deleted' => 'Version deleted successfully (soft delete)',
         'qr_data_empty' => 'QR data is empty',
         'qr_generator_unavailable' => 'QR generator unavailable (generateQrForDompdf missing)',

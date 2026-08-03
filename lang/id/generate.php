@@ -42,6 +42,7 @@ return [
         'more'                  => 'Lainnya',
         'admin'                 => 'Admin',
         'lock_final'            => 'Lock Final',
+        'delete_version'        => 'Hapus Versi',
         'unlock'                => 'Unlock',
         'new_version'           => 'Versi Baru',
         'shortcuts'             => 'Shortcuts',
@@ -153,6 +154,11 @@ return [
         'sign_anyway'       => 'Tetap tanda tangani',
         'fill_name_first'   => 'Isi namanya dulu',
         'delete_version' => 'Hapus versi v{version}? Aksi ini tidak bisa di-undo.',
+        // Versi terakhir: menghapusnya sama artinya dengan menghapus dokumennya.
+        // Disebut apa adanya, karena tombolnya bertuliskan "Hapus Versi".
+        'delete_whole_document'       => 'Ini satu-satunya versi, jadi menghapusnya akan menghapus SELURUH dokumen (No RM {norm}, No Pendaftaran {nopen}) beserta semua versinya. Lanjutkan?',
+        'delete_whole_document_title' => 'Hapus seluruh dokumen',
+        'delete_whole_document_yes'   => 'Hapus dokumen',
         'lock_final'     => "Kunci versi ini sebagai FINAL?\n\nSetelah terkunci, versi ini tidak bisa diedit lagi. Untuk merevisi, buat versi baru.",
         'unlock_version' => 'Buka kunci versi ini?',
         'restore_slot'   => 'Pulihkan seluruh slot dokumen ini? Semua versi yang ter-soft-delete akan kembali aktif.',
