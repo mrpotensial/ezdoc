@@ -117,6 +117,61 @@ if (!function_exists('ezdoc_recorded_signature_slots')) {
     }
 }
 
+if (!function_exists('ezdoc_frozen_field_keys')) {
+    /**
+     * Field mana yang sudah dibekukan tanda tangan yang ada.
+     *
+     * Gabungan `covered_fields` dari setiap tanda tangan aktif. Inilah yang akan
+     * ditolak guard §7b kalau berubah — jadi inilah juga yang harus terlihat
+     * tidak bisa diedit, supaya tidak ada yang mengetik ke field yang pasti
+     * ditolak.
+     *
+     * Mengembalikan `null` berarti **semuanya beku**, dan itu dinyatakan alih-alih
+     * disimpulkan dari daftar kosong. Tanda tangan v1 tidak mencatat cakupannya
+     * karena v1 memang mencakup seluruh field; daftar kosong akan berarti
+     * kebalikannya.
+     *
+     * @param mixed $conn
+     * @return array<string,true>|null
+     */
+    function ezdoc_frozen_field_keys($conn, int $docId): ?array
+    {
+        if ($docId <= 0) {
+            return [];
+        }
+
+        try {
+            $db = $conn instanceof \Ezdoc\Db\Connection
+                ? $conn
+                : \Ezdoc\Context::default()->connection();
+
+            $rows = $db->fetchAll(
+                'SELECT `metadata` FROM `ezdoc_signatures` WHERE `document_id` = ? AND `deleted_at` IS NULL',
+                [$docId]
+            );
+        } catch (\Throwable $e) {
+            @error_log('[ezdoc:signature] gagal membaca field beku: ' . $e->getMessage());
+            return [];
+        }
+
+        $frozen = [];
+        foreach ($rows as $row) {
+            $meta = json_decode((string) ($row['metadata'] ?? ''), true);
+            if (!is_array($meta) || empty($meta['ttd_id'])) {
+                continue;
+            }
+            if (!isset($meta['covered_fields']) || !is_array($meta['covered_fields'])) {
+                return null; // v1 — seluruhnya
+            }
+            foreach ($meta['covered_fields'] as $key) {
+                $frozen[(string) $key] = true;
+            }
+        }
+
+        return $frozen;
+    }
+}
+
 if (!function_exists('ezdoc_signature_image_store')) {
     /**
      * Penyimpan gambar untuk request ini, atau null kalau belum tersedia.

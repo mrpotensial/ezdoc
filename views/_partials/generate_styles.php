@@ -385,6 +385,21 @@
             display: block !important;
             aspect-ratio: 1 / 1 !important;
         }
+        /* Field yang isinya sudah dibekukan tanda tangan.
+           Sengaja tenang — garis putus-putus abu-abu, bukan gembok atau spanduk.
+           Yang perlu disampaikan cuma "ini tidak diketik di sini lagi"; alasannya
+           ada di tooltip bagi yang mencoba. Saat dicetak, semua jejaknya hilang:
+           dokumen final tidak boleh menunjukkan keadaan editor. */
+        .field-frozen {
+            border-bottom: 1px dotted #d1d5db;
+            cursor: default;
+        }
+        .field-frozen-empty { color: #9ca3af; }
+        .edit-off .field-frozen { border-bottom: none; }
+        @media print {
+            .field-frozen { border-bottom: none !important; }
+        }
+
         /* Lencana pada tanda tangan yang sudah tercatat. Tenang dan kecil — ia
            menjelaskan kenapa tidak ada tombol, bukan meminta perhatian. Tanpa
            penjelasan, "tidak bisa diklik" terbaca sebagai rusak. */

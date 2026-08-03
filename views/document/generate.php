@@ -1605,8 +1605,17 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         $html = processTabledbRows($html, $tableDbQueries, $param_norm, $param_nopen, $dbFields, $conn);
     }
 
+    // Field yang sudah dibekukan tanda tangan yang ada. `null` berarti semuanya
+    // (tanda tangan v1 mencakup seluruh field).
+    //
+    // Dipakai untuk membuat field itu TERLIHAT beku. Sebelumnya pembekuan baru
+    // terasa saat menyimpan: petugas mengetik, menekan simpan, dan ditolak. Batas
+    // sebenarnya tetap guard §7b di sisi simpan — ini supaya tidak ada yang
+    // menabraknya tanpa peringatan.
+    $frozenFields = ezdoc_frozen_field_keys($conn, (int) $doc_id);
+
     // Replace field placeholders with appropriate input types
-    $html = preg_replace_callback('/<span[^>]*class=["\']field-placeholder[^"\']*["\']([^>]*)>\{\{([^}:]+)(?::text)?\}\}<\/span>/', function($m) {
+    $html = preg_replace_callback('/<span[^>]*class=["\']field-placeholder[^"\']*["\']([^>]*)>\{\{([^}:]+)(?::text)?\}\}<\/span>/', function($m) use ($frozenFields) {
         $attrs = $m[1];
         $name = $m[2];
         $val = v($name);
@@ -1634,14 +1643,18 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             $val = h(resolveDefault($default));
         }
 
-        return renderFieldInput($name, $type, $val, $options, $label, $validation);
+        $isFrozen = $frozenFields === null || isset($frozenFields[$name]);
+
+        return renderFieldInput($name, $type, $val, $options, $label, $validation, $isFrozen);
     }, $html);
 
     // Handle bare {{field}} without span wrapper (fallback) - text type
-    $html = preg_replace_callback('/\{\{([^}:]+)(?::text)?\}\}/', function($m) {
+    $html = preg_replace_callback('/\{\{([^}:]+)(?::text)?\}\}/', function($m) use ($frozenFields) {
         $name = $m[1];
         $val = v($name);
-        return renderFieldInput($name, 'text', $val, '', '');
+        $isFrozen = $frozenFields === null || isset($frozenFields[$name]);
+
+        return renderFieldInput($name, 'text', $val, '', '', [], $isFrozen);
     }, $html);
 
     // Process <p> tags - mark floating-only for paragraphs with only floating elements
@@ -1685,10 +1698,50 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
     return $html;
 }
 
-// Render field input based on type. $validation = ['required'=>'1','min'=>...,'max'=>...,'pattern'=>...,'errorMsg'=>...]
-function renderFieldInput($name, $type, $val, $options, $label, $validation = []) {
+/**
+ * Field yang isinya sudah dibekukan tanda tangan.
+ *
+ * Nilainya tetap dikirim lewat input tersembunyi — kalau tidak, menyimpan
+ * dokumen akan terbaca sebagai mengosongkan field, dan guard §7b menolaknya
+ * justru karena tidak ada yang mengubah apa pun.
+ *
+ * Tampilannya sengaja tenang: garis putus-putus abu-abu, bukan gembok atau
+ * spanduk. Yang perlu disampaikan cuma "ini tidak diketik di sini lagi", dan
+ * tooltip-nya menjelaskan alasannya bagi yang mencoba.
+ */
+function renderFrozenField($name, $type, $val, $options, $label) {
     $hName = h($name);
     $hVal = h($val);
+    $title = h(t('title.field_frozen_by_signature', [], 'Already signed — the content can no longer change. Create a new version to revise.'));
+
+    // Checkbox dan radio tidak punya teks untuk ditampilkan; nilainya yang bicara.
+    if ($type === 'checkbox') {
+        $on = ($val === '1' || $val === 'true' || $val === 'yes' || $val === 'Ya');
+        $mark = '<span class="field-frozen" title="' . $title . '">' . ($on ? '&#9745;' : '&#9744;') . '</span>';
+        $labelHtml = $label !== '' ? ' ' . h($label) : '';
+
+        return $mark . $labelHtml . '<input type="hidden" name="' . $hName . '" value="' . $hVal . '">';
+    }
+
+    $shown = $hVal !== '' ? $hVal : '<span class="field-frozen-empty">&mdash;</span>';
+
+    return '<span class="field-frozen" title="' . $title . '" data-field="' . $hName . '">' . $shown . '</span>'
+        . '<input type="hidden" name="' . $hName . '" value="' . $hVal . '">';
+}
+
+// Render field input based on type. $validation = ['required'=>'1','min'=>...,'max'=>...,'pattern'=>...,'errorMsg'=>...]
+//
+// $frozen: field ini dicakup tanda tangan yang sudah ada, jadi mengubahnya akan
+// ditolak guard §7b. Dirender tidak bisa diedit supaya penolakan itu tidak
+// datang sebagai kejutan setelah petugas mengetik. Batas sebenarnya tetap di
+// sisi simpan — ini keterlihatan, bukan keamanan.
+function renderFieldInput($name, $type, $val, $options, $label, $validation = [], $frozen = false) {
+    $hName = h($name);
+    $hVal = h($val);
+
+    if ($frozen) {
+        return renderFrozenField($name, $type, $val, $options, $label);
+    }
 
     // Build validation data attributes (rendered as data-v-* on the span/input)
     $vAttrs = '';

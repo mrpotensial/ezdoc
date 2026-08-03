@@ -196,4 +196,87 @@ final class RecordedSlotsTest extends TestCase
 
         self::assertSame([], ezdoc_recorded_signature_slots(new PdoConnection($bare), 7));
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Which fields are frozen
+    // ═══════════════════════════════════════════════════════════════════════
+    //
+    // Drives what the editor renders as no-longer-editable. The point is that the
+    // freeze becomes visible before somebody types into a field the save will
+    // reject — the wall was there either way; only the warning is new.
+
+    public function testFrozenFieldsAreTheUnionOfWhatSignaturesCover(): void
+    {
+        $this->record(7, ['ttd_id' => 'ttd_a', 'covered_fields' => ['isi', 'nama_ttd_a']]);
+        $this->record(7, ['ttd_id' => 'ttd_b', 'covered_fields' => ['isi', 'pernyataan_oleh']]);
+
+        $frozen = ezdoc_frozen_field_keys($this->db, 7);
+        self::assertIsArray($frozen);
+
+        $keys = array_keys($frozen);
+        sort($keys);
+        self::assertSame(['isi', 'nama_ttd_a', 'pernyataan_oleh'], $keys);
+    }
+
+    /**
+     * The field a not-yet-signed slot owns stays editable — that is the whole
+     * reason a second signer can still work.
+     */
+    public function testAnotherSlotsFieldIsNotFrozenByTheFirstSignature(): void
+    {
+        $this->record(7, ['ttd_id' => 'ttd_a', 'covered_fields' => ['isi', 'nama_ttd_a']]);
+
+        $frozen = ezdoc_frozen_field_keys($this->db, 7);
+        self::assertIsArray($frozen);
+        self::assertArrayNotHasKey('pernyataan_oleh', $frozen,
+            "the second signer must still be able to fill in their own name");
+    }
+
+    public function testNothingIsFrozenWithoutSignatures(): void
+    {
+        self::assertSame([], ezdoc_frozen_field_keys($this->db, 7));
+        self::assertSame([], ezdoc_frozen_field_keys($this->db, 0));
+    }
+
+    /**
+     * A v1 signature records no coverage because v1 covered *everything*. Null
+     * says exactly that. An empty array would say the opposite — nothing frozen —
+     * and every field on an older document would render as editable while the
+     * save refuses each one.
+     */
+    public function testAV1SignatureFreezesEverything(): void
+    {
+        $this->record(7, ['ttd_id' => 'ttd_a']); // tanpa covered_fields
+
+        self::assertNull(ezdoc_frozen_field_keys($this->db, 7));
+    }
+
+    /** One v1 signature is enough — its coverage swallows the others'. */
+    public function testAnyV1SignatureFreezesEverythingRegardlessOfV2Siblings(): void
+    {
+        $this->record(7, ['ttd_id' => 'ttd_a', 'covered_fields' => ['isi']]);
+        $this->record(7, ['ttd_id' => 'ttd_b']); // v1
+
+        self::assertNull(ezdoc_frozen_field_keys($this->db, 7));
+    }
+
+    public function testWithdrawnSignaturesStopFreezing(): void
+    {
+        $this->record(7, ['ttd_id' => 'ttd_a', 'covered_fields' => ['isi']], '2026-08-03 09:00:00');
+
+        self::assertSame([], ezdoc_frozen_field_keys($this->db, 7));
+    }
+
+    /**
+     * A missing table must leave everything editable, not everything frozen.
+     * Failing closed here would make a consumer that has not run the migration
+     * unable to edit anything, with no explanation.
+     */
+    public function testAMissingTableFreezesNothing(): void
+    {
+        $bare = new \PDO('sqlite::memory:');
+        $bare->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+
+        self::assertSame([], ezdoc_frozen_field_keys(new PdoConnection($bare), 7));
+    }
 }
