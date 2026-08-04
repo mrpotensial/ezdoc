@@ -47,6 +47,22 @@ CREATE TABLE IF NOT EXISTS ezdoc_documents (
 
     -- Identity
     title TEXT NULL,
+
+    -- Identitas subjek yang generik. Lihat docs/PLAN-SUBJECT-SCHEMA.md dan
+    -- migrations/2026_08_04_000001_alter_ezdoc_documents_add_subject_identity.php.
+    --
+    -- Di sisi MySQL kolom ini datang lewat ALTER, karena di sana ada data hidup.
+    -- Di sini ia langsung di CREATE: berkas SQLite dipakai tes, yang selalu
+    -- membangun tabel dari nol. Hasil akhirnya sama, jalannya saja berbeda.
+    --
+    -- subject_type NOT NULL DEFAULT '' — bukan NULL. Ia akan ikut kunci unik
+    -- slot, dan NULL dianggap berbeda dari NULL di indeks unik, yang membuat
+    -- keunikannya runtuh tanpa pesan kesalahan apa pun.
+    subject_type TEXT NOT NULL DEFAULT '',
+    subject_id TEXT NULL,
+    context_id TEXT NULL,
+
+    -- Digantikan subject_id / context_id. Masih dibaca sampai langkah C1.
     norm TEXT NULL,
     nopen TEXT NULL,
     label TEXT NOT NULL DEFAULT '-',
@@ -95,9 +111,11 @@ CREATE TABLE IF NOT EXISTS ezdoc_documents (
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     -- Carried over from the earlier shape of this file. Nothing writes them.
+    --
+    -- `subject_type` dan `subject_id` dulu ada di sini juga — desain generik
+    -- lama sudah memakai nama yang persis sedang dituju rencana subjek. Keduanya
+    -- dinaikkan jadi kolom utama di atas, bukan dihapus.
     reference_number TEXT NULL,
-    subject_type TEXT NULL,
-    subject_id TEXT NULL,
     rendered_html TEXT NULL,
     owner_id INTEGER NULL,
 
@@ -117,6 +135,8 @@ CREATE INDEX IF NOT EXISTS idx_ezdoc_documents_uuid ON ezdoc_documents (uuid);
 CREATE INDEX IF NOT EXISTS idx_ezdoc_documents_template ON ezdoc_documents (template_id);
 CREATE INDEX IF NOT EXISTS idx_ezdoc_documents_template_uuid ON ezdoc_documents (template_uuid);
 CREATE INDEX IF NOT EXISTS idx_ezdoc_documents_norm_nopen ON ezdoc_documents (norm, nopen);
+CREATE INDEX IF NOT EXISTS idx_ezdoc_documents_subject
+    ON ezdoc_documents (subject_type, subject_id, context_id);
 CREATE INDEX IF NOT EXISTS idx_ezdoc_documents_status ON ezdoc_documents (status, deleted_at);
 CREATE INDEX IF NOT EXISTS idx_ezdoc_documents_slot
     ON ezdoc_documents (template_uuid, norm, nopen, label, deleted_at);
