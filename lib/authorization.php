@@ -429,6 +429,53 @@ function ezdoc_can_manage_templates(): bool
 }
 
 /**
+ * Roles yang boleh melihat detail audit — alamat IP dan daftar role orang lain.
+ *
+ * @return array<string>
+ */
+function ezdoc_audit_detail_roles(): array
+{
+    if (!defined('EZDOC_AUDIT_DETAIL_ROLES')) return [];
+    $raw = EZDOC_AUDIT_DETAIL_ROLES;
+    if (is_array($raw)) return $raw;
+    if (is_string($raw)) {
+        $decoded = json_decode($raw, true);
+        return is_array($decoded) ? $decoded : [];
+    }
+    return [];
+}
+
+/**
+ * Bolehkah pengguna ini melihat IP dan daftar role pelaku lain di riwayat?
+ *
+ * ## Kosong berarti TIDAK, bukan YA
+ *
+ * Perhatikan bedanya dengan ezdoc_can_manage_templates() tepat di atas: di sana
+ * daftar kosong berarti "boleh semua", demi kecocokan mundur dengan versi
+ * sebelum RBAC template dipisah.
+ *
+ * Di sini kebalikannya, dan itu disengaja. Yang dijaga bukan fitur melainkan
+ * data pribadi: alamat IP orang lain. Kontrol privasi yang bawaannya terbuka
+ * hanya melindungi pemasangan yang sempat dikonfigurasi — dan yang belum
+ * dikonfigurasi justru yang paling butuh dilindungi.
+ *
+ * Akibatnya kolom IP hilang dari riwayat sampai EZDOC_AUDIT_DETAIL_ROLES (atau
+ * EZDOC_TEMPLATE_MANAGER_ROLES, yang jadi bawaannya) diisi. Itu memang harganya.
+ */
+/**
+ * @param array<string>|null $roles Daftar role pembanding. Null = baca dari
+ *        konfigurasi, yang dipakai produksi. Bentuknya mengikuti
+ *        ezdoc_has_role() dan ezdoc_require_role() yang juga menerima daftar.
+ */
+function ezdoc_can_view_audit_detail(?array $roles = null): bool
+{
+    $roles = $roles ?? ezdoc_audit_detail_roles();
+    if (empty($roles)) return false;
+
+    return ezdoc_has_role($roles);
+}
+
+/**
  * Guard: die dengan JSON 403 kalau user tidak boleh manage templates.
  */
 function ezdoc_require_manage_templates(string $message = 'Tidak berhak modify template design'): void

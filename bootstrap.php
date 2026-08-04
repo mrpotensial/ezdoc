@@ -37,6 +37,7 @@ require_once EZDOC_LIB . '/audit.php';
 require_once EZDOC_LIB . '/signature_image.php';
 // After audit.php — ezdoc_issue_otp_voucher() records an entry when it succeeds.
 require_once EZDOC_LIB . '/otp_voucher.php';
+require_once EZDOC_LIB . '/actor_names.php';
 
 // Auto-run migrations (menggunakan Ezdoc\Migrations\Runner via wrapper)
 if (EZDOC_AUTO_MIGRATE && isset($GLOBALS['conn']) && $GLOBALS['conn']) {

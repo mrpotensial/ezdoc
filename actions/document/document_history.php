@@ -70,6 +70,16 @@ ezdoc_require_on_template($accessConfig, 'view', 'Tidak berhak melihat dokumen d
 /** Batas atas. Slot yang sering disimpan bisa punya ratusan baris. */
 const EZDOC_HISTORY_LIMIT = 60;
 
+/**
+ * Dua tingkat. Yang boleh membuka dokumen melihat siapa, kapan, dan apa. Alamat
+ * IP dan daftar role orang lain butuh izin tersendiri — lihat
+ * ezdoc_can_view_audit_detail() dan docs/PLAN-IDENTITY-DISCLOSURE.md.
+ *
+ * Disaring di sini, bukan di tampilan. Yang bocor adalah JSON-nya; menyembunyikan
+ * kolom di JavaScript meninggalkan datanya utuh satu klik di balik tab Network.
+ */
+$showAuditDetail = ezdoc_can_view_audit_detail();
+
 // Semua versi di slot ini. Versi yang sudah dihapus ikut: penghapusan itu sendiri
 // bagian dari riwayat, dan menyembunyikannya membuat garis waktunya berlubang
 // tanpa penjelasan.
@@ -175,8 +185,45 @@ if ($truncated) {
     $entries = array_slice($entries, 0, EZDOC_HISTORY_LIMIT);
 }
 
+// ─── Nama pelaku ───
+//
+// Diselesaikan SETELAH pemotongan, jadi yang ditanyakan cuma baris yang benar-
+// benar ditampilkan. Sekali tanya untuk semuanya: enam puluh baris tidak boleh
+// jadi enam puluh query.
+//
+// Library tidak tahu di mana nama pengguna disimpan — itu urusan aplikasi
+// pemakainya, lewat Ezdoc\Auth\ActorDirectory. Tanpa itu, tampilannya jatuh ke
+// `#18` seperti sebelumnya.
+$names = ezdoc_actor_names(array_column($entries, 'actor'));
+if ($names !== []) {
+    foreach ($entries as $i => $entry) {
+        $actor = (int) $entry['actor'];
+        if (isset($names[$actor])) {
+            $entries[$i]['actor_name'] = $names[$actor];
+        }
+    }
+}
+
+// Field yang tidak boleh dilihat DIHILANGKAN, bukan dikosongkan. Kunci yang ada
+// tapi bernilai '' tetap memberi tahu bahwa ada sesuatu di sana — dan mengundang
+// pertanyaan berikutnya, yaitu apa isinya.
+if (!$showAuditDetail) {
+    foreach ($entries as $i => $entry) {
+        unset($entries[$i]['ip'], $entries[$i]['roles']);
+    }
+    $entries = array_values($entries);
+}
+
 ezdoc_respond_success([
     'entries'   => $entries,
+    // Dinyatakan, bukan dibiarkan tersirat. Tanpa penanda ini, klien tidak bisa
+    // membedakan "server menahan field-nya" dari "server versi lama yang memang
+    // belum pernah mengirimnya" — dan library ini dipasang orang lain, yang
+    // versinya tidak selalu sejalan dengan tampilannya.
+    //
+    // Alasan yang lebih dekat: pertanyaan "kenapa kolom IP hilang?" bisa dijawab
+    // dari respons, tanpa harus membaca PHP-nya.
+    'audit_detail' => $showAuditDetail,
     // Dinyatakan, bukan dibiarkan tersirat. Daftar yang dipotong diam-diam
     // terbaca sebagai "cuma segini yang pernah terjadi".
     'truncated' => $truncated,

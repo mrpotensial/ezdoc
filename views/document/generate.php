@@ -549,14 +549,16 @@ if ($param_is_deleted) {
 // For new doc (no match), default version = 1
 if (!$dokumen) $param_version = 1;
 
-// Lookup creator display name via RoleProvider — consumer resolves against their user store.
-// Legacy helper still available via ezdoc_fetch_creator_name() for backward compat.
-// spec: ezdoc-spec/context/role_provider.md#displayName
+// Nama pembuat dokumen. Satu pintu — ezdoc_actor_names() yang memutuskan dari
+// mana namanya datang, dan ia yang menyimpan jalur usangnya. Sebelumnya blok ini
+// memanggil $ctx->roleProvider->displayName() lewat method_exists: metode yang
+// tidak ada di antarmuka RoleProvider, tanpa implementasi, dan merujuk berkas
+// spesifikasi yang tidak pernah ada.
 if (!empty($docMeta['created_by'])) {
-    if (method_exists($ctx->roleProvider, 'displayName')) {
-        $docMeta['created_by_name'] = $ctx->roleProvider->displayName((int)$docMeta['created_by']);
-    } elseif (function_exists('ezdoc_fetch_creator_name')) {
-        $docMeta['created_by_name'] = ezdoc_fetch_creator_name($conn, $docMeta['created_by']);
+    $__creatorId = (int) $docMeta['created_by'];
+    $__creatorNames = function_exists('ezdoc_actor_names') ? ezdoc_actor_names([$__creatorId]) : [];
+    if (isset($__creatorNames[$__creatorId])) {
+        $docMeta['created_by_name'] = $__creatorNames[$__creatorId];
     }
 }
 
@@ -3160,13 +3162,26 @@ function renderFieldForPdf($name, $type, $val, $label) {
         // spec: ezdoc-spec/js/url_bag.md — endpoint URLs injected server-side, JS reads from EZDOC_URLS
         window.EZDOC_URLS = <?= json_encode($ezdocUrls, JSON_UNESCAPED_SLASHES) ?>;
 
-        <?php // Identitas penanda tangan, untuk konfirmasi mode QR. Id dan role saja:
-        // itu yang benar-benar diketahui library, dan itu juga yang masuk ke record
-        // tanda tangan. Menampilkan nama akan menuntut library tahu tabel pegawai
-        // milik aplikasi pemakainya. ?>
+        <?php
+        // Identitas penanda tangan, untuk konfirmasi mode QR.
+        //
+        // Nama kalau aplikasi pemakai menyambungkan Ezdoc\Auth\ActorDirectory,
+        // kalau tidak jatuh ke `#18`. Konfirmasi "Menandatangani sebagai" dibaca
+        // manusia tepat sebelum ia menandatangani — nomor internal tidak
+        // membantunya memastikan apa pun.
+        //
+        // Daftar role sengaja TIDAK dikirim. Ia tidak berguna untuk konfirmasi,
+        // dan mengirimnya menaruh daftar role di HTML setiap halaman generate.
+        $__signerId = function_exists('ezdoc_current_user_id') ? ezdoc_current_user_id() : 0;
+        $__signerName = '';
+        if ($__signerId > 0 && function_exists('ezdoc_actor_names')) {
+            $__names = ezdoc_actor_names([$__signerId]);
+            $__signerName = $__names[$__signerId] ?? '';
+        }
+        ?>
         window.EZDOC_SIGNER = {
-            id: <?= json_encode((string) (function_exists('ezdoc_current_user_id') ? ezdoc_current_user_id() : 0)) ?>,
-            roles: <?= json_encode(function_exists('ezdoc_current_user_roles') ? array_values(ezdoc_current_user_roles()) : []) ?>
+            id: <?= json_encode((string) $__signerId) ?>,
+            name: <?= json_encode($__signerName, JSON_UNESCAPED_UNICODE) ?>
         };
 
         // i18n dictionary — mirrors EZDOC_URLS above. spec: docs/I18N.md

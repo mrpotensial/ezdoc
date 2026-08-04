@@ -74,6 +74,37 @@ if (!defined('EZDOC_TEMPLATE_MANAGER_ROLES')) {
     // Contoh production: define('EZDOC_TEMPLATE_MANAGER_ROLES', json_encode(['superadmin', 'template_designer']));
 }
 
+// ─── Detail audit: siapa boleh melihat alamat IP dan daftar role orang lain ───
+//
+// Riwayat dokumen mencatat siapa melakukan apa, dari IP mana, dengan role apa.
+// Bagian "siapa" dan "kapan" wajar dilihat siapa pun yang boleh membuka
+// dokumennya. Dua bagian lain tidak:
+//
+//   - Alamat IP adalah data pribadi. GDPR Pasal 4 dan Resital 30 menyebutnya
+//     pengenal daring; UU PDP No. 27/2022 memperlakukannya serupa. Staf yang
+//     menandatangani dari rumah tidak boleh membocorkan IP rumahnya ke setiap
+//     rekan yang punya akses baca.
+//   - Daftar role menunjukkan siapa superadmin-nya, dan itu memilihkan target
+//     buat orang yang mau menipu lewat telepon.
+//
+// Pola yang sama dipakai GitHub (audit log + IP hanya untuk pemilik organisasi),
+// Atlassian, dan AWS CloudTrail (butuh izin IAM tersendiri). DocuSign menampilkan
+// IP, tapi di sertifikat bukti formal — bukan di feed aktivitas biasa.
+//
+// Bawaannya ikut EZDOC_TEMPLATE_MANAGER_ROLES supaya tidak ada konfigurasi baru
+// yang wajib diisi. Konsekuensinya: selama keduanya kosong, TIDAK ADA yang
+// melihat IP — termasuk superadmin. Itu arah gagal yang benar untuk kontrol
+// privasi. Isi salah satunya untuk membukanya kembali:
+//
+//   define('EZDOC_AUDIT_DETAIL_ROLES', json_encode(['superadmin']));
+//
+// Tidak ada nama role yang dipaku di library. Aplikasi yang otorisasinya bukan
+// berbasis role bisa mengisi nama izinnya di sini lalu menerjemahkannya lewat
+// ezdoc_set_role_provider().
+if (!defined('EZDOC_AUDIT_DETAIL_ROLES')) {
+    define('EZDOC_AUDIT_DETAIL_ROLES', EZDOC_TEMPLATE_MANAGER_ROLES);
+}
+
 // ─── OTP Provider ───
 // ─── OTP Provider (Universal Configuration) ───
 // Ezdoc menggunakan arsitektur berbasis konfigurasi (Config-Driven Architecture).

@@ -1189,8 +1189,19 @@
                 ? ` <span class="text-[10px] text-red-600">(${t('history_event.failed_suffix', {}, 'failed')})</span>`
                 : '';
 
+            // Nama kalau aplikasi pemakai menyambungkan ActorDirectory, kalau
+            // tidak `#18`. Nomor internal tidak berarti apa-apa buat pembacanya
+            // dan tidak menyebut siapa pun di luar sistem ini — tapi riwayat
+            // tanpa pelaku sama sekali lebih buruk lagi, jadi harus ada jatuhnya.
+            //
+            // `roles` bisa saja tidak ada di respons: server menghapusnya untuk
+            // yang tidak berhak melihat detail audit. Tidak ada yang perlu
+            // dilakukan di sini — bagian itu memang tinggal hilang.
+            const actorLabel = e.actor_name
+                ? escapeHtmlSimple(e.actor_name)
+                : `#${escapeHtmlSimple(e.actor)}`;
             const who = e.actor
-                ? `#${escapeHtmlSimple(e.actor)}${e.roles ? ' · ' + escapeHtmlSimple(e.roles) : ''}`
+                ? `${actorLabel}${e.roles ? ' · ' + escapeHtmlSimple(e.roles) : ''}`
                 : t('history_event.unknown_actor', {}, 'unknown');
 
             // Riwayat mencakup seluruh slot, jadi tiap baris harus menyebut versi
@@ -1618,15 +1629,20 @@
 
             if (isQrMode) {
                 const signer = window.EZDOC_SIGNER || {};
-                const roles = (signer.roles || []).join(', ');
                 const asEl = document.getElementById('signQrAs');
                 const slotEl = document.getElementById('signQrSlot');
                 // Ditampilkan apa adanya, termasuk saat identitasnya tidak ada.
                 // Menandatangani sebagai "0" adalah masalah yang harus terlihat
                 // sebelum ditandatangani, bukan sesudahnya di halaman verify.
                 if (asEl) {
+                    // Nama kalau aplikasi pemakai menyambungkan ActorDirectory,
+                    // kalau tidak `#18`. Baris ini dibaca orang tepat sebelum ia
+                    // menandatangani — nomor internal tidak membantunya
+                    // memastikan apa pun. Daftar role tidak lagi dikirim: tidak
+                    // berguna untuk konfirmasi, dan mengirimnya menaruh daftar
+                    // role di HTML setiap halaman generate.
                     asEl.textContent = (signer.id && signer.id !== '0')
-                        ? (roles ? `#${signer.id} · ${roles}` : `#${signer.id}`)
+                        ? (signer.name ? signer.name : `#${signer.id}`)
                         : t('modal.sign_qr.no_identity', {}, 'no identity — check access configuration');
                 }
                 if (slotEl) slotEl.textContent = label || id;

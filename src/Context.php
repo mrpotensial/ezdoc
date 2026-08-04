@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ezdoc;
 
+use Ezdoc\Auth\ActorDirectory;
 use Ezdoc\Auth\HasRoleProvider;
 use Ezdoc\Auth\RoleProvider;
 use Ezdoc\Db\Connection;
@@ -82,6 +83,14 @@ final class Context
     public $otpProvider;
 
     /**
+     * Resolves actor ids to readable names for audit displays. Null → the
+     * history falls back to `#18`.
+     *
+     * @var ActorDirectory|null
+     */
+    public $actorDirectory;
+
+    /**
      * Typed `mixed` on purpose: this is the validating boundary, so it has to
      * be able to see — and reject — whatever a host actually passes. Narrowing
      * the docblock to the accepted union would make the guard below look like
@@ -91,8 +100,13 @@ final class Context
      *   The first two are adapted on demand; a Connection is used as given.
      * @throws EzdocException kalau $db bukan salah satu dari ketiganya
      */
-    public function __construct($db, RoleProvider $roleProvider, ?PdfRenderer $pdf = null, ?UserOtpProvider $otpProvider = null)
-    {
+    public function __construct(
+        $db,
+        RoleProvider $roleProvider,
+        ?PdfRenderer $pdf = null,
+        ?UserOtpProvider $otpProvider = null,
+        ?ActorDirectory $actorDirectory = null
+    ) {
         if (!($db instanceof mysqli) && !($db instanceof PDO) && !($db instanceof Connection)) {
             throw new EzdocException(
                 'Ezdoc\\Context: $db must be mysqli, PDO or Ezdoc\\Db\\Connection, got '
@@ -103,6 +117,7 @@ final class Context
         $this->roleProvider = $roleProvider;
         $this->pdf = $pdf;
         $this->otpProvider = $otpProvider;
+        $this->actorDirectory = $actorDirectory;
     }
 
     /**
@@ -177,7 +192,42 @@ final class Context
             }
         }
 
-        return new self($db, new HasRoleProvider(), null, $otpProvider);
+        return new self($db, new HasRoleProvider(), null, $otpProvider, self::resolveActorDirectory());
+    }
+
+    /**
+     * Find the host's actor directory, if it wired one.
+     *
+     * Same three steps as the OTP provider above, deliberately — a host that
+     * learned one wiring pattern should not have to learn a second.
+     *
+     * Failure is swallowed. A directory that cannot be built costs readable
+     * names in the audit panel; letting it throw would cost the page.
+     */
+    private static function resolveActorDirectory(): ?ActorDirectory
+    {
+        if (isset($GLOBALS['EZDOC_ACTOR_DIRECTORY']) && $GLOBALS['EZDOC_ACTOR_DIRECTORY'] instanceof ActorDirectory) {
+            return $GLOBALS['EZDOC_ACTOR_DIRECTORY'];
+        }
+
+        if (!defined('EZDOC_ACTOR_DIRECTORY_CLASS') || EZDOC_ACTOR_DIRECTORY_CLASS === '') {
+            return null;
+        }
+
+        $class = EZDOC_ACTOR_DIRECTORY_CLASS;
+        if (!is_string($class) || !class_exists($class)) {
+            return null;
+        }
+
+        try {
+            $instance = method_exists($class, 'fromGlobals') ? $class::fromGlobals() : new $class();
+        } catch (\Throwable $e) {
+            @error_log('[ezdoc] actor directory instantiation failed: ' . $e->getMessage());
+
+            return null;
+        }
+
+        return $instance instanceof ActorDirectory ? $instance : null;
     }
 
     /**
@@ -215,24 +265,30 @@ final class Context
      */
     public function withDb($db): self
     {
-        return new self($db, $this->roleProvider, $this->pdf, $this->otpProvider);
+        return new self($db, $this->roleProvider, $this->pdf, $this->otpProvider, $this->actorDirectory);
     }
 
     /** Immutable copy dengan roleProvider diubah. */
     public function withRoleProvider(RoleProvider $rp): self
     {
-        return new self($this->db, $rp, $this->pdf, $this->otpProvider);
+        return new self($this->db, $rp, $this->pdf, $this->otpProvider, $this->actorDirectory);
     }
 
     /** Immutable copy dengan PDF renderer diubah. */
     public function withPdf(?PdfRenderer $pdf): self
     {
-        return new self($this->db, $this->roleProvider, $pdf, $this->otpProvider);
+        return new self($this->db, $this->roleProvider, $pdf, $this->otpProvider, $this->actorDirectory);
     }
 
     /** Immutable copy dengan UserOtpProvider diubah. */
     public function withOtpProvider(?UserOtpProvider $otpProvider): self
     {
-        return new self($this->db, $this->roleProvider, $this->pdf, $otpProvider);
+        return new self($this->db, $this->roleProvider, $this->pdf, $otpProvider, $this->actorDirectory);
+    }
+
+    /** Immutable copy dengan ActorDirectory diubah. */
+    public function withActorDirectory(?ActorDirectory $actorDirectory): self
+    {
+        return new self($this->db, $this->roleProvider, $this->pdf, $this->otpProvider, $actorDirectory);
     }
 }
