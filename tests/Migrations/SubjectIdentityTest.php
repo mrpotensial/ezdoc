@@ -163,6 +163,81 @@ final class SubjectIdentityTest extends TestCase
     }
 
     /**
+     * Setiap kolom yang ditulis kode harus benar-benar ada di tabelnya.
+     *
+     * Ini kelas kesalahan yang paling mungkin terjadi di penulisan ganda: kolom
+     * ditambahkan ke daftar tapi tidak ke skema, atau sebaliknya. Ia tidak
+     * ketahuan sampai penyimpanan pertama di produksi, dan pesannya tidak
+     * menyebut kolom mana.
+     *
+     * Daftar kolomnya dibaca dari berkas yang benar-benar dikirim, lalu
+     * INSERT-nya dijalankan sungguhan ke skema yang benar-benar dikirim. Tidak
+     * ada satu pun yang ditulis ulang di sini — menyalin daftar kolom ke dalam
+     * tes akan membuat tesnya lulus sementara kodenya rusak.
+     *
+     * @dataProvider writeSites
+     */
+    public function testEveryColumnTheCodeWritesExists(string $file, string $marker): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../' . $file);
+
+        $at = strpos($src, $marker);
+        self::assertNotFalse($at, "{$marker} tidak ketemu di {$file} — situs tulisnya pindah");
+
+        // Daftar kolom = kurung pertama setelah nama tabel, sebelum VALUES.
+        $after = substr($src, $at, 1200);
+        self::assertSame(1, preg_match('/\(([^)]*)\)\s*.{0,40}VALUES/s', $after, $m), 'daftar kolom tidak terbaca');
+
+        $columns = array_values(array_filter(array_map(
+            static function (string $c): string {
+                return trim(str_replace(["'", '.', "\n", '`'], '', $c));
+            },
+            explode(',', $m[1])
+        )));
+
+        self::assertNotEmpty($columns);
+
+        $pdo = $this->documents();
+        $actual = array_keys($this->columns($pdo));
+
+        $missing = array_values(array_diff($columns, $actual));
+        self::assertSame([], $missing, "{$file} menulis kolom yang tidak ada di tabel: " . implode(', ', $missing));
+
+        // Dijalankan sungguhan, bukan cuma dibandingkan namanya.
+        $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+        $stmt = $pdo->prepare(
+            'INSERT INTO ezdoc_documents (' . implode(', ', $columns) . ') VALUES (' . $placeholders . ')'
+        );
+
+        // Kolom yang punya CHECK constraint butuh nilai yang sah; sisanya bebas.
+        // Yang diuji keselarasan kolom, bukan validasi isinya.
+        $sample = [
+            'status'             => 'draft',
+            'is_locked'          => 0,
+            'public_slug_active' => 1,
+            'version'            => 1,
+            'revision'           => 1,
+            'subject_type'       => 'uji',
+        ];
+
+        $values = [];
+        foreach ($columns as $c) {
+            $values[] = $sample[$c] ?? ('uji-' . $c);
+        }
+
+        self::assertTrue($stmt->execute($values), 'INSERT dengan daftar kolom yang dikirim ditolak SQLite');
+    }
+
+    /** @return array<string,array{string,string}> */
+    public static function writeSites(): array
+    {
+        return [
+            'save_document' => ['actions/document/save_document.php', 'INSERT INTO ezdoc_documents'],
+            'new_version'   => ['actions/document/new_version.php', 'INSERT INTO ezdoc_documents'],
+        ];
+    }
+
+    /**
      * `subject_type` sengaja TIDAK diisi migrasi. Menyimpulkan bahwa baris lama
      * adalah pasien butuh pengetahuan yang cuma dimiliki aplikasi pemakainya,
      * dan menuliskannya di library berarti memaku satu domain ke dalam paket

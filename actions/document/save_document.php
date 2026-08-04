@@ -569,10 +569,15 @@ try {
     if ($isEdit) {
         // UPDATE — uuid, template_uuid, template_version immutable per doc
         $db->execute(
+            // subject_type sengaja TIDAK ikut diperbarui. Ia bagian dari identitas
+            // slot; mengubahnya saat update berarti dokumen berpindah slot diam-diam
+            // hanya karena konfigurasi berubah di antara dua penyimpanan.
             'UPDATE ezdoc_documents SET title = ?, norm = ?, nopen = ?, label = ?,
+                subject_id = ?, context_id = ?,
                 field_values = ?, signature_values = ?, floating_elements = ?, updated_by = ?
              WHERE id = ?',
-            [$computedTitle, $norm, $nopen, $label, $jsonFields, $jsonTtd, $docFloatingJson, $authorId, $doc_id]
+            [$computedTitle, $norm, $nopen, $label, $norm, $nopen,
+             $jsonFields, $jsonTtd, $docFloatingJson, $authorId, $doc_id]
         );
     } else {
         $docUuid = ezdoc_uuid_v7();
@@ -601,16 +606,20 @@ try {
         );
         if ($nextVersion < 1) $nextVersion = 1;
 
+        // Penulisan ganda selama peralihan: kolom lama DAN yang baru.
+        // Yang dibaca masih yang lama — lihat docs/PLAN-SUBJECT-SCHEMA.md.
         $db->execute(
             'INSERT INTO ezdoc_documents
              (uuid, template_id, template_uuid, template_version,
               title, norm, nopen, label, version,
+              subject_type, subject_id, context_id,
               field_values, signature_values, floating_elements,
               status, published_at, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 $docUuid, $template_id, $templateUuid, $templateVersion,
                 $computedTitle, $norm, $nopen, $label, $nextVersion,
+                ezdoc_subject_type(), $norm, $nopen,
                 $jsonFields, $jsonTtd, $docFloatingJson,
                 'published', $publishedAt, $authorId,
             ]

@@ -43,6 +43,7 @@ require_once EZDOC_LIB . '/otp_voucher.php';
 // diam-diam gagal di setiap aksi AJAX, yang masuk lewat pintu berbeda.
 require_once EZDOC_LIB . '/doc_meta_helpers.php';
 require_once EZDOC_LIB . '/actor_names.php';
+require_once EZDOC_LIB . '/subject_identity.php';
 
 // Auto-run migrations (menggunakan Ezdoc\Migrations\Runner via wrapper)
 if (EZDOC_AUTO_MIGRATE && isset($GLOBALS['conn']) && $GLOBALS['conn']) {

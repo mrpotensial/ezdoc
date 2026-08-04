@@ -15,6 +15,12 @@ CREATE TABLE IF NOT EXISTS ezdoc_templates (
     category TEXT NOT NULL DEFAULT '',
     scope TEXT NOT NULL DEFAULT 'patient',
     content TEXT,
+
+    -- Sidecar metadata elemen mengambang (logo/TTD/QR/materai berposisi).
+    -- Di MySQL kolom ini datang lewat migrasi ALTER Juli 2026; twin SQLite-nya
+    -- tidak pernah menyusul. Lihat catatan yang sama di twin ezdoc_documents.
+    floating_elements TEXT NULL,
+
     content_hash TEXT NULL,
     signature_config TEXT NULL,
     layout_config TEXT NULL,

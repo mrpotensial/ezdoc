@@ -289,12 +289,15 @@ final class DocumentRepository
         $now = date('Y-m-d H:i:s');
         $actorForInsert = $actorId > 0 ? $actorId : null;
 
+        // Penulisan ganda selama peralihan: kolom lama DAN identitas subjek yang
+        // generik. Yang dibaca masih yang lama — docs/PLAN-SUBJECT-SCHEMA.md.
         $sql = 'INSERT INTO ezdoc_documents '
             . '(uuid, template_id, template_uuid, template_version, title, norm, nopen, label, '
+            . 'subject_type, subject_id, context_id, '
             . 'field_values, signature_values, metadata, status, is_locked, '
             . 'content_hash, content_hash_at, content_hash_version, '
             . 'published_at, revision, created_by, updated_by, created_at, updated_at) '
-            . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)';
+            . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)';
 
         $this->db->execute($sql, [
             $uuid,
@@ -305,6 +308,9 @@ final class DocumentRepository
             $norm,
             $nopen,
             $label,
+            function_exists('ezdoc_subject_type') ? ezdoc_subject_type() : '',
+            $norm,
+            $nopen,
             $fieldValuesJson,
             $signatureValuesJson,
             $metadataJson,
@@ -355,8 +361,11 @@ final class DocumentRepository
 
         [$norm, $nopen, $label] = $this->extractLegacyIdentity($req);
 
+        // subject_type sengaja tidak ikut: ia bagian dari identitas slot, dan
+        // mengubahnya saat update memindahkan dokumen ke slot lain diam-diam.
         $sql = 'UPDATE ezdoc_documents SET '
             . 'title = ?, norm = ?, nopen = ?, label = ?, '
+            . 'subject_id = ?, context_id = ?, '
             . 'field_values = ?, signature_values = ?, metadata = ?, '
             . 'status = ?, is_locked = ?, '
             . 'content_hash = ?, content_hash_at = ?, content_hash_version = ?, '
@@ -368,6 +377,8 @@ final class DocumentRepository
             $norm,
             $nopen,
             $label,
+            $norm,
+            $nopen,
             $fieldValuesJson,
             $signatureValuesJson,
             $metadataJson,

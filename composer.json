@@ -43,7 +43,8 @@
             "lib/migrations.php",
             "lib/audit.php",
             "lib/otp_voucher.php",
-            "lib/actor_names.php"
+            "lib/actor_names.php",
+            "lib/subject_identity.php"
         ]
     },
     "autoload-dev": {

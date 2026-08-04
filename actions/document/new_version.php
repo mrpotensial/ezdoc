@@ -90,15 +90,18 @@ $publishedAt = date('Y-m-d H:i:s');
 
 try {
     $db->execute(
+        // Penulisan ganda selama peralihan — lihat docs/PLAN-SUBJECT-SCHEMA.md.
         'INSERT INTO ezdoc_documents
          (uuid, template_id, template_uuid, template_version,
           norm, nopen, label, version,
+          subject_type, subject_id, context_id,
           field_values, signature_values,
           status, published_at, is_locked, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)',
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)',
         [
             $docUuid, $tid, $templateUuid, $templateVersion,
             $n, $np, $lb, $nextVersion,
+            ezdoc_subject_type(), $n, $np,
             $newFields, $newTtd,
             'published', $publishedAt, $authorId,
         ]

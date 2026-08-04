@@ -75,6 +75,13 @@ CREATE TABLE IF NOT EXISTS ezdoc_documents (
     signature_values TEXT NULL,
     metadata TEXT NULL,
 
+    -- Sidecar posisi elemen mengambang, override per-dokumen. NULL = ikut
+    -- template. Di MySQL kolom ini datang lewat migrasi ALTER Juli 2026; twin
+    -- SQLite-nya tidak pernah menyusul, dan DialectParityTest tidak menangkapnya
+    -- karena ia hanya membandingkan berkas *_create_*. Ditemukan 2026-08-04 oleh
+    -- tes yang menjalankan daftar kolom milik save_document.php ke skema ini.
+    floating_elements TEXT NULL,
+
     -- Lifecycle state
     status TEXT NOT NULL DEFAULT 'published'
         CHECK (status IN ('draft', 'published', 'locked', 'archived')),
