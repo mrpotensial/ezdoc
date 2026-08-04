@@ -480,7 +480,7 @@ sepuasnya — ia memang tinggal di aplikasi ini.
 
 | | Isi |
 |---|---|
-| **V1** | Migrasi `ezdoc_otp_vouchers` (MySQL + SQLite), `OtpVoucherService` (terbitkan, klaim, cek status, jeda, batas percobaan per nomor), tes |
+| ~~**V1**~~ | **SELESAI** — lihat §8b di bawah |
 | **V2** | Endpoint terbitkan voucher + endpoint cek status. Hook untuk bot consumer. Belum ada UI |
 | **V3** | Penanda `$wa_handled` di `api_qontak.php` + `api/ttd_otp_wa_handler.php` + halaman QR statis, gaya `display_antrian_qr_v2.php` |
 | **V4** | Modal di generate: nomor terkunci + petunjuk status + kolom kode. Jalur cadangan pindah ke balik "Pasien tidak bisa memindai?" |
@@ -492,6 +492,66 @@ lewat CLI, diklaim lewat CLI.
 **V3 sebelum V4, bukan sesudahnya.** Karena jalur pindaian sekarang jalur utama,
 modalnya tidak berguna sebelum ada QR dan bot yang menerbitkan kodenya. Kalau
 V4 lebih dulu, petugas dapat kolom kode yang tidak mungkin diisi siapa pun.
+
+## 8b. V1 — sudah dikerjakan
+
+Semua di dalam folder `ezdoc/`. Migrasi baru **ditulis, belum dijalankan** ke
+server mana pun.
+
+### Berkas
+
+| Berkas | Isi |
+|---|---|
+| `src/Support/Clock.php` | Antarmuka satu metode, bentuknya sama persis dengan PSR-20 |
+| `src/Support/SystemClock.php` | Jam sungguhan; default di mana-mana |
+| `src/Support/FrozenClock.php` | Jam yang cuma bergerak kalau disuruh. Sengaja di `src/`, bukan `tests/` — host juga menulis tes, dan test double yang tidak bisa mereka jangkau akan ditulis ulang dengan buruk. Symfony menaruh `MockClock` di komponennya karena alasan yang sama |
+| `src/Support/PsrClock.php` | Membungkus jam PSR-20 milik host. Tidak menyebut `Psr\Clock\ClockInterface` di type hint — menyebutnya membuat berkas ini fatal di host yang tidak memasang paketnya |
+| `migrations/2026_08_03_000001_create_ezdoc_otp_vouchers.php` | MySQL |
+| `migrations/sqlite/…_create_ezdoc_otp_vouchers.sql` | Kembarannya, ditulis bersamaan bukan menyusul |
+| `src/Signature/Otp/OtpVoucherRepository.php` | Klaim & pemakaian percobaan sebagai UPDATE bersyarat tunggal |
+| `src/Signature/Otp/OtpVoucherService.php` | Aturannya: terbitkan, status, klaim, bersihkan |
+| `src/Signature/Otp/OtpVoucherStatus.php` | `none` / `active` / `expired` / `locked` — kode, bukan kalimat |
+| `src/Signature/Otp/OtpVoucherClaimResult.php` | Hasil klaim + sign token |
+| `tests/Support/ClockTest.php` | 10 tes |
+| `tests/Signature/Otp/OtpVoucherServiceTest.php` | 33 tes, SQLite sungguhan, jam beku sepanjang berkas |
+
+Hasil: **1155 tes, 28402 asersi, PHPStan bersih.** Naik dari 1112.
+
+### Yang berubah dari rencana, dan kenapa
+
+**Normalisasi nomor tidak perlu ditulis.** `OtpService::normalizePhone()` sudah
+ada dan sudah menangani `62…`, `08…`, `+62…`, dan spasi/strip. Tinggal dipakai.
+Tesnya tetap ditulis, karena yang penting bukan siapa yang menulis fungsinya
+tapi bahwa jalur ini benar-benar memakainya.
+
+**`OtpChallengeRepository` ikut dapat jam.** Ini tidak direncanakan; ia muncul
+sebagai dua tes yang gagal. Klaim voucher menulis baris challenge lewat jam
+beku, lalu `verifySignToken()` membacanya lewat `time()` asli — dan menolak
+token yang baru saja diterbitkannya sendiri.
+
+Bukan tesnya yang salah. Satu alur tidak boleh memakai dua jam. Parameter
+jamnya opsional, jadi pemanggil lama tidak terpengaruh, tapi `OtpVoucherService`
+menurunkan jamnya sendiri saat membuat repository default.
+
+**`composer.json`: `ext-mysqli` pindah ke `suggest`,** sejajar dengan `ext-pdo`
+yang memang sudah di sana. `psr/clock` ditambahkan sebagai saran.
+
+### Keputusan implementasi yang tidak ada di rencana
+
+**Urutan saat klaim: bakar voucher dulu, tulis challenge kemudian.** Kalau
+dibalik dan langkah kedua gagal, tertinggal challenge yang bisa dipakai
+sementara vouchernya masih hidup — kodenya bisa dibelanjakan dua kali. Gagal
+dengan urutan sekarang hanya menghanguskan satu kode; pasien mengirim
+`TTD-OTP` lagi, gratis. Gagal dengan urutan sebaliknya menghancurkan sifat
+sekali-pakai, yang jadi tumpuan seluruh desain.
+
+**`otp_hash` pada challenge hasil klaim diisi hash dari byte acak.** Kolomnya
+tidak boleh NULL, dan mengisinya dengan sesuatu yang bisa ditebak berarti
+membuka pintu kedua ke tanda tangan yang sama — pintu yang melewati voucher.
+
+**Percobaan tidak berkurang kalau kodenya sudah kedaluwarsa.** Kedaluwarsa
+diperiksa sebelum percobaan dibebankan, jadi menunggu terlalu lama tidak
+diam-diam memakan jatah tebakan.
 
 ## 9. Yang perlu diputuskan sebelum mulai
 

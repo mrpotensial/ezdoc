@@ -12,7 +12,6 @@
     ],
     "require": {
         "php": ">=7.4",
-        "ext-mysqli": "*",
         "ext-json": "*",
         "ext-mbstring": "*"
     },
@@ -23,6 +22,8 @@
         "symfony/polyfill-php81": "^1.28"
     },
     "suggest": {
+        "ext-mysqli": "Dibutuhkan kalau memakai MysqliConnection, adapter default. Bukan requirement keras: consumer yang jalan di atas PdoConnection (SQLite/Postgres/SQL Server) tidak menyentuh mysqli sama sekali, dan mewajibkannya membuat mereka tidak bisa memasang library ini.",
+        "psr/clock": "Kalau host sudah punya jam PSR-20 di containernya, bungkus dengan Ezdoc\\Support\\PsrClock supaya ezdoc tidak jalan di atas notion 'sekarang' yang kedua. Tanpa paket ini, Ezdoc\\Support\\SystemClock dipakai.",
         "symfony/polyfill-php80": "Recommended untuk PHP 7.4 runtime — battle-tested polyfill (str_starts_with, str_ends_with, str_contains, get_debug_type). Kalau tidak install, lib/polyfill.php akan handle fallback minimal.",
         "dompdf/dompdf": "Dibutuhkan oleh Ezdoc\\Rendering\\DompdfRenderer, backend PDF bawaan. Tanpa paket ini, inject PdfRenderer sendiri (mPDF, wkhtmltopdf, Weasyprint) lewat Context::withPdf().",
         "ext-openssl": "Dibutuhkan untuk tanda tangan L2/L3 (CMS/PKCS#7, PAdES, timestamp RFC 3161). Tanda tangan L1 (HMAC) tidak memerlukannya.",

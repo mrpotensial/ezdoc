@@ -6,6 +6,8 @@ namespace Ezdoc\Signature\Otp;
 
 use Ezdoc\Db\Connection;
 use Ezdoc\Db\Mysqli\MysqliConnection;
+use Ezdoc\Support\Clock;
+use Ezdoc\Support\SystemClock;
 use mysqli;
 
 /**
@@ -22,10 +24,16 @@ final class OtpChallengeRepository
     /** @var Connection */
     private Connection $db;
 
+    private Clock $clock;
+
     /**
      * @param Connection|mysqli $db
+     * @param Clock|null        $clock Source of "now" for expiry predicates and
+     *        written timestamps. Optional, so existing callers are unaffected;
+     *        supply one when the caller has its own, since a flow that reads two
+     *        different clocks will reject rows it wrote itself moments earlier.
      */
-    public function __construct($db)
+    public function __construct($db, ?Clock $clock = null)
     {
         if ($db instanceof mysqli) {
             $this->db = new MysqliConnection($db);
@@ -34,6 +42,14 @@ final class OtpChallengeRepository
         } else {
             throw new \InvalidArgumentException('Expected Connection or mysqli instance');
         }
+
+        $this->clock = $clock ?? new SystemClock();
+    }
+
+    /** Now, in storage format, optionally offset by whole seconds. */
+    private function stamp(int $offsetSeconds = 0): string
+    {
+        return date('Y-m-d H:i:s', $this->clock->now()->getTimestamp() + $offsetSeconds);
     }
 
     /**
@@ -63,7 +79,7 @@ final class OtpChallengeRepository
             $data['max_attempts'] ?? 3,
             $data['expires_at'],
             isset($data['provider_meta']) ? json_encode($data['provider_meta'], JSON_UNESCAPED_UNICODE) : null,
-            date('Y-m-d H:i:s'),
+            $this->stamp(),
         ]);
     }
 
@@ -128,7 +144,7 @@ final class OtpChallengeRepository
     {
         $this->db->execute(
             "UPDATE `ezdoc_ttd_otp_challenges` SET `expires_at` = ? WHERE `challenge_id` = ?",
-            [date('Y-m-d H:i:s', time() - 1), $challengeId]
+            [$this->stamp(-1), $challengeId]
         );
     }
 
@@ -175,7 +191,7 @@ final class OtpChallengeRepository
             "UPDATE `ezdoc_ttd_otp_challenges`
                 SET `verified_at` = ?, `sign_token` = ?
               WHERE `challenge_id` = ? AND `verified_at` IS NULL",
-            [date('Y-m-d H:i:s'), $signToken, $challengeId]
+            [$this->stamp(), $signToken, $challengeId]
         );
 
         return (int) $affected > 0;
@@ -237,7 +253,7 @@ final class OtpChallengeRepository
             $templateId,
             // Grace window: the code is entered, then the operator still has
             // to draw and submit the signature.
-            date('Y-m-d H:i:s', time() - self::SIGN_GRACE_SECONDS),
+            $this->stamp(-self::SIGN_GRACE_SECONDS),
         ];
 
         if ($docId === null) {
@@ -255,7 +271,7 @@ final class OtpChallengeRepository
         [$where, $params] = $this->signTokenPredicate($signToken, $ttdId, $templateId, $docId);
 
         // The used-at stamp goes in front of the predicate's own parameters.
-        array_unshift($params, date('Y-m-d H:i:s'));
+        array_unshift($params, $this->stamp());
 
         $sql = "UPDATE `ezdoc_ttd_otp_challenges`
                    SET `sign_token_used_at` = ?
