@@ -972,9 +972,12 @@
             const meta = <?= json_encode($docMeta, JSON_UNESCAPED_UNICODE) ?>;
             if (!meta.id) return;
 
+            // Nama saja. Nomor pegawai tidak berarti apa-apa buat pembacanya dan
+            // tidak menyebut siapa pun di luar sistem ini — `#18` hanya muncul
+            // kalau namanya memang tidak ketemu, aturan yang sama dengan riwayat.
             const createdBy = meta.created_by_name
-                ? `${meta.created_by_name} (ID: ${meta.created_by})`
-                : (meta.created_by ? `ID: ${meta.created_by}` : '-');
+                ? meta.created_by_name
+                : (meta.created_by ? `#${meta.created_by}` : '-');
 
             // Build materai info rows from current rendered placeholders + hidden inputs
             let materaiRows = '';
@@ -1014,35 +1017,64 @@
             modal = document.createElement('div');
             modal.id = 'docInfoModal';
             modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:4000;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;';
+            // Dua kolom, bukan satu kolom yang dilebarkan. Keterangan dokumen
+            // pendek dan tetap; riwayat panjang dan bertambah terus. Menumpuknya
+            // membuat riwayat terjepit di kotak gulir setinggi lima baris —
+            // bagian yang paling sering dibaca justru dapat ruang paling sempit.
+            //
+            // Bentuknya mengikuti Certificate of Completion DocuSign dan panel
+            // Activity Adobe Sign: identitas dokumen di satu sisi, garis waktu
+            // di sisi lain.
+            const metaRow = (label, value) => `
+                <div class="flex gap-3 py-[5px]">
+                    <div class="w-[38%] shrink-0 text-gray-500">${label}</div>
+                    <div class="min-w-0 flex-1 text-gray-900">${value}</div>
+                </div>`;
+
             modal.innerHTML = `
-                <div class="bg-white rounded-[10px] w-[90%] max-w-[420px] p-5">
-                    <div class="flex justify-between items-center mb-4">
-                        <h5 class="m-0"><i class="bi bi-info-circle"></i> ${t('modal.doc_info.title', {}, 'Document Details')}</h5>
-                        <button onclick="document.getElementById('docInfoModal').remove()" class="border-0 bg-transparent text-xl cursor-pointer text-gray-500">&times;</button>
-                    </div>
-                    <table class="w-full text-[13px]" style="border-collapse:collapse;">
-                        <tr><td class="py-1.5 px-0 text-gray-500 w-[40%]">${t('modal.doc_info.document_id_label', {}, 'Document ID')}</td><td class="py-1.5 px-0"><code>${meta.id}</code></td></tr>
-                        <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.version_row_label', {}, 'Version')}</td><td class="py-1.5 px-0">v${CURRENT_VERSION} ${<?= $param_is_locked ? 'true' : 'false' ?> ? t('toolbar.locked', {}, 'Locked') : t('modal.doc_info.editable_suffix', {}, '(Editable)')}</td></tr>
-                        <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.norm_row_label', {}, 'MR No.')}</td><td class="py-1.5 px-0">${escapeHtmlSimple(CURRENT_NORM || '-')}</td></tr>
-                        <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.nopen_row_label', {}, 'Registration No.')}</td><td class="py-1.5 px-0">${escapeHtmlSimple(CURRENT_NOPEN || '-')}</td></tr>
-                        <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.label_row_label', {}, 'Label')}</td><td class="py-1.5 px-0">${escapeHtmlSimple(CURRENT_LABEL || '-')}</td></tr>
-                        <tr><td colspan="2" class="py-2.5 px-0"><hr class="m-0 border-0" style="border-top:1px solid #e5e7eb;"></td></tr>
-                        <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.created_by_label', {}, 'Created by')}</td><td class="py-1.5 px-0">${escapeHtmlSimple(createdBy)}</td></tr>
-                        <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.created_at_label', {}, 'Created at')}</td><td class="py-1.5 px-0">${fmtDate(meta.created_at)}</td></tr>
-                        <tr><td class="py-1.5 px-0 text-gray-500">${t('modal.doc_info.updated_at_label', {}, 'Last updated')}</td><td class="py-1.5 px-0">${fmtDate(meta.updated_at)}</td></tr>
-                        ${materaiRows}
-                    </table>
+                <div class="bg-white rounded-xl w-[94%] max-w-[820px] max-h-[88vh] flex flex-col overflow-hidden shadow-2xl">
 
-                    <div class="mt-5 pt-4 border-t border-gray-200">
-                        <div class="flex items-baseline justify-between mb-2">
-                            <h6 class="m-0 text-[12px] font-semibold text-gray-700">${t('modal.doc_info.history_heading', {}, 'History')}</h6>
-                            <span class="text-[10px] text-gray-400">${t('modal.doc_info.history_newest_first', {}, 'newest first')}</span>
+                    <div class="flex justify-between items-start gap-4 px-6 pt-5 pb-4 border-b border-gray-100">
+                        <div class="min-w-0">
+                            <h5 class="m-0 text-[15px] font-semibold text-gray-900">${t('modal.doc_info.title', {}, 'Document Details')}</h5>
+                            <div class="text-[12px] text-gray-500 mt-0.5 tabular-nums">
+                                #${meta.id} · v${CURRENT_VERSION} · ${escapeHtmlSimple(CURRENT_NORM || '-')}/${escapeHtmlSimple(CURRENT_NOPEN || '-')}
+                            </div>
                         </div>
-                        <div id="docHistoryBody" class="text-[12px] text-gray-400 py-3 text-center">${t('modal.doc_info.history_loading', {}, 'Loading history…')}</div>
+                        <button onclick="document.getElementById('docInfoModal').remove()"
+                                class="border-0 bg-transparent text-xl leading-none cursor-pointer text-gray-400 hover:text-gray-700 -mt-1">&times;</button>
                     </div>
 
-                    <div class="text-right mt-4">
-                        <button onclick="document.getElementById('docInfoModal').remove()" class="py-1.5 px-4 border-0 bg-blue-500 text-white rounded-md cursor-pointer">${t('actions.close', {}, 'Close')}</button>
+                    <div class="flex-1 min-h-0 flex flex-col md:flex-row">
+
+                        <div class="md:w-[42%] md:border-r border-gray-100 px-6 py-4 overflow-y-auto text-[13px] tabular-nums">
+                            ${metaRow(t('modal.doc_info.document_id_label', {}, 'Document ID'), `<code class="text-[12px]">${meta.id}</code>`)}
+                            ${metaRow(t('modal.doc_info.version_row_label', {}, 'Version'), `v${CURRENT_VERSION} <span class="text-gray-500">${<?= $param_is_locked ? 'true' : 'false' ?> ? t('toolbar.locked', {}, 'Locked') : t('modal.doc_info.editable_suffix', {}, '(Editable)')}</span>`)}
+                            ${metaRow(t('modal.doc_info.norm_row_label', {}, 'MR No.'), escapeHtmlSimple(CURRENT_NORM || '-'))}
+                            ${metaRow(t('modal.doc_info.nopen_row_label', {}, 'Registration No.'), escapeHtmlSimple(CURRENT_NOPEN || '-'))}
+                            ${metaRow(t('modal.doc_info.label_row_label', {}, 'Label'), escapeHtmlSimple(CURRENT_LABEL || '-'))}
+
+                            <div class="my-3 border-t border-gray-100"></div>
+
+                            ${metaRow(t('modal.doc_info.created_by_label', {}, 'Created by'), escapeHtmlSimple(createdBy))}
+                            ${metaRow(t('modal.doc_info.created_at_label', {}, 'Created at'), fmtDate(meta.created_at))}
+                            ${metaRow(t('modal.doc_info.updated_at_label', {}, 'Last updated'), fmtDate(meta.updated_at))}
+
+                            ${materaiRows ? `<table class="w-full text-[13px] mt-1" style="border-collapse:collapse;">${materaiRows}</table>` : ''}
+                        </div>
+
+                        <div class="flex-1 min-w-0 flex flex-col px-6 py-4 border-t md:border-t-0 border-gray-100">
+                            <div class="flex items-baseline justify-between mb-2 shrink-0">
+                                <h6 class="m-0 text-[12px] font-semibold text-gray-700">${t('modal.doc_info.history_heading', {}, 'History')}</h6>
+                                <span class="text-[10px] text-gray-400">${t('modal.doc_info.history_newest_first', {}, 'newest first')}</span>
+                            </div>
+                            <div id="docHistoryBody" class="flex-1 min-h-[220px] overflow-y-auto text-[12px] text-gray-400 py-3 text-center">${t('modal.doc_info.history_loading', {}, 'Loading history…')}</div>
+                        </div>
+                    </div>
+
+                    <div class="text-right px-6 py-3 border-t border-gray-100 bg-gray-50/60">
+                        <button onclick="document.getElementById('docInfoModal').remove()"
+                                class="py-1.5 px-4 border-0 bg-slate-900 hover:bg-slate-800 text-white text-[13px] font-medium rounded-md cursor-pointer transition">${t('actions.close', {}, 'Close')}</button>
                     </div>
                 </div>
             `;
@@ -1111,7 +1143,10 @@
                     return;
                 }
 
-                box.className = 'max-h-[240px] overflow-y-auto -mr-1 pr-1';
+                // Mengisi tinggi kolomnya, bukan dipatok 240px. Sejak panelnya
+                // dua kolom, riwayat punya ruang sendiri — memateri tingginya
+                // akan menyisakan ruang kosong di bawah lalu tetap menggulir.
+                box.className = 'flex-1 min-h-[220px] overflow-y-auto -mr-1 pr-1';
                 box.innerHTML = data.entries.map(renderHistoryEntry).join('')
                     + (data.truncated
                         ? `<div class="text-[10px] text-gray-400 text-center pt-2">${t('modal.doc_info.history_truncated', {}, 'Older entries are not shown')}</div>`
