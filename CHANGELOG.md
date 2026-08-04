@@ -6,6 +6,131 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v1.0-prep track — "Identitas: siapa boleh melihat apa"
+
+**Changed — riwayat tidak lagi membagikan IP dan daftar role ke semua pembaca (2026-08-04)**
+
+Panel riwayat menampilkan id internal, snapshot role, dan **alamat IP** setiap
+pelaku di slot itu, ke siapa pun yang punya hak `view` di template. Perawat yang
+bisa membuka dokumen dari sebuah template bisa melihat IP setiap dokter yang
+pernah menandatangani — termasuk yang menandatangani dari rumah.
+
+IP adalah data pribadi: GDPR Pasal 4 dan Resital 30 menyebutnya pengenal
+daring, UU PDP No. 27/2022 memperlakukannya serupa. GitHub membatasi audit log
+beserta IP ke pemilik organisasi; Atlassian ke admin; CloudTrail butuh izin IAM
+tersendiri. DocuSign memang menampilkan IP — di sertifikat bukti formal, bukan
+di feed aktivitas.
+
+Sekarang dua tingkat, `EZDOC_AUDIT_DETAIL_ROLES`. **Kosong berarti tidak**,
+kebalikan dari `ezdoc_can_manage_templates()` di sebelahnya — inversinya
+disengaja dan diberi tes tersendiri, karena kontrol privasi yang bawaannya
+terbuka hanya melindungi pemasangan yang sempat dikonfigurasi.
+
+Disaring di server: field yang tidak boleh dilihat **dihapus** dari respons.
+Menyembunyikannya di JavaScript meninggalkan datanya utuh di tab Network.
+
+**Added — `Ezdoc\Auth\ActorDirectory`, dan penyatuan tiga mekanisme (2026-08-04)**
+
+Riwayat menampilkan `#18`. Ternyata sudah ada **tiga** cara mencari nama, tidak
+satu pun selesai:
+
+1. `$ctx->roleProvider->displayName()` — dipanggil lewat `method_exists`, tidak
+   ada di antarmuka `RoleProvider`, tanpa implementasi, dan berkas spesifikasi
+   yang dirujuk komentarnya tidak pernah ada
+2. `ezdoc_fetch_creator_name()` — menjalankan `SELECT nama_pegawai FROM pegawai`
+   dari dalam library
+3. Tidak ada apa-apa
+
+Menambahkan yang keempat akan memperburuk. Jadi satu pintu,
+`ezdoc_actor_names()`, dengan dua yang lama sebagai cadangan usang.
+`ActorDirectory` menerima **daftar** id, bukan satu — 60 baris riwayat tidak
+boleh jadi 60 query.
+
+**Fixed — nama muncul di halaman generate, hilang di panel riwayat (2026-08-04)**
+
+`lib/doc_meta_helpers.php` hanya di-`require` oleh `views/document/generate.php`.
+Jadi pencarian nama berhasil di halaman itu dan buntu di setiap aksi AJAX, yang
+masuk lewat pintu berbeda — panel riwayat menampilkan `#18` sementara header
+dokumen dua inci di atasnya menampilkan nama orangnya.
+
+Kelas yang sama dengan bug `$conn` yang tidak pernah di-`global`: jalan atau
+tidak tergantung dari pintu mana request masuk.
+
+### v1.0-prep track — "OTP jalur kedua: pasien yang meminta kode"
+
+**Added — voucher OTP lewat QR, V1–V5 (2026-08-03 … 2026-08-04)**
+
+Lihat `docs/PLAN-OTP-JALUR-KEDUA.md`. Pesan yang dimulai bisnis berbayar, jadi
+arahnya dibalik: pasien memindai QR di ruang tunggu, bot membalas kode sekali
+pakai, petugas memasukkannya.
+
+Voucher lahir hanya tahu nomor pengirimnya — dokumennya diputuskan menit
+kemudian, oleh orang lain. Karena itu tabelnya terpisah dari
+`ezdoc_ttd_otp_challenges`, yang `template_id`/`ttd_id`-nya wajar `NOT NULL`.
+
+Klaim voucher **bermuara** jadi challenge yang sudah terverifikasi, sehingga
+`sign_token` dan `save_document.php` tidak berubah sebaris pun.
+
+Penerbitan sengaja **fungsi in-process**, bukan endpoint: server memanggil
+dirinya sendiri lewat loopback butuh kunci rahasia dan mewarisi setiap cara
+loopback bisa gagal — dan `cada904` sudah membuktikannya dari arah sebaliknya.
+
+**Added — `Ezdoc\Support\Clock` (2026-08-03)**
+
+Bentuk identik PSR-20, dideklarasikan sendiri supaya host yang deploy dengan
+menyalin berkas tidak wajib memasang paket. `FrozenClock` ada di `src/`, bukan
+`tests/` — host menulis tes juga, dan test double yang tidak bisa mereka jangkau
+akan ditulis ulang dengan buruk (Symfony menaruh `MockClock` di komponennya
+karena alasan yang sama).
+
+`OtpChallengeRepository` ikut menerima jam. Ini ketahuan dari dua tes gagal:
+klaim menulis challenge lewat jam beku lalu `verifySignToken()` membacanya lewat
+`time()` asli, dan menolak token yang baru saja diterbitkannya sendiri. Satu
+alur tidak boleh memakai dua jam.
+
+### v1.0-prep track — "Migrasi dialek yang berbohong"
+
+**Fixed — tiga migrasi SQLite menggambarkan tabel yang berbeda (2026-08-04)**
+
+| Tabel | Keadaan |
+|---|---|
+| `ezdoc_audit_log` | Skema berbeda total — `entity_type`/`created_at`, padahal Logger menulis `target_type`/`occurred_at` |
+| `ezdoc_documents` | 16 kolom hilang termasuk `norm`, `nopen`, `label`, `version`, `signature_values`; `uk_slot_version` tidak ada sama sekali |
+| `ezdoc_default_vars` | `is_enabled`, `metadata` |
+
+Cara ia gagal itu bagian terpentingnya. Berkas dialek yang **hilang** gagal di
+query pertama dan ketahuan. Berkas dialek yang **berbohong** jalan terus. Logger
+menelan setiap kesalahan dengan sengaja, jadi log audit **diam-diam tidak
+mencatat apa pun** di setiap host SQLite.
+
+`tests/Migrations/DialectParityTest.php` menjalankan setiap berkas SQLite yang
+dikirim, membaca `PRAGMA table_info`, dan membandingkannya dengan versi
+MySQL-nya. **Tes itu yang menemukan dua dari tiga.**
+
+Database SQLite yang sudah ada tetap memegang tabel lama —
+`CREATE TABLE IF NOT EXISTS` tidak mengubahnya. Hapus tabelnya lalu jalankan
+ulang.
+
+**Changed — `ext-mysqli` pindah dari `require` ke `suggest` (2026-08-04)**
+
+Sejajar dengan `ext-pdo` yang memang sudah di sana. Sebelumnya toko
+Laravel+Postgres **tidak bisa memasang ezdoc sama sekali** walaupun tidak akan
+menyentuh mysqli sedetik pun — bertabrakan dengan klaim "framework-agnostic
+library" di deskripsi paketnya sendiri.
+
+### v1.0-prep track — "Gambar tanda tangan keluar dari baris dokumen"
+
+**Changed — `Ezdoc\Storage\BlobStore`, dua backend (2026-07-30)**
+
+Gambar tanda tangan terukur 97,3% dari data dokumen. Setelah dinormalisasi jadi
+~3,5 KB ia justru masuk kembali ke clustered index InnoDB dan ikut terbaca tiap
+kali dokumen diambil, diminta atau tidak.
+
+Kuncinya SHA-256 dari byte-nya. Bukan pilihan gaya: hash tanda tangan mencakup
+`ttd_value`, dan referensi yang menyebut LOKASI bisa menunjuk byte lain besok.
+Bentuk barisnya mengikuti `active_storage_blobs` Rails; pembersihannya mengikuti
+`Blob.unattached` — tanpa FK, karena satu blob bisa dirujuk banyak dokumen.
+
 ### v1.0-prep track — "Context lepas dari mysqli + auth yang tidak diam"
 
 Audit kopling ke host, dipicu satu pertanyaan: apakah library ini masih

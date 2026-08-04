@@ -1,6 +1,6 @@
 # ezdoc — Product Requirements Document
 
-> **Status**: Draft v1 · **Owner**: `mrpotensial` · **Last updated**: 2026-07-06
+> **Status**: Draft v1 · **Owner**: `mrpotensial` · **Last updated**: 2026-08-04
 > **Target audience**: developer yang extend, deploy, atau consume library ini.
 
 ---
@@ -126,7 +126,7 @@ Library ini standalone project — tidak vendor-locked ke industry manapun. Dogf
  Idempotent, safe repeated
 - Library now **fully ezdoc_*-tables-only** — no consumer-app-specific tables in library scope
 
-### 3.5 Tests — 862 test terverifikasi (2026-07-30)
+### 3.5 Tests — 1.208 test terverifikasi (2026-08-04)
 
 PHPUnit aktif lokal (`composer test`), PHPStan level 5 bersih (`composer stan`),
 keduanya via `composer check`. **Tidak pernah dijalankan di server**, dan test DB
@@ -135,17 +135,24 @@ menolak nama database yang tidak mengandung "test".
 Angka di atas adalah hasil eksekusi terakhir yang benar-benar dijalankan, bukan
 perkiraan. Test yang ditulis setelah itu ditandai di bawah sampai dieksekusi.
 
-| Area | Test | Catatan |
-|---|---|---|
-| `Signature/` | 218 | L1/L2, KeyStore, PKCS#7, `/ByteRange`, encoder DER RFC 3161, OTP, payload per tanda tangan, verifier, nilai slot |
-| `Db/` | 273 | 5 grammar via kontrak bersama; DDL SQLite **dieksekusi** ke `sqlite::memory:` lalu diintrospeksi |
-| akar `tests/` | 131 | Integritas 18 endpoint action, Context DI, UUID |
-| `Template/`, `Table/` | 86 | Floating element, extractor/injector, tabledb |
-| `UI/` | 33 | Slot registry, dan paritas i18n dua arah — kunci, bentuk, placeholder |
-| `Access/`, `Auth/` | 35 | Termasuk peringatan shim default saat konvensi host tidak ada |
-| `Http/` | 30 | Router, dan guard fatal→JSON via subprocess PHP sungguhan |
-| `Audit/`, `Migrations/` | 31 | MySQL test DB terisolasi di Laragon |
-| `Support/` | 25 | `CanonicalJson` — subset RFC 8785, urutan kunci UTF-16 |
+| Area | Catatan |
+|---|---|
+| `Signature/` | L1/L2, KeyStore, PKCS#7, `/ByteRange`, encoder DER RFC 3161, OTP, payload per tanda tangan, verifier, nilai slot, **voucher OTP jalur pasien** |
+| `Db/` | 5 grammar via kontrak bersama; DDL SQLite **dieksekusi** ke `sqlite::memory:` lalu diintrospeksi |
+| akar `tests/` | Integritas endpoint action, Context DI, UUID |
+| `Template/`, `Table/` | Floating element, extractor/injector, tabledb |
+| `UI/` | Slot registry, paritas i18n dua arah, **lingkup fungsi JS view** |
+| `Access/`, `Auth/` | Shim default, **gerbang detail audit**, **resolusi nama pelaku** |
+| `Http/` | Router, dan guard fatal→JSON via subprocess PHP sungguhan |
+| `Audit/`, `Migrations/` | MySQL test DB terisolasi di Laragon, **paritas dialek MySQL↔SQLite** |
+| `Storage/` | **BlobStore dua backend via kontrak bersama, factory, normalisasi gambar** |
+| `Support/` | `CanonicalJson` — subset RFC 8785, urutan kunci UTF-16, **Clock** |
+
+Sebagian perilaku tampilan diuji di luar PHPUnit, dengan menjalankan JavaScript
+yang benar-benar dikirim di atas DOM tiruan (Node `vm`) — modal voucher, panel
+riwayat, dan modal keterangan dokumen. Alasannya sama tiap kali: memeriksa
+sintaks membuktikan berkasnya terurai, bukan bahwa fungsinya berjalan. Yang
+menemukan `fmtDate is not defined` adalah pemanggilan, bukan linter.
 
 **Yang ditemukan test ini, bukan ditemukan pengguna:**
 
@@ -313,34 +320,45 @@ pernah menyembuhkan apa pun pada base URL berbentuk subdomain; empat cacat i18n
 Di luar lingkup: L2/L3 sertifikat, pemanggilan TSA, UI pencabutan, migrasi
 penyimpanan gambar (jalur S, §7 dokumen rencana).
 
-### 3.9c Paritas migrasi SQLite belum utuh — ditemukan 2026-07-30
+### 3.9c Paritas migrasi SQLite — divergensi ditutup 2026-08-04, pertanyaan desainnya masih terbuka
 
-Ditemukan saat menulis test verifier tanda tangan.
+Awalnya ditemukan saat menulis test verifier tanda tangan (2026-07-30), lalu
+ternyata lebih luas dari dugaan.
 
-| | Keadaan |
-|---|---|
-| `ezdoc_signatures` | **Tidak ada migrasi SQLite** — 4 dari 5 migrasi inti punya padanan, yang ini tidak. Ditulis 2026-07-30 |
-| `ezdoc_documents` | **Divergen secara struktural**, bukan sekadar kurang kolom: MySQL 32 kolom, SQLite 21 |
+**Cara ia gagal itu bagian terpenting dari ceritanya.** Berkas dialek yang
+*hilang* gagal di query pertama dan langsung ketahuan. Berkas dialek yang
+*berbohong* — ada, tapi menggambarkan tabel yang berbeda — jalan terus sampai
+ada yang membutuhkan datanya. `Ezdoc\Audit\Logger` menelan setiap kesalahan
+dengan sengaja, karena pencatatan tidak boleh menjatuhkan operasi yang sedang
+dicatatnya; akibatnya log audit **diam-diam tidak mencatat apa pun** di setiap
+host SQLite, dan tidak ada yang tahu.
 
-Divergensi dokumen bukan kolom yang tertinggal — konsepnya berbeda:
+| Tabel | Keadaan | Sekarang |
+|---|---|---|
+| `ezdoc_signatures` | Tidak ada migrasi SQLite | Ditulis 2026-07-30 |
+| `ezdoc_documents` | 16 kolom hilang — `norm`, `nopen`, `label`, `version`, `signature_values`, keluarga `public_slug`, cap hash, `revision`, `deleted_by/reason` — dan `uk_slot_version` tidak ada sama sekali | Ditulis ulang 2026-08-04 |
+| `ezdoc_audit_log` | **Skema berbeda total**: `entity_type`/`created_at`, padahal Logger menulis `target_type`/`occurred_at` | Ditulis ulang 2026-08-04 |
+| `ezdoc_default_vars` | `is_enabled`, `metadata` hilang | Ditulis ulang 2026-08-04 |
 
-| Hanya di MySQL | Hanya di SQLite |
-|---|---|
-| `norm`, `nopen`, `label`, `version`, `signature_values`, `public_slug*`, `published_at`, `content_hash_at` | `reference_number`, `subject_type`, `subject_id`, `rendered_html`, `owner_id` |
+`tests/Migrations/DialectParityTest.php` sekarang menjalankan setiap berkas
+SQLite yang dikirim, membaca `PRAGMA table_info`, dan membandingkannya dengan
+kolom yang dideklarasikan versi MySQL-nya. **Tes itu yang menemukan dua dari
+tiga** — saya cuma menemukan yang pertama.
 
-Migrasi SQLite mencerminkan desain lama yang generik (`subject_type`/`subject_id`),
-sementara jalur MySQL berkembang ke bentuk spesifik pasien (`norm`/`nopen`).
-**Keduanya bukan tabel yang sama.**
+Database SQLite yang sudah ada tetap memegang tabel lama:
+`CREATE TABLE IF NOT EXISTS` tidak mengubah tabel yang sudah ada. Karena selama
+ini memang tidak menyimpan apa yang seharusnya, hapus tabelnya lalu jalankan
+ulang.
 
-Artinya klaim portabilitas 5 dialect belum berlaku di tingkat skema untuk
-dokumen — grammar-nya bisa meng-*compile* DDL untuk lima dialect (273 test),
-tapi migrasi yang dikirim untuk SQLite tidak menyimpan hal yang sama dengan
-MySQL. Menyatukannya perlu keputusan: mana yang jadi bentuk kanonis, dan apakah
-`norm`/`nopen` (spesifik domain rumah sakit) pantas ada di skema library atau
-mestinya `subject_type`/`subject_id` yang generik.
+**Yang masih terbuka: bentuk kanonisnya.** Divergensi ditutup dengan membuat
+SQLite mengikuti MySQL — termasuk `norm`/`nopen`, yang spesifik domain rumah
+sakit. Kolom generik lama (`subject_type`, `subject_id`, `reference_number`,
+`rendered_html`, `owner_id`) tetap dipertahankan karena menghapus kolom hanya
+bisa merusak pemasangan yang menyimpan data di dalamnya.
 
-Belum dikerjakan. Test verifier memakai stand-in minimal yang diberi komentar
-eksplisit, bukan berpura-pura paritasnya ada.
+Jadi pertanyaannya belum dijawab, cuma ditunda: apakah skema library pantas
+menyebut `norm`/`nopen`, atau mestinya `subject_type`/`subject_id` yang generik
+dengan `norm`/`nopen` sebagai pemetaan milik aplikasi pemakai. Lihat §10.1.
 
 ### 3.10 Pintu `public/` — syarat mount, ditemukan 2026-07-29
 
@@ -379,6 +397,80 @@ menyatakan niatnya — entah mengirim identitas, atau menyalakan
 | `Migrations\Runner` masih mysqli penuh | Migrasi hanya jalan di MySQL/MariaDB | Bagian dari sapuan lapisan persistensi v0.9.9 |
 | `Router` daftar dokumen ter-gate `instanceof mysqli` | Konsumen PDO dapat daftar kosong, bukan fatal | Butuh `SchemaManager` yang belum diimplementasi |
 | `SchemaManager` nol implementasi — kedua Connection `throw` | DDL bisa di-*compile*, belum bisa dieksekusi/diintrospeksi | v0.9.9 W2 |
+
+### 3.11 Penyimpanan gambar tanda tangan — ✅ selesai 2026-07-30
+
+Gambar tanda tangan terukur **97,3%** dari data dokumen. Dengan
+`ROW_FORMAT=DYNAMIC`, sebuah baris InnoDB menyimpan kolom variabel *inline*
+selama barisnya masih muat di separuh page — jadi setelah gambarnya
+dinormalisasi jadi ~3,5 KB, ia justru masuk kembali ke clustered index dan ikut
+terbaca setiap kali dokumen diambil, diminta atau tidak.
+
+| | |
+|---|---|
+| Proyeksi daftar | `signature_values` tidak lagi ikut di query daftar |
+| Normalisasi | Pengurangan **4,48×** terukur, bukan perkiraan |
+| Abstraksi | `Ezdoc\Storage\BlobStore` — backend `database` dan `disk`, satu kontrak, 51 tes bersama |
+| Kunci = isi | `key` adalah SHA-256 byte-nya. Referensi yang menyebut LOKASI bisa menunjuk byte lain besok; yang menyebut ISI tidak bisa — dan hash tanda tangan mencakup `ttd_value` |
+| Bentuk baris | Mengikuti `active_storage_blobs` Rails: tempat byte tinggal jadi pilihan config, bukan komitmen skema |
+| Kebersihan | `cli/purge-orphan-blobs.php`, dry-run dulu. Tanpa FK: satu blob bisa dirujuk banyak dokumen, jadi tidak ada induk tunggal untuk cascade — pola `Blob.unattached` ActiveStorage |
+
+Ambang pilihannya mengikuti "To BLOB or Not To BLOB" (Sears, van Ingen, Gray,
+Microsoft Research 2006): di bawah 256 KB database menang, di atas 1 MB
+filesystem menang.
+
+### 3.12 OTP jalur kedua — pasien yang meminta kode ✅ selesai 2026-08-04
+
+Lihat `docs/PLAN-OTP-JALUR-KEDUA.md`. Ringkasnya: pesan yang dimulai bisnis
+berbayar, jadi arahnya dibalik — pasien memindai QR di ruang tunggu, bot membalas
+kode sekali pakai, petugas memasukkannya.
+
+**Bentuknya berbeda secara mendasar dari jalur lama, dan itu yang menentukan
+desainnya.** Challenge lahir sudah tahu tujuannya (template, slot, dokumen).
+Voucher lahir hanya tahu nomor pengirimnya — dokumennya diputuskan menit
+kemudian, oleh orang lain, di meja lain. Karena itu tabelnya terpisah:
+melonggarkan `template_id`/`ttd_id` jadi NULL akan membuat satu tabel menampung
+dua jenis baris dengan aturan berbeda.
+
+Klaim voucher **bermuara** jadi baris challenge yang sudah terverifikasi, jadi
+seluruh mesin `sign_token` — termasuk `save_document.php` — tidak berubah
+sebaris pun.
+
+| | |
+|---|---|
+| Tabel | `ezdoc_otp_vouchers`, satu kode aktif per nomor (pola Twilio Verify / Auth0) |
+| Jam | `Ezdoc\Support\Clock` — bentuk identik PSR-20, dideklarasikan sendiri supaya host yang deploy dengan menyalin berkas tidak wajib `composer install`. `SystemClock`, `FrozenClock` (di `src/`, bukan `tests/` — host menulis tes juga), `PsrClock` |
+| Penerbitan | **Fungsi in-process**, bukan endpoint. Server memanggil dirinya sendiri lewat loopback butuh kunci rahasia dan mewarisi tiap cara loopback bisa gagal — dan commit `cada904` sudah membuktikannya dari arah sebaliknya (403) |
+| Sisi tampilan | Nomor terkunci ke nomor dokumen + petunjuk status, supaya salah ketik ketahuan sebelum kodenya dimasukkan |
+
+### 3.13 Pengungkapan identitas — ✅ selesai 2026-08-04
+
+Lihat `docs/PLAN-IDENTITY-DISCLOSURE.md`.
+
+Panel riwayat dulu menampilkan id internal, daftar role, dan **alamat IP**
+setiap pelaku, ke siapa pun yang punya hak `view` di template. IP adalah data
+pribadi — GDPR Pasal 4 dan Resital 30 menyebutnya pengenal daring, UU PDP
+No. 27/2022 memperlakukannya serupa.
+
+| | |
+|---|---|
+| Dua tingkat | Hak `view` → siapa/kapan/apa. `EZDOC_AUDIT_DETAIL_ROLES` → ditambah IP dan daftar role |
+| Kosong = TIDAK | Kebalikan dari `ezdoc_can_manage_templates()` di sebelahnya, dan itu disengaja: kontrol privasi yang bawaannya terbuka hanya melindungi pemasangan yang sempat dikonfigurasi |
+| Disaring di server | Field yang tidak boleh dilihat **dihapus** dari respons, bukan dikosongkan dan bukan disembunyikan di JS |
+| Nama, bukan nomor | `Ezdoc\Auth\ActorDirectory` — antarmuka **jamak**, karena 60 baris riwayat tidak boleh jadi 60 query |
+| Tanpa nama role yang dipaku | Aplikasi yang otorisasinya bukan berbasis role mengisi nama izinnya dan menerjemahkannya lewat `ezdoc_set_role_provider()` |
+
+**Ini menyatukan tiga mekanisme setengah jadi, bukan menambah yang keempat:**
+`RoleProvider::displayName()` yang duck-typed tanpa implementasi dan merujuk
+berkas spesifikasi yang tidak pernah ada; `ezdoc_fetch_creator_name()` yang
+menjalankan `SELECT nama_pegawai FROM pegawai` **dari dalam library**; dan tidak
+ada apa-apa. Sekarang satu pintu, `ezdoc_actor_names()`, dengan dua yang lama
+sebagai cadangan usang.
+
+> **Sisa:** `ezdoc_fetch_creator_name()` masih menyebut tabel `pegawai` di dalam
+> library. Sekarang cadangan terakhir dan tidak terpanggil selama directory
+> tersambung, tapi tetap melanggar netralitas. Menghapusnya menghapus fungsi
+> publik — lihat §10.1.
 
 ## 4. Gap Analysis
 
@@ -2327,6 +2419,20 @@ Explicit apa yang **TIDAK** akan dilakukan library ini:
 - License: MIT
 - Repository: TBD (kandidat: `github.com/mrpotensial/ezdoc`)
 
+**`require` sengaja tipis** — `php >= 7.4`, `ext-json`, `ext-mbstring`. Tidak
+lebih.
+
+`ext-mysqli` dipindahkan ke `suggest` pada 2026-08-04, sejajar dengan `ext-pdo`
+yang memang sudah di sana. Sebelumnya ia `require`, yang berarti toko
+Laravel+Postgres **tidak bisa memasang ezdoc sama sekali** walaupun mereka tidak
+akan menyentuh mysqli sedetik pun — bertabrakan langsung dengan klaim
+"framework-agnostic library" di deskripsi paketnya sendiri.
+
+`psr/clock` juga di `suggest`: kalau host sudah punya jam PSR-20 di
+container-nya, bungkus dengan `Ezdoc\Support\PsrClock` supaya ezdoc tidak
+berjalan di atas notion "sekarang" yang kedua. Tanpa paket itu,
+`Ezdoc\Support\SystemClock` dipakai.
+
 ### 8.3 Semantic versioning
 
 - `0.x` — pre-release, breaking changes allowed
@@ -2341,11 +2447,51 @@ Explicit apa yang **TIDAK** akan dilakukan library ini:
 - **Audit trail**: silent-fail write (business logic never blocked kalau audit table down), tapi log error via `error_log`
 - **Session hijack**: library tidak handle session — delegated ke consumer's auth system
 
+### 9.1 Membaca audit ≠ menulis audit
+
+Ditambahkan 2026-08-04 setelah §3.13.
+
+Menulis catatan audit selalu menyimpan identitas selengkap-lengkapnya — id
+pelaku, snapshot role, alamat IP. Itu yang membuatnya jadi catatan audit.
+**Membacanya** aturannya lain:
+
+| | Syarat |
+|---|---|
+| Siapa, kapan, apa | Hak `view` di template |
+| Alamat IP, daftar role pelaku lain | `EZDOC_AUDIT_DETAIL_ROLES` |
+
+Bawaannya kosong, dan kosong berarti **tidak**. Kontrol privasi yang bawaannya
+terbuka hanya melindungi pemasangan yang sempat dikonfigurasi — dan yang belum
+dikonfigurasi justru yang paling butuh dilindungi. Perhatikan ini kebalikan dari
+`ezdoc_can_manage_templates()`, yang kosong berarti "boleh semua" demi
+kecocokan mundur; inversinya disengaja, dan diberi tes tersendiri supaya
+"perapian" berikutnya tidak menyamakannya dengan tetangganya.
+
+Penyaringan terjadi **di server**: field yang tidak boleh dilihat dihapus dari
+respons. Menyembunyikannya di JavaScript meninggalkan datanya utuh, satu klik
+di balik tab Network.
+
+### 9.2 Silent-fail: kapan boleh, kapan berbahaya
+
+Menelan kesalahan itu benar untuk pencatatan audit — ia tidak boleh menjatuhkan
+operasi yang sedang dicatatnya. Tapi 2026-08-04 menunjukkan harganya: migrasi
+SQLite `ezdoc_audit_log` menggambarkan tabel yang sama sekali berbeda, INSERT-nya
+selalu gagal, dan karena kegagalannya ditelan, **log audit tidak mencatat apa pun
+di setiap host SQLite** — tanpa satu pun tanda.
+
+Pelajarannya bukan "berhenti menelan", tapi: yang menelan kesalahan wajib punya
+tes yang memeriksa hasilnya, bukan cuma bahwa ia tidak melempar. Sekarang
+`DialectParityTest` menjalankan setiap berkas dialek dan membandingkan
+kolomnya — dan tes itulah yang menemukan dua dari tiga migrasi basi.
+
 ## 10. Open Questions
 
 Berikut point yang perlu decision dari stakeholder:
 
 ### 10.1 Baseline (v0.2-v0.5)
+0a. **Bentuk kanonis skema dokumen** — apakah `norm`/`nopen` (spesifik rumah sakit) pantas ada di skema library, atau mestinya `subject_type`/`subject_id` generik dengan `norm`/`nopen` sebagai pemetaan milik aplikasi pemakai? Divergensi MySQL↔SQLite sudah ditutup dengan membuat SQLite mengikuti MySQL (§3.9c), jadi pertanyaannya ditunda, bukan dijawab.
+0b. **`ezdoc_fetch_creator_name()`** — hapus dari library? Ia menyebut tabel `pegawai` di dalam paket yang dimaksudkan untuk dipasang orang lain (§3.13). Sekarang cadangan terakhir dan tidak terpanggil kalau `ActorDirectory` tersambung, tapi menghapusnya menghapus fungsi publik.
+0c. **Salinan `ezdoc/views/`** — folder itu berisi salinan lengkap seluruh proyek (199 dari 253 berkas PHP di bawahnya). Tidak bisa dijalankan — `views/public/config.php` mencari `koneksi.php` satu level terlalu tinggi — tapi ia muncul di setiap pencarian teks dan salinan `save_document.php` di dalamnya tertinggal jauh (468 baris vs 911). Hapus?
 1. **Legacy migrations** — kapan aman di-delete dari folder `migrations/`? Perlu confirm semua production env sudah migrated ke `ezdoc_*` tables.
 2. **HMAC secret rotation** — apakah perlu support key rotation (multiple valid keys)?
 3. **Doc versioning** — apakah document juga versioned seperti template? (skarang document immutable setelah locked)
