@@ -482,7 +482,7 @@ sepuasnya — ia memang tinggal di aplikasi ini.
 |---|---|
 | ~~**V1**~~ | **SELESAI** — lihat §8b di bawah |
 | ~~**V2**~~ | **SELESAI** — lihat §8c di bawah |
-| **V3** | Penanda `$wa_handled` di `api_qontak.php` + `api/ttd_otp_wa_handler.php` + halaman QR statis, gaya `display_antrian_qr_v2.php` |
+| ~~**V3**~~ | **SELESAI** — lihat §8e di bawah |
 | **V4** | Modal di generate: nomor terkunci + petunjuk status + kolom kode. Jalur cadangan pindah ke balik "Pasien tidak bisa memindai?" |
 | **V5** | Pembersih voucher kedaluwarsa + kejadian riwayat `otp.voucher_issued` / `otp.voucher_claimed` / `otp.phone_overridden` |
 
@@ -643,6 +643,75 @@ yang menemukan dua dari tiga.
 >
 > **Server MySQL tidak tersentuh sama sekali.** Yang diubah hanya berkas dialek
 > SQLite, yang cuma dipakai tes dan mode demo.
+
+## 8e. V3 — sudah dikerjakan (sisi consumer)
+
+Perubahan pertama di luar folder `ezdoc/`.
+
+| Berkas | Perubahan |
+|---|---|
+| `api/ttd_otp_wa_handler.php` | **Baru.** Kata kunci `ttd-otp[-{token}]`, bentuknya meniru `antrian_wa_handler.php` |
+| `api/api_qontak.php` | Penanda `$wa_handled` + `require_once` handler baru |
+| `page/display_ttd_otp_qr.php` | **Baru.** Halaman QR statis untuk layar ruang tunggu |
+
+### Penanda `$wa_handled`
+
+```php
+$wa_handled = false;
+if ($participant_type == 'customer') {
+    $wa_handled = handle_antrian_wa($text_trim, $thread_id, $account_uid)
+               || handle_ttd_otp_wa($text_trim, $thread_id, $account_uid);
+}
+```
+
+Enam blok yang membalas sekarang dijaga `if (!$wa_handled && …)`: `mau daftar`,
+`ya,robot saja`/`kembali ke robot`, `bicara ke petugas`, `kirim ulang`,
+`chat dengan cs`, dan balasan AI untuk gambar/dokumen.
+
+Sebelumnya nilai balik `handle_antrian_wa()` dibuang ke badan `if` yang kosong.
+Aman selama ini cuma karena kebetulan tidak ada kata kunci yang bertabrakan —
+dan akan pecah begitu `chatbot/adapter_whatsapp.php` disambungkan.
+
+### Ezdoc dimuat lambat, dan tanpa migrasi otomatis
+
+`ttd_otp_load_ezdoc()` baru menyentuh `ezdoc/bootstrap.php` **setelah** kata
+kuncinya cocok. Memuatnya di setiap pesan WhatsApp berarti satu perjalanan ke
+database untuk chat yang tidak ada hubungannya dengan dokumen.
+
+`EZDOC_AUTO_MIGRATE` dimatikan di jalur ini. Webhook bukan tempat menjalankan
+DDL: ia jalan tanpa pengawasan dan bisa beberapa sekaligus. Kalau tabelnya
+memang belum ada, penerbitan gagal rapi lewat balasan "layanan sedang tidak
+tersedia". Tabelnya dibuat lewat jalur web biasa.
+
+### Halaman QR
+
+Statis: `wa.me/{nomor}?text=TTD-OTP`. Yang sekali pakai kodenya, bukan QR-nya —
+jadi tidak perlu dicetak ulang dan tidak perlu token berputar seperti antrian.
+
+Nomornya dibaca dari `antrian_setting`, mencoba `wa_nomor_ttd` dulu lalu jatuh
+ke `wa_nomor_pendaftaran`. Kalau nanti tanda tangan dipisah ke nomor sendiri,
+tinggal tambah satu baris setting — tanpa mengubah kode. **Tidak ada baris
+yang ditulis ke database**; kalau keduanya tidak ada, dipakai nomor bawaan.
+
+ES5 dipertahankan mengikuti `display_antrian_qr_v2.php`: layar ruang tunggunya
+iPad Mini 1 (iOS 9.3.5), tanpa arrow function, `let`/`const`, atau template
+literal. Kalau skrip QR gagal dimuat, nomor dan kata kuncinya ditampilkan
+sebagai teks — layar kosong tidak memberi tahu siapa pun apa yang harus
+dilakukan.
+
+### Cara mengujinya
+
+`handle_ttd_otp_wa()` kode consumer, di luar suite PHPUnit ezdoc. Diuji lewat
+skrip yang menstub `qontak_request_bot()` dan `ezdoc_issue_otp_voucher()`, lalu
+memanggil fungsi aslinya:
+
+- 2 kata kunci dikenali (`ttd-otp`, `ttd-otp-{token}`), token sampai ke metadata
+- 10 kata kunci **tidak** diambil alih — termasuk `antrian-pendaftaran`,
+  `mau daftar`, `otp-ttd`, `ttdotp`, dan pesan kosong
+- 3 hasil gagal (`cooldown`/`bad_phone`/`error`) punya balasan sendiri, tidak
+  ada yang membocorkan kode
+- Hasil rusak dari ezdoc tidak melempar keluar — webhook yang mati akan diulang
+  Qontak, dan pasien bisa menerima beberapa kode sekaligus
 
 ## 9. Yang perlu diputuskan sebelum mulai
 
