@@ -80,11 +80,17 @@ function ezdoc_actor_names(array $ids): array
     // 2. Usang: RoleProvider yang kebetulan punya displayName(). Satu per satu,
     //    karena bentuk itu memang tidak pernah punya versi jamak.
     if (method_exists($ctx->roleProvider, 'displayName')) {
+        // Dipanggil sebagai callable, bukan `->displayName()`. Metodenya memang
+        // tidak ada di antarmuka RoleProvider — itulah masalah aslinya — jadi
+        // menulisnya sebagai pemanggilan metode biasa akan ditandai analisis
+        // statis sebagai metode tak terdefinisi, di sini dan di setiap editor
+        // yang membuka berkas ini.
+        $legacy = [$ctx->roleProvider, 'displayName'];
         $names = [];
         foreach ($clean as $id) {
             try {
                 /** @var mixed $name */
-                $name = $ctx->roleProvider->displayName($id);
+                $name = is_callable($legacy) ? $legacy($id) : null;
                 if (is_string($name) && $name !== '') {
                     $names[$id] = $name;
                 }
@@ -99,6 +105,19 @@ function ezdoc_actor_names(array $ids): array
 
     // 3. Usang: pencarian yang menyebut nama tabel milik satu aplikasi. Tetap
     //    ada supaya pemasangan lama tidak kehilangan nama secara mendadak.
+    //
+    //    Dimuat di sini kalau belum, bukan diandaikan sudah ada. Berkas itu dulu
+    //    hanya di-require oleh halaman generate, sehingga nama muncul di halaman
+    //    itu dan hilang di panel riwayat — permintaan AJAX yang masuk lewat
+    //    pintu berbeda. Ketergantungan yang cuma benar di satu jalur masuk
+    //    adalah ketergantungan yang belum dinyatakan.
+    if (!function_exists('ezdoc_fetch_creator_name') && defined('EZDOC_LIB')) {
+        $helpers = EZDOC_LIB . '/doc_meta_helpers.php';
+        if (is_file($helpers)) {
+            require_once $helpers;
+        }
+    }
+
     if (function_exists('ezdoc_fetch_creator_name') && isset($GLOBALS['conn'])) {
         $names = [];
         foreach ($clean as $id) {

@@ -151,6 +151,34 @@ final class ActorNamesTest extends TestCase
         self::assertSame([], ezdoc_actor_names([0, '', null]));
     }
 
+    /**
+     * The last-resort fallback lives in `lib/doc_meta_helpers.php`, which used
+     * to be required only by `views/document/generate.php`.
+     *
+     * The result was a lookup that worked on the generate page and silently
+     * failed in every AJAX action — the history panel showed `#18` while the
+     * document header two inches above it showed the person's name. Whether a
+     * dependency is loaded must not depend on which door the request came
+     * through.
+     */
+    public function testTheFallbackIsLoadedRegardlessOfEntryPoint(): void
+    {
+        $bootstrap = (string) file_get_contents(dirname(__DIR__, 2) . '/bootstrap.php');
+
+        // The require statements, not any mention of the filenames — the first
+        // version of this test matched a comment and failed for that reason.
+        $meta = strpos($bootstrap, "require_once EZDOC_LIB . '/doc_meta_helpers.php'");
+        $actors = strpos($bootstrap, "require_once EZDOC_LIB . '/actor_names.php'");
+
+        self::assertNotFalse($meta, 'bootstrap.php must load doc_meta_helpers.php');
+        self::assertNotFalse($actors, 'bootstrap.php must load actor_names.php');
+        self::assertLessThan(
+            $actors,
+            $meta,
+            'doc_meta_helpers.php must be loaded before actor_names.php, which falls back to it'
+        );
+    }
+
     // ─── Context plumbing ───
 
     /**

@@ -37,6 +37,11 @@ require_once EZDOC_LIB . '/audit.php';
 require_once EZDOC_LIB . '/signature_image.php';
 // After audit.php — ezdoc_issue_otp_voucher() records an entry when it succeeds.
 require_once EZDOC_LIB . '/otp_voucher.php';
+// Sebelum actor_names.php — jalur cadangan terakhirnya memanggil
+// ezdoc_fetch_creator_name() dari sini. Berkas ini dulu hanya dimuat oleh
+// views/document/generate.php, jadi pencarian nama berhasil di halaman itu dan
+// diam-diam gagal di setiap aksi AJAX, yang masuk lewat pintu berbeda.
+require_once EZDOC_LIB . '/doc_meta_helpers.php';
 require_once EZDOC_LIB . '/actor_names.php';
 
 // Auto-run migrations (menggunakan Ezdoc\Migrations\Runner via wrapper)
