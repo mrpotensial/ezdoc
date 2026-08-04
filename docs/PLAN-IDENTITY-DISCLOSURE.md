@@ -345,6 +345,35 @@ sekarang lewat pintu itu.
 
 **1206 tes, 28604 asersi, PHPStan bersih.**
 
+### Nomor pegawai: boleh muncul, tapi hanya untuk yang berhak
+
+Diputuskan setelah I1–I5 jalan. Gerbangnya yang sama —
+`EZDOC_AUDIT_DETAIL_ROLES`, tetap tanpa nama role yang dipaku.
+
+Satu fungsi, `actorLabel(id, name)`, dipakai riwayat dan panel keterangan:
+
+| | Tampilannya |
+|---|---|
+| Nama ada, tanpa hak detail | `Ahmad Qaedi` |
+| Nama ada, dengan hak detail | `Ahmad Qaedi (#18)` |
+| Nama tidak ketemu | `#18` |
+| Tidak ada nama maupun id | kosong — pemanggil yang memilih katanya |
+
+Yang terakhir dikembalikan kosong, bukan `-`, supaya riwayat bisa bilang "tidak
+diketahui" sementara panel keterangan cukup `-`. Id `0` dan id kosong sama-sama
+berarti tidak ada pengguna dan harus terbaca sama; sebelum ini yang satu tampil
+`#0` dan yang lain "tidak diketahui".
+
+> **Ini kosmetik, bukan batas keamanan.** Batas keamanannya di server:
+> `document_history.php` benar-benar menghapus `ip` dan `roles` dari respons.
+> Nomor pegawai selalu terkirim karena ia penampilan cadangan saat nama tidak
+> ketemu — yang diputuskan di sisi tampilan cuma apakah ia ikut muncul ketika
+> namanya ADA.
+
+Satu fungsi untuk semua layar, bukan aturan per layar. Aturan yang
+berbeda-beda di tiap tempat adalah cara sebuah kebijakan pengungkapan berhenti
+jadi kebijakan.
+
 ### Satu tes yang layak disebut
 
 `ActorNamesTest::testTheDirectorySurvivesEveryImmutableCopy()`. `with*()`

@@ -64,6 +64,11 @@ final class ViewFunctionScopeTest extends TestCase
             'applySignToken'     => ['applySignToken'],
             'refreshVoucherStatus' => ['refreshVoucherStatus'],
             'stopVoucherPoll'    => ['stopVoucherPoll'],
+
+            // Satu aturan penulisan pelaku untuk riwayat, "Dibuat oleh", dan
+            // apa pun yang menyusul. Aturan yang berbeda-beda per layar adalah
+            // cara sebuah kebijakan pengungkapan berhenti jadi kebijakan.
+            'actorLabel'         => ['actorLabel'],
         ];
     }
 

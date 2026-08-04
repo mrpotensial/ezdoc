@@ -972,12 +972,7 @@
             const meta = <?= json_encode($docMeta, JSON_UNESCAPED_UNICODE) ?>;
             if (!meta.id) return;
 
-            // Nama saja. Nomor pegawai tidak berarti apa-apa buat pembacanya dan
-            // tidak menyebut siapa pun di luar sistem ini — `#18` hanya muncul
-            // kalau namanya memang tidak ketemu, aturan yang sama dengan riwayat.
-            const createdBy = meta.created_by_name
-                ? meta.created_by_name
-                : (meta.created_by ? `#${meta.created_by}` : '-');
+            const createdBy = actorLabel(meta.created_by, meta.created_by_name) || '-';
 
             // Build materai info rows from current rendered placeholders + hidden inputs
             let materaiRows = '';
@@ -1224,19 +1219,12 @@
                 ? ` <span class="text-[10px] text-red-600">(${t('history_event.failed_suffix', {}, 'failed')})</span>`
                 : '';
 
-            // Nama kalau aplikasi pemakai menyambungkan ActorDirectory, kalau
-            // tidak `#18`. Nomor internal tidak berarti apa-apa buat pembacanya
-            // dan tidak menyebut siapa pun di luar sistem ini — tapi riwayat
-            // tanpa pelaku sama sekali lebih buruk lagi, jadi harus ada jatuhnya.
-            //
             // `roles` bisa saja tidak ada di respons: server menghapusnya untuk
             // yang tidak berhak melihat detail audit. Tidak ada yang perlu
             // dilakukan di sini — bagian itu memang tinggal hilang.
-            const actorLabel = e.actor_name
-                ? escapeHtmlSimple(e.actor_name)
-                : `#${escapeHtmlSimple(e.actor)}`;
-            const who = e.actor
-                ? `${actorLabel}${e.roles ? ' · ' + escapeHtmlSimple(e.roles) : ''}`
+            const whoLabel = actorLabel(e.actor, e.actor_name);
+            const who = whoLabel
+                ? `${escapeHtmlSimple(whoLabel)}${e.roles ? ' · ' + escapeHtmlSimple(e.roles) : ''}`
                 : t('history_event.unknown_actor', {}, 'unknown');
 
             // Riwayat mencakup seluruh slot, jadi tiap baris harus menyebut versi
@@ -1262,6 +1250,40 @@
 
         function escapeHtmlSimple(s) {
             return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
+        /**
+         * Bagaimana seorang pelaku ditulis: nama, nomor, atau keduanya.
+         *
+         * Satu fungsi untuk semua tempat — riwayat, "Dibuat oleh", dan nanti
+         * halaman audit. Aturan yang berbeda-beda per layar adalah cara sebuah
+         * kebijakan pengungkapan berhenti jadi kebijakan.
+         *
+         * - nama ada, tanpa hak detail  → "Ahmad Qaedi"
+         * - nama ada, dengan hak detail → "Ahmad Qaedi (#18)"
+         * - nama tidak ketemu           → "#18"
+         * - tidak ada nama maupun id    → "" (pemanggil yang memilih katanya)
+         *
+         * Yang terakhir dikembalikan kosong, bukan "-", supaya riwayat bisa
+         * bilang "tidak diketahui" sementara panel keterangan cukup "-". Id `0`
+         * dan id kosong sama-sama berarti tidak ada pengguna, dan keduanya harus
+         * terbaca sama.
+         *
+         * Nomor pegawai selalu dikirim server karena ia penampilan cadangan.
+         * Yang diputuskan di sini cuma apakah ia ikut tampil ketika namanya ADA
+         * — kosmetik, bukan batas keamanan. Batas keamanannya di server, yang
+         * menghapus `ip` dan `roles` dari respons untuk yang tidak berhak.
+         *
+         * @returns {string} teks mentah, BELUM di-escape — pemanggilnya yang escape
+         */
+        function actorLabel(id, name) {
+            const hasId = id !== undefined && id !== null && String(id) !== '' && String(id) !== '0';
+
+            if (!name) {
+                return hasId ? `#${id}` : '';
+            }
+
+            return (window.EZDOC_AUDIT_DETAIL && hasId) ? `${name} (#${id})` : String(name);
         }
 
         // ===== Document versioning =====

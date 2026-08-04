@@ -3184,6 +3184,20 @@ function renderFieldForPdf($name, $type, $val, $label) {
             name: <?= json_encode($__signerName, JSON_UNESCAPED_UNICODE) ?>
         };
 
+        <?php
+        // Bolehkah pengguna ini melihat nomor pegawai di samping namanya?
+        //
+        // Gerbang yang sama dengan alamat IP dan daftar role di riwayat —
+        // EZDOC_AUDIT_DETAIL_ROLES, tanpa nama role yang dipaku di library.
+        //
+        // Penting: ini KOSMETIK, bukan batas keamanan. Batas keamanannya ada di
+        // server, di document_history.php, yang benar-benar menghapus `ip` dan
+        // `roles` dari respons. Nomor pegawai selalu terkirim karena ia jadi
+        // penampilan cadangan saat nama tidak ketemu; yang diputuskan di sini
+        // cuma apakah ia ikut ditampilkan ketika namanya ADA.
+        ?>
+        window.EZDOC_AUDIT_DETAIL = <?= (function_exists('ezdoc_can_view_audit_detail') && ezdoc_can_view_audit_detail()) ? 'true' : 'false' ?>;
+
         // i18n dictionary — mirrors EZDOC_URLS above. spec: docs/I18N.md
         window.EZDOC_I18N = <?= json_encode($translator->all(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
 
