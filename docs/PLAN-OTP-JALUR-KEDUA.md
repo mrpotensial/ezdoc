@@ -483,7 +483,7 @@ sepuasnya — ia memang tinggal di aplikasi ini.
 | ~~**V1**~~ | **SELESAI** — lihat §8b di bawah |
 | ~~**V2**~~ | **SELESAI** — lihat §8c di bawah |
 | ~~**V3**~~ | **SELESAI** — lihat §8e di bawah |
-| **V4** | Modal di generate: nomor terkunci + petunjuk status + kolom kode. Jalur cadangan pindah ke balik "Pasien tidak bisa memindai?" |
+| ~~**V4**~~ | **SELESAI** — lihat §8f di bawah |
 | **V5** | Pembersih voucher kedaluwarsa + kejadian riwayat `otp.voucher_issued` / `otp.voucher_claimed` / `otp.phone_overridden` |
 
 V1 dan V2 bisa dites tanpa menyentuh tampilan sama sekali — voucher diterbitkan
@@ -712,6 +712,81 @@ memanggil fungsi aslinya:
   ada yang membocorkan kode
 - Hasil rusak dari ezdoc tidak melempar keluar — webhook yang mati akan diulang
   Qontak, dan pasien bisa menerima beberapa kode sekaligus
+
+## 8f. V4 — sudah dikerjakan (modal di generate)
+
+Modal tanda tangan yang sama, isinya sekarang tiga panel yang bergantian:
+
+| Panel | Kapan |
+|---|---|
+| `signOtpStepVoucher` | **Utama.** Terbuka begitu slot ber-OTP dibuka |
+| `signOtpStep1` (kirim) | Setelah menekan "Pasien tidak bisa memindai?" |
+| `signOtpStep2` (masukkan) | Setelah kode dikirim lewat jalur cadangan |
+
+Ada jalan pulang dari cadangan ("Kembali ke kode dari pasien"). Tanpa itu,
+petugas yang salah menekan hanya punya satu pilihan tersisa: mengirim pesan
+berbayar.
+
+### Nomor terkunci
+
+Diisi otomatis dari sumber yang sama dengan jalur lama — DOM dulu (koreksi yang
+belum disimpan), baru nilai server. Kolomnya `readonly` dengan ikon gembok.
+
+"Ubah nomor" membukanya, dan sekali dibuka **tidak dikunci lagi** selama modal
+terbuka: mengembalikan nomor dokumen diam-diam akan membuang apa yang baru saja
+diketik petugas.
+
+### Petunjuk status, dan kenapa ia tidak boleh diperiksa berkala untuk semua
+
+Server membatasi pemeriksaan nomor bebas 10 per menit. Memeriksa tiap 10 detik
+memakan hampir seluruh jatah itu — dan jatahnya ada supaya nomor tidak bisa
+disapu satu per satu.
+
+Jadi pemeriksaan berkala **hanya untuk nomor yang berasal dari dokumen**, dan
+untuk nomor itu servernya tidak dibatasi maupun dicatat, karena tidak ada nomor
+pilihan pemanggil yang bisa dipakai mengintai. Begitu petugas menekan "Ubah
+nomor", pemeriksaan berkala berhenti.
+
+Gunanya berkala: pasien memindai saat modal sudah terbuka, dan statusnya
+berubah sendiri tanpa petugas menekan apa pun.
+
+### `applySignToken()` — satu jalan keluar untuk dua jalur
+
+Kedua jalur berakhir di fungsi yang sama: simpan token, buat input tersembunyi
+di form, buka kanvas, sembunyikan panel.
+
+Sebelumnya `verifyTtdOtp()` melakukannya sendiri. Membiarkan jalur voucher
+menyalin blok itu berarti dua salinan yang harus dijaga sejajar — dan yang
+paling mudah tertinggal justru input tersembunyi yang dibaca saat menyimpan.
+Tanpa itu, penyimpanan ditolak dengan "verifikasi OTP diperlukan" tepat setelah
+petugas berhasil memverifikasi.
+
+### Cara mengujinya
+
+`ViewFunctionScopeTest` diperluas: enam fungsi baru wajib ada di lingkup global.
+Empat di antaranya dipanggil dari atribut `onclick=`, yang hanya melihat lingkup
+global — kalau nested, berkasnya tetap lolos parse dan lolos lint, lalu gagal
+saat petugas menekan tombolnya.
+
+Perilakunya diuji dengan menjalankan JS aslinya di atas DOM tiruan, 33
+pemeriksaan:
+
+- Panel mana yang tampil di tiap perpindahan, termasuk nomor yang ikut pindah
+  ke jalur cadangan
+- Enam keadaan status dan warnanya, plus bahwa teksnya tidak pernah memuat
+  angka enam digit
+- Nomor **tidak** dikirim ke server saat asalnya dokumen, dan dikirim setelah
+  "Ubah nomor"
+- Kode 5 digit ditolak sebelum menyentuh jaringan
+- Sisa percobaan hanya muncul untuk `invalid`, bukan untuk `expired`
+- Klaim berhasil membuka kanvas dan mengisi input `_sign_token_*`
+- Pemeriksaan berkala jalan untuk nomor dokumen, berhenti saat modal ditutup,
+  dan tidak pernah jalan untuk nomor manual
+
+> Dua kegagalan pertama harness ternyata dari harness-nya sendiri: `let` di
+> tingkat atas skrip `vm` tidak jadi properti sandbox, jadi keadaan dalam tidak
+> bisa dibaca dari luar. Diperbaiki dengan menguji perilaku yang terlihat —
+> yang memang seharusnya diuji.
 
 ## 9. Yang perlu diputuskan sebelum mulai
 

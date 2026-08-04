@@ -48,6 +48,22 @@ final class ViewFunctionScopeTest extends TestCase
             'openSign'           => ['openSign'],
             'generateTtdQr'      => ['generateTtdQr'],
             'showNewVersionModal'=> ['showNewVersionModal'],
+
+            // Dipanggil dari atribut onclick= di markup modal, yang hanya bisa
+            // melihat lingkup global. Nested di dalam fungsi lain akan lolos
+            // parse, lolos lint, dan baru gagal saat petugas menekan tombolnya.
+            'claimTtdVoucher'    => ['claimTtdVoucher'],
+            'showOtpFallback'    => ['showOtpFallback'],
+            'showVoucherRoute'   => ['showVoucherRoute'],
+            'unlockVoucherPhone' => ['unlockVoucherPhone'],
+
+            // Dipakai kedua jalur OTP. Kalau hilang, jalur voucher berhasil
+            // memverifikasi lalu gagal menyimpan dengan pesan "verifikasi OTP
+            // diperlukan" — kegagalan yang membingungkan justru karena
+            // verifikasinya baru saja berhasil.
+            'applySignToken'     => ['applySignToken'],
+            'refreshVoucherStatus' => ['refreshVoucherStatus'],
+            'stopVoucherPoll'    => ['stopVoucherPoll'],
         ];
     }
 

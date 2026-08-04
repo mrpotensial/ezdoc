@@ -300,6 +300,32 @@ return [
             'phone_required'     => 'Nomor WhatsApp wajib diisi.',
             'send_success'       => 'Kode OTP terkirim.',
             'verify_success'     => 'Verifikasi berhasil.',
+
+            // ── Jalur utama: pasien yang meminta kode lewat QR ──
+            // Petunjuk status ada supaya salah ketik nomor ketahuan sebelum
+            // kodenya dimasukkan. Tanpa itu, satu digit salah terbaca sebagai
+            // tiga kali "kode salah" dan yang disalahkan pasiennya.
+            'voucher_title'      => 'Kode dari Pasien',
+            'voucher_desc'       => 'Pasien memindai QR di ruang tunggu, lalu menyebutkan kodenya.',
+            'voucher_from_doc'   => 'dari dokumen',
+            'voucher_typed'      => 'diketik manual',
+            'voucher_code_label' => 'Kode dari pasien (6 digit):',
+            'voucher_verify_btn' => 'Verifikasi Kode',
+            'voucher_change_phone' => 'Ubah nomor',
+            'voucher_fallback_link' => 'Pasien tidak bisa memindai?',
+            'voucher_back_link'  => 'Kembali ke kode dari pasien',
+            'voucher_code_required' => 'Kode 6 digit wajib diisi.',
+
+            // Status voucher. Tidak pernah menyebut kodenya, cuma ada/tidak dan
+            // sisa waktunya.
+            'status_checking'    => 'Memeriksa…',
+            'status_none'        => 'Belum ambil kode — minta pasien memindai QR',
+            'status_active'      => 'Sudah ambil kode · berlaku {minutes} menit lagi',
+            'status_active_soon' => 'Sudah ambil kode · berlaku {seconds} detik lagi',
+            'status_expired'     => 'Kode sudah kedaluwarsa — minta pasien memindai lagi',
+            'status_locked'      => 'Terlalu banyak percobaan salah — minta kode baru',
+            'status_no_phone'    => 'Nomor pasien belum diisi di dokumen',
+            'status_unavailable' => 'Status tidak dapat diperiksa',
         ],
     ],
 ];
