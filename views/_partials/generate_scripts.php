@@ -1154,6 +1154,17 @@
                 'otp.sent':            { icon: 'bi-whatsapp',               tone: 'text-gray-500',    label: t('history_event.otp_sent', {}, 'OTP code sent') },
                 'otp.verified':        { icon: 'bi-shield-check',           tone: 'text-emerald-600', label: t('history_event.otp_verified', {}, 'OTP verified') },
                 'otp.verify_failed':   { icon: 'bi-shield-exclamation',     tone: 'text-red-600',     label: t('history_event.otp_verify_failed', {}, 'OTP verification failed') },
+
+                // Jalur pasien meminta kodenya sendiri lewat QR.
+                'otp.voucher_issued':   { icon: 'bi-qr-code',            tone: 'text-gray-500',    label: t('history_event.otp_voucher_issued', {}, 'Code requested by the patient') },
+                'otp.voucher_claimed':  { icon: 'bi-shield-check',       tone: 'text-emerald-600', label: t('history_event.otp_voucher_claimed', {}, 'Patient code verified') },
+                'otp.voucher_claim_failed': { icon: 'bi-shield-exclamation', tone: 'text-red-600', label: t('history_event.otp_voucher_claim_failed', {}, 'Patient code rejected') },
+
+                // Nomor yang tidak berasal dari dokumen. Dipisah dari yang biasa
+                // supaya terlihat sekilas: pertanyaan yang ditanyakan saat ada
+                // sengketa adalah "dari mana nomornya", bukan "apakah ada kode".
+                'otp.voucher_claimed_override': { icon: 'bi-pencil-square', tone: 'text-amber-600', label: t('history_event.otp_voucher_claimed_override', {}, 'Patient code verified against a different number') },
+                'otp.voucher_lookup_manual':    { icon: 'bi-search',        tone: 'text-gray-500', label: t('history_event.otp_voucher_lookup_manual', {}, 'Status checked for a typed number') },
             };
 
             // Kejadian yang tidak dikenali tetap ditampilkan, memakai nama mentahnya.

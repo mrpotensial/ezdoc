@@ -214,6 +214,34 @@ final class OtpVoucherRepository
     }
 
     /**
+     * How many rows {@see purgeExpired()} would remove for the same cutoff.
+     *
+     * Exists so a purge can be previewed. A cleanup command whose only mode is
+     * "delete and tell you afterwards" gets run once, nervously, and then never
+     * scheduled.
+     *
+     * @param string $before Formatted 'Y-m-d H:i:s'.
+     */
+    public function countExpired(string $before): int
+    {
+        return (int) $this->db->fetchScalar(
+            'SELECT COUNT(*) FROM `ezdoc_otp_vouchers` WHERE `claimed_at` IS NULL AND `expires_at` < ?',
+            [$before]
+        );
+    }
+
+    /**
+     * How many claimed vouchers exist. These are never purged — reported so the
+     * preview can say what it is keeping, not only what it is removing.
+     */
+    public function countClaimed(): int
+    {
+        return (int) $this->db->fetchScalar(
+            'SELECT COUNT(*) FROM `ezdoc_otp_vouchers` WHERE `claimed_at` IS NOT NULL'
+        );
+    }
+
+    /**
      * Drop vouchers that expired before `$before` and were never claimed.
      *
      * Claimed rows are kept: they are the link between a signature and the code

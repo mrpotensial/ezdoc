@@ -100,6 +100,12 @@ return [
         'otp_sent'                 => 'Kode OTP dikirim',
         'otp_verified'             => 'OTP terverifikasi',
         'otp_verify_failed'        => 'Verifikasi OTP gagal',
+        // Jalur pasien meminta kodenya sendiri lewat QR.
+        'otp_voucher_issued'       => 'Pasien meminta kode',
+        'otp_voucher_claimed'      => 'Kode dari pasien terverifikasi',
+        'otp_voucher_claim_failed' => 'Kode dari pasien ditolak',
+        'otp_voucher_claimed_override' => 'Kode terverifikasi ke nomor berbeda',
+        'otp_voucher_lookup_manual'    => 'Status diperiksa untuk nomor yang diketik',
         'revoked_suffix'           => 'dicabut',
         'failed_suffix'            => 'gagal',
         'unknown_actor'            => 'tidak diketahui',

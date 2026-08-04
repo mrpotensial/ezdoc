@@ -84,6 +84,12 @@ return [
         'otp_sent' => 'OTP code sent',
         'otp_verified' => 'OTP verified',
         'otp_verify_failed' => 'OTP verification failed',
+        // The route where the patient requests the code themselves via QR.
+        'otp_voucher_issued' => 'Code requested by the patient',
+        'otp_voucher_claimed' => 'Patient code verified',
+        'otp_voucher_claim_failed' => 'Patient code rejected',
+        'otp_voucher_claimed_override' => 'Patient code verified against a different number',
+        'otp_voucher_lookup_manual' => 'Status checked for a typed number',
         'revoked_suffix' => 'revoked',
         'failed_suffix' => 'failed',
         'unknown_actor' => 'unknown',

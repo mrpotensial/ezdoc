@@ -445,4 +445,29 @@ final class OtpVoucherServiceTest extends TestCase
 
         self::assertSame(0, $this->service->purge());
     }
+
+    /**
+     * The preview the cleanup command shows before deleting anything. A count
+     * that disagrees with what the delete then does would make the dry run
+     * worse than useless.
+     */
+    public function testTheCountMatchesWhatThePurgeRemoves(): void
+    {
+        $spent = $this->service->issue(self::PHONE);
+        $this->claim($spent['code']);
+
+        $this->clock->advance(60);
+        $this->service->issue(self::PHONE);
+
+        $this->clock->advance(600 + 86400 + 1);
+        $cutoff = date('Y-m-d H:i:s', $this->clock->now()->getTimestamp() - 86400);
+
+        self::assertSame(1, $this->vouchers->countExpired($cutoff));
+        self::assertSame(1, $this->vouchers->countClaimed());
+        self::assertSame(1, $this->vouchers->purgeExpired($cutoff));
+
+        // And once removed, the count agrees there is nothing left.
+        self::assertSame(0, $this->vouchers->countExpired($cutoff));
+        self::assertSame(1, $this->vouchers->countClaimed());
+    }
 }

@@ -484,7 +484,7 @@ sepuasnya — ia memang tinggal di aplikasi ini.
 | ~~**V2**~~ | **SELESAI** — lihat §8c di bawah |
 | ~~**V3**~~ | **SELESAI** — lihat §8e di bawah |
 | ~~**V4**~~ | **SELESAI** — lihat §8f di bawah |
-| **V5** | Pembersih voucher kedaluwarsa + kejadian riwayat `otp.voucher_issued` / `otp.voucher_claimed` / `otp.phone_overridden` |
+| ~~**V5**~~ | **SELESAI** — lihat §8g di bawah |
 
 V1 dan V2 bisa dites tanpa menyentuh tampilan sama sekali — voucher diterbitkan
 lewat CLI, diklaim lewat CLI.
@@ -787,6 +787,54 @@ pemeriksaan:
 > tingkat atas skrip `vm` tidak jadi properti sandbox, jadi keadaan dalam tidak
 > bisa dibaca dari luar. Diperbaiki dengan menguji perilaku yang terlihat —
 > yang memang seharusnya diuji.
+
+## 8g. V5 — sudah dikerjakan
+
+### `cli/purge-expired-vouchers.php`
+
+Dry-run dulu, sama seperti `purge-orphan-blobs.php`. Pemeriksaan sebelumnya
+disebutkan angkanya, lalu `apply` untuk benar-benar menghapus.
+
+**Voucher yang sudah diklaim tidak pernah dihapus.** Baris itu adalah
+penghubung antara sebuah tanda tangan dan kode yang mengizinkannya — nomor mana
+yang meminta, kapan, dan apakah nomornya dari dokumen atau diketik. Itu
+pertanyaan yang benar-benar ditanyakan saat ada sengketa. Yang jadi sampah
+hanya kode yang tidak pernah dipakai siapa pun.
+
+Yang belum diklaim pun disimpan sehari dulu (`EZDOC_VOUCHER_GRACE_HOURS`).
+Kode yang kedaluwarsa sepuluh menit lalu masih jadi bukti: "pasien bilang sudah
+minta kode tapi tidak pernah bisa" cuma bisa dijawab selama barisnya ada.
+Barisnya kecil — satu nomor dan satu hash — jadi menyimpannya nyaris tidak ada
+ongkosnya dibanding yang bisa dijawabnya.
+
+`countExpired()` dan `countClaimed()` ditambahkan ke repository supaya dry-run
+punya angka. Ada tesnya yang memastikan angka pratinjau **sama** dengan jumlah
+yang benar-benar dihapus — pratinjau yang berbeda dari kenyataan lebih buruk
+daripada tidak ada pratinjau.
+
+### Lima kejadian di panel riwayat
+
+| Kejadian | Label |
+|---|---|
+| `otp.voucher_issued` | Pasien meminta kode |
+| `otp.voucher_claimed` | Kode dari pasien terverifikasi |
+| `otp.voucher_claim_failed` | Kode dari pasien ditolak |
+| `otp.voucher_claimed_override` | Kode terverifikasi ke nomor berbeda |
+| `otp.voucher_lookup_manual` | Status diperiksa untuk nomor yang diketik |
+
+Dua yang terakhir sengaja punya baris sendiri, bukan digabung ke yang biasa.
+Pertanyaan saat sengketa adalah "dari mana nomornya", bukan "apakah ada kode" —
+kalau keduanya terlihat sama di riwayat, jawabannya harus digali dari metadata.
+
+> **`otp.voucher_issued` tidak akan muncul di panel riwayat dokumen.** Ia
+> dicatat saat pasien mengirim pesan, jauh sebelum ada yang membuka dokumennya,
+> jadi `doc_id`-nya NULL dan panel yang menyaring per-slot tidak akan
+> menemukannya. Itu benar, bukan bug: penerbitan milik nomor, bukan milik
+> dokumen. Labelnya tetap didaftarkan supaya halaman audit global nanti punya
+> kata-katanya.
+
+Semua kunci ada di dua bahasa, dan `TranslationUsageTest` memverifikasi setiap
+kunci yang dipakai memang ada di keduanya.
 
 ## 9. Yang perlu diputuskan sebelum mulai
 
