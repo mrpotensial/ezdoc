@@ -163,6 +163,32 @@ final class OtpVoucherService
     }
 
     /**
+     * Seconds left on the issue cooldown for a number; 0 when a code may be
+     * issued right now.
+     *
+     * Exists so a caller can say "wait 40 more seconds" instead of "no". A bot
+     * replying to a patient has to put a number in the sentence, and parsing it
+     * back out of an exception message would break the moment that message is
+     * translated.
+     */
+    public function cooldownRemaining(string $phone): int
+    {
+        $clean = OtpService::normalizePhone($phone);
+        if (strlen($clean) < self::MIN_PHONE_DIGITS) {
+            return 0;
+        }
+
+        $lastIssued = $this->repo->lastIssuedAt($clean);
+        if ($lastIssued === null) {
+            return 0;
+        }
+
+        $elapsed = $this->clock->now()->getTimestamp() - $lastIssued;
+
+        return max(0, self::ISSUE_COOLDOWN_SECONDS - $elapsed);
+    }
+
+    /**
      * Whether this number is currently holding a usable code.
      *
      * Drives the hint under the phone field. It exists so a mistyped number

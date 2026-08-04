@@ -41,7 +41,8 @@
             "lib/authorization.php",
             "lib/schema.php",
             "lib/migrations.php",
-            "lib/audit.php"
+            "lib/audit.php",
+            "lib/otp_voucher.php"
         ]
     },
     "autoload-dev": {

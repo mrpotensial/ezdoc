@@ -481,7 +481,7 @@ sepuasnya — ia memang tinggal di aplikasi ini.
 | | Isi |
 |---|---|
 | ~~**V1**~~ | **SELESAI** — lihat §8b di bawah |
-| **V2** | Endpoint terbitkan voucher + endpoint cek status. Hook untuk bot consumer. Belum ada UI |
+| ~~**V2**~~ | **SELESAI** — lihat §8c di bawah |
 | **V3** | Penanda `$wa_handled` di `api_qontak.php` + `api/ttd_otp_wa_handler.php` + halaman QR statis, gaya `display_antrian_qr_v2.php` |
 | **V4** | Modal di generate: nomor terkunci + petunjuk status + kolom kode. Jalur cadangan pindah ke balik "Pasien tidak bisa memindai?" |
 | **V5** | Pembersih voucher kedaluwarsa + kejadian riwayat `otp.voucher_issued` / `otp.voucher_claimed` / `otp.phone_overridden` |
@@ -552,6 +552,97 @@ membuka pintu kedua ke tanda tangan yang sama — pintu yang melewati voucher.
 **Percobaan tidak berkurang kalau kodenya sudah kedaluwarsa.** Kedaluwarsa
 diperiksa sebelum percobaan dibebankan, jadi menunggu terlalu lama tidak
 diam-diam memakan jatah tebakan.
+
+## 8c. V2 — sudah dikerjakan
+
+### Yang berubah dari rencana: tidak ada endpoint untuk menerbitkan voucher
+
+Rencana menyebut "endpoint terbitkan voucher". Setelah dilihat lagi, itu bentuk
+yang salah.
+
+Pemanggilnya adalah penangan webhook milik aplikasi ini sendiri — mesin yang
+sama, instalasi PHP yang sama, tanpa sesi browser. Menempuhnya lewat HTTP
+berarti server memanggil dirinya sendiri, dan itu butuh kunci rahasia untuk
+autentikasi: satu kredensial lagi untuk disimpan, dirotasi, dan bocor, ditukar
+dengan nol manfaat. Ia juga mewarisi semua cara permintaan loopback bisa gagal
+yang tidak berlaku untuk pemanggilan fungsi biasa — lapisan auth front
+controller, proxy di tengah, TLS ke diri sendiri, aturan firewall yang ditulis
+untuk lalu lintas luar.
+
+Yang terakhir bukan hipotetis di sini: commit `cada904` justru memperbaiki
+ezdoc yang memanggil webhook consumer lewat loopback dan dibalas 403, dengan
+memindahkannya jadi adapter in-process. Alasannya sama, arahnya kebalikan.
+
+Jadi penerbitan voucher jadi **fungsi**, bukan endpoint:
+
+```php
+require_once __DIR__ . '/../ezdoc/bootstrap.php';
+$result = ezdoc_issue_otp_voucher($senderPhone, ['message_id' => $msgId]);
+```
+
+Kalau suatu saat botnya pindah ke mesin lain, tambahkan transport di depan
+fungsi itu — jangan ganti fungsinya. Aturannya tetap di `OtpVoucherService`.
+
+### Berkas
+
+| Berkas | Isi |
+|---|---|
+| `lib/otp_voucher.php` | `ezdoc_issue_otp_voucher()` — tidak pernah melempar (webhook yang mati berujung diulang dan mencetak kode yang tidak dibaca siapa pun), mengembalikan `issued` / `cooldown` + `retry_after` / `bad_phone` / `error` |
+| `actions/document/otp_voucher_status.php` | Petunjuk status. Auth + akses template + RBAC slot + batas 10 pemeriksaan manual per menit per petugas + dicatat |
+| `actions/document/claim_ttd_voucher.php` | Klaim kode → sign token. Aturan nomor **sama persis** dengan `send_ttd_otp.php` |
+| `actions/_dispatcher.php` | Dua action baru terdaftar. Penerbitan sengaja tidak ada di sini |
+| `lang/{id,en}/common.php` | 5 kunci baru, dua bahasa |
+| `tests/Signature/Otp/IssueVoucherHelperTest.php` | 7 tes lewat Context sungguhan |
+
+### Kenapa aturan nomornya diulang di klaim
+
+`send_ttd_otp.php` menolak (atau mencatat) kode yang diarahkan ke nomor selain
+yang tercatat, dijaga `EZDOC_OTP_ALLOW_PHONE_OVERRIDE` dan
+`EZDOC_OTP_OVERRIDE_ROLES`. Aturan itu diulang di `claim_ttd_voucher.php`
+dengan sengaja.
+
+Kalau tidak, petugas yang dilarang mengalihkan kode tinggal pindah ke jalur ini
+dan mendapat hasil yang sama — aturan dengan pintu di sebelahnya.
+
+### Pesan gagal di sini sengaja dibedakan
+
+`verify_ttd_otp.php` memakai satu pesan seragam supaya pemanggil tidak bisa
+membedakan "challenge tidak ada" dari "kadaluarsa" dari "kode salah". Di sini
+justru dibedakan, dan itu bukan kelalaian: pemanggilnya sudah lolos pemeriksaan
+akses yang sama dengan endpoint status, yang menjawab pertanyaan itu secara
+langsung. Menyeragamkannya hanya membuat petugas terus mengulang kode yang
+sudah mati.
+
+## 8d. Tiga migrasi SQLite basi — ditemukan saat mengerjakan V2
+
+Bukan bagian dari OTP. Ketemu karena tes helper penerbitan butuh tabel audit,
+dan tabelnya ternyata tidak punya kolom yang ditulis `Ezdoc\Audit\Logger`.
+
+| Tabel | Yang hilang |
+|---|---|
+| `ezdoc_audit_log` | **Skemanya beda total.** `entity_type`/`created_at`, padahal Logger menulis `target_type`/`occurred_at` |
+| `ezdoc_documents` | 16 kolom, termasuk `norm`, `nopen`, `label`, `version`, `signature_values` — dan `uk_slot_version` tidak ada sama sekali |
+| `ezdoc_default_vars` | `is_enabled`, `metadata` |
+
+Yang berbahaya bukan kesalahannya, tapi cara ia gagal. Logger menelan setiap
+error dengan sengaja — pencatatan tidak boleh menjatuhkan operasi yang sedang
+dicatatnya. Jadi di setiap host SQLite, log audit **diam-diam tidak mencatat
+apa pun**, dan tidak ada yang tahu sampai ada yang membutuhkan datanya.
+
+Berkas dialek yang **hilang** gagal di query pertama dan langsung ketahuan.
+Berkas dialek yang **berbohong** jalan terus.
+
+Ketiganya sudah ditulis ulang, plus `tests/Migrations/DialectParityTest.php`
+yang menjalankan setiap berkas SQLite sungguhan lalu membandingkan
+`PRAGMA table_info` dengan kolom yang dideklarasikan versi MySQL-nya. Tes ini
+yang menemukan dua dari tiga.
+
+> Database SQLite yang sudah ada tetap memegang tabel lama —
+> `CREATE TABLE IF NOT EXISTS` tidak mengubah tabel yang sudah ada. Karena
+> selama ini memang tidak mencatat apa-apa, hapus tabelnya lalu jalankan ulang.
+>
+> **Server MySQL tidak tersentuh sama sekali.** Yang diubah hanya berkas dialek
+> SQLite, yang cuma dipakai tes dan mode demo.
 
 ## 9. Yang perlu diputuskan sebelum mulai
 

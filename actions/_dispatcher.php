@@ -108,6 +108,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['_doc_action'])) {
         'restore_slot'    => 'restore_slot.php',
         'send_ttd_otp'    => 'send_ttd_otp.php',
         'verify_ttd_otp'  => 'verify_ttd_otp.php',
+        // Patient-initiated route. Issuing has no entry here on purpose — the
+        // host's inbound handler calls ezdoc_issue_otp_voucher() in-process
+        // rather than reaching the server over its own loopback.
+        'otp_voucher_status' => 'otp_voucher_status.php',
+        'claim_ttd_voucher'  => 'claim_ttd_voucher.php',
         'document_history'=> 'document_history.php',
     ];
     $action = (string)$_POST['_doc_action'];
