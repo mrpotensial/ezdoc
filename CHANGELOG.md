@@ -6,6 +6,56 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v1.0-prep track — "norm/nopen jadi identitas subjek yang generik"
+
+**Added — tiga kolom generik, tahap expand/contract (2026-08-04 … 2026-08-05)**
+
+Lihat `docs/PLAN-SUBJECT-SCHEMA.md`. Skema dokumen menyebut `norm` dan `nopen`,
+dua nama yang tidak berarti apa-apa di luar rumah sakit, di dalam paket yang
+visinya sendiri berbunyi "no Indonesian-specific field name di core schema".
+
+**Tiga kolom, bukan dua.** `norm` menyebut SIAPA (pasiennya, bertahan lintas
+kunjungan), `nopen` menyebut KUNJUNGAN MANA. Diperas jadi satu `subject_id`,
+pertanyaan "semua dokumen pasien ini di semua kunjungan" tidak bisa dijawab
+lagi. Bentuknya mengikuti `DocumentReference` FHIR: `subject` +
+`context.encounter`.
+
+`subject_type` NOT NULL DEFAULT `''` — bukan NULL, dan bukan `'patient'`. Ia
+akan ikut kunci unik slot, dan NULL dianggap berbeda dari NULL di indeks unik,
+yang membuat keunikan runtuh tanpa pesan kesalahan. Tesnya membangun kedua
+varian berdampingan dan menunjukkan bedanya. Bawaan `'patient'` akan memaku
+rumah sakit ke skema library — persis yang sedang dihilangkan.
+
+Yang sudah mendarat: migrasi (idempoten lewat introspeksi) + isi mekanis dari
+`norm`/`nopen`, penulisan ganda di lima situs tulis, sembilan predikat baca
+slot, `Document::contextId`, dan alias parameter yang menerima nama lama maupun
+baru. Yang belum: kunci unik baru dan pembuangan kolom lama.
+
+`subject_type` sengaja belum masuk predikat baca — di database nilainya `''`,
+dan kalau aplikasi mengirim `'patient'` tanpa backfill yang sejalan, seluruh
+dokumen menghilang.
+
+**Fixed — `floating_elements` hilang di kedua twin SQLite (2026-08-05)**
+
+Migrasi keempat yang berbohong. Kolomnya datang ke MySQL lewat ALTER Juli 2026;
+`ezdoc_documents` dan `ezdoc_templates` versi SQLite tidak pernah menyusul.
+
+`DialectParityTest` tidak menangkapnya karena ia hanya membandingkan berkas
+`*_create_*`. Ditutup dari arah lain oleh tes yang membaca daftar kolom dari
+INSERT yang benar-benar dikirim lalu menjalankannya ke skema yang benar-benar
+dikirim — bukan "apakah kedua CREATE cocok", tapi "apakah setiap kolom yang
+ditulis kode benar-benar ada".
+
+**Documented — PSrE dan e-Meterai (2026-08-05)**
+
+`docs/PLAN-PSRE-METERAI.md`. `PSRE-INTEGRATION.md` menyatakan
+`BaseRemoteProvider`/`HttpClient`/`SignSession` "belum di-implement"; berkasnya
+802 baris tanpa penanda TODO. Dikoreksi.
+
+Yang paling menentukan: ezdoc menandatangani **data** (JSON kanonis), PAdES
+menandatangani **byte PDF**. Urutannya terbalik, dan PDF berubah dari turunan
+yang bisa dirender ulang jadi artefak yang harus disimpan.
+
 ### v1.0-prep track — "Identitas: siapa boleh melihat apa"
 
 **Changed — riwayat tidak lagi membagikan IP dan daftar role ke semua pembaca (2026-08-04)**

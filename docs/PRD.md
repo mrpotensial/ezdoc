@@ -1,6 +1,6 @@
 # ezdoc — Product Requirements Document
 
-> **Status**: Draft v1 · **Owner**: `mrpotensial` · **Last updated**: 2026-08-04
+> **Status**: Draft v1 · **Owner**: `mrpotensial` · **Last updated**: 2026-08-05
 > **Target audience**: developer yang extend, deploy, atau consume library ini.
 
 ---
@@ -126,7 +126,7 @@ Library ini standalone project — tidak vendor-locked ke industry manapun. Dogf
  Idempotent, safe repeated
 - Library now **fully ezdoc_*-tables-only** — no consumer-app-specific tables in library scope
 
-### 3.5 Tests — 1.208 test terverifikasi (2026-08-04)
+### 3.5 Tests — 1.226 test terverifikasi (2026-08-05)
 
 PHPUnit aktif lokal (`composer test`), PHPStan level 5 bersih (`composer stan`),
 keduanya via `composer check`. **Tidak pernah dijalankan di server**, dan test DB
@@ -194,13 +194,23 @@ padahal providernya belum bisa di-instansiasi.
 | Level | Mechanism | Legal validity (Indonesia) | Status sebenarnya |
 |-------|-----------|---------------------------|-------------------|
 | **L1** | HMAC-SHA256 dengan shared secret + content hash | Tidak mengikat (tapi tamper-detectable) | **Jalan** |
-| **L2** | Local PKI — self-signed / internal CA cert (X.509) | Non-repudiation dalam organisasi | **Jalan, belum ada test** — `openssl_sign`/`verify`, `X509Certificate`, Env + File keystore |
+| **L2** | Local PKI — self-signed / internal CA cert (X.509) | Non-repudiation dalam organisasi | **Jalan, sudah ada test** — `openssl_sign`/`verify`, `X509Certificate`, Env + File keystore |
 | **L3** | PSrE Indonesia (Peruri, Privy, VIDA, Digisign, BSrE) | Mengikat per UU ITE 2016 Pasal 11 | **Kerangka.** Plumbing (`BaseRemoteProvider`, `CurlHttpClient`, DTO) solid; `PeruriProvider`/`PrivyProvider` masih placeholder — token stub, endpoint dan skema payload menunggu kredensial sandbox. Lihat `docs/PSRE-INTEGRATION.md`. |
 | **L3+** | L3 + TSA timestamp (RFC 3161) → PAdES-B-LT | Mengikat + verifiable jangka panjang | **TSA jalan** (`OpensslTimestampClient`, `HttpTimestampClient`, parser DER). **PAdES sebagian**: `JSignPdfSigner` (butuh Java) bekerja; `OpensslPdfSigner::embedSignature()` sengaja melempar — PAdES murni-PHP belum ada. |
 | **A1** | Blockchain anchor (hash publik di chain) — orthogonal, boleh combine dengan L1-L3 | Bukti keberadaan pada waktu X (proof-of-existence). Bukan sertifikasi identitas. | **Belum ada** — tidak ada folder `Anchor/`. Rencana v0.9.5. |
 
-**Belum ada di seluruh layer**: CRL/OCSP revocation check, HSM keystore
-(PKCS#11), dan test untuk L2/TSA (tidak ada `tests/Signature/`).
+**Belum ada di seluruh layer**: CRL/OCSP revocation check dan HSM keystore
+(PKCS#11).
+
+> **Diperiksa ulang 2026-08-05.** Kalimat ini dulu menutup dengan "dan test
+> untuk L2/TSA (tidak ada `tests/Signature/`)". Foldernya sekarang ada dan
+> berisi `LocalPkiProviderTest`, `KeyStoreTest`, `PkcsSevenEnvelopeTest`,
+> `PdfBytesRangeTest`, `SignaturePayloadTest`, `DocumentSignatureVerifierTest`,
+> dan seluruh keluarga OTP.
+>
+> Yang **masih** benar dan lebih menusuk: `PeruriProvider` (17 penanda TODO)
+> dan `PrivyProvider` (14) **belum punya satu pun test**. Rencana lengkapnya di
+> `docs/PLAN-PSRE-METERAI.md`.
 
 > **Note pola pikir**: Level 1-3 = "**siapa** yang tanda tangan + integritas isi". Anchoring (A1) = "**bukti publik** bahwa dokumen ini exist pada waktu X yang tidak bisa diubah setelah ter-anchor". Anchoring bisa combined dengan any level — L3 + A1 = signature legally binding + audit trail publik immutable.
 
@@ -339,26 +349,80 @@ host SQLite, dan tidak ada yang tahu.
 | `ezdoc_documents` | 16 kolom hilang — `norm`, `nopen`, `label`, `version`, `signature_values`, keluarga `public_slug`, cap hash, `revision`, `deleted_by/reason` — dan `uk_slot_version` tidak ada sama sekali | Ditulis ulang 2026-08-04 |
 | `ezdoc_audit_log` | **Skema berbeda total**: `entity_type`/`created_at`, padahal Logger menulis `target_type`/`occurred_at` | Ditulis ulang 2026-08-04 |
 | `ezdoc_default_vars` | `is_enabled`, `metadata` hilang | Ditulis ulang 2026-08-04 |
+| `ezdoc_documents` + `ezdoc_templates` | `floating_elements` hilang di **keduanya** — kolomnya datang lewat migrasi ALTER Juli 2026, twin SQLite tidak pernah menyusul | Ditambahkan 2026-08-05 |
 
 `tests/Migrations/DialectParityTest.php` sekarang menjalankan setiap berkas
 SQLite yang dikirim, membaca `PRAGMA table_info`, dan membandingkannya dengan
 kolom yang dideklarasikan versi MySQL-nya. **Tes itu yang menemukan dua dari
 tiga** — saya cuma menemukan yang pertama.
 
+Yang keempat (`floating_elements`) lolos dari tes itu, dan alasannya penting:
+`DialectParityTest` hanya membandingkan berkas `*_create_*`, sementara
+`floating_elements` datang lewat migrasi ALTER. Titik butanya ditutup dari arah
+lain oleh `SubjectIdentityTest::testEveryColumnTheCodeWritesExists()`, yang
+membaca daftar kolom dari INSERT yang benar-benar dikirim lalu menjalankannya
+ke skema yang benar-benar dikirim. Bukan "apakah kedua CREATE cocok", tapi
+"apakah setiap kolom yang ditulis kode benar-benar ada".
+
 Database SQLite yang sudah ada tetap memegang tabel lama:
 `CREATE TABLE IF NOT EXISTS` tidak mengubah tabel yang sudah ada. Karena selama
 ini memang tidak menyimpan apa yang seharusnya, hapus tabelnya lalu jalankan
 ulang.
 
-**Yang masih terbuka: bentuk kanonisnya.** Divergensi ditutup dengan membuat
-SQLite mengikuti MySQL — termasuk `norm`/`nopen`, yang spesifik domain rumah
-sakit. Kolom generik lama (`subject_type`, `subject_id`, `reference_number`,
-`rendered_html`, `owner_id`) tetap dipertahankan karena menghapus kolom hanya
-bisa merusak pemasangan yang menyimpan data di dalamnya.
+**Bentuk kanonisnya — sudah dijawab 2026-08-04, lihat §3.14.** Jawabannya
+generik, dan ironisnya nama yang dituju (`subject_type`, `subject_id`) memang
+sudah ada di migrasi SQLite lama sebagai sisa desain generik yang ditinggalkan.
 
-Jadi pertanyaannya belum dijawab, cuma ditunda: apakah skema library pantas
-menyebut `norm`/`nopen`, atau mestinya `subject_type`/`subject_id` yang generik
-dengan `norm`/`nopen` sebagai pemetaan milik aplikasi pemakai. Lihat §10.1.
+### 3.14 Identitas subjek generik — 🔄 sedang berjalan, lihat `docs/PLAN-SUBJECT-SCHEMA.md`
+
+`norm` (nomor rekam medis) dan `nopen` (nomor pendaftaran) diganti identitas
+subjek yang generik. Alasannya visi §1 sendiri: "no Indonesian-specific field
+name di core schema".
+
+**Tiga kolom, bukan dua.** Godaan pertamanya memeras keduanya jadi satu
+`subject_id`. Itu salah — `norm` menyebut SIAPA (pasiennya, bertahan lintas
+kunjungan), `nopen` menyebut KUNJUNGAN MANA. Diperas jadi satu, pertanyaan
+"semua dokumen pasien ini di semua kunjungan" tidak bisa dijawab lagi.
+
+Bentuknya mengikuti `DocumentReference` FHIR, yang punya `subject` (Patient) dan
+`context.encounter` (Encounter) — persis pasangan ini.
+
+| Baru | Menggantikan |
+|---|---|
+| `subject_type` | — (baru; `patient`, `employee`, `student`, …) |
+| `subject_id` | `norm` |
+| `context_id` | `nopen` |
+
+**`subject_type` NOT NULL DEFAULT `''`, dan itu bukan kelalaian.** Ia akan ikut
+kunci unik slot, dan NULL dianggap berbeda dari NULL di indeks unik — kolom
+pembeda yang boleh NULL membuat keunikan runtuh tanpa satu pun pesan kesalahan.
+Pelajaran yang sama pernah dibayar di proyek ini waktu `deleted_at` masuk kunci
+unik. Tesnya membangun kedua varian berdampingan dan menunjukkan bedanya, bukan
+mengklaimnya.
+
+Bawaannya `''` bukan `'patient'`: nilai bawaan itu memaku rumah sakit ke skema
+library, persis yang sedang dihilangkan. Migrasi mengisi `subject_id`/`context_id`
+(penyalinan mekanis) tapi **tidak pernah menebak** `subject_type`.
+
+| Tahap | Keadaan |
+|---|---|
+| E1+E2 — kolom + isi dari `norm`/`nopen` | ✅ migrasi ditulis, idempoten lewat introspeksi |
+| E3 — tulis ganda di 5 situs tulis | ✅ |
+| C1a — 9 predikat baca slot | ✅ |
+| C1b — `Document::contextId` + alias parameter | ✅ |
+| E4 — kunci unik baru | ⏳ butuh `subject_type` pasti dulu |
+| C2 — buang `norm`/`nopen` | ⏳ satu-satunya langkah tanpa jalan kembali |
+
+**`subject_type` sengaja belum masuk predikat baca.** Di database nilainya `''`;
+kalau aplikasi mengirim `'patient'` tanpa backfill yang sejalan, tidak ada baris
+yang cocok dan seluruh dokumen menghilang. Ia masuk belakangan, sebagai langkah
+tersendiri yang disengaja.
+
+**Yang masih terbuka:** dari mana `subject_type` datang saat berjalan. Sekarang
+dari konstanta `EZDOC_DEFAULT_SUBJECT_TYPE`, jatuh ke `''`. Sumber per-template
+lebih benar — template surat pasien dan template SK karyawan bisa hidup di
+pemasangan yang sama — tapi kandidatnya kolom di `ezdoc_templates`, bukan
+atribut HTML yang harus diurai tiap penyimpanan. Lihat PLAN-SUBJECT-SCHEMA §8.
 
 ### 3.10 Pintu `public/` — syarat mount, ditemukan 2026-07-29
 
@@ -2489,7 +2553,7 @@ kolomnya — dan tes itulah yang menemukan dua dari tiga migrasi basi.
 Berikut point yang perlu decision dari stakeholder:
 
 ### 10.1 Baseline (v0.2-v0.5)
-0a. **Bentuk kanonis skema dokumen** — apakah `norm`/`nopen` (spesifik rumah sakit) pantas ada di skema library, atau mestinya `subject_type`/`subject_id` generik dengan `norm`/`nopen` sebagai pemetaan milik aplikasi pemakai? Divergensi MySQL↔SQLite sudah ditutup dengan membuat SQLite mengikuti MySQL (§3.9c), jadi pertanyaannya ditunda, bukan dijawab.
+0a. ~~**Bentuk kanonis skema dokumen**~~ — **dijawab 2026-08-04**: generik, tiga kolom (`subject_type`/`subject_id`/`context_id`), mengikuti `DocumentReference` FHIR. Sedang dikerjakan bertahap, lihat §3.14. Yang tersisa dari pertanyaan ini: dari mana `subject_type` datang saat berjalan.
 0b. **`ezdoc_fetch_creator_name()`** — hapus dari library? Ia menyebut tabel `pegawai` di dalam paket yang dimaksudkan untuk dipasang orang lain (§3.13). Sekarang cadangan terakhir dan tidak terpanggil kalau `ActorDirectory` tersambung, tapi menghapusnya menghapus fungsi publik.
 0c. **Salinan `ezdoc/views/`** — folder itu berisi salinan lengkap seluruh proyek (199 dari 253 berkas PHP di bawahnya). Tidak bisa dijalankan — `views/public/config.php` mencari `koneksi.php` satu level terlalu tinggi — tapi ia muncul di setiap pencarian teks dan salinan `save_document.php` di dalamnya tertinggal jauh (468 baris vs 911). Hapus?
 1. **Legacy migrations** — kapan aman di-delete dari folder `migrations/`? Perlu confirm semua production env sudah migrated ke `ezdoc_*` tables.
@@ -2499,6 +2563,24 @@ Berikut point yang perlu decision dari stakeholder:
 5. **Framework priorities** — Laravel dulu atau WordPress dulu untuk sample?
 
 ### 10.2 Signature & PSrE (v0.6-v0.9)
+
+> Ditinjau ulang 2026-08-05 — lihat `docs/PLAN-PSRE-METERAI.md`. Yang paling
+> menentukan dan belum ada di daftar lama:
+>
+> 5a. **Sertifikat per penanda tangan, atau satu sertifikat institusi?** Ini
+> mengubah bentuk pendaftarannya sepenuhnya. Sertifikat institusi jauh lebih
+> sederhana — tidak perlu mendaftarkan tiap dokter ke PSrE — tapi tanda
+> tangannya berbunyi atas nama institusi, bukan atas nama orangnya.
+>
+> 5b. **e-Meterai resmi.** Belum ada sama sekali di kode; yang ada di template
+> cuma placeholder visual. Butuh akun distributor + saldo dibeli di muka, dan
+> keputusan hukum dokumen mana yang dikenai. Urutannya tidak bisa dibalik:
+> meterai selalu SEBELUM tanda tangan.
+>
+> 5c. **PDF jadi artefak yang berlaku.** PAdES menandatangani byte PDF, bukan
+> data yang menghasilkannya — jadi PDF tidak bisa lagi dirender ulang sesuka
+> hati. Kandidat penyimpanannya `ezdoc_blobs`, yang sudah ada dan sudah punya
+> dua backend.
 6. **PSrE prioritas** — Peruri dulu (kandidat teratas karena banyak dipakai instansi kesehatan) atau Privy (pricing lebih ramah startup)? Konfirmasi budget & existing contract.
 7. **Certificate storage** — cert-per-user disimpan di `ezdoc_user_certificates` (baru), atau reference-only ke PSrE user account (fetch on-demand)?
 8. **OTP flow untuk L3** — email, SMS, atau in-app push? Vendor biasanya kasih pilihan multi-channel.
