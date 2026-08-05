@@ -158,5 +158,9 @@ return [
         'otp_voucher_none'        => 'Nomor ini belum meminta kode.',
         'otp_lookup_rate_limited' => 'Terlalu sering memeriksa nomor. Tunggu sebentar.',
         'otp_lookup_failed'       => 'Gagal memeriksa kode.',
+
+        // ── V6: kode terikat dokumen, diminta lewat QR di layar petugas ──
+        'scan_not_configured'     => 'Fitur minta kode lewat QR belum dikonfigurasi di aplikasi ini.',
+        'scan_request_failed'     => 'Gagal membuat permintaan kode. Silakan coba lagi.',
     ],
 ];

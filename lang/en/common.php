@@ -109,5 +109,9 @@ return [
         'otp_voucher_none' => 'This number has not requested a code yet.',
         'otp_lookup_rate_limited' => 'Too many lookups. Please wait a moment.',
         'otp_lookup_failed' => 'Could not check the code.',
+
+        // ── V6: document-bound code, requested via a QR on the operator's screen ──
+        'scan_not_configured' => 'Scan-to-sign is not configured for this installation.',
+        'scan_request_failed' => 'Could not create the code request. Please try again.',
     ],
 ];

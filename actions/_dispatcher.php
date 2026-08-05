@@ -113,6 +113,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['_doc_action'])) {
         // rather than reaching the server over its own loopback.
         'otp_voucher_status' => 'otp_voucher_status.php',
         'claim_ttd_voucher'  => 'claim_ttd_voucher.php',
+        // V6 — kode terikat dokumen. Verifikasinya memakai verify_ttd_otp yang
+        // sudah ada: challenge hasil pindaian adalah challenge biasa.
+        'request_scan_code'  => 'request_scan_code.php',
+        'scan_code_status'   => 'scan_code_status.php',
         'document_history'=> 'document_history.php',
     ];
     $action = (string)$_POST['_doc_action'];

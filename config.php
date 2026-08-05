@@ -74,6 +74,23 @@ if (!defined('EZDOC_TEMPLATE_MANAGER_ROLES')) {
     // Contoh production: define('EZDOC_TEMPLATE_MANAGER_ROLES', json_encode(['superadmin', 'template_designer']));
 }
 
+// ─── QR "minta kode" di layar petugas ───
+//
+// Bentuk tautan yang dibawa QR. `{token}` diganti token pindaian sekali pakai.
+//
+// Ditulis sebagai pola, bukan nomor WhatsApp, karena library tidak boleh tahu
+// kanal apa yang dipakai. Pemasangan yang memakai Telegram, SMS, atau portal
+// sendiri tinggal menaruh polanya masing-masing.
+//
+// Contoh WhatsApp:
+//   define('EZDOC_SCAN_URL_TEMPLATE', 'https://wa.me/6282148663619?text=TTD-OTP-{token}');
+//
+// Kosong = fitur QR tidak muncul di modal tanda tangan. Bukan rusak — memang
+// belum dikonfigurasi, dan jalur OTP lama tetap jalan.
+if (!defined('EZDOC_SCAN_URL_TEMPLATE')) {
+    define('EZDOC_SCAN_URL_TEMPLATE', '');
+}
+
 // ─── Detail audit: siapa boleh melihat alamat IP dan daftar role orang lain ───
 //
 // Riwayat dokumen mencatat siapa melakukan apa, dari IP mana, dengan role apa.
