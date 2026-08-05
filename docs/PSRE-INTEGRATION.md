@@ -339,13 +339,17 @@ volume komitmen tahunan.*
 
 ## Known limitations di v0.7
 
-- **Stubs**: Peruri + Privy hanya skeleton. Real API mapping (endpoint,
-  payload schema, response field names, auth path) baru diisi v0.7.1
-  setelah sandbox credentials tersedia.
-- **BaseRemoteProvider + HttpClient**: belum di-implement. Provider stub
-  reference kelas ini sebagai contract yang akan datang. Autoload akan
-  fatal-error sampai base class + interface di-commit di v0.7.1.
-- **SignSession + OtpChallenge DTO**: belum di-implement.
+> **Diperiksa ulang 2026-08-05.** Tiga butir pertama daftar ini sudah tidak
+> benar — `BaseRemoteProvider` (802 baris), `HttpClient`, `SignSession`, dan
+> `OtpChallenge` semuanya sudah ada dan tanpa penanda TODO. Yang masih benar
+> adalah butir stub-nya, dan itu memang yang menunggu kredensial sandbox.
+> Keadaan lengkapnya di `docs/PLAN-PSRE-METERAI.md` §1.
+
+- **Stubs**: Peruri (17 penanda TODO) + Privy (14) masih skeleton. Real API
+  mapping (endpoint, payload schema, response field names, auth path) menunggu
+  sandbox credentials. **Belum ada satu pun test untuk kedua provider ini.**
+- ~~**BaseRemoteProvider + HttpClient**: belum di-implement.~~ Sudah ada.
+- ~~**SignSession + OtpChallenge DTO**: belum di-implement.~~ Sudah ada.
 - **No auto-webhook handler**: async callback dari PSrE harus diterima
   manual di route consumer — planned v0.7.1 (helper `WebhookVerifier`).
 - **No cert revocation check**: CRL/OCSP lookup belum di-integrate —
