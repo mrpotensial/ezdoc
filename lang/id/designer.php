@@ -366,16 +366,19 @@ return [
         // Label tombol toolbar editor. Dulu hardcoded di designer_scripts.php,
         // dan dua di antaranya bahasa Indonesia di dalam library yang
         // dimaksudkan untuk dipasang orang lain. Di sini justru tempatnya.
+        // "Gambar", bukan "Logo": tombolnya menyisipkan gambar apa saja — kop
+        // surat, foto ruangan, diagram, watermark. Menyebutnya Logo cuma
+        // menggambarkan satu pemakaian dan menyembunyikan sisanya.
         'field_label'              => 'Field',
         'ttd_label'                => 'TTD',
         'materai_label'            => 'Materai',
         'qr_label'                 => 'QR',
-        'logo_label'               => 'Logo',
+        'logo_label'               => 'Gambar',
 
         'mode_inline'              => 'Inline (dalam teks)',
         'mode_front'               => 'Floating - Di Depan Teks',
         'mode_behind'              => 'Floating - Di Belakang Teks',
-        'logo_tooltip'             => 'Insert Logo Placeholder',
+        'logo_tooltip'             => 'Sisipkan Penanda Gambar',
         'logo_name_prompt'         => 'Nama logo (contoh: logo_rs):',
         'logo_width_prompt'        => 'Lebar logo (contoh: 80px, 100px):',
         'qr_tooltip'               => 'Insert QR Code Placeholder',

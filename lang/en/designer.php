@@ -370,16 +370,19 @@ return [
         // "Stamp" rather than "Materai": stamp duty is not an Indonesian
         // invention. India, Malaysia, Singapore and the UK each have their own,
         // and the button means the same thing in all of them.
+        // "Image" rather than "Logo": the button inserts an image placeholder
+        // of any kind — letterhead, ward photo, diagram, watermark. Calling it
+        // Logo describes one use and hides the rest.
         'field_label' => 'Field',
         'ttd_label' => 'Signature',
         'materai_label' => 'Stamp',
         'qr_label' => 'QR',
-        'logo_label' => 'Logo',
+        'logo_label' => 'Image',
 
         'mode_inline' => 'Inline (in text)',
         'mode_front' => 'Floating - In Front of Text',
         'mode_behind' => 'Floating - Behind Text',
-        'logo_tooltip' => 'Insert Logo Placeholder',
+        'logo_tooltip' => 'Insert Image Placeholder',
         'logo_name_prompt' => 'Logo name (example: logo_hospital):',
         'logo_width_prompt' => 'Logo width (example: 80px, 100px):',
         'qr_tooltip' => 'Insert QR Code Placeholder',
