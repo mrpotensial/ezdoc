@@ -836,6 +836,148 @@ kalau keduanya terlihat sama di riwayat, jawabannya harus digali dari metadata.
 Semua kunci ada di dua bahasa, dan `TranslationUsageTest` memverifikasi setiap
 kunci yang dipakai memang ada di keduanya.
 
+## 8h. V6 — kode terikat dokumen, bukan cuma nomor HP
+
+**Diputuskan 2026-08-05.** Ini peningkatan atas V1–V5 yang sudah jalan, dan ia
+mengubah bentuk rancangannya — jadi lebih sederhana, bukan lebih rumit.
+
+### Masalah dengan yang sekarang
+
+Pasien mengirim `TTD-OTP` dan menerima enam angka **tanpa tahu untuk apa**.
+
+Secara hukum itu lemah. Persetujuan seharusnya sadar — orang menyetujui sesuatu
+yang ia ketahui. Kode buta bukan persetujuan, ia cuma bukti bahwa nomor itu
+dipegang orangnya.
+
+### Bentuk barunya
+
+QR pindah dari layar ruang tunggu ke **layar petugas, di dokumen itu sendiri**.
+Isinya token acak. Balasan bot menyebutkan dokumen apa yang akan ditandatangani.
+Kodenya hanya berlaku untuk dokumen itu.
+
+```
+petugas buka dokumen, tekan "Minta kode"
+        ↓  sistem bikin challenge, status "menunggu dipindai"
+QR muncul di layar, isinya token acak
+        ↓  pasien pindai → kirim
+bot cocokkan token → challenge → balas: identitas dokumen + kode
+        ↓
+petugas masukkan kode
+```
+
+### Yang membaik
+
+| | |
+|---|---|
+| **Persetujuan jadi bermakna** | Pasien tahu persis apa yang disetujuinya, dan buktinya tersimpan di WhatsApp-nya sendiri |
+| **Salah dokumen jadi mustahil** | Sekarang satu kode bisa dipakai untuk dokumen mana pun milik nomor itu |
+| **Pengintaian nomor hilang** | Petugas tidak perlu mengetik nomor sama sekali — QR sudah menunjuk dokumen yang benar. Jalur "Ubah nomor" beserta pencatatannya ikut hilang |
+
+### Dan tabel voucher jadi tidak perlu
+
+Ini yang menarik. `ezdoc_otp_vouchers` ada karena satu alasan: **kode lahir
+sebelum ada yang tahu untuk dokumen mana** (§3).
+
+Kalau kodenya terikat dokumen sejak awal, alasan itu hilang. Yang tersisa persis
+bentuk `ezdoc_ttd_otp_challenges` yang sudah ada — terikat ke (template, slot,
+dokumen, nomor HP). Bedanya cuma siapa yang memulai, dan itu satu kolom token
+pindaian plus satu status baru.
+
+Jadi V6 **menghapus** tabel, bukan menambah.
+
+### Yang hilang
+
+Pasien tidak bisa lagi menyiapkan kode sambil antre — QR-nya di layar petugas.
+Untuk penandatanganan itu tidak masalah: memang harus di meja itu.
+
+### Isi pesannya — ini bagian yang jadi bukti
+
+Bedakan dua arah:
+
+**Yang dikirim pasien**: token acak saja, `TTD-OTP-a7f3c9d2`. Tidak ada gunanya
+menaruh apa pun di situ — pasien tidak membacanya, ia cuma menekan kirim. Dan
+teks itu tersimpan di server Qontak.
+
+**Yang diterima pasien**: harus lengkap. Ini yang dibaca, dan ini buktinya.
+
+```
+*PERSETUJUAN TANDA TANGAN*
+---
+
+Dokumen        : Persetujuan Tindakan Medis
+Atas nama      : Siti Rahayu
+No. Pendaftaran: 2607280142
+Tanggal        : 5 Agustus 2026
+Unit           : Poli Kandungan
+
+Kode Anda      : *483920*
+Berlaku 10 menit.
+
+---
+Dengan menyebutkan kode ini kepada petugas, Anda
+menyetujui penandatanganan dokumen di atas.
+
+Jika Anda tidak merasa meminta ini, jangan berikan
+kodenya dan laporkan ke petugas.
+```
+
+Kalimat terakhir bukan basa-basi: ia memberi pasien kesempatan menolak, dan
+justru itu yang membuat persetujuannya kuat.
+
+### Nomor identitas mana yang ditampilkan
+
+**`context_id` ya, `subject_id` tidak.**
+
+| | Menunjuk | Kenapa dipilih / tidak |
+|---|---|---|
+| `context_id` (nomor pendaftaran) | kunjungannya | Yang dibutuhkan sebagai bukti justru ini — "dokumen yang mana", bukan "siapa orangnya". Dan pasien bisa mencocokkannya sendiri dengan karcis antreannya |
+| `subject_id` (nomor rekam medis) | orangnya | Permanen, menghubungkan seluruh riwayat. Kalau bocor jauh lebih merugikan, sementara nilai buktinya sudah dijawab namanya |
+
+Yang paling berguna sebagai bukti kebetulan juga yang paling aman.
+
+`label` ikut ditampilkan **hanya kalau isinya bukan `-`** — untuk kasus dua
+dokumen sejenis dalam satu kunjungan.
+
+### Dua aturan yang gampang dilanggar
+
+**Jangan memformat ulang nomornya.** Gunanya nomor itu ada di pesan adalah
+supaya pasien bisa mencocokkan dengan karcisnya. Mengubah bentuknya menghapus
+manfaatnya. (Diperiksa 2026-08-05: nol dari data yang ada memakai tanda hubung —
+tampilkan apa adanya.)
+
+**Jangan memaku label "No. Pendaftaran" di library.** `context_id` berarti nomor
+pendaftaran di rumah sakit, nomor SK di HR, tahun ajaran di kampus. Labelnya
+lewat i18n dan bisa ditimpa per pemasangan.
+
+### Garis isi yang tetap dijaga
+
+| Boleh | Sebaiknya tidak |
+|---|---|
+| Nama pasien, nama dokumen, tanggal, unit, nomor pendaftaran | Diagnosis, isi klinis, tindakan spesifik, hasil pemeriksaan |
+
+HP bisa dilihat orang lain. Yang di kiri sudah cukup untuk mengenali dokumen
+tanpa membocorkan kondisi medis.
+
+### Simpan teks yang benar-benar dikirim
+
+Kalau ada sengketa, pertanyaannya bukan "apa isi dokumennya" tapi **"apa yang
+diberitahukan ke pasien saat itu"**.
+
+Merangkainya ulang nanti tidak menjawab itu — nama template bisa berubah, dan
+hasil rangkaian ulang belum tentu sama dengan yang dulu dibaca pasien. Jadi
+salinan pesannya masuk ke catatan audit.
+
+### Nasib pekerjaan V1–V5
+
+| | |
+|---|---|
+| `Ezdoc\Support\Clock` | Tetap |
+| Jeda, batas 3 percobaan, pesan gagal seragam | Tetap |
+| Handler bot WhatsApp | Tetap; cara mencocokkan tokennya yang berubah |
+| Modal di generate | Tetap, malah lebih sederhana — kolom nomor HP tidak perlu lagi |
+| `OtpVoucherService` + `ezdoc_otp_vouchers` | **Dirombak** — dilebur ke challenge |
+| Halaman QR ruang tunggu | Tidak dipakai; disimpan atau dibuang, lihat §9 |
+
 ## 9. Yang perlu diputuskan sebelum mulai
 
 Semua sudah diputuskan. Tidak ada yang menggantung.
@@ -847,6 +989,15 @@ Semua sudah diputuskan. Tidak ada yang menggantung.
 | 3 | Satu voucher untuk berapa slot? | **Satu voucher satu slot.** Kalau satu kode membuka banyak tanda tangan, satu kebocoran membuka semuanya |
 | 4 | QR statis atau dinamis? | **Statis dulu.** Dinamis menyusul kalau perlu — tabel dan servicenya sama |
 | 5 | ~~Kapan tombol cadangan ditawarkan?~~ | **Dicoret.** Tautan "Pasien tidak bisa memindai?" selalu ada, tanpa hitungan mundur. Petugas di loket melihat pasiennya langsung — dia lebih tahu daripada timer |
+
+### Untuk V6 (§8h) — belum diputuskan
+
+| | Pertanyaan | Catatan |
+|---|---|---|
+| 6 | QR di layar petugas saja, atau boleh ikut tercetak di dokumen? | Kalau tercetak, tokennya ikut tercetak dan tidak bisa kedaluwarsa cepat — itu melemahkannya |
+| ~~7~~ | ~~Satu QR per dokumen, atau per slot?~~ | **Diputuskan: per slot tanda tangan, dan hanya slot yang OTP-nya aktif.** Kodenya memang mengesahkan satu tanda tangan, bukan satu dokumen — surat dengan TTD pasien dan TTD saksi melibatkan dua orang berbeda, masing-masing memindai QR-nya sendiri. Slot tanpa OTP tidak menampilkan QR sama sekali |
+| 8 | Halaman QR ruang tunggu dibuang atau disimpan sebagai cadangan? | Menyimpannya berarti dua jalur yang harus dijaga |
+| 9 | Nama dokumen yang disebut ke pasien: nama template apa adanya, atau template punya "nama untuk pasien" tersendiri? | Perlu kalau ada nama template yang menyebut tindakan spesifik |
 
 ### Akibat keputusan 1 + 2: satu aturan, bukan dua
 

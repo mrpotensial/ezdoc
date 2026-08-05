@@ -84,6 +84,100 @@ final class OtpChallengeRepository
     }
 
     /**
+     * Create a challenge that has no code yet, waiting for the signer to scan.
+     *
+     * This is the patient-initiated route (V6). The row is bound to its document
+     * and slot from the moment it exists — which is the whole point, and the
+     * reason a separate voucher table is no longer needed.
+     *
+     * `phone` and `otp_hash` stay NULL: neither is known until somebody scans.
+     * The code is only minted once a scan arrives, by {@see fulfilScan()}.
+     *
+     * @param array{
+     *     challenge_id: string, doc_id: int|null, template_id: int, ttd_id: string,
+     *     scan_token: string, expires_at: string, created_at: string,
+     *     max_attempts?: int, provider_meta?: array<string,mixed>|null
+     * } $data
+     */
+    public function createAwaitingScan(array $data): void
+    {
+        $this->db->execute(
+            'INSERT INTO `ezdoc_ttd_otp_challenges`
+                (`challenge_id`, `doc_id`, `template_id`, `ttd_id`, `scan_token`,
+                 `attempts`, `max_attempts`, `expires_at`, `provider_meta`, `created_at`)
+             VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)',
+            [
+                $data['challenge_id'],
+                $data['doc_id'],
+                $data['template_id'],
+                $data['ttd_id'],
+                $data['scan_token'],
+                $data['max_attempts'] ?? 3,
+                $data['expires_at'],
+                isset($data['provider_meta']) && $data['provider_meta'] !== null
+                    ? json_encode($data['provider_meta'], JSON_UNESCAPED_UNICODE)
+                    : null,
+                $data['created_at'],
+            ]
+        );
+    }
+
+    /**
+     * The challenge a scan token points at, whatever state it is in.
+     *
+     * Returns the row even when expired or already scanned — the caller needs to
+     * tell those apart to say something useful, and a bare null would make every
+     * failure look the same.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function findByScanToken(string $scanToken): ?array
+    {
+        if ($scanToken === '') {
+            return null;
+        }
+
+        return $this->db->fetchOne(
+            'SELECT * FROM `ezdoc_ttd_otp_challenges` WHERE `scan_token` = ? LIMIT 1',
+            [$scanToken]
+        );
+    }
+
+    /**
+     * Turn a scan into a live code: record who scanned, store the code's hash,
+     * and keep a copy of exactly what the signer was told.
+     *
+     * `scanned_at IS NULL` makes this first-scan-wins. Two people scanning the
+     * same on-screen QR at the same moment must not both receive a code — the
+     * second would silently overwrite the first's, and the first would be told a
+     * code that no longer verifies.
+     *
+     * The expiry is rewritten here on purpose. Until the scan, the deadline
+     * belongs to the QR (short: it sits on an unattended screen). Afterwards it
+     * belongs to the code (longer: the signer has to read it out).
+     *
+     * @return bool True when this call performed the transition.
+     */
+    public function fulfilScan(
+        string $scanToken,
+        string $phone,
+        string $otpHash,
+        string $expiresAt,
+        string $scannedAt,
+        string $consentMessage
+    ): bool {
+        $affected = $this->db->execute(
+            'UPDATE `ezdoc_ttd_otp_challenges`
+                SET `phone` = ?, `otp_hash` = ?, `expires_at` = ?,
+                    `scanned_at` = ?, `consent_message` = ?
+              WHERE `scan_token` = ? AND `scanned_at` IS NULL',
+            [$phone, $otpHash, $expiresAt, $scannedAt, $consentMessage, $scanToken]
+        );
+
+        return $affected > 0;
+    }
+
+    /**
      * Find challenge by ID.
      */
     public function findById(string $challengeId): ?array

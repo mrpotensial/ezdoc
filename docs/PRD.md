@@ -507,6 +507,32 @@ sebaris pun.
 | Penerbitan | **Fungsi in-process**, bukan endpoint. Server memanggil dirinya sendiri lewat loopback butuh kunci rahasia dan mewarisi tiap cara loopback bisa gagal — dan commit `cada904` sudah membuktikannya dari arah sebaliknya (403) |
 | Sisi tampilan | Nomor terkunci ke nomor dokumen + petunjuk status, supaya salah ketik ketahuan sebelum kodenya dimasukkan |
 
+**🔄 V6 diputuskan 2026-08-05 — kode terikat dokumen.** Lihat
+`docs/PLAN-OTP-JALUR-KEDUA.md` §8h.
+
+Kelemahan V1–V5: pasien mengirim `TTD-OTP` dan menerima enam angka **tanpa tahu
+untuk apa**. Secara hukum itu lemah — persetujuan seharusnya sadar.
+
+V6 memindahkan QR dari layar ruang tunggu ke layar petugas, di dokumen itu
+sendiri. Balasan bot menyebutkan identitas dokumennya, dan kodenya hanya berlaku
+untuk dokumen itu.
+
+**Dan itu menghapus tabel, bukan menambah.** `ezdoc_otp_vouchers` ada karena satu
+alasan — kode lahir sebelum ada yang tahu untuk dokumen mana. Kalau terikat
+dokumen sejak awal, alasan itu hilang, dan yang tersisa persis bentuk
+`ezdoc_ttd_otp_challenges` yang sudah ada: satu kolom token pindaian plus satu
+status baru.
+
+Dua aturan yang lahir dari diskusinya, keduanya soal bukti:
+
+- **Balasan bot adalah artefak buktinya**, dan **teks yang benar-benar dikirim
+  disimpan** — bukan dirangkai ulang nanti. Pertanyaan saat sengketa bukan "apa
+  isi dokumennya" tapi "apa yang diberitahukan ke pasien saat itu"
+- **`context_id` ditampilkan, `subject_id` tidak.** Nomor kunjungan menjawab
+  "dokumen yang mana" dan bisa dicocokkan pasien dengan karcisnya; nomor rekam
+  medis permanen dan menghubungkan seluruh riwayat, sementara nilai buktinya
+  sudah dijawab namanya
+
 ### 3.13 Pengungkapan identitas — ✅ selesai 2026-08-04
 
 Lihat `docs/PLAN-IDENTITY-DISCLOSURE.md`.

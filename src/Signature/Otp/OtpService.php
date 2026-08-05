@@ -35,11 +35,36 @@ class OtpService
     private OtpChallengeRepository $repo;
     private ?UserOtpProvider $provider;
 
+    /**
+     * Context is consulted only when no repository was supplied.
+     *
+     * It used to be resolved unconditionally, which made the class impossible to
+     * construct without one even after every dependency had been injected — the
+     * opposite of what optional constructor arguments promise, and it turned a
+     * unit test into an integration test.
+     *
+     * ## Why the repository, and not the provider, decides
+     *
+     * `null` for a provider means two different things: "not supplied" and
+     * "there deliberately isn't one" — plenty of installs never send codes
+     * themselves. Nothing in the signature can tell those apart.
+     *
+     * The repository has no such ambiguity, so it is the one that answers "did
+     * the caller wire this by hand?". A caller who passes a repository is wiring
+     * explicitly, and a null provider from them is taken at face value: none.
+     * {@see createChallenge()} refuses clearly when it needs one and there is
+     * none, so the mistake surfaces where it can be understood.
+     */
     public function __construct(?OtpChallengeRepository $repo = null, ?UserOtpProvider $provider = null)
     {
-        $ctx = Context::default();
-        $this->repo = $repo ?? new OtpChallengeRepository($ctx->db);
-        $this->provider = $provider ?? $ctx->otpProvider;
+        if ($repo === null) {
+            $ctx = Context::default();
+            $repo = new OtpChallengeRepository($ctx->db);
+            $provider = $provider ?? $ctx->otpProvider;
+        }
+
+        $this->repo = $repo;
+        $this->provider = $provider;
     }
 
     /**
