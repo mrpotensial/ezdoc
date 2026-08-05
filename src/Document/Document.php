@@ -48,6 +48,19 @@ final class Document
     /** @var string|null */
     private $subjectId;
 
+    /**
+     * Episode/konteks subjeknya — kunjungan untuk pasien, periode SK untuk
+     * pegawai, tahun ajaran untuk mahasiswa. Menggantikan `nopen`.
+     *
+     * Dipisah dari `subjectId` karena keduanya memang dua hal: yang satu
+     * menyebut SIAPA dan bertahan lintas episode, yang satu menyebut EPISODE
+     * MANA. Diperas jadi satu, "semua dokumen subjek ini di semua episode"
+     * tidak bisa ditanyakan lagi.
+     *
+     * @var string|null
+     */
+    private $contextId;
+
     /** @var array<string,mixed> */
     private $fieldValues;
 
@@ -107,6 +120,7 @@ final class Document
         ?string $referenceNumber,
         ?string $subjectType,
         ?string $subjectId,
+        ?string $contextId,
         array $fieldValues,
         array $signatureValues,
         array $metadata,
@@ -129,6 +143,7 @@ final class Document
         $this->referenceNumber = $referenceNumber;
         $this->subjectType = $subjectType;
         $this->subjectId = $subjectId;
+        $this->contextId = $contextId;
         $this->fieldValues = $fieldValues;
         $this->signatureValues = $signatureValues;
         $this->metadata = $metadata;
@@ -176,11 +191,22 @@ final class Document
             ? (string) $row['subject_id']
             : null;
 
+        $contextId = isset($row['context_id']) && $row['context_id'] !== null && $row['context_id'] !== ''
+            ? (string) $row['context_id']
+            : null;
+
+        // Jatuh ke kolom lama selama masa peralihan. `'patient'` disimpulkan di
+        // sini, bukan ditulis migrasi: baris yang punya `norm` memang berasal
+        // dari jalur pasien, tapi menuliskannya ke database berarti library
+        // memutuskan domain milik aplikasi pemakainya.
         if ($subjectType === null && !empty($row['norm'])) {
             $subjectType = 'patient';
         }
         if ($subjectId === null && !empty($row['norm'])) {
             $subjectId = (string) $row['norm'];
+        }
+        if ($contextId === null && !empty($row['nopen'])) {
+            $contextId = (string) $row['nopen'];
         }
 
         $fieldValues = self::decodeJsonObject($row['field_values'] ?? null);
@@ -240,6 +266,7 @@ final class Document
             $referenceNumber,
             $subjectType,
             $subjectId,
+            $contextId,
             $fieldValues,
             $signatureValues,
             $metadata,
@@ -323,6 +350,12 @@ final class Document
     public function getSubjectId(): ?string
     {
         return $this->subjectId;
+    }
+
+    /** Episode/konteksnya — kunjungan, periode, tahun ajaran. Dulu `nopen`. */
+    public function getContextId(): ?string
+    {
+        return $this->contextId;
     }
 
     /** @return array<string,mixed> */
@@ -430,6 +463,7 @@ final class Document
             'reference_number' => $this->referenceNumber,
             'subject_type' => $this->subjectType,
             'subject_id' => $this->subjectId,
+            'context_id' => $this->contextId,
             'field_values' => $this->fieldValues,
             // `null` saat kolomnya tidak dimuat, bukan `[]`. Ini yang masuk ke
             // respons JSON dan audit log: `[]` di sana akan tercatat sebagai

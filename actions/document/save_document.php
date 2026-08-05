@@ -32,8 +32,8 @@ use Ezdoc\Context;
 global $author_id;
 
 $template_id = (int)($_POST['template_id'] ?? 0);
-$norm  = trim($_POST['_norm']  ?? '');
-$nopen = trim($_POST['_nopen'] ?? '');
+// Menerima _subject_id/_context_id maupun nama lamanya — lihat ezdoc_slot_identity().
+[$norm, $nopen] = ezdoc_slot_identity($_POST, '_');
 $label = trim($_POST['_label'] ?? '-');
 if ($label === '') $label = '-';
 $doc_id = (int)($_POST['_doc_id'] ?? 0);

@@ -60,3 +60,39 @@ function ezdoc_subject_type(): string
 
     return '';
 }
+
+/**
+ * Baca identitas slot dari permintaan, menerima nama lama maupun baru.
+ *
+ * Nama baru menang kalau ada. Nama lama tetap diterima tanpa batas waktu yang
+ * ditentukan sekarang: tautan `?norm=1&nopen=1` sudah tersimpan di bookmark
+ * orang dan di tautan yang dikirim lewat chat, dan mematikannya berarti
+ * mematahkan sesuatu yang tidak pernah mereka minta ubah.
+ *
+ * Awalan dipakai karena `save_document.php` membaca `_norm`/`_nopen`
+ * sementara aksi lain membaca `norm`/`nopen` — perbedaan yang sudah ada
+ * sebelum ini dan tidak perlu diseragamkan hanya untuk lewat sini.
+ *
+ * @param array<string,mixed> $source Biasanya $_POST atau $_GET.
+ * @return array{0: string, 1: string} [subject_id, context_id]
+ */
+function ezdoc_slot_identity(array $source, string $prefix = ''): array
+{
+    $pick = static function (array $src, string ...$keys): string {
+        foreach ($keys as $key) {
+            if (isset($src[$key]) && is_scalar($src[$key])) {
+                $value = trim((string) $src[$key]);
+                if ($value !== '') {
+                    return $value;
+                }
+            }
+        }
+
+        return '';
+    };
+
+    return [
+        $pick($source, $prefix . 'subject_id', $prefix . 'norm'),
+        $pick($source, $prefix . 'context_id', $prefix . 'nopen'),
+    ];
+}

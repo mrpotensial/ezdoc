@@ -20,8 +20,8 @@ use Ezdoc\Context;
 global $author_id;
 
 $tid = (int)($_POST['template_id'] ?? 0);
-$n   = trim($_POST['norm']  ?? '');
-$np  = trim($_POST['nopen'] ?? '');
+// Menerima subject_id/context_id maupun nama lamanya — lihat ezdoc_slot_identity().
+[$n, $np] = ezdoc_slot_identity($_POST);
 $lb  = trim($_POST['label'] ?? '-');
 
 if ($tid <= 0 || $n === '' || $np === '') {

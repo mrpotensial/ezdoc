@@ -238,6 +238,36 @@ final class SubjectIdentityTest extends TestCase
     }
 
     /**
+     * Nama lama harus tetap diterima. Tautan `?norm=1&nopen=1` sudah tersimpan
+     * di bookmark dan dikirim lewat chat; mematikannya berarti mematahkan
+     * sesuatu yang tidak pernah diminta berubah.
+     *
+     * @dataProvider slotParamCases
+     * @param array<string,string> $post
+     */
+    public function testBothParameterNamesAreAccepted(array $post, string $prefix, string $subject, string $context): void
+    {
+        require_once dirname(__DIR__, 2) . '/lib/subject_identity.php';
+
+        self::assertSame([$subject, $context], ezdoc_slot_identity($post, $prefix));
+    }
+
+    /** @return array<string,array{array<string,string>,string,string,string}> */
+    public static function slotParamCases(): array
+    {
+        return [
+            'nama lama'            => [['norm' => '1', 'nopen' => '2'], '', '1', '2'],
+            'nama baru'            => [['subject_id' => '3', 'context_id' => '4'], '', '3', '4'],
+            'berawalan, nama lama' => [['_norm' => '5', '_nopen' => '6'], '_', '5', '6'],
+            'berawalan, nama baru' => [['_subject_id' => '7', '_context_id' => '8'], '_', '7', '8'],
+            'nama baru menang'     => [['norm' => 'lama', 'subject_id' => 'baru', 'nopen' => 'x', 'context_id' => 'y'], '', 'baru', 'y'],
+            'nama baru kosong'     => [['subject_id' => '', 'norm' => 'cadangan', 'nopen' => 'n'], '', 'cadangan', 'n'],
+            'tidak ada apa-apa'    => [[], '', '', ''],
+            'dipangkas spasinya'   => [['norm' => '  9  ', 'nopen' => " 10\t"], '', '9', '10'],
+        ];
+    }
+
+    /**
      * `subject_type` sengaja TIDAK diisi migrasi. Menyimpulkan bahwa baris lama
      * adalah pasien butuh pengetahuan yang cuma dimiliki aplikasi pemakainya,
      * dan menuliskannya di library berarti memaku satu domain ke dalam paket
