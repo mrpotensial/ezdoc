@@ -2366,7 +2366,7 @@
 
                 // Logo insert with positioning options
                 editor.ui.registry.addMenuButton('insertlogo', {
-                    text: 'Logo',
+                    text: t('toolbar_insert.logo_label', {}, 'Logo'),
                     icon: 'ezdoc-logo',
                     tooltip: t('toolbar_insert.logo_tooltip', {}, 'Insert Logo Placeholder'),
                     fetch: function(callback) {
@@ -2426,7 +2426,7 @@
 
                 // QR Code insert with positioning options
                 editor.ui.registry.addMenuButton('insertqr', {
-                    text: 'QR',
+                    text: t('toolbar_insert.qr_label', {}, 'QR'),
                     icon: 'ezdoc-qr',
                     tooltip: t('toolbar_insert.qr_tooltip', {}, 'Insert QR Code Placeholder'),
                     fetch: function(callback) {
@@ -2478,7 +2478,7 @@
 
                 // Field insert with type options
                 editor.ui.registry.addMenuButton('insertfield', {
-                    text: 'Field',
+                    text: t('toolbar_insert.field_label', {}, 'Field'),
                     icon: 'ezdoc-field',
                     tooltip: t('toolbar_insert.field_tooltip', {}, 'Insert Field Input'),
                     fetch: function(callback) {
@@ -2528,7 +2528,7 @@
 
                 // TTD insert with positioning options
                 editor.ui.registry.addMenuButton('insertttd', {
-                    text: 'TTD',
+                    text: t('toolbar_insert.ttd_label', {}, 'Signature'),
                     icon: 'ezdoc-ttd',
                     tooltip: t('toolbar_insert.ttd_tooltip', {}, 'Insert Signature Placeholder'),
                     fetch: function(callback) {
@@ -2620,7 +2620,7 @@
 
                 // ===== Materai (stamp duty) =====
                 editor.ui.registry.addMenuButton('insertmaterai', {
-                    text: 'Materai',
+                    text: t('toolbar_insert.materai_label', {}, 'Stamp'),
                     icon: 'ezdoc-materai',
                     tooltip: t('toolbar_insert.materai_tooltip', {}, 'Insert Stamp Duty (E-Materai upload / empty area to affix)'),
                     fetch: function(callback) {

@@ -30,5 +30,5 @@ return [
     'app.author_id'    => $author_id ?? null,
     'app.author_roles' => $author_role_array ?? [],
 
-    'app.locale' => 'id',
+    'app.locale' => 'en',
 ];

@@ -362,6 +362,20 @@ return [
         'used_in_docs_count' => '{used} / {total} doc(s)',
     ],
     'toolbar_insert' => [
+        // Editor toolbar button labels. These were hardcoded in
+        // designer_scripts.php, and two of them were Indonesian ("TTD",
+        // "Materai") sitting in a library meant to be installed elsewhere —
+        // the tooltips already went through translation, the labels did not.
+        //
+        // "Stamp" rather than "Materai": stamp duty is not an Indonesian
+        // invention. India, Malaysia, Singapore and the UK each have their own,
+        // and the button means the same thing in all of them.
+        'field_label' => 'Field',
+        'ttd_label' => 'Signature',
+        'materai_label' => 'Stamp',
+        'qr_label' => 'QR',
+        'logo_label' => 'Logo',
+
         'mode_inline' => 'Inline (in text)',
         'mode_front' => 'Floating - In Front of Text',
         'mode_behind' => 'Floating - Behind Text',

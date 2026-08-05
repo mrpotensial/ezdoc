@@ -363,6 +363,15 @@ return [
         'used_in_docs_count'          => '{used} / {total} dok',
     ],
     'toolbar_insert' => [
+        // Label tombol toolbar editor. Dulu hardcoded di designer_scripts.php,
+        // dan dua di antaranya bahasa Indonesia di dalam library yang
+        // dimaksudkan untuk dipasang orang lain. Di sini justru tempatnya.
+        'field_label'              => 'Field',
+        'ttd_label'                => 'TTD',
+        'materai_label'            => 'Materai',
+        'qr_label'                 => 'QR',
+        'logo_label'               => 'Logo',
+
         'mode_inline'              => 'Inline (dalam teks)',
         'mode_front'               => 'Floating - Di Depan Teks',
         'mode_behind'              => 'Floating - Di Belakang Teks',
