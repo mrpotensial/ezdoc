@@ -49,6 +49,12 @@ final class DocumentRepository
     private static $desiredCols = [
         'id', 'uuid', 'template_id', 'template_uuid', 'template_version',
         'title', 'norm', 'nopen', 'label', 'version',
+        // Identitas subjek yang generik. Document::fromRow() sudah lebih dulu
+        // memilih kolom ini dan baru jatuh ke norm — tapi selama ia tidak ikut
+        // di-SELECT, cabang itu tidak pernah terpakai dan jalur lamanya yang
+        // selalu jalan. Daftar ini sendiri disaring lewat introspeksi, jadi
+        // consumer yang belum menjalankan migrasinya tetap aman.
+        'subject_type', 'subject_id', 'context_id',
         'field_values', 'signature_values', 'metadata',
         'status', 'is_locked',
         'content_hash', 'content_hash_at', 'content_hash_version',

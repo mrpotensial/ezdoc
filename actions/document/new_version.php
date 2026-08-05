@@ -48,7 +48,7 @@ $templateVersion = (int) $tpl['version'];
 // Search by template_uuid (family) supaya lintas template version ke-detect.
 $nextVersion = (int) $db->fetchScalar(
     'SELECT COALESCE(MAX(version), 0) + 1
-     FROM ezdoc_documents WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ?',
+     FROM ezdoc_documents WHERE template_uuid = ? AND subject_id = ? AND context_id = ? AND label = ?',
     [$templateUuid, $n, $np, $lb]
 );
 if ($nextVersion < 1) $nextVersion = 1;
@@ -75,7 +75,7 @@ $newTtd = '{}';
 if ($sourceVersion > 0) {
     $src = $db->fetchOne(
         'SELECT field_values FROM ezdoc_documents
-         WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ?
+         WHERE template_uuid = ? AND subject_id = ? AND context_id = ? AND label = ?
            AND version = ? AND deleted_at IS NULL',
         [$templateUuid, $n, $np, $lb, $sourceVersion]
     );

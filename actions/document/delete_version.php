@@ -55,7 +55,7 @@ if ((int) $doc['is_locked'] === 1) {
 // Cek apakah ini versi terakhir di slot (search by template_uuid untuk lintas versi template)
 $cnt = (int) $db->fetchScalar(
     'SELECT COUNT(*) FROM ezdoc_documents
-     WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ? AND deleted_at IS NULL',
+     WHERE template_uuid = ? AND subject_id = ? AND context_id = ? AND label = ? AND deleted_at IS NULL',
     [$doc['template_uuid'], $doc['norm'], $doc['nopen'], $doc['label']]
 );
 if ($cnt <= 1) {

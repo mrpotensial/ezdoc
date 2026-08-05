@@ -35,7 +35,7 @@ $rows = $db->fetchAll(
     'SELECT d.id, d.version, d.is_locked, d.updated_at
      FROM ezdoc_documents d
      INNER JOIN ezdoc_templates t ON t.uuid = d.template_uuid
-     WHERE t.id = ? AND d.norm = ? AND d.nopen = ? AND d.label = ? AND d.deleted_at IS NULL
+     WHERE t.id = ? AND d.subject_id = ? AND d.context_id = ? AND d.label = ? AND d.deleted_at IS NULL
      ORDER BY d.version DESC',
     [$tid, $n, $np, $lb]
 );

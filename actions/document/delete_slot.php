@@ -53,7 +53,7 @@ if (!$hasExplicitDeleteConfig) {
 // Refuse kalau ada versi locked
 $lockedCnt = (int) $db->fetchScalar(
     'SELECT COUNT(*) FROM ezdoc_documents
-     WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ?
+     WHERE template_uuid = ? AND subject_id = ? AND context_id = ? AND label = ?
        AND is_locked = 1 AND deleted_at IS NULL',
     [$templateUuid, $n, $np, $lb]
 );
@@ -66,7 +66,7 @@ $author = (string) ($author_id ?? 'system');
 try {
     $affected = $db->execute(
         'UPDATE ezdoc_documents SET deleted_at = NOW(), deleted_by = ?
-         WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ?
+         WHERE template_uuid = ? AND subject_id = ? AND context_id = ? AND label = ?
            AND deleted_at IS NULL',
         [$author, $templateUuid, $n, $np, $lb]
     );

@@ -38,7 +38,7 @@ $templateUuid = $tpl->getUuid();
 try {
     $affected = $db->execute(
         'UPDATE ezdoc_documents SET deleted_at = NULL, deleted_by = NULL
-         WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ?
+         WHERE template_uuid = ? AND subject_id = ? AND context_id = ? AND label = ?
            AND deleted_at IS NOT NULL',
         [$templateUuid, $n, $np, $lb]
     );

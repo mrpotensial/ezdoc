@@ -54,7 +54,7 @@ $db = Context::default()->connection();
 // menandatangani apa dan dari IP mana — bukan sesuatu yang dibagikan hanya
 // karena penebak id-nya beruntung.
 $doc = $db->fetchOne(
-    'SELECT d.id, d.template_id, d.template_uuid, d.norm, d.nopen, d.label, t.access_config
+    'SELECT d.id, d.template_id, d.template_uuid, d.subject_id, d.context_id, d.label, t.access_config
      FROM ezdoc_documents d
      LEFT JOIN ezdoc_templates t ON t.id = d.template_id
      WHERE d.id = ? LIMIT 1',
@@ -85,9 +85,9 @@ $showAuditDetail = ezdoc_can_view_audit_detail();
 // tanpa penjelasan.
 $slotRows = $db->fetchAll(
     'SELECT id, version FROM ezdoc_documents
-     WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ?
+     WHERE template_uuid = ? AND subject_id = ? AND context_id = ? AND label = ?
      ORDER BY version',
-    [$doc['template_uuid'], $doc['norm'], $doc['nopen'], $doc['label']]
+    [$doc['template_uuid'], $doc['subject_id'], $doc['context_id'], $doc['label']]
 );
 
 /** @var array<int,int> id dokumen => nomor versi */

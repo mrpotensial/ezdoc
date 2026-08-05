@@ -349,7 +349,7 @@ if (!$isEdit) {
     // Find latest version in slot — search by template_uuid untuk lintas template version
     $row = $db->fetchOne(
         'SELECT id, version, is_locked FROM ezdoc_documents
-         WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ? AND deleted_at IS NULL
+         WHERE template_uuid = ? AND subject_id = ? AND context_id = ? AND label = ? AND deleted_at IS NULL
          ORDER BY version DESC LIMIT 1',
         [$templateUuid, $norm, $nopen, $label]
     );
@@ -601,7 +601,7 @@ try {
         $nextVersion = (int) $db->fetchScalar(
             'SELECT COALESCE(MAX(version), 0) + 1
              FROM ezdoc_documents
-             WHERE template_uuid = ? AND norm = ? AND nopen = ? AND label = ?',
+             WHERE template_uuid = ? AND subject_id = ? AND context_id = ? AND label = ?',
             [$templateUuid, $norm, $nopen, $label]
         );
         if ($nextVersion < 1) $nextVersion = 1;
