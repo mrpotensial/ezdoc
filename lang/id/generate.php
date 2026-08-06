@@ -106,6 +106,10 @@ return [
         'otp_voucher_claim_failed' => 'Kode dari pasien ditolak',
         'otp_voucher_claimed_override' => 'Kode terverifikasi ke nomor berbeda',
         'otp_voucher_lookup_manual'    => 'Status diperiksa untuk nomor yang diketik',
+        // V6 — kode terikat dokumen. Lima kunci voucher di atas dipertahankan
+        // walau jalurnya sudah pensiun: baris lama masih ada di log audit.
+        'otp_scan_requested'       => 'QR ditampilkan ke penanda tangan',
+        'otp_scan_fulfilled'       => 'Penanda tangan memindai dan menerima kode',
         'revoked_suffix'           => 'dicabut',
         'failed_suffix'            => 'gagal',
         'unknown_actor'            => 'tidak diketahui',

@@ -2975,57 +2975,6 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     </div>
                 </div>
 
-                <div id="signOtpStepVoucher" class="hidden">
-                    <h6 class="text-sm font-bold text-slate-800 mb-1 flex items-center gap-1.5">
-                        <i class="bi bi-qr-code-scan text-slate-700 text-base"></i>
-                        <span><?= h(t('modal.otp.voucher_title', [], 'Kode dari Pasien')) ?></span>
-                    </h6>
-                    <p class="text-xs text-slate-600 mb-3"><?= h(t('modal.otp.voucher_desc', [], 'Pasien memindai QR di ruang tunggu, lalu menyebutkan kodenya.')) ?></p>
-
-                    <div class="mb-3">
-                        <label class="block text-xs font-semibold text-slate-700 mb-1"><?= h(t('modal.otp.phone_label', [], 'Nomor WhatsApp Pasien:')) ?></label>
-                        <div class="flex items-center gap-2">
-                            <input type="text" id="signVoucherPhone" readonly
-                                   class="flex-1 text-xs p-2 border border-slate-300 rounded font-mono bg-slate-100 text-slate-700 read-only:cursor-default"
-                                   placeholder="08xxxxxxxxxx / 628xxxxxxxxxx">
-                            <span id="signVoucherPhoneOrigin" class="shrink-0 inline-flex items-center gap-1 text-[11px] text-slate-500">
-                                <i class="bi bi-lock-fill"></i>
-                                <span id="signVoucherPhoneOriginText"><?= h(t('modal.otp.voucher_from_doc', [], 'dari dokumen')) ?></span>
-                            </span>
-                        </div>
-                        <div id="signVoucherStatus" class="text-[11px] mt-1.5 flex items-center gap-1 text-slate-500">
-                            <i class="bi bi-dash-circle"></i>
-                            <span id="signVoucherStatusText"><?= h(t('modal.otp.status_checking', [], 'Memeriksa…')) ?></span>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="block text-xs font-semibold text-slate-700 mb-1"><?= h(t('modal.otp.voucher_code_label', [], 'Kode dari pasien (6 digit):')) ?></label>
-                        <input type="text" id="signVoucherCode" maxlength="6" inputmode="numeric"
-                               class="w-full text-center text-lg tracking-[0.5em] font-bold p-2 border border-slate-300 rounded font-mono focus:border-slate-800"
-                               placeholder="<?= h(t('modal.otp.otp_placeholder', [], '123456')) ?>" autocomplete="off">
-                        <div id="signVoucherAttempts" class="text-[11px] text-amber-600 mt-1 font-semibold"></div>
-                    </div>
-
-                    <button type="button" id="btnClaimVoucher" onclick="claimTtdVoucher()"
-                            class="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-bold transition flex items-center justify-center gap-2">
-                        <i class="bi bi-check-circle-fill"></i>
-                        <span id="btnClaimVoucherText"><?= h(t('modal.otp.voucher_verify_btn', [], 'Verifikasi Kode')) ?></span>
-                    </button>
-
-                    <?php // Jalur cadangan berbayar, jadi ia ada di balik satu langkah
-                    // tambahan — bukan supaya sulit dipakai, tapi supaya tidak dipakai
-                    // hanya karena tombolnya paling dekat ke jari. ?>
-                    <div class="flex items-center justify-between mt-3 text-[11px]">
-                        <button type="button" onclick="showOtpFallback()" class="text-slate-500 hover:text-slate-800 underline underline-offset-2">
-                            <?= h(t('modal.otp.voucher_fallback_link', [], 'Pasien tidak bisa memindai?')) ?>
-                        </button>
-                        <button type="button" id="btnUnlockVoucherPhone" onclick="unlockVoucherPhone()" class="text-slate-500 hover:text-slate-800 underline underline-offset-2">
-                            <?= h(t('modal.otp.voucher_change_phone', [], 'Ubah nomor')) ?>
-                        </button>
-                    </div>
-                </div>
-
                 <!-- Step 1: Kirim OTP (jalur cadangan) -->
                 <div id="signOtpStep1" class="hidden">
                     <h6 class="text-sm font-bold text-slate-800 mb-1 flex items-center gap-1.5">

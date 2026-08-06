@@ -1195,6 +1195,13 @@
                 // sengketa adalah "dari mana nomornya", bukan "apakah ada kode".
                 'otp.voucher_claimed_override': { icon: 'bi-pencil-square', tone: 'text-amber-600', label: t('history_event.otp_voucher_claimed_override', {}, 'Patient code verified against a different number') },
                 'otp.voucher_lookup_manual':    { icon: 'bi-search',        tone: 'text-gray-500', label: t('history_event.otp_voucher_lookup_manual', {}, 'Status checked for a typed number') },
+
+                // V6 — kode terikat dokumen. Lima kejadian voucher di atas
+                // dipertahankan walau jalurnya sudah pensiun: baris lama masih
+                // ada di log audit, dan riwayat yang menampilkan nama kejadian
+                // mentah untuk dokumen lama sama saja dengan riwayat yang rusak.
+                'otp.scan_requested': { icon: 'bi-qr-code',      tone: 'text-gray-500',    label: t('history_event.otp_scan_requested', {}, 'QR shown to the signer') },
+                'otp.scan_fulfilled': { icon: 'bi-qr-code-scan', tone: 'text-emerald-600', label: t('history_event.otp_scan_fulfilled', {}, 'Signer scanned and received a code') },
             };
 
             // Kejadian yang tidak dikenali tetap ditampilkan, memakai nama mentahnya.
@@ -1613,14 +1620,6 @@
             signTokens: {},
             timerInterval: null,
 
-            // ── Jalur voucher (pasien yang meminta kodenya lewat QR) ──
-            // 'document' = nomor diambil dari field dokumen; 'manual' = petugas
-            // mengetiknya. Yang manual ikut tercatat di log audit, dan hanya
-            // yang 'document' yang boleh diperiksa berulang otomatis — status
-            // untuk nomor bebas dibatasi 10 per menit di sisi server.
-            voucherPhoneOrigin: 'document',
-            voucherPoll: null,
-
             // ── V6: kode diminta lewat QR di layar ini ──
             scanPoll: null,
             scanCountdown: null
@@ -1728,7 +1727,7 @@
                     overlay.classList.add('hidden');
                     if (btnSaveSign) btnSaveSign.disabled = false;
                     _hideAllOtpSteps();
-                    stopVoucherPoll();
+                    stopScanPoll();
                 } else {
                     // Requires OTP verification first
                     otpBadge.classList.add('hidden');
@@ -1755,26 +1754,25 @@
                     if (!patientPhone) patientPhone = ttdInfo.otp_phone_value || '';
                     patientPhone = patientPhone.trim();
 
-                    // Kedua jalur memakai nomor yang sama. Yang membedakan hanya
-                    // siapa yang meminta kodenya.
+                    // Hanya jalur kirim yang butuh nomor. Jalur pindaian tidak
+                    // punya kolom nomor sama sekali — nomornya ketahuan dari
+                    // siapa yang memindai.
                     const phoneInput = document.getElementById('signOtpPhoneInput');
                     if (phoneInput) phoneInput.value = patientPhone;
 
-                    const voucherPhone = document.getElementById('signVoucherPhone');
-                    if (voucherPhone) voucherPhone.value = patientPhone;
-
-                    // Nomor dari dokumen: terkunci. Petugas tidak perlu mengetik
-                    // apa pun, jadi tidak ada yang bisa salah ketik.
-                    _otpState.voucherPhoneOrigin = 'document';
-                    _lockVoucherPhone(true);
-
-                    // V6 kalau pemasangan sudah mengonfigurasi pola tautannya;
-                    // kalau belum, jalur voucher lama yang tampil. Ditentukan
-                    // server lewat EZDOC_SCAN_URL_TEMPLATE.
+                    // Jalur pindaian kalau pemasangan sudah mengonfigurasi pola
+                    // tautannya; kalau belum, jalur kirim OTP.
+                    //
+                    // Cadangannya jalur kirim, BUKAN voucher. Voucher lahir untuk
+                    // satu alasan — kode diminta sebelum ada yang tahu untuk
+                    // dokumen mana — dan alasan itu hilang begitu QR-nya pindah ke
+                    // layar ini. Yang tersisa darinya cuma kelemahannya: nomor
+                    // yang diketik tangan, beserta jeda, pencatatan, dan batas
+                    // sepuluh-per-menit yang dibangun untuk menahannya.
                     if (window.EZDOC_SCAN_ENABLED) {
                         showScanRoute();
                     } else {
-                        showVoucherRoute();
+                        showOtpFallback();
                     }
                 }
             } else {
@@ -1784,7 +1782,7 @@
                 overlay.classList.add('hidden');
                 if (btnSaveSign) btnSaveSign.disabled = false;
                 _hideAllOtpSteps();
-                stopVoucherPoll();
+                stopScanPoll();
             }
 
             // Nilai slot yang bukan data URI tidak bisa digambar ke canvas —
@@ -1950,6 +1948,23 @@
             const el = document.getElementById('signOtpStepScan');
             if (el) el.classList.remove('hidden');
             _scanState('signScanIdle');
+        }
+
+        /**
+         * Jalur cadangan: petugas mengirim kode ke nomor yang tercatat.
+         *
+         * Dipakai dua arah — dari tautan "tidak bisa memindai" di panel pindaian,
+         * dan sebagai jalur bawaan saat pemasangan belum mengonfigurasi pola
+         * tautan QR-nya.
+         *
+         * Ini yang berbayar, jadi ia tidak pernah jadi tampilan pertama selama
+         * jalur pindaian tersedia.
+         */
+        function showOtpFallback() {
+            _hideAllOtpSteps();
+            stopScanPoll();
+            const el = document.getElementById('signOtpStep1');
+            if (el) el.classList.remove('hidden');
         }
 
         /**
@@ -2184,224 +2199,6 @@
                 btnText.textContent = t('modal.otp.voucher_verify_btn', {}, 'Verifikasi Kode');
             }
         }
-
-        function _lockVoucherPhone(locked) {
-            const input = document.getElementById('signVoucherPhone');
-            const badge = document.getElementById('signVoucherPhoneOrigin');
-            const btn = document.getElementById('btnUnlockVoucherPhone');
-            if (!input) return;
-
-            input.readOnly = locked;
-            input.classList.toggle('bg-slate-100', locked);
-            input.classList.toggle('text-slate-700', locked);
-
-            if (badge) {
-                const icon = badge.querySelector('i');
-                const text = document.getElementById('signVoucherPhoneOriginText');
-                if (icon) icon.className = locked ? 'bi bi-lock-fill' : 'bi bi-pencil-fill';
-                if (text) {
-                    text.textContent = locked
-                        ? t('modal.otp.voucher_from_doc', {}, 'dari dokumen')
-                        : t('modal.otp.voucher_typed', {}, 'diketik manual');
-                }
-            }
-            if (btn) btn.classList.toggle('hidden', !locked);
-        }
-
-        /**
-         * Buka kunci kolom nomor.
-         *
-         * Sekali dibuka tidak dikunci lagi selama modal terbuka: mengembalikan
-         * nomor dokumen diam-diam akan membuang apa yang baru diketik petugas.
-         * Pemakaiannya tercatat di sisi server saat kode diklaim.
-         */
-        function unlockVoucherPhone() {
-            _otpState.voucherPhoneOrigin = 'manual';
-            _lockVoucherPhone(false);
-            stopVoucherPoll(); // Nomor bebas dibatasi 10 pemeriksaan per menit
-            const input = document.getElementById('signVoucherPhone');
-            if (input) {
-                input.focus();
-                input.select();
-            }
-        }
-
-        function showVoucherRoute() {
-            _hideAllOtpSteps();
-            const el = document.getElementById('signOtpStepVoucher');
-            if (el) el.classList.remove('hidden');
-            refreshVoucherStatus();
-            startVoucherPoll();
-        }
-
-        function showOtpFallback() {
-            _hideAllOtpSteps();
-            stopVoucherPoll();
-            const el = document.getElementById('signOtpStep1');
-            if (el) el.classList.remove('hidden');
-
-            // Nomor yang sudah dikoreksi petugas ikut pindah, supaya jalur
-            // cadangan tidak mengirim ke nomor yang sudah diketahui salah.
-            const from = document.getElementById('signVoucherPhone');
-            const to = document.getElementById('signOtpPhoneInput');
-            if (from && to && from.value.trim()) to.value = from.value.trim();
-        }
-
-        /**
-         * Periksa berkala, tapi hanya untuk nomor yang berasal dari dokumen.
-         *
-         * Gunanya: pasien memindai saat petugas sudah membuka modal, dan
-         * statusnya berubah sendiri tanpa petugas menekan apa pun.
-         *
-         * Nomor yang diketik manual TIDAK diperiksa berkala. Server membatasi
-         * pemeriksaan nomor bebas 10 per menit — memeriksa tiap 10 detik akan
-         * memakan hampir seluruh jatah itu, dan jatahnya ada supaya nomor tidak
-         * bisa disapu satu per satu.
-         */
-        function startVoucherPoll() {
-            stopVoucherPoll();
-            if (_otpState.voucherPhoneOrigin !== 'document') return;
-            _otpState.voucherPoll = setInterval(refreshVoucherStatus, 10000);
-        }
-
-        function stopVoucherPoll() {
-            if (_otpState.voucherPoll) {
-                clearInterval(_otpState.voucherPoll);
-                _otpState.voucherPoll = null;
-            }
-        }
-
-        function _setVoucherStatus(icon, tone, text) {
-            const wrap = document.getElementById('signVoucherStatus');
-            const label = document.getElementById('signVoucherStatusText');
-            if (!wrap || !label) return;
-            wrap.className = 'text-[11px] mt-1.5 flex items-center gap-1 ' + tone;
-            const i = wrap.querySelector('i');
-            if (i) i.className = 'bi ' + icon;
-            label.textContent = text;
-        }
-
-        async function refreshVoucherStatus() {
-            const input = document.getElementById('signVoucherPhone');
-            if (!input) return;
-
-            const phone = input.value.trim();
-            if (!phone) {
-                _setVoucherStatus('bi-exclamation-circle', 'text-amber-600',
-                    t('modal.otp.status_no_phone', {}, 'Nomor pasien belum diisi di dokumen'));
-                return;
-            }
-
-            try {
-                const fd = new FormData();
-                fd.append('_doc_action', 'otp_voucher_status');
-                fd.append('template_id', templateId);
-                fd.append('ttd_id', currentTtdId);
-                if (CURRENT_DOC_ID) fd.append('doc_id', CURRENT_DOC_ID);
-                // Nomor hanya dikirim kalau petugas mengubahnya. Kalau tidak,
-                // server memakai nomor dokumen — dan tidak ada nomor pilihan
-                // pemanggil yang bisa dipakai untuk mengintai.
-                if (_otpState.voucherPhoneOrigin === 'manual') fd.append('phone', phone);
-
-                const endpoint = typeof _ezdocEndpoint === 'function'
-                    ? _ezdocEndpoint('docAction')
-                    : 'actions/document/otp_voucher_status.php';
-                const res = await fetch(endpoint, { method: 'POST', body: fd });
-                const data = await res.json();
-
-                if (!data.success) {
-                    _setVoucherStatus('bi-dash-circle', 'text-slate-500',
-                        t('modal.otp.status_unavailable', {}, 'Status tidak dapat diperiksa'));
-                    return;
-                }
-
-                if (data.state === 'active') {
-                    const secs = Number(data.seconds_left) || 0;
-                    _setVoucherStatus('bi-check-circle-fill', 'text-emerald-600',
-                        secs >= 60
-                            ? t('modal.otp.status_active', {minutes: Math.floor(secs / 60)},
-                                `Sudah ambil kode · berlaku ${Math.floor(secs / 60)} menit lagi`)
-                            : t('modal.otp.status_active_soon', {seconds: secs},
-                                `Sudah ambil kode · berlaku ${secs} detik lagi`));
-                } else if (data.state === 'expired') {
-                    _setVoucherStatus('bi-x-circle', 'text-amber-600',
-                        t('modal.otp.status_expired', {}, 'Kode sudah kedaluwarsa — minta pasien memindai lagi'));
-                } else if (data.state === 'locked') {
-                    _setVoucherStatus('bi-shield-exclamation', 'text-red-600',
-                        t('modal.otp.status_locked', {}, 'Terlalu banyak percobaan salah — minta kode baru'));
-                } else {
-                    _setVoucherStatus('bi-dash-circle', 'text-slate-500',
-                        t('modal.otp.status_none', {}, 'Belum ambil kode — minta pasien memindai QR'));
-                }
-            } catch (e) {
-                // Jaringan putus bukan alasan untuk membuat petugas panik.
-                _setVoucherStatus('bi-dash-circle', 'text-slate-500',
-                    t('modal.otp.status_unavailable', {}, 'Status tidak dapat diperiksa'));
-            }
-        }
-
-        async function claimTtdVoucher() {
-            const codeInput = document.getElementById('signVoucherCode');
-            const phoneInput = document.getElementById('signVoucherPhone');
-            const code = (codeInput?.value || '').trim();
-
-            if (!/^\d{6}$/.test(code)) {
-                showToast(t('modal.otp.voucher_code_required', {}, 'Kode 6 digit wajib diisi.'), 'error');
-                codeInput?.focus();
-                return;
-            }
-
-            const btn = document.getElementById('btnClaimVoucher');
-            const btnText = document.getElementById('btnClaimVoucherText');
-
-            btn.disabled = true;
-            btnText.textContent = t('modal.otp.verifying', {}, 'Memverifikasi...');
-
-            try {
-                const fd = new FormData();
-                fd.append('_doc_action', 'claim_ttd_voucher');
-                fd.append('template_id', templateId);
-                fd.append('ttd_id', currentTtdId);
-                fd.append('code', code);
-                if (CURRENT_DOC_ID) fd.append('doc_id', CURRENT_DOC_ID);
-                if (_otpState.voucherPhoneOrigin === 'manual') {
-                    fd.append('phone', (phoneInput?.value || '').trim());
-                }
-
-                const endpoint = typeof _ezdocEndpoint === 'function'
-                    ? _ezdocEndpoint('docAction')
-                    : 'actions/document/claim_ttd_voucher.php';
-                const res = await fetch(endpoint, { method: 'POST', body: fd });
-                const data = await res.json();
-
-                if (data.success) {
-                    if (codeInput) codeInput.value = '';
-                    const attemptsEl = document.getElementById('signVoucherAttempts');
-                    if (attemptsEl) attemptsEl.textContent = '';
-                    applySignToken(data.sign_token, data.message);
-                } else {
-                    showToast(data.message || t('modal.otp.invalid_code', {}, 'Kode tidak sesuai.'), 'error');
-
-                    const attemptsEl = document.getElementById('signVoucherAttempts');
-                    if (attemptsEl) {
-                        attemptsEl.textContent = (data.attempts_left !== undefined && data.reason === 'invalid')
-                            ? t('modal.otp.attempts_left', {attempts: data.attempts_left},
-                                `Sisa percobaan: ${data.attempts_left} kali`)
-                            : '';
-                    }
-                    // Statusnya baru saja berubah — kedaluwarsa, terkunci, atau
-                    // percobaan berkurang. Diperbarui supaya petugas tidak
-                    // mengulang kode yang sudah mati.
-                    refreshVoucherStatus();
-                }
-            } catch (e) {
-                showToast('Gagal memverifikasi kode: ' + e.message, 'error');
-            } finally {
-                btn.disabled = false;
-                btnText.textContent = t('modal.otp.voucher_verify_btn', {}, 'Verifikasi Kode');
-            }
-        }
-
         /**
          * Terima sign token dan buka kanvasnya.
          *
@@ -2432,7 +2229,6 @@
             if (btnSave) btnSave.disabled = false;
 
             _hideAllOtpSteps();
-            stopVoucherPoll();
             stopScanPoll();
         }
 
@@ -2461,7 +2257,6 @@
             modal.classList.remove('show');
             // Modal tertutup, tidak ada yang membaca statusnya. Membiarkannya
             // berjalan berarti satu permintaan tiap beberapa detik selamanya.
-            stopVoucherPoll();
             stopScanPoll();
         }
         function clearSign() { ctx.clearRect(0, 0, canvas.width, canvas.height); }

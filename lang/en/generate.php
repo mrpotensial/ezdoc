@@ -90,6 +90,10 @@ return [
         'otp_voucher_claim_failed' => 'Patient code rejected',
         'otp_voucher_claimed_override' => 'Patient code verified against a different number',
         'otp_voucher_lookup_manual' => 'Status checked for a typed number',
+        // V6 — document-bound code. The five voucher keys above are kept even
+        // though that route is retired: old rows still sit in the audit log.
+        'otp_scan_requested' => 'QR shown to the signer',
+        'otp_scan_fulfilled' => 'Signer scanned and received a code',
         'revoked_suffix' => 'revoked',
         'failed_suffix' => 'failed',
         'unknown_actor' => 'unknown',
