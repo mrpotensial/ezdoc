@@ -85,11 +85,21 @@ if (!defined('EZDOC_TEMPLATE_MANAGER_ROLES')) {
 // Contoh WhatsApp:
 //   define('EZDOC_SCAN_URL_TEMPLATE', 'https://wa.me/6282148663619?text=TTD-OTP-{token}');
 //
-// Kosong = fitur QR tidak muncul di modal tanda tangan. Bukan rusak — memang
-// belum dikonfigurasi, dan jalur OTP lama tetap jalan.
-if (!defined('EZDOC_SCAN_URL_TEMPLATE')) {
-    define('EZDOC_SCAN_URL_TEMPLATE', '');
-}
+// Tidak didefinisikan = fitur QR tidak muncul di modal tanda tangan. Bukan
+// rusak — memang belum dikonfigurasi, dan jalur kirim OTP tetap jalan.
+//
+// **Sengaja TIDAK di-`define()` di sini**, walau semua konstanta lain di berkas
+// ini punya nilai bawaan.
+//
+// Berkas ini dimuat di awal bootstrap; hook aplikasi pemakai
+// (EZDOC_BOOTSTRAP_HOOK) dijalankan di akhirnya. Kalau di sini ditulis
+// `if (!defined(...)) define(..., '')`, konstantanya sudah telanjur terisi
+// kosong saat hook-nya jalan — dan `if (!defined(...))` milik hook tidak akan
+// pernah benar. Fiturnya mati diam-diam, dan yang mengonfigurasinya tidak
+// pernah tahu kenapa.
+//
+// Kedua pembacanya sudah menangani "belum didefinisikan" sebagai kosong, jadi
+// tidak ada yang hilang dengan membiarkannya tidak ada.
 
 // ─── Detail audit: siapa boleh melihat alamat IP dan daftar role orang lain ───
 //

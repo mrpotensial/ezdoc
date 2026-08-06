@@ -2993,10 +2993,15 @@ function renderFieldForPdf($name, $type, $val, $label) {
                         <i class="bi bi-send-fill"></i> <span id="btnSendOtpText"><?= h(t('modal.otp.send_btn', [], 'Kirim Kode OTP via WA')) ?></span>
                     </button>
 
-                    <?php // Tanpa jalan pulang, petugas yang salah menekan tautan
-                    // cadangan hanya punya satu pilihan: mengirim pesan berbayar. ?>
-                    <div class="mt-3 text-[11px]">
-                        <button type="button" onclick="showVoucherRoute()" class="text-slate-500 hover:text-slate-800 underline underline-offset-2">
+                    <?php // Jalan pulang ke jalur pindaian. Tanpa ini, petugas yang
+                    // salah menekan tautan cadangan hanya punya satu pilihan:
+                    // mengirim pesan berbayar.
+                    //
+                    // Hanya muncul kalau jalur pindaian memang tersedia — kalau
+                    // pemasangan belum mengonfigurasinya, tidak ada tempat untuk
+                    // kembali. ?>
+                    <div class="mt-3 text-[11px]" id="signOtpBackToScan" style="display:none;">
+                        <button type="button" onclick="showScanRoute()" class="text-slate-500 hover:text-slate-800 underline underline-offset-2">
                             <?= h(t('modal.otp.voucher_back_link', [], 'Kembali ke kode dari pasien')) ?>
                         </button>
                     </div>

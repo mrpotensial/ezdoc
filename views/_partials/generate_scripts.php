@@ -1965,6 +1965,10 @@
             stopScanPoll();
             const el = document.getElementById('signOtpStep1');
             if (el) el.classList.remove('hidden');
+
+            // Jalan pulang hanya kalau ada tempat untuk pulang.
+            const back = document.getElementById('signOtpBackToScan');
+            if (back) back.style.display = window.EZDOC_SCAN_ENABLED ? '' : 'none';
         }
 
         /**

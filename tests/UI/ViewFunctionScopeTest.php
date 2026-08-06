@@ -163,6 +163,59 @@ JS;
     }
 
     /**
+     * Every `onclick="something()"` in the markup must name a function that
+     * exists.
+     *
+     * The list above is hand-written, so it only guards what somebody
+     * remembered to add. This guards the opposite direction and needs no
+     * maintenance: it reads the markup and demands that whatever it calls is
+     * really there.
+     *
+     * Written after retiring the voucher route. Its functions were deleted from
+     * the JS, and one `onclick` in the markup still pointed at
+     * `showVoucherRoute()` — a button that threw ReferenceError the moment
+     * anybody pressed it. Nothing caught it: the list above did not mention it,
+     * the file parsed, and the browser harness never pressed that particular
+     * button. It reached the user.
+     */
+    public function testEveryOnclickInTheMarkupResolves(): void
+    {
+        if (self::node() === null) {
+            self::markTestSkipped('Node is not available.');
+        }
+
+        $markup = (string) file_get_contents(dirname(__DIR__, 2) . '/views/document/generate.php');
+
+        // `onclick="fn(` — the call target, ignoring inline expressions like
+        // `this.value` or `document.getElementById(...).remove()`, which are not
+        // named functions and cannot be checked this way.
+        preg_match_all('/\bonclick="\s*([A-Za-z_$][\w$]*)\s*\(/', $markup, $m);
+
+        $called = array_values(array_unique($m[1]));
+        self::assertNotEmpty($called, 'no onclick handlers parsed — the check is broken, not the file');
+
+        $defined = self::globalFunctions();
+
+        // `document`, `window` and friends are objects, not functions we define.
+        $ours = array_values(array_filter(
+            $called,
+            static function (string $fn): bool {
+                return !in_array($fn, ['document', 'window', 'alert', 'confirm', 'print'], true);
+            }
+        ));
+
+        $missing = array_values(array_diff($ours, $defined));
+
+        self::assertSame(
+            [],
+            $missing,
+            'the markup calls functions that no longer exist: ' . implode(', ', $missing)
+            . '. Each is a button that throws ReferenceError when pressed, and nothing else notices'
+            . ' — the file parses, and a test that never presses that button stays green.'
+        );
+    }
+
+    /**
      * If the probe suddenly finds almost nothing, it stopped working rather than
      * the file becoming empty — and every case above would pass by vacuum.
      */
