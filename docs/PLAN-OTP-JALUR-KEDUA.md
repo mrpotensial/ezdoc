@@ -967,6 +967,37 @@ Merangkainya ulang nanti tidak menjawab itu — nama template bisa berubah, dan
 hasil rangkaian ulang belum tentu sama dengan yang dulu dibaca pasien. Jadi
 salinan pesannya masuk ke catatan audit.
 
+### "Atas nama" harus dibaca dari deklarasi slot, bukan ditebak
+
+Ditemukan dari pemakaian nyata (2026-08-06): pesan selalu menyebut nama yang
+sama, apa pun yang ditulis di bawah tanda tangan.
+
+Sebabnya, pencari nama menebak dengan konvensi — `nama_<ttd_id>`, lalu
+`nama_pasien`, lalu `nama`. Padahal slot **menyatakan sendiri** field namanya
+lewat `data-nama-field`, dan penyimpan dokumen, halaman generate, serta
+`TemplateParser` sudah lama membacanya dari situ. Yang menebak cuma jalur ini.
+
+Diperiksa di dokumen 83 produksi:
+
+| Slot | `data-nama-field` | Ditebak | Seharusnya |
+|---|---|---|---|
+| `ttd_1785380818383` | `ttd2` | "test" | **"tes1"** |
+| `ttd_1776221449464` | `pernyataan_oleh` | "test" | **"test3"** |
+
+Dua slot, dua orang berbeda, satu jawaban. Menebak memang tidak bisa
+membedakannya — itulah kenapa slotnya menyatakan sendiri.
+
+Ini bukan salah tampilan. Pesan ini **adalah** buktinya, jadi nama yang keliru
+berarti catatan persetujuan atas nama orang yang tidak pernah menyetujui.
+
+Aturannya sekarang: **field yang dideklarasikan → `nama_<ttd_id>` → kosong.**
+Sama persis dengan yang dipakai penyimpan dokumen. Tidak ada tebakan dari kata
+umum, dan **kosong lebih baik daripada salah** — pesan tanpa nama masih jujur.
+
+Supaya jalur ini bisa membacanya, `OtpService::findTtdConfig()` sekarang ikut
+mengembalikan `nama_field`. Dibiarkan kosong kalau template tidak menyatakannya,
+bukan diisi `nama_<id>` — pemanggil berhak tahu apakah templatenya bicara.
+
 ### Nasib pekerjaan V1–V5
 
 | | |

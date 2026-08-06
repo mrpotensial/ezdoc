@@ -6,6 +6,62 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v1.0-prep track — "OTP terikat dokumen (V6)"
+
+**Added — QR pindah ke layar petugas, kode terikat satu dokumen (2026-08-05)**
+
+Lihat `docs/PLAN-OTP-JALUR-KEDUA.md` §8h. Voucher V1–V5 hanya tahu nomor
+pengirimnya: kode yang sama bisa dipakai untuk dokumen apa pun, dan pasien tidak
+diberi tahu ia sedang menyetujui apa. Kode yang tidak menyebut apa yang
+disetujui bukan persetujuan.
+
+Sekarang QR-nya per slot TTD yang OTP-nya aktif, ditampilkan di layar petugas,
+dan tokennya menunjuk satu challenge yang sudah tahu dokumennya. Balasan bot
+menyebut nama dokumen, bagian yang ditandatangani, atas nama siapa, dan nomor
+pendaftaran — sehingga pasien bisa mencocokkannya sendiri dengan karcisnya.
+Nomor rekam medis sengaja tidak ikut: ia permanen dan menghubungkan seluruh
+riwayat, sementara nilai buktinya sudah dijawab namanya.
+
+Berkas: `Ezdoc\Signature\Otp\ScanOtpService`, kolom `scan_token` di
+`ezdoc_ttd_otp_challenges` (migrasi `2026_08_05_000001` + twin SQLite),
+`lib/scan_otp.php`, action `request_scan_code` + `scan_code_status`.
+
+Teks persetujuan dirangkai **aplikasi pemakai**, bukan library — kata-katanya
+keputusan hukum, bukan teknis. Yang dikirim disimpan apa adanya sebagai bukti;
+kodenya ditempel di luar bagian yang disimpan, karena ia rahasia sesaat dan
+bukan bagian dari pernyataannya.
+
+**Removed — jalur voucher dipensiunkan (2026-08-05)**
+
+`otp_voucher_status` dan `claim_ttd_voucher` dicabut dari dispatcher. Jalur
+"petugas menekan Kirim OTP" tetap ada sebagai cadangan untuk yang tidak bisa
+memindai; yang hilang cuma voucher yang tidak menunjuk dokumen.
+
+**Fixed — "Atas nama" menyebut orang yang salah (2026-08-06)**
+
+Pesan persetujuan selalu menyebut nama yang sama, apa pun yang ditulis di bawah
+tanda tangan. Pencari namanya menebak dengan konvensi (`nama_<ttd_id>`,
+`nama_pasien`, `nama`) — padahal slot menyatakan sendiri field namanya lewat
+`data-nama-field`, dan penyimpan dokumen, halaman generate, serta
+`TemplateParser` sudah lama membacanya dari situ.
+
+Di dokumen produksi yang dilaporkan, dua slot menunjuk `ttd2` dan
+`pernyataan_oleh` — dua orang berbeda. Keduanya dijawab dengan isi field `nama`,
+yang tidak ada hubungannya dengan slot mana pun. Menebak memang tidak bisa
+membedakan dua penanda tangan dalam satu dokumen.
+
+Bukan salah tampilan: pesan ini yang disimpan sebagai bukti, jadi nama yang
+keliru berarti catatan persetujuan atas nama orang yang tidak pernah menyetujui.
+
+`OtpService::findTtdConfig()` kini ikut mengembalikan `nama_field`, dan
+`ezdoc_scan_signer_name()` memakai urutan **dideklarasikan → `nama_<ttd_id>` →
+kosong**. Tidak ada tebakan dari kata umum: pesan tanpa nama masih jujur, pesan
+dengan nama yang salah tidak.
+
+`nama_field` dibiarkan kosong kalau template tidak menyatakannya — bukan diisi
+`nama_<id>`, supaya pemanggil bisa membedakan "template diam" dari "template
+memang bilang begitu".
+
 ### v1.0-prep track — "norm/nopen jadi identitas subjek yang generik"
 
 **Added — tiga kolom generik, tahap expand/contract (2026-08-04 … 2026-08-05)**

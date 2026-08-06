@@ -103,7 +103,7 @@ class OtpService
      * @param string $templateHtml Raw template markup.
      * @param string $ttdId        Signature slot id to look for.
      * @return array{
-     *     found: bool, label: string, require_otp: bool,
+     *     found: bool, label: string, nama_field: string, require_otp: bool,
      *     phone_source: string, ttl_seconds: int,
      *     rbac: array{roles: array, users: array}
      * }
@@ -113,6 +113,7 @@ class OtpService
         $blank = [
             'found'        => false,
             'label'        => $ttdId,
+            'nama_field'   => '',
             'require_otp'  => false,
             'phone_source' => '',
             'ttl_seconds'  => self::TTL_MAX_SECONDS,
@@ -135,6 +136,7 @@ class OtpService
             }
 
             preg_match('/data-label="([^"]*)"/', $attrs, $label);
+            preg_match('/data-nama-field="([^"]*)"/', $attrs, $namaField);
             preg_match('/data-allowed-roles="([^"]*)"/', $attrs, $roles);
             preg_match('/data-allowed-users="([^"]*)"/', $attrs, $users);
             preg_match('/data-require-otp="([^"]*)"/', $attrs, $requireOtp);
@@ -147,6 +149,11 @@ class OtpService
             return [
                 'found'        => true,
                 'label'        => ($label[1] ?? '') !== '' ? $label[1] : $ttdId,
+                // Field yang memuat NAMA penanda tangan slot ini. Ia dideklarasikan
+                // template, bukan ditebak dari konvensi — dua slot di satu dokumen
+                // memakai field berbeda, dan menebaknya berarti menamai orang yang
+                // salah di catatan persetujuan.
+                'nama_field'   => $namaField[1] ?? '',
                 'require_otp'  => $rawOtp === '1' || strtolower($rawOtp) === 'true',
                 'phone_source' => $phoneSource[1] ?? '',
                 'ttl_seconds'  => self::clampTtl($rawTtl !== '' ? (int) $rawTtl : self::TTL_MAX_SECONDS),

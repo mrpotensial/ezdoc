@@ -179,4 +179,32 @@ final class OtpServiceTest extends TestCase
         self::assertFalse(OtpService::findTtdConfig('', 'ttd1')['found']);
         self::assertFalse(OtpService::findTtdConfig('<div></div>', '')['found']);
     }
+
+    /**
+     * The slot names the field holding its signer's name. Callers that only got
+     * `label` back had to guess it, and a guess ends up in the consent message —
+     * see ScanSignerNameTest.
+     */
+    public function testFindTtdConfigReportsTheDeclaredNameField(): void
+    {
+        $html = '<div class="ttd-placeholder" data-ttd="ttd1" data-label="Pasien"'
+              . ' data-nama-field="pernyataan_oleh"></div>'
+              . '<div class="ttd-placeholder" data-ttd="ttd2" data-label="Saksi"'
+              . ' data-nama-field="nama_saksi"></div>';
+
+        self::assertSame('pernyataan_oleh', OtpService::findTtdConfig($html, 'ttd1')['nama_field']);
+        self::assertSame('nama_saksi', OtpService::findTtdConfig($html, 'ttd2')['nama_field']);
+    }
+
+    /**
+     * Blank, not a convention. Filling in `nama_<id>` here would hide from the
+     * caller whether the template actually said anything.
+     */
+    public function testFindTtdConfigLeavesTheNameFieldBlankWhenUndeclared(): void
+    {
+        $html = '<div class="ttd-placeholder" data-ttd="ttd1" data-label="Pasien"></div>';
+
+        self::assertSame('', OtpService::findTtdConfig($html, 'ttd1')['nama_field']);
+        self::assertSame('', OtpService::findTtdConfig($html, 'missing')['nama_field']);
+    }
 }

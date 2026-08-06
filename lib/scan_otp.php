@@ -124,7 +124,7 @@ function ezdoc_scan_context(string $scanToken): array
 
                 $out['signer_name'] = ezdoc_scan_signer_name(
                     (string) ($doc['field_values'] ?? ''),
-                    (string) ($ttdConfig['label'] ?? ''),
+                    (string) ($ttdConfig['nama_field'] ?? ''),
                     (string) $challenge['ttd_id']
                 );
             }
@@ -145,15 +145,29 @@ function ezdoc_scan_context(string $scanToken): array
  * Slot mendeklarasikan field namanya lewat `data-nama-field`; kalau tidak ada,
  * konvensi `nama_<ttd_id>` dicoba. Gagal keduanya berarti string kosong —
  * pesannya tetap terkirim, cuma tanpa nama.
+ *
+ * Aturan itu sengaja sama persis dengan yang dipakai penyimpan dokumen dan
+ * halaman generate: satu dokumen bisa punya beberapa slot yang menunjuk field
+ * berbeda, jadi menebak nama field dari kata umum seperti `nama` akan menyebut
+ * orang lain. Pesan persetujuan ini adalah buktinya — nama kosong masih jujur,
+ * nama yang keliru tidak.
  */
-function ezdoc_scan_signer_name(string $fieldValuesJson, string $ttdLabel, string $ttdId): string
+function ezdoc_scan_signer_name(string $fieldValuesJson, string $namaField, string $ttdId): string
 {
     $values = json_decode($fieldValuesJson, true);
     if (!is_array($values)) {
         return '';
     }
 
-    foreach (['nama_' . $ttdId, 'nama_pasien', 'nama'] as $key) {
+    $keys = [];
+    if ($namaField !== '') {
+        $keys[] = $namaField;
+    }
+    if ($ttdId !== '') {
+        $keys[] = 'nama_' . $ttdId;
+    }
+
+    foreach ($keys as $key) {
         if (isset($values[$key]) && is_scalar($values[$key])) {
             $name = trim((string) $values[$key]);
             if ($name !== '') {

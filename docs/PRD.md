@@ -507,7 +507,7 @@ sebaris pun.
 | Penerbitan | **Fungsi in-process**, bukan endpoint. Server memanggil dirinya sendiri lewat loopback butuh kunci rahasia dan mewarisi tiap cara loopback bisa gagal — dan commit `cada904` sudah membuktikannya dari arah sebaliknya (403) |
 | Sisi tampilan | Nomor terkunci ke nomor dokumen + petunjuk status, supaya salah ketik ketahuan sebelum kodenya dimasukkan |
 
-**🔄 V6 diputuskan 2026-08-05 — kode terikat dokumen.** Lihat
+**✅ V6 selesai 2026-08-05 — kode terikat dokumen.** Lihat
 `docs/PLAN-OTP-JALUR-KEDUA.md` §8h.
 
 Kelemahan V1–V5: pasien mengirim `TTD-OTP` dan menerima enam angka **tanpa tahu
@@ -523,7 +523,11 @@ dokumen sejak awal, alasan itu hilang, dan yang tersisa persis bentuk
 `ezdoc_ttd_otp_challenges` yang sudah ada: satu kolom token pindaian plus satu
 status baru.
 
-Dua aturan yang lahir dari diskusinya, keduanya soal bukti:
+Yang dibangun: `Ezdoc\Signature\Otp\ScanOtpService`, kolom `scan_token` di
+`ezdoc_ttd_otp_challenges`, `lib/scan_otp.php`, action `request_scan_code` +
+`scan_code_status`. Action voucher dicabut dari dispatcher.
+
+Tiga aturan yang lahir dari diskusinya, ketiganya soal bukti:
 
 - **Balasan bot adalah artefak buktinya**, dan **teks yang benar-benar dikirim
   disimpan** — bukan dirangkai ulang nanti. Pertanyaan saat sengketa bukan "apa
@@ -532,6 +536,12 @@ Dua aturan yang lahir dari diskusinya, keduanya soal bukti:
   "dokumen yang mana" dan bisa dicocokkan pasien dengan karcisnya; nomor rekam
   medis permanen dan menghubungkan seluruh riwayat, sementara nilai buktinya
   sudah dijawab namanya
+- **Nama penanda tangan dibaca dari deklarasi slot (`data-nama-field`), tidak
+  pernah ditebak** — ditemukan dari pemakaian nyata 2026-08-06, saat pesan
+  selalu menyebut nama yang sama untuk dua slot yang menunjuk orang berbeda.
+  Urutannya dideklarasikan → `nama_<ttd_id>` → kosong. Pesan tanpa nama masih
+  jujur; pesan dengan nama yang salah adalah persetujuan atas nama orang yang
+  tidak pernah menyetujui
 
 ### 3.13 Pengungkapan identitas — ✅ selesai 2026-08-04
 
