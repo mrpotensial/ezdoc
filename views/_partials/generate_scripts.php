@@ -1619,7 +1619,11 @@
             // yang 'document' yang boleh diperiksa berulang otomatis — status
             // untuk nomor bebas dibatasi 10 per menit di sisi server.
             voucherPhoneOrigin: 'document',
-            voucherPoll: null
+            voucherPoll: null,
+
+            // ── V6: kode diminta lewat QR di layar ini ──
+            scanPoll: null,
+            scanCountdown: null
         };
 
         function openSign(id, label) {
@@ -1764,7 +1768,14 @@
                     _otpState.voucherPhoneOrigin = 'document';
                     _lockVoucherPhone(true);
 
-                    showVoucherRoute();
+                    // V6 kalau pemasangan sudah mengonfigurasi pola tautannya;
+                    // kalau belum, jalur voucher lama yang tampil. Ditentukan
+                    // server lewat EZDOC_SCAN_URL_TEMPLATE.
+                    if (window.EZDOC_SCAN_ENABLED) {
+                        showScanRoute();
+                    } else {
+                        showVoucherRoute();
+                    }
                 }
             } else {
                 // No OTP required
@@ -1912,10 +1923,266 @@
         // ─────────────────────────────────────────────────────────────────
 
         function _hideAllOtpSteps() {
-            ['signOtpStepVoucher', 'signOtpStep1', 'signOtpStep2'].forEach(id => {
+            ['signOtpStepScan', 'signOtpStepVoucher', 'signOtpStep1', 'signOtpStep2'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
             });
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // V6 — kode diminta penanda tangan lewat QR di layar ini
+        //
+        // Bedanya dengan jalur voucher yang digantikannya: kodenya terikat ke
+        // dokumen dan slot ini sejak diterbitkan, jadi tidak ada kolom nomor HP
+        // sama sekali. Nomornya ketahuan dari siapa yang memindai.
+        // ─────────────────────────────────────────────────────────────────
+
+        function _scanState(which) {
+            ['signScanIdle', 'signScanWaiting', 'signScanEntry'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('hidden', id !== which);
+            });
+        }
+
+        function showScanRoute() {
+            _hideAllOtpSteps();
+            stopScanPoll();
+            const el = document.getElementById('signOtpStepScan');
+            if (el) el.classList.remove('hidden');
+            _scanState('signScanIdle');
+        }
+
+        /**
+         * Identitas dokumen di samping QR, supaya penanda tangan bisa mencocokkan.
+         *
+         * Tidak pernah melempar. Ia dipanggil di tengah requestScanCode(),
+         * setelah gambar QR terpasang tapi sebelum keadaannya berpindah — jadi
+         * kegagalan di sini meninggalkan petugas di layar setengah jadi: QR sudah
+         * ada di DOM tapi tidak terlihat, dan pemeriksaan berkala tidak pernah
+         * mulai. Teks ini hiasan; ia tidak berhak menghentikan alurnya.
+         */
+        function _scanDocIdentity() {
+            try {
+                return _scanDocIdentityRaw();
+            } catch (e) {
+                return '';
+            }
+        }
+
+        function _scanDocIdentityRaw() {
+            const bagian = [];
+            const daftar = Array.isArray(configTtdMap) ? configTtdMap : [];
+            const ttdInfo = daftar.find(item => item.id === currentTtdId) || {};
+
+            // Nama penanda tangan diambil dari field yang dideklarasikan slotnya.
+            const namaField = ttdInfo.nama_field || '';
+            if (namaField) {
+                const el = document.querySelector(`[name="${namaField}"], .f[data-field="${namaField}"]`);
+                const nama = el ? (el.value || el.textContent || '').trim() : '';
+                if (nama) bagian.push(escapeHtmlSimple(nama));
+            }
+
+            // Nomor kunjungan, bukan nomor rekam medis — lihat
+            // docs/PLAN-OTP-JALUR-KEDUA.md §8h. Yang menjawab "dokumen yang mana"
+            // adalah nomor kunjungannya, dan penanda tangan bisa mencocokkannya
+            // dengan karcis yang dipegangnya.
+            if (CURRENT_NOPEN) bagian.push(escapeHtmlSimple(CURRENT_NOPEN));
+
+            return bagian.join(' · ');
+        }
+
+        async function requestScanCode() {
+            const btn = document.getElementById('btnRequestScan');
+            const btnText = document.getElementById('btnRequestScanText');
+            if (btn) btn.disabled = true;
+            if (btnText) btnText.textContent = t('modal.otp.scan_requesting', {}, 'Menyiapkan…');
+
+            try {
+                const fd = new FormData();
+                fd.append('_doc_action', 'request_scan_code');
+                fd.append('template_id', templateId);
+                fd.append('ttd_id', currentTtdId);
+                if (CURRENT_DOC_ID) fd.append('doc_id', CURRENT_DOC_ID);
+
+                const endpoint = typeof _ezdocEndpoint === 'function' ? _ezdocEndpoint('docAction') : 'actions/_dispatcher.php';
+                const res = await fetch(endpoint, { method: 'POST', body: fd });
+                const data = await res.json();
+
+                if (!data.success) {
+                    showToast(data.message || t('modal.otp.scan_failed', {}, 'Gagal menyiapkan QR.'), 'error');
+                    return;
+                }
+
+                // Dipakai verify_ttd_otp nanti — jalur verifikasi yang sudah ada.
+                _otpState.currentChallengeId = data.challenge_id;
+
+                const img = document.getElementById('signScanQr');
+                if (img) img.src = data.qr;
+
+                const ident = document.getElementById('signScanDocIdentity');
+                if (ident) ident.innerHTML = _scanDocIdentity();
+
+                _scanState('signScanWaiting');
+                _startScanCountdown(Number(data.ttl_seconds) || 300);
+                startScanPoll();
+            } catch (e) {
+                showToast('Gagal menyiapkan QR: ' + e.message, 'error');
+            } finally {
+                if (btn) btn.disabled = false;
+                if (btnText) btnText.textContent = t('modal.otp.scan_show_btn', {}, 'Tampilkan QR');
+            }
+        }
+
+        /**
+         * Hitung mundur masa berlaku QR.
+         *
+         * Ditampilkan karena QR yang mati tanpa tanda apa pun membuat petugas
+         * menunggu sesuatu yang tidak akan datang.
+         */
+        function _startScanCountdown(seconds) {
+            if (_otpState.scanCountdown) clearInterval(_otpState.scanCountdown);
+            const box = document.getElementById('signScanCountdown');
+            let sisa = seconds;
+
+            const tulis = () => {
+                if (!box) return;
+                const m = Math.floor(sisa / 60), d = sisa % 60;
+                box.textContent = t('modal.otp.scan_valid_for', {time: `${m}:${String(d).padStart(2, '0')}`},
+                    `Berlaku ${m}:${String(d).padStart(2, '0')}`);
+            };
+            tulis();
+
+            _otpState.scanCountdown = setInterval(() => {
+                sisa--;
+                if (sisa <= 0) {
+                    clearInterval(_otpState.scanCountdown);
+                    _otpState.scanCountdown = null;
+                    stopScanPoll();
+                    if (box) box.textContent = t('modal.otp.scan_expired', {}, 'QR kedaluwarsa — tampilkan ulang');
+                    _scanState('signScanIdle');
+                    return;
+                }
+                tulis();
+            }, 1000);
+        }
+
+        /**
+         * Tanyakan berkala apakah sudah dipindai.
+         *
+         * Tidak perlu jeda maupun pencatatan, tidak seperti pemeriksaan status
+         * pada jalur voucher: yang dikirim `challenge_id` — nilai acak yang baru
+         * saja diterbitkan untuk layar ini sendiri. Tidak ada yang bisa dipetakan
+         * dengan menebaknya.
+         */
+        function startScanPoll() {
+            // Hanya membersihkan pemeriksaannya sendiri, BUKAN hitung mundurnya.
+            //
+            // Versi pertama memanggil stopScanPoll() di sini, dan itu ikut
+            // mematikan hitung mundur yang baru saja dinyalakan requestScanCode()
+            // satu baris sebelumnya. Akibatnya angkanya membeku di nilai awal dan
+            // QR tidak pernah terlihat kedaluwarsa — petugas menunggu sesuatu
+            // yang sudah mati.
+            _clearScanPoll();
+            _otpState.scanPoll = setInterval(refreshScanStatus, 3000);
+        }
+
+        function _clearScanPoll() {
+            if (_otpState.scanPoll) {
+                clearInterval(_otpState.scanPoll);
+                _otpState.scanPoll = null;
+            }
+        }
+
+        /** Menghentikan keduanya. Dipakai saat modal ditutup atau panel berganti. */
+        function stopScanPoll() {
+            _clearScanPoll();
+            if (_otpState.scanCountdown) {
+                clearInterval(_otpState.scanCountdown);
+                _otpState.scanCountdown = null;
+            }
+        }
+
+        async function refreshScanStatus() {
+            if (!_otpState.currentChallengeId) return;
+
+            try {
+                const fd = new FormData();
+                fd.append('_doc_action', 'scan_code_status');
+                fd.append('challenge_id', _otpState.currentChallengeId);
+
+                const endpoint = typeof _ezdocEndpoint === 'function' ? _ezdocEndpoint('docAction') : 'actions/_dispatcher.php';
+                const res = await fetch(endpoint, { method: 'POST', body: fd });
+                const data = await res.json();
+                if (!data.success) return;
+
+                if (data.state === 'scanned') {
+                    stopScanPoll();
+                    _scanState('signScanEntry');
+
+                    const by = document.getElementById('signScanScannedBy');
+                    if (by) {
+                        by.textContent = data.masked_phone
+                            ? t('modal.otp.scan_scanned_by', {phone: data.masked_phone}, `Dipindai dari ${data.masked_phone}`)
+                            : t('modal.otp.scan_scanned', {}, 'Sudah dipindai');
+                    }
+
+                    const codeInput = document.getElementById('signScanCode');
+                    if (codeInput) codeInput.focus();
+                } else if (data.state === 'expired') {
+                    stopScanPoll();
+                    _scanState('signScanIdle');
+                }
+            } catch (e) {
+                // Jaringan tersendat bukan alasan menghentikan seluruh alurnya.
+                // Percobaan berikutnya tiga detik lagi.
+            }
+        }
+
+        async function verifyScanCode() {
+            const codeInput = document.getElementById('signScanCode');
+            const code = (codeInput?.value || '').trim();
+
+            if (!/^\d{6}$/.test(code)) {
+                showToast(t('modal.otp.voucher_code_required', {}, 'Kode 6 digit wajib diisi.'), 'error');
+                codeInput?.focus();
+                return;
+            }
+
+            const btn = document.getElementById('btnVerifyScan');
+            const btnText = document.getElementById('btnVerifyScanText');
+            btn.disabled = true;
+            btnText.textContent = t('modal.otp.verifying', {}, 'Memverifikasi...');
+
+            try {
+                // Jalur verifikasi yang sudah ada. Challenge hasil pindaian adalah
+                // challenge biasa — itu yang membuat tidak perlu endpoint baru.
+                const fd = new FormData();
+                fd.append('_doc_action', 'verify_ttd_otp');
+                fd.append('challenge_id', _otpState.currentChallengeId);
+                fd.append('otp_code', code);
+
+                const endpoint = typeof _ezdocEndpoint === 'function' ? _ezdocEndpoint('docAction') : 'actions/_dispatcher.php';
+                const res = await fetch(endpoint, { method: 'POST', body: fd });
+                const data = await res.json();
+
+                if (data.success) {
+                    if (codeInput) codeInput.value = '';
+                    stopScanPoll();
+                    applySignToken(data.sign_token, data.message);
+                } else {
+                    showToast(data.message || t('modal.otp.invalid_code', {}, 'Kode tidak sesuai.'), 'error');
+                    const box = document.getElementById('signScanAttempts');
+                    if (box && data.attempts_left !== undefined) {
+                        box.textContent = t('modal.otp.attempts_left', {attempts: data.attempts_left},
+                            `Sisa percobaan: ${data.attempts_left} kali`);
+                    }
+                }
+            } catch (e) {
+                showToast('Gagal memverifikasi kode: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btnText.textContent = t('modal.otp.voucher_verify_btn', {}, 'Verifikasi Kode');
+            }
         }
 
         function _lockVoucherPhone(locked) {
@@ -2166,6 +2433,7 @@
 
             _hideAllOtpSteps();
             stopVoucherPoll();
+            stopScanPoll();
         }
 
         function startOtpResendTimer(seconds) {
@@ -2192,8 +2460,9 @@
         function closeSign() {
             modal.classList.remove('show');
             // Modal tertutup, tidak ada yang membaca statusnya. Membiarkannya
-            // berjalan berarti satu permintaan tiap 10 detik selamanya.
+            // berjalan berarti satu permintaan tiap beberapa detik selamanya.
             stopVoucherPoll();
+            stopScanPoll();
         }
         function clearSign() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
 

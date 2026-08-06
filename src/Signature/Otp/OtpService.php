@@ -6,6 +6,8 @@ namespace Ezdoc\Signature\Otp;
 
 use Ezdoc\Context;
 use Ezdoc\Exceptions\EzdocException;
+use Ezdoc\Support\Clock;
+use Ezdoc\Support\SystemClock;
 
 /**
  * Service orchestrating OTP challenges, verification, and provider dispatch.
@@ -36,6 +38,19 @@ class OtpService
     private ?UserOtpProvider $provider;
 
     /**
+     * Sumber "sekarang".
+     *
+     * Dulu kelas ini memanggil `time()` langsung di tiga tempat, dan akibatnya
+     * baru terlihat saat tengah malam lewat: challenge yang dibuat lewat jam
+     * beku dinilai kedaluwarsa oleh jam sungguhan, dan tesnya berubah dari lulus
+     * jadi gagal tanpa satu baris pun berubah.
+     *
+     * Satu alur tidak boleh memakai dua jam — pelajaran yang sama sudah dibayar
+     * di OtpChallengeRepository.
+     */
+    private Clock $clock;
+
+    /**
      * Context is consulted only when no repository was supplied.
      *
      * It used to be resolved unconditionally, which made the class impossible to
@@ -55,16 +70,27 @@ class OtpService
      * {@see createChallenge()} refuses clearly when it needs one and there is
      * none, so the mistake surfaces where it can be understood.
      */
-    public function __construct(?OtpChallengeRepository $repo = null, ?UserOtpProvider $provider = null)
-    {
+    public function __construct(
+        ?OtpChallengeRepository $repo = null,
+        ?UserOtpProvider $provider = null,
+        ?Clock $clock = null
+    ) {
+        $this->clock = $clock ?? new SystemClock();
+
         if ($repo === null) {
             $ctx = Context::default();
-            $repo = new OtpChallengeRepository($ctx->db);
+            $repo = new OtpChallengeRepository($ctx->db, $this->clock);
             $provider = $provider ?? $ctx->otpProvider;
         }
 
         $this->repo = $repo;
         $this->provider = $provider;
+    }
+
+    /** Sekarang, menurut jam yang dipakai layanan ini. */
+    private function now(): int
+    {
+        return $this->clock->now()->getTimestamp();
     }
 
     /**
@@ -175,7 +201,7 @@ class OtpService
         // request costs a real message.
         $lastSentAt = $this->repo->lastChallengeCreatedAt($templateId, $ttdId, $docId);
         if ($lastSentAt !== null) {
-            $elapsed = time() - $lastSentAt;
+            $elapsed = $this->now() - $lastSentAt;
             if ($elapsed < self::SEND_COOLDOWN_SECONDS) {
                 throw new EzdocException(sprintf(
                     'Please wait %d more second(s) before requesting another code.',
@@ -190,7 +216,7 @@ class OtpService
         $otpHash = password_hash($otpCode, PASSWORD_DEFAULT);
 
         $challengeId = 'otp_' . bin2hex(random_bytes(16));
-        $expiresAt = date('Y-m-d H:i:s', time() + $ttlSeconds);
+        $expiresAt = date('Y-m-d H:i:s', $this->now() + $ttlSeconds);
 
         $sendContext = array_merge($context, [
             'challenge_id' => $challengeId,
@@ -254,7 +280,7 @@ class OtpService
             return OtpVerifyResult::failure($generic);
         }
 
-        if (strtotime($challenge['expires_at']) < time()) {
+        if (strtotime($challenge['expires_at']) < $this->now()) {
             return OtpVerifyResult::failure($generic);
         }
 

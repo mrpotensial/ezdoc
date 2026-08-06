@@ -69,6 +69,13 @@ final class ViewFunctionScopeTest extends TestCase
             // apa pun yang menyusul. Aturan yang berbeda-beda per layar adalah
             // cara sebuah kebijakan pengungkapan berhenti jadi kebijakan.
             'actorLabel'         => ['actorLabel'],
+
+            // V6 — dipanggil dari onclick= di modal tanda tangan.
+            'requestScanCode'    => ['requestScanCode'],
+            'verifyScanCode'     => ['verifyScanCode'],
+            'showScanRoute'      => ['showScanRoute'],
+            'refreshScanStatus'  => ['refreshScanStatus'],
+            'stopScanPoll'       => ['stopScanPoll'],
         ];
     }
 

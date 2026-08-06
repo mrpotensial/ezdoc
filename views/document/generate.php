@@ -2915,7 +2915,67 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 // Petunjuk status di bawah kolom nomor adalah inti perbaikannya:
                 // tanpa itu, satu digit salah terbaca sebagai tiga kali "kode salah".
                 ?>
-                <div id="signOtpStepVoucher">
+                <?php // ── V6: kode diminta penanda tangan lewat QR di layar ini ──
+                //
+                // Tiga keadaan dalam satu panel: belum diminta → menunggu dipindai
+                // → sudah dipindai. Dipisah jadi tiga panel akan membuat perpindahan
+                // terasa seperti melompat halaman, padahal ini satu urusan.
+                //
+                // Tidak ada kolom nomor HP di sini, dan itu inti perbaikannya:
+                // nomornya ketahuan dari siapa yang memindai, jadi tidak ada yang
+                // bisa salah ketik dan tidak ada yang bisa mengarahkan kode ke
+                // nomor lain.
+                ?>
+                <div id="signOtpStepScan" class="hidden">
+                    <h6 class="text-sm font-bold text-slate-800 mb-1 flex items-center gap-1.5">
+                        <i class="bi bi-qr-code-scan text-slate-700 text-base"></i>
+                        <span><?= h(t('modal.otp.scan_title', [], 'Minta Kode ke Penanda Tangan')) ?></span>
+                    </h6>
+
+                    <?php // Keadaan 1 — belum diminta ?>
+                    <div id="signScanIdle">
+                        <p class="text-xs text-slate-600 mb-3"><?= h(t('modal.otp.scan_idle_desc', [], 'Tampilkan QR di layar ini, lalu minta penanda tangan memindainya.')) ?></p>
+                        <button type="button" id="btnRequestScan" onclick="requestScanCode()"
+                                class="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-bold transition flex items-center justify-center gap-2">
+                            <i class="bi bi-qr-code"></i>
+                            <span id="btnRequestScanText"><?= h(t('modal.otp.scan_show_btn', [], 'Tampilkan QR')) ?></span>
+                        </button>
+                    </div>
+
+                    <?php // Keadaan 2 — menunggu dipindai ?>
+                    <div id="signScanWaiting" class="hidden text-center">
+                        <div id="signScanDocIdentity" class="text-[11px] text-slate-600 mb-2 leading-tight"></div>
+                        <img id="signScanQr" alt="" class="mx-auto rounded border border-slate-300 bg-white p-1.5" style="width:180px;height:180px;object-fit:contain;">
+                        <p class="text-xs text-slate-600 mt-2 mb-1"><?= h(t('modal.otp.scan_waiting', [], 'Menunggu penanda tangan memindai…')) ?></p>
+                        <div id="signScanCountdown" class="text-[11px] text-slate-500 tabular-nums"></div>
+                    </div>
+
+                    <?php // Keadaan 3 — sudah dipindai, kodenya sudah di tangan orangnya ?>
+                    <div id="signScanEntry" class="hidden">
+                        <div class="text-[11px] text-emerald-700 mb-2 flex items-center gap-1">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span id="signScanScannedBy"></span>
+                        </div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1"><?= h(t('modal.otp.voucher_code_label', [], 'Kode dari penanda tangan (6 digit):')) ?></label>
+                        <input type="text" id="signScanCode" maxlength="6" inputmode="numeric"
+                               class="w-full text-center text-lg tracking-[0.5em] font-bold p-2 border border-slate-300 rounded font-mono focus:border-slate-800"
+                               placeholder="<?= h(t('modal.otp.otp_placeholder', [], '123456')) ?>" autocomplete="off">
+                        <div id="signScanAttempts" class="text-[11px] text-amber-600 mt-1 font-semibold"></div>
+                        <button type="button" id="btnVerifyScan" onclick="verifyScanCode()"
+                                class="w-full mt-2 py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-bold transition flex items-center justify-center gap-2">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span id="btnVerifyScanText"><?= h(t('modal.otp.voucher_verify_btn', [], 'Verifikasi Kode')) ?></span>
+                        </button>
+                    </div>
+
+                    <div class="mt-3 text-[11px]">
+                        <button type="button" onclick="showOtpFallback()" class="text-slate-500 hover:text-slate-800 underline underline-offset-2">
+                            <?= h(t('modal.otp.voucher_fallback_link', [], 'Pasien tidak bisa memindai?')) ?>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="signOtpStepVoucher" class="hidden">
                     <h6 class="text-sm font-bold text-slate-800 mb-1 flex items-center gap-1.5">
                         <i class="bi bi-qr-code-scan text-slate-700 text-base"></i>
                         <span><?= h(t('modal.otp.voucher_title', [], 'Kode dari Pasien')) ?></span>
@@ -3197,6 +3257,11 @@ function renderFieldForPdf($name, $type, $val, $label) {
         // cuma apakah ia ikut ditampilkan ketika namanya ADA.
         ?>
         window.EZDOC_AUDIT_DETAIL = <?= (function_exists('ezdoc_can_view_audit_detail') && ezdoc_can_view_audit_detail()) ? 'true' : 'false' ?>;
+
+        <?php // Apakah jalur "minta kode lewat QR" tersedia di pemasangan ini.
+        // Diputuskan server, bukan ditebak sisi tampilan: tanpa pola tautan yang
+        // dikonfigurasi, tombolnya cuma akan menghasilkan 503. ?>
+        window.EZDOC_SCAN_ENABLED = <?= (defined('EZDOC_SCAN_URL_TEMPLATE') && EZDOC_SCAN_URL_TEMPLATE !== '' && strpos((string) EZDOC_SCAN_URL_TEMPLATE, '{token}') !== false) ? 'true' : 'false' ?>;
 
         // i18n dictionary — mirrors EZDOC_URLS above. spec: docs/I18N.md
         window.EZDOC_I18N = <?= json_encode($translator->all(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;

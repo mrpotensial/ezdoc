@@ -314,6 +314,20 @@ return [
             'status_locked'      => 'Too many wrong attempts — a new code is needed',
             'status_no_phone'    => 'No patient number on the document yet',
             'status_unavailable' => 'Status could not be checked',
+
+            // ── V6: the signer requests the code by scanning a QR on the
+            // operator's screen. No phone field on this route — the number
+            // comes from whoever scans, so nothing can be mistyped.
+            'scan_title' => 'Ask the Signer for a Code',
+            'scan_idle_desc' => 'Show a QR on this screen, then ask the signer to scan it.',
+            'scan_show_btn' => 'Show QR',
+            'scan_requesting' => 'Preparing…',
+            'scan_waiting' => 'Waiting for the signer to scan…',
+            'scan_valid_for' => 'Valid for {time}',
+            'scan_expired' => 'QR expired — show a new one',
+            'scan_scanned' => 'Scanned',
+            'scan_scanned_by' => 'Scanned from {phone}',
+            'scan_failed' => 'Could not prepare the QR.',
         ],
     ],
 ];

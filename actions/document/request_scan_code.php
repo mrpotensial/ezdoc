@@ -106,11 +106,37 @@ ezdoc_audit_log('otp.scan_requested', [
     ],
 ]);
 
+$scanUrl = str_replace('{token}', rawurlencode($issued['scan_token']), $urlTemplate);
+
+// Gambar QR-nya dirakit di sini, dan tautannya TIDAK ikut dikirim balik.
+//
+// Alternatifnya adalah mengirim tautan lalu membiarkan sisi tampilan memanggil
+// generate_qr?data=... — tapi itu menaruh tokennya di query string permintaan
+// kedua, yang mendarat di log akses peladen. Siapa pun yang membaca log bisa
+// merakit ulang QR-nya dan memindainya sendiri selama lima menit berikutnya.
+//
+// Dengan dirakit di sini, token hanya pernah ada sebagai piksel.
+$qr = null;
+if (function_exists('generateQrForDompdf')) {
+    try {
+        $qr = generateQrForDompdf($scanUrl, 220, 4);
+    } catch (\Throwable $e) {
+        @error_log('[ezdoc:scan:qr] ' . $e->getMessage());
+    }
+}
+
+if ($qr === null) {
+    ezdoc_respond_error(
+        t('response.qr_generator_unavailable', [], 'QR generator unavailable (generateQrForDompdf missing)'),
+        500
+    );
+}
+
 ezdoc_respond_success([
     // Dipegang sisi tampilan untuk memverifikasi kodenya nanti lewat
     // verify_ttd_otp — jalur yang sudah ada, tidak perlu yang baru.
     'challenge_id' => $issued['challenge_id'],
-    'scan_url'     => str_replace('{token}', rawurlencode($issued['scan_token']), $urlTemplate),
+    'qr'           => $qr,
     'expires_at'   => $issued['expires_at'],
     'ttl_seconds'  => ScanOtpService::SCAN_TTL_SECONDS,
 ]);

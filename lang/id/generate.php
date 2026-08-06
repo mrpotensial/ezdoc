@@ -332,6 +332,20 @@ return [
             'status_locked'      => 'Terlalu banyak percobaan salah — minta kode baru',
             'status_no_phone'    => 'Nomor pasien belum diisi di dokumen',
             'status_unavailable' => 'Status tidak dapat diperiksa',
+
+            // ── V6: kode diminta penanda tangan lewat QR di layar petugas ──
+            // Tidak ada kolom nomor HP di jalur ini: nomornya ketahuan dari
+            // siapa yang memindai, jadi tidak ada yang bisa salah ketik.
+            'scan_title'         => 'Minta Kode ke Penanda Tangan',
+            'scan_idle_desc'     => 'Tampilkan QR di layar ini, lalu minta penanda tangan memindainya.',
+            'scan_show_btn'      => 'Tampilkan QR',
+            'scan_requesting'    => 'Menyiapkan…',
+            'scan_waiting'       => 'Menunggu penanda tangan memindai…',
+            'scan_valid_for'     => 'Berlaku {time}',
+            'scan_expired'       => 'QR kedaluwarsa — tampilkan ulang',
+            'scan_scanned'       => 'Sudah dipindai',
+            'scan_scanned_by'    => 'Dipindai dari {phone}',
+            'scan_failed'        => 'Gagal menyiapkan QR.',
         ],
     ],
 ];

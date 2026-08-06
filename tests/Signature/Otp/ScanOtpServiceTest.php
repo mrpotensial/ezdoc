@@ -293,7 +293,11 @@ final class ScanOtpServiceTest extends TestCase
         $hasil = $this->service->fulfil($token, self::PHONE, 'pesan');
 
         $challengeId = (string) $this->row($token)['challenge_id'];
-        $otp = new \Ezdoc\Signature\Otp\OtpService($this->repo, null);
+        // Jam yang sama dengan yang membuat challenge-nya. Tanpa ini, tes ini
+        // lulus hari ini dan gagal besok — persis yang terjadi saat tanggal
+        // berganti di tengah pengerjaan, dan itu yang menemukan bahwa
+        // OtpService masih memanggil time() langsung.
+        $otp = new \Ezdoc\Signature\Otp\OtpService($this->repo, null, $this->clock);
 
         $verdict = $otp->verify($challengeId, $hasil['code']);
 
