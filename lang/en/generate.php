@@ -293,32 +293,6 @@ return [
             'send_success'       => 'Code sent.',
             'verify_success'     => 'Verified.',
 
-            // ── Primary route: the patient requests the code via QR ──
-            // The status hint exists so a mistyped number shows up before the
-            // code is entered. Without it, one wrong digit reads as three
-            // rounds of "wrong code" and the patient gets the blame.
-            'voucher_title'      => 'Code from the Patient',
-            'voucher_desc'       => 'The patient scans the QR in the waiting room, then reads out the code.',
-            'voucher_from_doc'   => 'from the document',
-            'voucher_typed'      => 'typed manually',
-            'voucher_code_label' => 'Code from the patient (6 digits):',
-            'voucher_verify_btn' => 'Verify Code',
-            'voucher_change_phone' => 'Change number',
-            'voucher_fallback_link' => 'Patient cannot scan?',
-            'voucher_back_link'  => 'Back to code from the patient',
-            'voucher_code_required' => 'A 6-digit code is required.',
-
-            // Voucher status. Never mentions the code itself — only whether one
-            // exists and how long it lives.
-            'status_checking'    => 'Checking…',
-            'status_none'        => 'No code requested yet — ask the patient to scan the QR',
-            'status_active'      => 'Code requested · valid for {minutes} more minutes',
-            'status_active_soon' => 'Code requested · valid for {seconds} more seconds',
-            'status_expired'     => 'The code has expired — ask the patient to scan again',
-            'status_locked'      => 'Too many wrong attempts — a new code is needed',
-            'status_no_phone'    => 'No patient number on the document yet',
-            'status_unavailable' => 'Status could not be checked',
-
             // ── V6: the signer requests the code by scanning a QR on the
             // operator's screen. No phone field on this route — the number
             // comes from whoever scans, so nothing can be mistyped.
@@ -332,6 +306,11 @@ return [
             'scan_scanned' => 'Scanned',
             'scan_scanned_by' => 'Scanned from {phone}',
             'scan_failed' => 'Could not prepare the QR.',
+            'scan_code_label' => 'Code from the signer (6 digits):',
+            'scan_code_required' => 'A 6-digit code is required.',
+            'scan_verify_btn' => 'Verify Code',
+            'scan_fallback_link' => 'Signer cannot scan?',
+            'scan_back_link' => 'Back to the scanned code',
         ],
     ],
 ];

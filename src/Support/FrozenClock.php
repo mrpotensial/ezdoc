@@ -16,11 +16,11 @@ use DateTimeImmutable;
  *
  * ```php
  * $clock = new FrozenClock('2026-08-03 10:00:00');
- * $service = new OtpVoucherService(null, $clock);
- * $service->issue('62812...');
+ * $service = new ScanOtpService(null, $clock);
+ * $issued = $service->issue($templateId, $ttdId, $docId);
  *
- * $clock->advance(601);            // one second past a ten-minute code
- * $service->status('62812...');    // → expired, with no waiting
+ * $clock->advance(301);                      // one second past a five-minute QR
+ * $service->resolve($issued['scan_token']);  // → expired, with no waiting
  * ```
  */
 final class FrozenClock implements Clock

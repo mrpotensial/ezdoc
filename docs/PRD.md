@@ -483,29 +483,29 @@ Ambang pilihannya mengikuti "To BLOB or Not To BLOB" (Sears, van Ingen, Gray,
 Microsoft Research 2006): di bawah 256 KB database menang, di atas 1 MB
 filesystem menang.
 
-### 3.12 OTP jalur kedua — pasien yang meminta kode ✅ selesai 2026-08-04
+### 3.12 OTP jalur kedua — penanda tangan yang meminta kode ✅ selesai 2026-08-05
 
 Lihat `docs/PLAN-OTP-JALUR-KEDUA.md`. Ringkasnya: pesan yang dimulai bisnis
-berbayar, jadi arahnya dibalik — pasien memindai QR di ruang tunggu, bot membalas
-kode sekali pakai, petugas memasukkannya.
+berbayar, jadi arahnya dibalik — penanda tangan memindai QR, bot membalas kode
+sekali pakai, petugas memasukkannya.
 
-**Bentuknya berbeda secara mendasar dari jalur lama, dan itu yang menentukan
-desainnya.** Challenge lahir sudah tahu tujuannya (template, slot, dokumen).
-Voucher lahir hanya tahu nomor pengirimnya — dokumennya diputuskan menit
-kemudian, oleh orang lain, di meja lain. Karena itu tabelnya terpisah:
-melonggarkan `template_id`/`ttd_id` jadi NULL akan membuat satu tabel menampung
-dua jenis baris dengan aturan berbeda.
+**Dikerjakan dua kali.** V1–V5 memakai *voucher*: kode yang lahir hanya tahu
+nomor pengirimnya, karena QR-nya statis di ruang tunggu dan dokumennya baru
+diputuskan menit kemudian. V6 memindahkan QR ke layar petugas, dan sejak itu
+kodenya terikat dokumen sejak lahir.
 
-Klaim voucher **bermuara** jadi baris challenge yang sudah terverifikasi, jadi
-seluruh mesin `sign_token` — termasuk `save_document.php` — tidak berubah
-sebaris pun.
+**Jalur voucher sudah dibuang seluruhnya (2026-08-07)** — 12 berkas dan tabel
+`ezdoc_otp_vouchers`, lewat migrasi `2026_08_07_000001`. Catatan auditnya tetap:
+`otp.voucher_issued` / `otp.voucher_claimed` adalah bukti bahwa sesuatu
+benar-benar terjadi, dan tidak berhenti benar karena jalurnya pensiun.
+
+Yang tetap berlaku dari fase itu:
 
 | | |
 |---|---|
-| Tabel | `ezdoc_otp_vouchers`, satu kode aktif per nomor (pola Twilio Verify / Auth0) |
 | Jam | `Ezdoc\Support\Clock` — bentuk identik PSR-20, dideklarasikan sendiri supaya host yang deploy dengan menyalin berkas tidak wajib `composer install`. `SystemClock`, `FrozenClock` (di `src/`, bukan `tests/` — host menulis tes juga), `PsrClock` |
 | Penerbitan | **Fungsi in-process**, bukan endpoint. Server memanggil dirinya sendiri lewat loopback butuh kunci rahasia dan mewarisi tiap cara loopback bisa gagal — dan commit `cada904` sudah membuktikannya dari arah sebaliknya (403) |
-| Sisi tampilan | Nomor terkunci ke nomor dokumen + petunjuk status, supaya salah ketik ketahuan sebelum kodenya dimasukkan |
+| Verifikasi | Tetap bermuara ke `ezdoc_ttd_otp_challenges`, jadi seluruh mesin `sign_token` — termasuk `save_document.php` — tidak berubah sebaris pun |
 
 **✅ V6 selesai 2026-08-05 — kode terikat dokumen.** Lihat
 `docs/PLAN-OTP-JALUR-KEDUA.md` §8h.

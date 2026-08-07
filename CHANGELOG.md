@@ -31,11 +31,35 @@ keputusan hukum, bukan teknis. Yang dikirim disimpan apa adanya sebagai bukti;
 kodenya ditempel di luar bagian yang disimpan, karena ia rahasia sesaat dan
 bukan bagian dari pernyataannya.
 
-**Removed — jalur voucher dipensiunkan (2026-08-05)**
+**Removed — jalur voucher dibuang seluruhnya (2026-08-05 … 2026-08-07)**
 
-`otp_voucher_status` dan `claim_ttd_voucher` dicabut dari dispatcher. Jalur
-"petugas menekan Kirim OTP" tetap ada sebagai cadangan untuk yang tidak bisa
-memindai; yang hilang cuma voucher yang tidak menunjuk dokumen.
+Tahap pertama mencabut `otp_voucher_status` dan `claim_ttd_voucher` dari
+dispatcher. Tahap kedua membuang berkasnya: `OtpVoucherService`,
+`OtpVoucherRepository`, `OtpVoucherClaimResult`, `OtpVoucherStatus`,
+`lib/otp_voucher.php`, dua action, `cli/purge-expired-vouchers.php`, dua berkas
+tes, dan migrasi pembuat tabelnya. Tabelnya dibuang migrasi
+`2026_08_07_000001`.
+
+Migrasi pembuat ikut dibuang, bukan disimpan. Aturan "migrasi hanya bertambah"
+ada supaya basis data yang pernah menjalankan yang lama bisa dibawa ke keadaan
+terbaru — dan migrasi drop-nya sudah menjamin itu. Yang tersisa cuma pilihan
+antara mengirim pasangan CREATE-lalu-DROP ke setiap pemasangan baru selamanya
+atau membuangnya karena paketnya belum pernah dirilis. Dipilih yang kedua.
+
+**Yang TIDAK ikut dibuang: catatan auditnya.** `otp.voucher_issued` dan
+`otp.voucher_claimed` tetap ada di `ezdoc_audit_log`, dan lima labelnya tetap
+ada di berkas bahasa. Baris audit adalah catatan bahwa sesuatu benar-benar
+terjadi; ia tidak berhenti benar hanya karena jalurnya pensiun. Menghapusnya
+akan membuat riwayat dokumen berlubang persis di bagian yang menerangkan
+bagaimana sebuah tanda tangan dulu diverifikasi.
+
+Lima kunci i18n `modal.otp.voucher_*` yang ternyata masih dipakai UI V6
+diganti nama jadi `scan_*`. Nama yang menyebut mekanisme yang sudah tidak ada
+akan menyesatkan pembaca berikutnya — dan sekarang waktunya, sebelum rilis
+membuat nama itu permanen.
+
+Jalur "petugas menekan Kirim OTP" tetap ada sebagai cadangan untuk yang tidak
+bisa memindai; yang hilang cuma voucher yang tidak menunjuk dokumen.
 
 **Fixed — "Atas nama" menyebut orang yang salah (2026-08-06)**
 

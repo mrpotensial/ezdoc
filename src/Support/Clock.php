@@ -30,7 +30,7 @@ use DateTimeImmutable;
  * When a host does have PSR-20, wrap it:
  *
  * ```php
- * new OtpVoucherService($repo, new PsrClock($container->get(ClockInterface::class)));
+ * new OtpService($repo, null, new PsrClock($container->get(ClockInterface::class)));
  * ```
  *
  * Prior art for the shape: lcobucci/clock and Symfony's Clock component both

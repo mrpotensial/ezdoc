@@ -98,18 +98,6 @@ return [
         'otp_not_configured' => 'OTP delivery is not configured for this application.',
         'otp_phone_override_denied' => 'The code can only be sent to the number on file.',
 
-        // ── document/otp_voucher_status.php + claim_ttd_voucher.php ──
-        // The patient-initiated route. These messages deliberately differ from
-        // one another, unlike verify_ttd_otp.php's: the caller has already
-        // passed the same access check as the status endpoint, which answers
-        // the same question outright. One generic sentence would only leave the
-        // operator retrying a code that is already dead.
-        'otp_voucher_expired' => 'That code has expired. Ask the patient to request a new one.',
-        'otp_voucher_locked' => 'Too many wrong attempts. Ask the patient to request a new code.',
-        'otp_voucher_none' => 'This number has not requested a code yet.',
-        'otp_lookup_rate_limited' => 'Too many lookups. Please wait a moment.',
-        'otp_lookup_failed' => 'Could not check the code.',
-
         // ── V6: document-bound code, requested via a QR on the operator's screen ──
         'scan_not_configured' => 'Scan-to-sign is not configured for this installation.',
         'scan_request_failed' => 'Could not create the code request. Please try again.',

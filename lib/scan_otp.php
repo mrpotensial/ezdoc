@@ -6,9 +6,8 @@ declare(strict_types=1);
  * Sisi masuk jalur "penanda tangan meminta kodenya sendiri" (V6).
  *
  * Dipanggil penangan pesan masuk milik aplikasi pemakai, in-process — bukan
- * lewat HTTP. Alasannya sama dengan `ezdoc_issue_otp_voucher()`: server yang
- * memanggil dirinya sendiri lewat loopback butuh kunci rahasia dan mewarisi
- * setiap cara loopback bisa gagal.
+ * lewat HTTP. Server yang memanggil dirinya sendiri lewat loopback butuh kunci
+ * rahasia dan mewarisi setiap cara loopback bisa gagal.
  *
  * ## Pembagian tugasnya
  *

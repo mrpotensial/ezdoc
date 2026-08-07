@@ -1006,8 +1006,34 @@ bukan diisi `nama_<id>` — pemanggil berhak tahu apakah templatenya bicara.
 | Jeda, batas 3 percobaan, pesan gagal seragam | Tetap |
 | Handler bot WhatsApp | Tetap; cara mencocokkan tokennya yang berubah |
 | Modal di generate | Tetap, malah lebih sederhana — kolom nomor HP tidak perlu lagi |
-| `OtpVoucherService` + `ezdoc_otp_vouchers` | **Dirombak** — dilebur ke challenge |
-| Halaman QR ruang tunggu | Tidak dipakai; disimpan atau dibuang, lihat §9 |
+| `OtpVoucherService` + `ezdoc_otp_vouchers` | **Dibuang** 2026-08-07 — lihat di bawah |
+| Halaman QR ruang tunggu | Tidak dipakai; **disimpan** atas keputusan 2026-08-07 |
+
+### Pembuangannya — selesai 2026-08-07
+
+Dua belas berkas dihapus: empat kelas `OtpVoucher*`, `lib/otp_voucher.php`,
+dua action, `cli/purge-expired-vouchers.php`, dua berkas tes, dan migrasi
+pembuat tabelnya (MySQL + kembaran SQLite). Tabelnya dibuang migrasi
+`2026_08_07_000001_drop_ezdoc_otp_vouchers`.
+
+Migrasi pembuatnya ikut dibuang, bukan disimpan sebagai riwayat. Aturan
+"migrasi hanya bertambah" ada untuk satu tujuan — basis data yang pernah
+menjalankan yang lama harus bisa dibawa ke keadaan terbaru — dan migrasi
+drop-nya sudah menjamin itu. Sisanya tinggal pilihan: mengirim pasangan CREATE
+lalu DROP ke setiap pemasangan baru selamanya, atau membuangnya karena paketnya
+memang belum pernah dirilis.
+
+**Catatan auditnya tidak ikut.** Di server ada 3 baris `otp.voucher_issued` dan
+2 baris `otp.voucher_claimed`. Baris audit adalah catatan bahwa sesuatu
+benar-benar terjadi; ia tidak berhenti benar hanya karena jalurnya pensiun.
+Kelima label i18n `history_event.otp_voucher_*` karena itu tetap ada — tanpa
+mereka, panel riwayat akan menampilkan kode mentah persis di bagian yang
+menerangkan bagaimana tanda tangan itu dulu diverifikasi.
+
+Lima kunci `modal.otp.voucher_*` yang ternyata masih dipakai UI V6 diganti nama
+jadi `scan_*`. Sisanya (`voucher_title`, `voucher_desc`, `voucher_from_doc`,
+`voucher_typed`, `voucher_change_phone`, dan seluruh blok `status_*` penunjuk
+status nomor) sudah tidak dirujuk siapa pun dan dibuang.
 
 ## 9. Yang perlu diputuskan sebelum mulai
 

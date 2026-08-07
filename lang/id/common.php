@@ -147,18 +147,6 @@ return [
         'otp_not_configured'      => 'Pengiriman OTP belum dikonfigurasi di aplikasi ini.',
         'otp_phone_override_denied' => 'Kode hanya boleh dikirim ke nomor yang tercatat.',
 
-        // ── document/otp_voucher_status.php + claim_ttd_voucher.php ──
-        // Jalur pasien yang meminta kode sendiri. Di sini pesannya SENGAJA
-        // dibedakan, tidak seperti verify_ttd_otp.php: pemanggilnya sudah lolos
-        // pemeriksaan akses yang sama dengan endpoint status, yang menjawab
-        // pertanyaan yang sama secara langsung. Satu pesan seragam cuma bikin
-        // petugas terus mengulang kode yang sudah mati.
-        'otp_voucher_expired'     => 'Kode sudah kadaluarsa. Minta pasien kirim ulang untuk dapat kode baru.',
-        'otp_voucher_locked'      => 'Terlalu banyak percobaan salah. Minta pasien kirim ulang untuk dapat kode baru.',
-        'otp_voucher_none'        => 'Nomor ini belum meminta kode.',
-        'otp_lookup_rate_limited' => 'Terlalu sering memeriksa nomor. Tunggu sebentar.',
-        'otp_lookup_failed'       => 'Gagal memeriksa kode.',
-
         // ── V6: kode terikat dokumen, diminta lewat QR di layar petugas ──
         'scan_not_configured'     => 'Fitur minta kode lewat QR belum dikonfigurasi di aplikasi ini.',
         'scan_request_failed'     => 'Gagal membuat permintaan kode. Silakan coba lagi.',

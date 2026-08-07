@@ -108,18 +108,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['_doc_action'])) {
         'restore_slot'    => 'restore_slot.php',
         'send_ttd_otp'    => 'send_ttd_otp.php',
         'verify_ttd_otp'  => 'verify_ttd_otp.php',
-        // Patient-initiated route. Issuing has no entry here on purpose — the
-        // host's inbound handler calls ezdoc_issue_otp_voucher() in-process
-        // rather than reaching the server over its own loopback.
-        // V6 — kode terikat dokumen. Verifikasinya memakai verify_ttd_otp yang
-        // sudah ada: challenge hasil pindaian adalah challenge biasa.
+        // Jalur yang dimulai penanda tangan. Pemenuhannya sengaja tidak punya
+        // entri di sini: penangan pesan masuk milik aplikasi pemakai memanggil
+        // ezdoc_scan_fulfil() in-process, bukan menghubungi servernya sendiri
+        // lewat loopback.
         //
-        // `otp_voucher_status` dan `claim_ttd_voucher` DIHAPUS dari daftar ini.
-        // Berkasnya masih ada, tapi tidak bisa dijangkau lagi — dan itu memang
-        // tujuannya: yang pertama menerima nomor telepon dan menjawab apakah
-        // nomor itu punya kode aktif, sehingga butuh jeda, pencatatan, dan batas
-        // sepuluh-per-menit untuk menahannya. Membiarkannya terbuka berarti
-        // memelihara permukaan serangan untuk jalur yang tidak dipakai siapa pun.
+        // Verifikasinya memakai verify_ttd_otp yang sudah ada — challenge hasil
+        // pindaian adalah challenge biasa.
         'request_scan_code'  => 'request_scan_code.php',
         'scan_code_status'   => 'scan_code_status.php',
         'document_history'=> 'document_history.php',
