@@ -70,6 +70,53 @@ final class BlobStoreFactory
             ?? (self::$cache[self::BACKEND_DATABASE] = new DatabaseBlobStore($db));
     }
 
+    /**
+     * Penyimpan untuk dokumen yang dibekukan — **default-nya disk**.
+     *
+     * Bawaan umum di atas dipilih untuk gambar tanda tangan: ~3,5 KB, jauh di
+     * bawah titik silang ~256 KB, di mana kolom database menang. Dokumen yang
+     * sudah dirender bukan itu. Satu PDF bertanda tangan berukuran ratusan KB
+     * sampai beberapa MB — sisi lain titik silang yang sama.
+     *
+     * Karena itu bawaannya dibalik di sini, bukan diwarisi. Memakai satu
+     * pengaturan untuk dua jenis benda yang berbeda dua orde besaran berarti
+     * salah satunya pasti salah tempat.
+     *
+     *   EZDOC_ARTIFACT_STORAGE_BACKEND  'disk' (bawaan) | 'database'
+     *   EZDOC_ARTIFACT_STORAGE_PATH     path absolut; jatuh ke EZDOC_STORAGE_PATH
+     *
+     * `database` tetap boleh, tapi harus **dinyatakan**. Ada pemasangan yang
+     * memang menginginkannya — tanpa berkas bersama antar-server, atau ingin
+     * cadangannya satu transaksi dengan datanya. Yang tidak boleh adalah
+     * kejadian itu berlangsung tanpa ada yang memilihnya.
+     *
+     * @throws EzdocException kalau disk dipilih tapi tidak ada path yang disetel
+     */
+    public static function forArtifacts(Connection $db): BlobStore
+    {
+        $backend = self::readSetting('EZDOC_ARTIFACT_STORAGE_BACKEND');
+        $backend = $backend === null || $backend === '' ? self::BACKEND_DISK : strtolower($backend);
+
+        if ($backend === self::BACKEND_DATABASE) {
+            return self::make($db, self::BACKEND_DATABASE);
+        }
+
+        $root = self::readSetting('EZDOC_ARTIFACT_STORAGE_PATH');
+        $root = $root === null || trim($root) === '' ? self::configuredDiskRoot() : trim($root);
+
+        if ($root === null) {
+            throw new EzdocException(
+                'Dokumen beku disimpan di disk, tapi belum ada tempatnya. '
+                . 'Setel EZDOC_ARTIFACT_STORAGE_PATH (atau EZDOC_STORAGE_PATH) ke direktori '
+                . 'yang bisa ditulis DI LUAR document root — dokumen beku bukan aset publik, '
+                . 'dan sebagai berkas statis siapa pun yang memegang URL-nya bisa membacanya. '
+                . 'Kalau memang ingin di database, nyatakan EZDOC_ARTIFACT_STORAGE_BACKEND=database.'
+            );
+        }
+
+        return self::make($db, self::BACKEND_DISK, $root);
+    }
+
     public static function configuredBackend(): string
     {
         $raw = self::readSetting('EZDOC_STORAGE_BACKEND');

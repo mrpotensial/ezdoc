@@ -361,6 +361,7 @@ dikerjakan tanpa menunggu.
 | **P3** | Centang per TTD dan per penanda materai di designer + hitungan biaya yang terlihat (§4) | Tidak |
 | **P4** | Alur "bekukan lalu tanda tangan": render PDF, simpan byte-nya, hitung hashnya, kunci dokumennya | Tidak |
 | **P5** | Tes provider PSrE dengan `HttpClient` palsu — yang hari ini belum ada satu pun | Tidak |
+| **P8** | **Penanda tangan PDF in-house**, dipersempit ke PDF yang baru kita buat sendiri: incremental update + tambal `/ByteRange`, klaim PAdES-B-B. Inilah yang membuat berkas keluaran bisa diperiksa siapa pun **tanpa PSrE** — lihat §7b | Tidak |
 | **P6** | Isi pemetaan Peruri/Privy | **Ya** — kredensial sandbox |
 | **P7** | Adapter materai di sisi consumer | **Ya** — akun distributor |
 
@@ -371,6 +372,206 @@ atribut template; belum ada yang membacanya sampai P4. Sama seperti tahap
 P1–P5 semuanya di dalam `ezdoc/`, tidak menyentuh vendor, dan tetap berguna
 kalau nanti PSrE-nya ternyata bukan Peruri maupun Privy.
 
+## 7b. Yang diambil dari rencana lama (2026-05-04)
+
+`pengeluaran/docs/20260504-tanda-tangan-elektronik-hybrid.md` ditulis untuk
+sistem sebelum ezdoc ada. Nama tabelnya, helper-nya, dan identitasnya semua khas
+rumah sakit — tapi alasannya banyak yang masih tajam, dan empat hal di sana
+memang belum ada pada kita.
+
+### Apakah tanda tangan kita harus pindah ke PDF?
+
+**Menambah, bukan mengganti.** Keduanya menjawab pertanyaan berbeda, dan yang
+satu tidak bisa menirukan yang lain:
+
+| | Menjawab | Bisa dilakukan yang lain? |
+|---|---|---|
+| Tanda tangan data (JCS) kita | "Siapa menyatakan fakta yang mana" — per slot, per field | **Tidak.** PAdES tanda tangan ke-N mencakup byte 0..M, artinya seluruh isi sebelumnya termasuk tanda tangan sebelumnya. Ia rantai, bukan pembagian. Ia tidak bisa menyatakan "dokter menanggung diagnosis, pasien menanggung pernyataan persetujuan" |
+| Tanda tangan PAdES ke byte PDF | "Dokumen persis seperti ini, tidak berubah, dan bisa diperiksa siapa pun di Adobe Reader" | **Tidak.** Hash data kita tidak bisa diverifikasi alat luar mana pun |
+
+**Tapi kelemahan kita hari ini bukan hash-nya — melainkan tidak adanya artefak.**
+Dokumen dirender ulang dari template setiap kali dibuka. Ubah templatenya, dan
+dokumen yang ditandatangani tahun lalu **terlihat** berbeda, walau tanda
+tangannya masih terverifikasi. Yang berubah bukan yang ditandatangani, tapi yang
+dibaca orang. Itu lubangnya, dan §4.1 rencana lama menamai persis itu.
+
+Membekukan artefak **tidak butuh vendor dan tidak butuh kriptografi baru**:
+render sekali, simpan byte-nya, kunci dokumennya. Itu yang paling mendesak.
+
+### Tanda tangan ke dalam berkas PDF tetap perlu, PSrE atau tidak
+
+**Koreksi (2026-08-08).** Bagian ini sebelumnya menulis seolah menandatangani
+byte PDF hanya berguna kalau PSrE tersambung, dan menyimpulkan "biar PSrE saja
+yang menandatangani". Itu salah, dan menyempitkan masalahnya.
+
+**PSrE itu pilihan, bukan keharusan.** Sebagian besar pemasangan tidak akan
+punya kontrak PSrE — dan mereka tetap butuh berkasnya sendiri yang bisa
+dibuktikan. Kalau tanda tangannya cuma ada di database kita, maka berkas PDF
+yang keluar dari sistem cuma kertas biasa: dibawa ke mana pun, tidak ada yang
+bisa memeriksanya tanpa membuka sistem kita.
+
+Yang didapat tanda tangan sendiri (sertifikat lokal / institusi) di dalam PDF,
+**tanpa PSrE sama sekali**:
+
+| | Tanpa PSrE | Dengan PSrE |
+|---|---|---|
+| "Berkas ini berubah tidak sejak ditandatangani?" | **Bisa dijawab.** Ubah satu byte, pembaca PDF mana pun langsung melaporkannya | Sama |
+| "Siapa yang menandatangani?" | Tertera, tapi penerbitnya belum tepercaya — Adobe menulis *"Validity unknown"* | Tepercaya sampai ke akar PSrE |
+| Perlu kontrak / biaya | Tidak | Ya |
+
+Kolom pertama itu **separuh dari syarat UU ITE Pasal 11(1)** — huruf c dan d,
+"perubahan setelah penandatanganan dapat diketahui". Ia berdiri sendiri dan
+tidak menunggu siapa pun.
+
+### Yang menghalangi cuma satu langkah: menempelkannya ke berkas
+
+Sertifikatnya bukan penghalang — `LocalPkiProvider` (L2) sudah ada.
+`PkcsSevenEnvelope` sudah ada dan sudah diuji. `PdfBytesRange` sudah bisa
+membaca maupun menghitung. Yang belum ada cuma langkah **menulis** tanda tangan
+itu ke dalam PDF: `OpensslPdfSigner::embedSignature()` masih stub yang melempar.
+
+| Jalur | Caranya | Konsekuensinya |
+|---|---|---|
+| **A. JSignPdf** | Panggil program Java dari luar PHP | Jalan hari ini, PAdES lengkap sampai B-LT. Tapi menuntut Java terpasang di server — untuk paket Packagist itu syarat yang berat |
+| **B. Tanda tangan saat merender** | Perender menyisakan tempat `/Contents` sambil menulis PDF-nya | Tanpa Java. Tapi dompdf tidak bisa; harus ganti perender (TCPDF/mPDF) |
+| **C. Tulis sendiri incremental update** | Tambah bagian baru di ujung PDF + tambal `/ByteRange` | Paling banyak kerja, dan alasan stub itu ditulis |
+| **D. `ExternalPdfSigner`** | Diserahkan ke aplikasi pemakai / API PSrE | Pintu darurat, bukan jawaban |
+
+**Saran: C, tapi dipersempit.**
+
+Peringatan di stub itu sah untuk kasus umum — menandatangani PDF sembarangan
+yang mungkin sudah punya tanda tangan lain, terenkripsi, atau terlinearisasi.
+**Kasus kita bukan itu.** Kita menandatangani PDF yang baru saja kita buat
+sendiri, sedetik sebelumnya, pada saat pembekuan. Tidak ada tanda tangan
+sebelumnya, tidak ada enkripsi, dan strukturnya kita yang tentukan.
+
+Bar-nya juga berbeda. Untuk tanda tangan sendiri, yang harus menerima hasilnya
+adalah **pembaca PDF mana pun**, bukan PSrE. Dan itu bisa diuji di dalam repo:
+`PdfBytesRange::fromPdf()` + `PkcsSevenEnvelope` sudah ada, jadi keluaran kita
+bisa dibongkar ulang dan diperiksa sendiri di test.
+
+Jadi bentuknya: satu penanda tangan in-house yang **menyatakan batasnya
+sendiri** — hanya PDF tanpa tanda tangan sebelumnya, dan menolak dengan jelas di
+luar itu. Yang diklaim PAdES-B-B (satu tanda tangan, tanpa data pencabutan),
+bukan B-LT. `JSignPdfSigner` tetap ada untuk yang butuh B-LT/LTA.
+
+Kalau nanti PSrE tersambung, tanda tangannya menumpuk **di atas** — dan itu
+memang gunanya incremental update. PSrE yang melakukannya, bukan kita.
+
+### Kapan dibekukan — otomatis, bukan tombol
+
+Pertanyaan dari pemakaian (2026-08-08): *"kok perlu tombol sahkan? bukannya saat
+TTD sudah dianggap sahkan?"*
+
+**Betul, dan bawaannya memang harus otomatis.** Tombol terpisah di jalur biasa
+cuma menambah satu langkah yang artinya sudah dilakukan langkah sebelumnya —
+dan langkah yang artinya tidak jelas akan ditekan tanpa dibaca.
+
+Aturannya: **dokumen dibekukan begitu slot TTD terakhir terisi.**
+
+| Bentuk dokumen | Yang terjadi |
+|---|---|
+| Satu slot TTD | Ditandatangani → langsung beku. Tidak ada tombol |
+| Beberapa slot | Beku setelah yang terakhir. Yang menandatangani lebih dulu tidak menunggu — field yang ia tanggung sudah beku sejak ia tanda tangan |
+| Tanpa slot TTD sama sekali | Tidak ada yang memicu, dan memang tidak perlu: tidak ada pernyataan yang dilindungi |
+| Ada meterai / PSrE menyala | **Baru di sini tombolnya perlu** |
+
+Kasus terakhir berbeda karena ia **mengeluarkan biaya**. Meterai dibeli per
+keping dan tanda tangan tersertifikasi dibayar per pemakaian. Yang menghabiskan
+uang tidak boleh berjalan sebagai akibat samping dari menekan "tanda tangan" —
+itu jenis kejutan yang baru ketahuan di tagihan bulan depan.
+
+Jadi "Sahkan" di §4b **bukan** tombol pembekuan. Ia tombol pembelian, dan
+pembekuan kebetulan ikut terjadi di dalamnya.
+
+Rencana lama sampai pada tempat yang sama lewat jalan berbeda (§7.1 langkah 4:
+"cek apakah semua TTD wajib sudah lengkap; kalau sudah → render, pin").
+
+Satu akibat yang harus disebutkan: menemukan salah ketik **setelah** semua orang
+menandatangani berarti mencabut pembekuan dengan alasan tertulis, lalu semua
+tanda tangan diulang. Itu terasa berat, dan memang seharusnya — dokumen yang
+sudah disetujui banyak orang tidak boleh bisa diubah diam-diam.
+
+### Di mana berkas bekunya disimpan
+
+**Di disk, bukan di tabel.** Ini menjawab keputusan §8 nomor 5.
+
+`ezdoc_blobs` memang bawaannya database, dan itu benar untuk apa yang selama ini
+disimpannya: gambar tanda tangan ~3,5 KB, jauh di bawah titik silang ~256 KB.
+Dokumen yang sudah dirender ada di **sisi lain** titik silang itu — ratusan KB
+sampai beberapa MB.
+
+Karena itu `BlobStoreFactory::forArtifacts()` membalik bawaannya jadi disk.
+Mewarisi satu pengaturan untuk dua benda yang berbeda dua orde besaran berarti
+salah satunya pasti salah tempat, dan yang salah tempat baru terasa
+berbulan-bulan kemudian sebagai tabel yang membengkak.
+
+Yang **tidak** berubah: baris metadatanya tetap di `ezdoc_blobs`. Yang pindah
+cuma byte-nya. Identitasnya tetap kunci isi, jadi memeriksa keutuhan tetap
+otomatis — dan pindah backend tetap urusan konfigurasi, bukan perubahan skema.
+
+```
+EZDOC_ARTIFACT_STORAGE_BACKEND   'disk' (bawaan) | 'database'
+EZDOC_ARTIFACT_STORAGE_PATH      path absolut, DI LUAR document root
+                                 (jatuh ke EZDOC_STORAGE_PATH kalau kosong)
+```
+
+Kalau disk dipilih tapi tidak ada pathnya, pembekuan **ditolak** — bukan
+diam-diam jatuh ke database. Jatuh diam-diam menaruh dokumen di tempat yang
+tidak diniatkan operator dan tidak ia cadangkan.
+
+### Mengikat keduanya
+
+Artefak beku mencatat daftar tanda tangan data yang dibekukannya beserta
+hashnya. Daftar itu ikut ditulis ke dalam PDF sebelum byte-nya di-hash, sehingga
+satu pemeriksaan menjawab dua pertanyaan sekaligus: "apakah dokumen ini utuh"
+dan "siapa menyatakan apa di dalamnya".
+
+Kunci artefaknya **tidak perlu kolom hash baru** — `ezdoc_blobs` sudah
+content-addressed (`key` = SHA-256 isinya), dan `BlobStore::get()` sudah wajib
+menolak byte yang tidak cocok dengan kuncinya. Itu lebih kuat daripada "baca
+file, hash ulang, bandingkan" di rencana lama.
+
+### Empat yang diambil, berurutan
+
+| | Isi | Butuh vendor? |
+|---|---|---|
+| **A1** | **State machine terikat penandatanganan.** `ezdoc_documents.status` sudah punya `draft/published/locked/archived`, tapi itu status penerbitan yang digerakkan tombol manual — tidak ada hubungannya dengan tanda tangan. Rencana lama §3 menyambungkannya, dengan angka yang menenangkan: **~90% dokumen tidak akan pernah dibekukan** | Tidak |
+| **A2** | **Artefak beku** (= P1 + P4). Render sekali → `ezdoc_blobs` → kunci. Rencana lama §4 sudah matang detailnya: siklus tanda tangan, "berkas tidak pernah dihapus", dan alur cabut → sunting → bekukan ulang jadi artefak baru | Tidak |
+| **A3** | **Halaman verifikasi publik** (§7.6 rencana lama). Kita punya mesinnya (`DocumentSignatureVerifier`) dan pembuat QR-nya, tapi **tidak ada halamannya** — QR di dokumen menunjuk ke tempat yang tidak ada. Inilah yang membuat syarat UU ITE 11(1) huruf c dan d bisa dibuktikan **orang luar** | Tidak |
+| **A4** | **Saksi** (§5.4). OTP kita membuktikan seseorang memegang HP tertentu. Ia **tidak** membuktikan ada petugas yang menyaksikan. Untuk yang tidak punya HP, tidak bisa memindai, buta huruf, atau tidak sadar — hari ini kita tidak punya jawaban sama sekali. Presedennya bukan cuma lokal: *In-Person Signing* DocuSign berbentuk sama persis, "host" terautentikasi menyatakan menyaksikan | Tidak |
+
+A4 menuntut satu hal kecil lebih dulu: **jenis pihak penanda tangan**. RBAC kita
+menjawab "siapa yang boleh", bukan "ini pihak macam apa". Bentuk netralnya
+`account | delegated | external | witness` — sejajar dengan tipe penerima
+DocuSign, bukan `internal_auth`/`external_patient` yang khas rumah sakit.
+
+### Yang sengaja TIDAK diambil
+
+| | Kenapa |
+|---|---|
+| Foto wajah (Layer 2 rencana lama) | Biometrik = data pribadi spesifik (UU PDP Pasal 4(2) huruf d, GDPR Pasal 9). Beban kepatuhannya berat untuk library umum. Sediakan titik sambungnya, biar aplikasi pemakai yang memutuskan |
+| Tata letak `/storage/signed_pdfs/YYYY/MM/` | `ezdoc_blobs` sudah lebih baik: content-addressed, dua backend, dan kuncinya sudah checksum-nya |
+| Sidecar JSON | Sebagian tumpang tindih dengan log audit. Alasannya ("kalau DB rusak") masih sah, tapi cukup jadi metadata di artefaknya |
+| `ENUM` di mana-mana | Harus jalan di lima grammar |
+| `hasRole()`, tabel `pegawai`, NORM, `surat_dokumen_v2` | Khas rumah sakit |
+
+### Urutan pembangunan yang diperbarui
+
+```
+A1 state turunan ──► A2 artefak beku ──► P8 tanda tangan ──► A3 halaman
+     (murah,           (P1+P4,             sendiri ke PDF      verifikasi
+   bingkai A2)       tanpa vendor)         (tanpa vendor)     (butuh A2)
+                                                 │
+                                                 ▼
+                                       PSrE menumpuk di atas      A4 saksi
+                                        (butuh vendor, P6)    (berdiri sendiri)
+```
+
+P8 sengaja **sebelum** PSrE, bukan sesudah. Ia tidak menunggu kontrak siapa pun,
+dan ia yang membuat berkas keluaran berdiri sendiri sebagai bukti. PSrE
+menambahkan kepercayaan pada identitasnya — bukan menambahkan keutuhannya.
+
 ## 8. Yang perlu diputuskan
 
 | | Pertanyaan | Kenapa perlu sekarang |
@@ -380,7 +581,7 @@ kalau nanti PSrE-nya ternyata bukan Peruri maupun Privy.
 | 3 | Dokumen mana yang perlu materai, dan **berapa** per dokumen? | Keputusan hukum, bukan teknis. Dokumen rangkap dan lampiran termasuk yang tidak jelas — tanyakan ke konsultan pajak. Kode tidak memaku jumlahnya: yang menentukan berapa penanda materai di templatenya |
 | 3b | Kalau centangnya menyala tapi penyedianya belum tersambung, apa yang terjadi? | Saran: dokumen tetap bisa diisi dan ditandatangani biasa, diberi tanda **"belum disahkan"**, lalu bisa disahkan begitu penyedianya siap. Yang **tidak boleh**: sistem diam saja seolah sudah sah — petugas mengira dokumennya berkekuatan hukum padahal tidak, dan baru ketahuan saat dibawa ke pengadilan |
 | 4 | Sertifikat penanda tangan: per dokter, atau satu sertifikat institusi? | Mengubah bentuk pendaftarannya sepenuhnya. Sertifikat institusi jauh lebih sederhana, tapi tanda tangannya jadi "RSIA Anugrah", bukan "dr. X" |
-| 5 | PDF yang ditandatangani disimpan di mana? | `ezdoc_blobs` sudah ada dan sudah punya dua backend — kandidat kuat, bukan tabel baru |
+| ~~5~~ | ~~PDF yang ditandatangani disimpan di mana?~~ | **Sudah dijawab 2026-08-08**: `ezdoc_blobs`, backend disk. Lihat §7b |
 
 ## 9. Yang TIDAK termasuk
 

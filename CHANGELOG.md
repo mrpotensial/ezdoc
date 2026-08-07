@@ -6,6 +6,111 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v1.0-prep track — "Artefak beku: rendering yang tidak berubah lagi"
+
+**Added — `ezdoc_document_artifacts` + `FreezeService` (2026-08-08)**
+
+Lihat `docs/PLAN-PSRE-METERAI.md` §7b. Sampai sekarang dokumen dirender ulang
+dari template setiap kali dibuka. Tanda tangan kita tetap terverifikasi kalau
+templatenya berubah — ia mencakup **data**, bukan tampilan — tapi yang **dibaca**
+orang jadi berbeda dari yang dulu mereka setujui. Itu lubangnya, dan bukan
+hashnya yang salah.
+
+Membekukan menutup selisih itu: render sekali, simpan byte-nya, dan sejak itu
+yang ditampilkan adalah byte tersebut.
+
+**Tidak ada kolom hash di mana pun.** `ezdoc_blobs` sudah content-addressed
+(`key` = SHA-256 isinya) dan `BlobStore::get()` sudah wajib menolak byte yang
+tidak cocok dengan kuncinya — jadi "simpan hash lalu bandingkan saat dibaca"
+sudah terjadi satu lapis di bawah. Kolom `pdf_hash` cuma akan jadi kebenaran
+kedua yang bisa berselisih.
+
+**Tidak ada kolom status di `ezdoc_documents`.** Rencana lama menambah empat
+(`doc_state`, `active_pdf_path`, `active_pdf_hash`, `active_sign_cycle`) yang
+semuanya harus dijaga sejalan dengan tabel artefak. Statusnya diturunkan: dokumen
+beku kalau ia punya artefak yang belum digantikan. Satu sumber kebenaran, dijawab
+satu indeks — bentuk `has_one :current_*` di Rails.
+
+Baris artefak tidak pernah dihapus dan tidak pernah ditimpa. Membekukan ulang
+melahirkan siklus berikutnya; yang lama ditandai `superseded_at` dan byte-nya
+tetap bisa diambil lewat uuid. Orang yang memegang cetakan siklus lama harus
+tetap bisa memeriksanya, justru karena ia sudah tidak berlaku. Alasan pencabutan
+wajib diisi — catatan yang menjawab "kapan" tapi tidak "kenapa" tidak berguna
+setahun kemudian.
+
+`manifest` mengikat dua pertanyaan jadi satu pemeriksaan: byte artefak menjawab
+"apakah dokumen ini utuh", manifesnya menjawab "siapa menyatakan apa di
+dalamnya". `content_hash` tiap tanda tangan **disalin**, bukan cuma uuid-nya —
+rujukan yang menyebut baris bisa menunjuk isi lain besok.
+
+`FreezeService` sengaja **tidak merender**. Byte-nya diterima dari pemanggil,
+karena backend render adalah pilihan aplikasi pemakai (`PdfRenderer`) dan
+membekukan tidak boleh ikut memaksakannya.
+
+**Decided — pembekuan otomatis, bukan tombol (2026-08-08)**
+
+Dari pertanyaan pemakaian: kenapa perlu tombol "Sahkan", bukankah menandatangani
+sudah berarti mengesahkan? Betul. Dokumen dibekukan begitu **slot TTD terakhir
+terisi** — tanpa tombol.
+
+Tombol hanya perlu kalau template menyalakan meterai atau PSrE, karena keduanya
+**mengeluarkan biaya**. Yang menghabiskan uang tidak boleh berjalan sebagai
+akibat samping dari menekan "tanda tangan". Jadi "Sahkan" adalah tombol
+pembelian; pembekuan kebetulan ikut terjadi di dalamnya.
+
+**Changed — dokumen beku disimpan di disk, bukan di kolom (2026-08-08)**
+
+`BlobStoreFactory::forArtifacts()` membalik bawaannya jadi disk. Bawaan umum
+`ezdoc_blobs` adalah database, dan itu benar untuk apa yang selama ini
+disimpannya: gambar tanda tangan ~3,5 KB, jauh di bawah titik silang ~256 KB
+("To BLOB or Not To BLOB", Sears/van Ingen/Gray 2006). Dokumen yang sudah
+dirender ada di sisi lain titik silang itu.
+
+Satu pengaturan untuk dua benda yang berbeda dua orde besaran berarti salah
+satunya pasti salah tempat — dan yang salah tempat baru terasa berbulan-bulan
+kemudian sebagai tabel yang membengkak.
+
+`EZDOC_ARTIFACT_STORAGE_BACKEND` (bawaan `disk`) + `EZDOC_ARTIFACT_STORAGE_PATH`
+(jatuh ke `EZDOC_STORAGE_PATH`). Database tetap boleh tapi harus dinyatakan.
+Disk tanpa path **ditolak**, bukan diam-diam jatuh ke database. Baris metadata
+tetap di `ezdoc_blobs` — yang pindah cuma byte-nya, jadi identitas kunci-isi dan
+pemeriksaan keutuhan tidak berubah sedikit pun.
+
+Ini sekaligus menjawab keputusan terbuka §8 nomor 5 di `PLAN-PSRE-METERAI.md`.
+
+**Documented — koreksi: tanda tangan ke berkas PDF tidak menunggu PSrE (2026-08-08)**
+
+Catatan sebelumnya menulis seolah menandatangani byte PDF baru berguna kalau
+PSrE tersambung, dan menyimpulkan "biar PSrE saja yang menandatangani". Itu
+menyempitkan masalahnya.
+
+**PSrE adalah pilihan.** Sebagian besar pemasangan tidak akan punya kontraknya,
+dan mereka tetap butuh berkas yang bisa dibuktikan sendiri. Tanda tangan sendiri
+di dalam PDF sudah menjawab "berkas ini berubah tidak sejak ditandatangani" di
+pembaca PDF mana pun — yaitu huruf c dan d UU ITE Pasal 11(1). Yang belum
+dijawabnya cuma kepercayaan pada identitasnya, dan itu yang ditambahkan PSrE.
+
+Penghalangnya ternyata satu langkah saja: menempelkan tanda tangan ke berkas.
+Sertifikatnya sudah ada (`LocalPkiProvider`), amplopnya sudah ada
+(`PkcsSevenEnvelope`), pembacanya sudah ada (`PdfBytesRange`). Yang stub cuma
+`OpensslPdfSigner::embedSignature()`.
+
+Ditambahkan sebagai **P8** di §7b, dengan lingkup yang dipersempit: hanya PDF
+yang baru kita buat sendiri saat pembekuan — tanpa tanda tangan sebelumnya,
+tanpa enkripsi, strukturnya kita yang tentukan. Peringatan di stub itu sah untuk
+kasus umum, bukan untuk kasus ini. Yang diklaim PAdES-B-B, bukan B-LT.
+
+Yang tetap berlaku dari catatan lama: tanda tangan data per-slot **tidak
+diganti**. PAdES tanda tangan ke-N mencakup byte 0..M — seluruh isi sebelumnya
+termasuk tanda tangan sebelumnya. Ia rantai, bukan pembagian, jadi ia tidak bisa
+menyatakan "dokter menanggung diagnosis, pasien menanggung pernyataan
+persetujuan". Keduanya dipakai.
+
+Empat hal dari rencana lama `20260504-tanda-tangan-elektronik-hybrid.md` diadopsi
+(§7b): state turunan, artefak beku, halaman verifikasi publik, dan saksi. Foto
+wajah sengaja tidak — biometrik data pribadi spesifik, beban kepatuhannya bukan
+milik library umum.
+
 ### v1.0-prep track — "OTP terikat dokumen (V6)"
 
 **Added — QR pindah ke layar petugas, kode terikat satu dokumen (2026-08-05)**

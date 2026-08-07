@@ -543,6 +543,25 @@ Tiga aturan yang lahir dari diskusinya, ketiganya soal bukti:
   jujur; pesan dengan nama yang salah adalah persetujuan atas nama orang yang
   tidak pernah menyetujui
 
+### 3.14 Artefak beku — 🔄 fondasi selesai 2026-08-08
+
+Lihat `docs/PLAN-PSRE-METERAI.md` §7b. Dokumen selama ini dirender ulang dari
+template setiap dibuka. Tanda tangan tetap terverifikasi kalau templatenya
+berubah — ia mencakup data, bukan tampilan — tapi yang **dibaca** orang jadi
+berbeda dari yang dulu disetujui.
+
+| | |
+|---|---|
+| Tabel | `ezdoc_document_artifacts`. Tanpa kolom hash: `blob_key` **adalah** SHA-256 isinya, dan `BlobStore::get()` sudah wajib menolak byte yang tidak cocok |
+| Status | **Diturunkan**, bukan kolom. Dokumen beku kalau punya artefak yang belum digantikan — bukan empat kolom yang harus dijaga tetap sejalan (pola `has_one :current_*` Rails) |
+| Siklus | Baris tidak pernah dihapus/ditimpa. Bekukan ulang → siklus berikutnya; yang lama `superseded_at` + alasan wajib, byte-nya tetap terambil lewat uuid |
+| Manifes | Daftar tanda tangan yang dibekukan + `content_hash` masing-masing (disalin, bukan dirujuk). Satu pemeriksaan menjawab "utuh?" sekaligus "siapa menyatakan apa?" |
+| Render | **Bukan** urusan `FreezeService`. Byte diterima dari pemanggil — backend render milik aplikasi pemakai |
+
+Sudah mendarat: migrasi (MySQL + kembaran SQLite), `DocumentArtifact`,
+`ArtifactRepository`, `FreezeService`, 15 tes. Belum: aksi "Sahkan", penjaga
+simpan, dan jalur baca yang menyajikan artefak alih-alih render ulang.
+
 ### 3.13 Pengungkapan identitas — ✅ selesai 2026-08-04
 
 Lihat `docs/PLAN-IDENTITY-DISCLOSURE.md`.
