@@ -361,7 +361,8 @@ dikerjakan tanpa menunggu.
 | **P3** | Centang per TTD dan per penanda materai di designer + hitungan biaya yang terlihat (§4) | Tidak |
 | **P4** | Alur "bekukan lalu tanda tangan": render PDF, simpan byte-nya, hitung hashnya, kunci dokumennya | Tidak |
 | **P5** | Tes provider PSrE dengan `HttpClient` palsu — yang hari ini belum ada satu pun | Tidak |
-| **P8** | **Penanda tangan PDF in-house**, dipersempit ke PDF yang baru kita buat sendiri: incremental update + tambal `/ByteRange`, klaim PAdES-B-B. Inilah yang membuat berkas keluaran bisa diperiksa siapa pun **tanpa PSrE** — lihat §7b | Tidak |
+| **P8** | ✅ **Selesai 2026-08-08.** `IncrementalPdfSigner` + `PdfSignaturePlaceholder`: incremental update + tambal `/ByteRange`, klaim PAdES-B-B, dipersempit ke PDF yang baru kita buat sendiri. 18 tes, termasuk ujung ke ujung dengan OpenSSL sungguhan | Tidak |
+| **P9** | Sambungkan P8 ke pembekuan: render → `prepare()` → tanda tangani ringkasannya dengan `LocalPkiProvider` → `inject()` → simpan yang sudah bertanda tangan sebagai artefak | Tidak |
 | **P6** | Isi pemetaan Peruri/Privy | **Ya** — kredensial sandbox |
 | **P7** | Adapter materai di sisi consumer | **Ya** — akun distributor |
 

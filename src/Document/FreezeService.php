@@ -40,8 +40,17 @@ use Ezdoc\Support\Clock;
  * adalah pilihan aplikasi pemakai ({@see \Ezdoc\Rendering\PdfRenderer}) dan
  * membekukan tidak boleh ikut memaksakannya.
  *
- * Ia juga tidak menandatangani PDF-nya. Itu lapisan berikutnya (PAdES/PSrE) dan
- * ia bekerja **di atas** artefak ini — lihat §7b.
+ * ## Penyegelan
+ *
+ * Kalau {@see ArtifactSigner} dipasang, setiap pembekuan melewatinya — tepat di
+ * antara menerima byte dan menyimpannya. Letaknya di sini, bukan diserahkan ke
+ * pemanggil, karena setelah tersimpan byte-nya sudah menjadi identitas
+ * artefaknya: menyegel belakangan berarti menyegel dokumen yang berbeda.
+ *
+ * Tanpa penyegel, artefaknya tetap punya sidik jari isi lewat penyimpannya —
+ * cukup untuk membuktikan berkasnya tidak berubah **selama masih di dalam
+ * sistem**. Yang ditambahkan segel adalah kemampuan membuktikannya setelah
+ * berkasnya keluar.
  *
  * PHP 7.4+ compatible.
  */
@@ -56,6 +65,9 @@ final class FreezeService
     /** @var BlobStore */
     private $blobs;
 
+    /** @var ArtifactSigner|null */
+    private $signer;
+
     /**
      * Alasan pencabutan sependek ini tidak menjelaskan apa pun.
      *
@@ -68,9 +80,11 @@ final class FreezeService
         Connection $db,
         ?ArtifactRepository $artifacts = null,
         ?BlobStore $blobs = null,
-        ?Clock $clock = null
+        ?Clock $clock = null,
+        ?ArtifactSigner $signer = null
     ) {
         $this->db = $db;
+        $this->signer = $signer;
         $this->artifacts = $artifacts ?? new ArtifactRepository($db, $clock);
         // forArtifacts(), bukan make(): bawaan umum disetel untuk gambar tanda
         // tangan ~3,5 KB, sementara yang disimpan di sini dokumen utuh yang
@@ -92,9 +106,11 @@ final class FreezeService
     /**
      * Bekukan rendering sebuah dokumen.
      *
-     * @param string $bytes       Byte hasil render — biasanya PDF.
-     * @param string $actorId     Identitas buram yang membekukan.
-     * @param string $contentType Tipe MIME byte-nya.
+     * @param string              $bytes       Byte hasil render — biasanya PDF.
+     * @param string              $actorId     Identitas buram yang membekukan.
+     * @param string              $contentType Tipe MIME byte-nya.
+     * @param array<string,mixed> $context     Diteruskan ke penyegel: `name`,
+     *                                         `reason`, `location`.
      *
      * @throws ValidationException kalau byte-nya kosong, atau dokumennya sudah beku
      * @throws NotFoundException   kalau dokumennya tidak ada
@@ -103,7 +119,8 @@ final class FreezeService
         int $documentId,
         string $bytes,
         string $actorId,
-        string $contentType = 'application/pdf'
+        string $contentType = 'application/pdf',
+        array $context = []
     ): DocumentArtifact {
         if ($bytes === '') {
             throw new ValidationException('Tidak ada byte untuk dibekukan.');
@@ -126,6 +143,26 @@ final class FreezeService
             );
         }
 
+        $manifest = $this->buildManifest($documentId, (string) ($exists['uuid'] ?? ''));
+
+        // Disegel SEBELUM disimpan. Kuncinya adalah sidik jari isi, jadi
+        // menyegel setelah menyimpan akan menghasilkan byte lain — artefak yang
+        // tersimpan dan artefak yang tersegel jadi dua benda berbeda.
+        //
+        // Gagal di sini menggagalkan seluruh pembekuan. Dokumen yang seharusnya
+        // tersegel tapi diam-diam tidak baru ketahuan saat ada yang menyanggah,
+        // dan saat itu sudah terlambat.
+        if ($this->signer !== null) {
+            $bytes = $this->signer->sign($bytes, $context + [
+                'document_uuid' => (string) ($exists['uuid'] ?? ''),
+            ]);
+
+            $manifest['seal'] = [
+                'provider' => $this->signer->name(),
+                'format'   => 'pades-b-b',
+            ];
+        }
+
         // Byte-nya disimpan lebih dulu. Kalau langkah ini gagal, tidak ada baris
         // artefak yang menunjuk isi yang tidak pernah ada — dan menyimpan byte
         // yang tidak jadi dirujuk siapa pun tidak merusak apa-apa, karena
@@ -136,7 +173,7 @@ final class FreezeService
             $documentId,
             $this->artifacts->nextCycle($documentId),
             $blob->key(),
-            $this->buildManifest($documentId, (string) ($exists['uuid'] ?? '')),
+            $manifest,
             $actorId
         );
     }

@@ -262,6 +262,97 @@ final class FreezeServiceTest extends TestCase
         self::assertSame([], $artifact->signatures());
     }
 
+    // ─── segel ───
+
+    /**
+     * Penyegel dipanggil DI ANTARA menerima byte dan menyimpannya.
+     *
+     * Kalau ia dipanggil setelah menyimpan, yang tersimpan dan yang tersegel
+     * jadi dua benda berbeda — dan kuncinya, yang sidik jari isi, akan menunjuk
+     * yang belum tersegel.
+     */
+    public function testTheSealedBytesAreWhatGetsStored(): void
+    {
+        $service = $this->serviceWithSigner(new FakeArtifactSigner());
+
+        $artifact = $service->freeze(1, '%PDF-1.4 asli', self::ACTOR);
+
+        self::assertSame('%PDF-1.4 asli|TERSEGEL', $service->bytes($artifact));
+        self::assertSame(hash('sha256', '%PDF-1.4 asli|TERSEGEL'), $artifact->getBlobKey());
+    }
+
+    public function testTheManifestRecordsWhatSealedIt(): void
+    {
+        $service = $this->serviceWithSigner(new FakeArtifactSigner());
+
+        $manifest = $service->freeze(1, '%PDF-1.4 x', self::ACTOR)->getManifest();
+
+        self::assertSame('uji', $manifest['seal']['provider']);
+        self::assertSame('pades-b-b', $manifest['seal']['format']);
+    }
+
+    public function testWithoutASealerTheManifestSaysSoBySayingNothing(): void
+    {
+        $manifest = $this->service->freeze(1, '%PDF-1.4 x', self::ACTOR)->getManifest();
+
+        self::assertArrayNotHasKey('seal', $manifest);
+    }
+
+    /**
+     * Gagal menyegel harus menggagalkan pembekuannya.
+     *
+     * Dokumen yang seharusnya tersegel tapi diam-diam tidak baru ketahuan saat
+     * ada yang menyanggah, dan saat itu sudah terlambat.
+     */
+    public function testAFailedSealAbortsTheWholeFreeze(): void
+    {
+        $service = $this->serviceWithSigner(new FailingArtifactSigner());
+
+        try {
+            $service->freeze(1, '%PDF-1.4 x', self::ACTOR);
+            self::fail('seharusnya melempar');
+        } catch (\Ezdoc\Exceptions\EzdocException $e) {
+            // Yang penting bukan pesannya, tapi tidak adanya jejak.
+        }
+
+        self::assertFalse($this->service->isFrozen(1), 'dokumen tidak boleh jadi beku');
+        self::assertSame(
+            0,
+            (int) $this->db->fetchScalar('SELECT COUNT(*) FROM ezdoc_document_artifacts')
+        );
+        self::assertSame(
+            0,
+            (int) $this->db->fetchScalar('SELECT COUNT(*) FROM ezdoc_blobs'),
+            'byte yang gagal disegel tidak boleh ikut tersimpan'
+        );
+    }
+
+    public function testTheContextReachesTheSealer(): void
+    {
+        $signer = new FakeArtifactSigner();
+        $service = $this->serviceWithSigner($signer);
+
+        $service->freeze(1, '%PDF-1.4 x', self::ACTOR, 'application/pdf', [
+            'name'   => 'dr. Budi',
+            'reason' => 'Persetujuan tindakan',
+        ]);
+
+        self::assertSame('dr. Budi', $signer->lastContext['name']);
+        self::assertSame('Persetujuan tindakan', $signer->lastContext['reason']);
+        self::assertSame('doc-uuid-1', $signer->lastContext['document_uuid']);
+    }
+
+    private function serviceWithSigner(\Ezdoc\Document\ArtifactSigner $signer): FreezeService
+    {
+        return new FreezeService(
+            $this->db,
+            new ArtifactRepository($this->db, new FrozenClock('2026-08-08 09:00:00')),
+            new DatabaseBlobStore($this->db),
+            null,
+            $signer
+        );
+    }
+
     private function insertSignature(
         string $uuid,
         string $ttdId,
@@ -288,5 +379,42 @@ final class FreezeServiceTest extends TestCase
             '2026-08-08 09:00:00.000',
             $meta,
         ]);
+    }
+}
+
+/**
+ * Penyegel palsu — menandai byte-nya supaya bisa dibedakan dari yang asli.
+ *
+ * Palsu, bukan tiruan lewat mock, supaya yang diuji sifatnya: byte yang
+ * KELUAR dari penyegel itulah yang tersimpan.
+ */
+final class FakeArtifactSigner implements \Ezdoc\Document\ArtifactSigner
+{
+    /** @var array<string,mixed> */
+    public array $lastContext = [];
+
+    public function sign(string $pdfBytes, array $context = []): string
+    {
+        $this->lastContext = $context;
+
+        return $pdfBytes . '|TERSEGEL';
+    }
+
+    public function name(): string
+    {
+        return 'uji';
+    }
+}
+
+final class FailingArtifactSigner implements \Ezdoc\Document\ArtifactSigner
+{
+    public function sign(string $pdfBytes, array $context = []): string
+    {
+        throw new \Ezdoc\Exceptions\EzdocException('kunci tidak bisa dibaca');
+    }
+
+    public function name(): string
+    {
+        return 'gagal';
     }
 }

@@ -6,6 +6,60 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v1.0-prep track — "Kegagalan yang jauh dari sebabnya"
+
+**Fixed — satu folder `vendor/` mematikan seluruh aplikasi (2026-08-08)**
+
+Ditemukan dari padamnya server: setiap halaman ezdoc menjadi HTTP 500 kosong.
+Penyebabnya
+
+```
+ParseError: syntax error, unexpected '|', expecting variable
+di ezdoc/vendor/phpunit/phpunit/src/Framework/Assert/Functions.php:83
+```
+
+— berkas PHPUnit, di server ber-PHP 7, pada berkas yang tidak ada hubungannya
+dengan apa pun yang sedang dikerjakan.
+
+Rantainya: `require` ezdoc **tidak memuat satu pun paket** (hanya `php >= 7.4`
+dan dua ekstensi), jadi `ezdoc/vendor/` selalu folder pengembangan berisi
+PHPUnit dan PHPStan yang menuntut PHP 8. Folder itu ikut tersalin ke server;
+`autoload.php` menemukannya dan berhenti di situ; Composer me-`require` berkas
+PHPUnit lewat daftar `files`-nya; PHP 7 tidak bisa mengurai `?` dan `|` di
+posisi tipe.
+
+Dua perbaikan, dan yang kedua yang sebenarnya penting:
+
+**Loader PSR-4 bawaan sekarang SELALU didaftarkan**, bukan jadi cadangan yang
+dilewati begitu Composer ditemukan. Versi lama berhenti pada anggapan Composer
+pasti bisa menyelesaikan `Ezdoc\*` — anggapan yang runtuhnya total.
+
+**Composer boleh gagal.** Pemuatannya dibungkus dan kegagalannya dicatat,
+lengkap dengan petunjuk bahwa `vendor/` memang tidak semestinya ada di server.
+Yang hilang saat itu terjadi cuma paket milik aplikasi pemakai; ezdoc tetap
+jalan. Aplikasi yang kehilangan sebagian masih bisa didiagnosis — yang padam
+total tidak menyisakan petunjuk apa pun.
+
+Empat tes menjalankan `vendor/autoload.php` yang memang dibuat rusak di proses
+terpisah, lalu menuntut `Ezdoc\*` tetap termuat **dan** sebabnya tercatat.
+Ketahanan tidak bisa dibuktikan tanpa ada yang benar-benar patah.
+
+**Added — pintu depan tidak lagi mati tanpa suara (2026-08-08)**
+
+`public/index.php` dulu menghasilkan 500 kosong: tidak di layar, dan belum tentu
+di log. Mendiagnosisnya berubah jadi menebak dari jauh — memeriksa peta
+autoload, menjalankan migrasi di basis data lain, membaca ulang berkas bahasa —
+semua karena satu kalimat kegagalan tidak sampai ke siapa pun.
+
+Sekarang setiap kegagalan **selalu** masuk log error PHP, dan **ditampilkan di
+layar hanya** kalau berkas penanda `public/debug.txt` (atau `.debug`) ada.
+Berkas, bukan konstanta, karena kegagalannya sering terjadi sebelum config
+sempat dibaca. Dua nama diterima karena banyak klien FTP menolak berkas
+berawalan titik — penanda yang tidak bisa dipasang tidak menolong siapa pun.
+
+Diuji dengan melempar sungguhan di proses terpisah: senyap tanpa penanda,
+lengkap dengan penanda, dan pesannya mengingatkan agar penandanya dihapus lagi.
+
 ### v1.0-prep track — "Artefak beku: rendering yang tidak berubah lagi"
 
 **Added — `ezdoc_document_artifacts` + `FreezeService` (2026-08-08)**
@@ -46,6 +100,92 @@ rujukan yang menyebut baris bisa menunjuk isi lain besok.
 `FreezeService` sengaja **tidak merender**. Byte-nya diterima dari pemanggil,
 karena backend render adalah pilihan aplikasi pemakai (`PdfRenderer`) dan
 membekukan tidak boleh ikut memaksakannya.
+
+**Added — `IncrementalPdfSigner`: tanda tangan masuk ke dalam berkas PDF (2026-08-08)**
+
+`docs/PLAN-PSRE-METERAI.md` §7b (P8). Inilah yang membuat berkas keluaran bisa
+dibuktikan sendiri **tanpa PSrE**: ubah satu byte, pembaca PDF mana pun langsung
+melaporkan dokumen sudah diubah. Itu huruf c dan d UU ITE Pasal 11(1), dan ia
+tidak menunggu kontrak siapa pun.
+
+`OpensslPdfSigner::embedSignature()` tetap stub, dan itu benar — ia menolak
+menangani **PDF sembarangan**. Kelas baru ini bukan penambal umum: ia
+menandatangani PDF yang baru kita buat sendiri sedetik sebelumnya saat
+pembekuan, jadi ia boleh menuntut banyak. Yang di luar lingkupnya **ditolak
+dengan pesan yang menyebutkan jalan keluarnya**, bukan ditebak: PDF yang sudah
+bertanda tangan, terenkripsi, sudah punya `/AcroForm`, memakai
+cross-reference stream, atau `/Annots` sebagai rujukan tak langsung.
+
+Yang diklaim **PAdES-B-B** — satu tanda tangan, tanpa data pencabutan. Bukan
+B-T maupun B-LT; untuk itu `JSignPdfSigner` tetap ada.
+
+**Dua langkah, bukan `embedSignature()`.** Tanda tangannya menutupi byte PDF-nya
+sendiri, jadi byte itu harus sudah jadi sebelum ada yang bisa
+menandatanganinya — `PdfSigner::embedSignature($pdf, $pkcs7)` melingkar dan
+tidak bisa dipakai untuk tanda tangan terpisah. `prepare()` menyusun berkas
+lengkap dengan lubang kosong, `digest()` memberi ringkasan yang dikirim ke
+pemilik kunci, `inject()` menaruh CMS-nya kembali. Bentuk ini juga yang dituntut
+API PSrE nanti: yang dikirim ke mereka ringkasannya, **bukan dokumennya** —
+mengirim seluruh berkas ke pihak luar berarti mengirim isi medisnya juga.
+
+Byte asli tidak pernah disentuh. Katalog dan halaman pun diubah dengan menulis
+salinannya di ujung berkas, bukan menyunting di tempat — memang begitu
+incremental update bekerja, dan `/ByteRange` pertama dimulai dari byte 0
+sehingga menyunting apa pun di depan membatalkan tanda tangan yang sudah ada.
+
+Delapan belas tes. Yang menentukan tiga:
+
+- **ringkasan sebelum dan sesudah `inject()` harus identik** — satu-satunya
+  alasan tanda tangan PDF bisa bekerja
+- **tiap offset di tabel xref baru menunjuk objeknya sungguhan**, diperiksa dari
+  arah pembaca PDF. Offset yang meleset lolos setiap pemeriksaan tekstual dan
+  tetap gagal dibuka
+- **ujung ke ujung dengan OpenSSL sungguhan**: tanda tangani ringkasannya dengan
+  kunci nyata, masukkan, lalu baca ulang byte tercakup dari berkas jadinya
+
+Ditemukan lewat tes: offset lubang meleset satu byte karena bagian tambahan
+diawali baris kosong. Sekarang diukur dari awal kamusnya di berkas jadi, dan ada
+penjaga yang memeriksa `<`/`>` benar-benar ada di tempat yang ditunjuk
+`/ByteRange` sebelum hasilnya dikembalikan.
+
+**Added — penyegelan disambungkan ke pembekuan (2026-08-08)**
+
+`ArtifactSigner` (antarmuka) + `PkiArtifactSigner` (sertifikat sendiri).
+`FreezeService` menerimanya sebagai kolaborator opsional dan memanggilnya **di
+antara** menerima byte dan menyimpannya. Letaknya di sana, bukan diserahkan ke
+pemanggil, karena kunci artefak adalah sidik jari isi: menyegel setelah
+menyimpan menghasilkan byte lain, dan yang tersimpan jadi bukan yang tersegel.
+
+Gagal menyegel menggagalkan seluruh pembekuan — diuji sampai ke tidak adanya
+baris blob yang tertinggal. Dokumen yang seharusnya tersegel tapi diam-diam
+tidak baru ketahuan saat ada yang menyanggah.
+
+Manifes mencatat penyegelnya (`seal.provider`, `seal.format`), supaya setahun
+kemudian masih bisa dijawab: segel ini dibuat dengan apa, dan karena itu apa
+yang bisa dibuktikannya.
+
+**Fixed — perkakas tes yang menandatangani 20 byte sampah (2026-08-08)**
+
+`IncrementalPdfSignerTest` merakit sendiri DER dari keluaran S/MIME
+`openssl_pkcs7_sign()`, salah membaca bentuk `multipart/signed`, dan menghasilkan
+20 byte. Tesnya tetap lulus — yang diperiksanya cuma pengawetan byte, dan byte
+sampah pun terawetkan dengan baik.
+
+Sekarang CMS-nya dibuat lewat `PkcsSevenEnvelope`, pembuat yang benar-benar
+dipakai produksi. Jalur produksi sendiri tidak pernah salah; yang salah hanya
+perkakas tesnya. Pelajarannya tetap: perkakas tes yang menyalin logika produksi
+akan menyalin kesalahannya, atau menambah kesalahan sendiri yang tidak terlihat.
+
+**Documented — verifikasi CMS terpisah tidak bisa dari PHP murni (2026-08-08)**
+
+Diperiksa, bukan diasumsikan: `openssl_pkcs7_verify()` menjawab *"no content"*
+untuk CMS terpisah, dan `openssl_cms_verify()` tidak menyediakan jalan memberi
+isinya. Keterbatasan ini sudah disebut di docblock `PkcsSevenEnvelope`;
+sekarang ada buktinya.
+
+Akibatnya untuk tes: yang bisa dibuktikan di dalam repo adalah **offset** — dan
+justru di situlah risikonya. Verifikasi kriptografisnya dilakukan pembaca PDF,
+yang memang pemeriksa sebenarnya.
 
 **Decided — pembekuan otomatis, bukan tombol (2026-08-08)**
 
