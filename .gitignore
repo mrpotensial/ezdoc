@@ -66,6 +66,12 @@ desktop.ini
 .nova/
 .zed/
 
+# ─── Penanda diagnosa ─────────────────────────────────────────────────────
+# public/.debug membuka pesan kegagalan di layar. Ia dibuat sesaat saat ada
+# masalah lalu dihapus lagi — yang ter-commit akan menyalakannya di tempat
+# orang lain, dan pesan kegagalan memuat path server beserta isi query.
+/public/.debug
+
 # ─── Runtime / logs ───────────────────────────────────────────────────────
 *.log
 /logs/
