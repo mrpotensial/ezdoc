@@ -8,6 +8,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ### v1.0-prep track — "Kegagalan yang jauh dari sebabnya"
 
+**Fixed — tabel voucher lahir kembali sendiri (2026-08-10)**
+
+Terlihat di server: `ezdoc_otp_vouchers` ada lagi, kosong, dan catatan migrasi
+pembuatnya bertanggal **sesudah** migrasi yang membuangnya.
+
+Sebabnya migrasi drop itu sendiri. Ia ikut menghapus baris `ezdoc_migrations`
+milik migrasi pembuat, dengan alasan yang terdengar rapi: berkasnya sudah tidak
+dikirim, jadi catatannya cuma nama yang tidak bisa ditelusuri — `migrate:squash`
+Laravel melakukan hal serupa.
+
+Alasan itu berdiri di atas satu anggapan: **berkas pembuatnya benar-benar hilang
+dari server.** Anggapan itu salah. Banyak alat sinkron hanya menambah dan
+memperbarui, tidak pernah menghapus, jadi berkas yang dihapus dari repositori
+tetap duduk di sana. Rantainya: tabel dibuang → catatan pembuatnya dihapus →
+permintaan berikutnya melihat berkas yang belum tercatat → tabelnya dibuat lagi.
+
+Aturan "migrasi hanya bertambah" ada persis untuk ini, dan melanggarnya
+menghasilkan tepat apa yang aturan itu peringatkan. Baris yatim tidak berbahaya
+— Runner memindai berkas lalu melewati yang sudah tercatat, dan catatan tanpa
+berkas tidak pernah dicocokkan. Yang berbahaya adalah menghapus catatan sesuatu
+yang mungkin masih ada.
+
 **Fixed — satu folder `vendor/` mematikan seluruh aplikasi (2026-08-08)**
 
 Ditemukan dari padamnya server: setiap halaman ezdoc menjadi HTTP 500 kosong.

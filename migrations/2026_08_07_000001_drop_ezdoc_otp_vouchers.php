@@ -19,12 +19,26 @@
  * setiap pemasangan baru selamanya, atau membuang CREATE-nya karena paketnya
  * memang belum pernah dirilis. Dipilih yang kedua.
  *
- * Baris di `ezdoc_migrations` yang menyebut migrasi pembuat itu ikut dibuang di
- * sini. Ia tidak berbahaya — Runner memindai berkas lalu melewati yang sudah
- * tercatat, jadi catatan tanpa berkas tidak pernah dicocokkan — tapi ia
- * membingungkan: nama migrasi yang tidak bisa dicari berkasnya. Memangkas
- * catatan pendahulunya memang bagian dari menyatukan migrasi; `migrate:squash`
- * Laravel melakukan hal yang sama.
+ * ## Catatan pendahulunya DIBIARKAN — dan ini pelajaran yang dibayar mahal
+ *
+ * Versi pertama migrasi ini ikut menghapus baris `ezdoc_migrations` milik
+ * migrasi pembuat, dengan alasan yang terdengar rapi: berkasnya sudah tidak
+ * dikirim, jadi catatannya cuma nama yang tidak bisa ditelusuri. `migrate:squash`
+ * Laravel melakukan hal serupa.
+ *
+ * Alasan itu berdiri di atas satu anggapan: **berkas pembuatnya benar-benar
+ * hilang dari server.** Anggapan itu salah di lapangan. Banyak alat sinkron
+ * hanya menambah dan memperbarui, tidak pernah menghapus — jadi berkas yang
+ * dihapus dari repositori tetap duduk di server.
+ *
+ * Akibatnya berantai dan terjadi sungguhan (2026-08-10): tabel dibuang, catatan
+ * pembuatnya dihapus, lalu permintaan berikutnya melihat berkas migrasi yang
+ * belum tercatat — dan membuat tabelnya lagi.
+ *
+ * Aturan "migrasi hanya bertambah" ada persis untuk ini. Baris yatim tidak
+ * berbahaya: Runner memindai berkas lalu melewati yang sudah tercatat, dan
+ * catatan tanpa berkas tidak pernah dicocokkan. Yang berbahaya adalah menghapus
+ * catatan sesuatu yang mungkin masih ada.
  *
  * ## Catatan audit TIDAK ikut dibuang
  *
@@ -45,13 +59,9 @@ return [
             throw new \RuntimeException('drop ezdoc_otp_vouchers failed: ' . $conn->error);
         }
 
-        // Catatan pendahulunya ikut dipangkas — berkasnya sudah tidak dikirim,
-        // jadi yang tersisa hanya nama yang tidak bisa ditelusuri. Kalau
-        // gagal, dibiarkan: tabelnya sudah hilang, dan itu yang menentukan.
-        @$conn->query(
-            "DELETE FROM `ezdoc_migrations`"
-            . " WHERE `migration` = '2026_08_03_000001_create_ezdoc_otp_vouchers'"
-        );
+        // Catatan migrasi pembuatnya sengaja TIDAK disentuh — lihat alasannya
+        // di atas. Menghapusnya membuat berkas pembuat yang masih tertinggal di
+        // server dianggap belum pernah jalan, dan tabelnya lahir kembali.
     },
     'down' => function ($conn): void {
         // Sengaja tidak membuat ulang. Tidak ada satu pun kode yang membaca atau
