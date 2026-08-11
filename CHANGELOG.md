@@ -8,6 +8,44 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ### v1.0-prep track — "Kegagalan yang jauh dari sebabnya"
 
+**Fixed — teks berubah jadi `Â·` dan `â€"` di layar (2026-08-11)**
+
+Dilaporkan dari pemakaian: panel riwayat dan modal detail dokumen penuh simbol
+aneh. `·` jadi `Â·`, `—` jadi `â€"`, `×` jadi `Ã—`.
+
+Sebabnya penyuntingan di commit `536a883`: dua berkas view diubah dengan alat
+yang membaca UTF-8 sebagai Windows-1252 lalu menulisnya kembali sebagai UTF-8.
+Setiap karakter non-ASCII jadi ter-encode dua kali, dan tiga byte BOM ikut
+menempel di depan.
+
+Terlacak persis lewat git: `48eb625` masih punya 152 em dash yang benar dan nol
+jejak kerusakan; `536a883` menyisakan 2 em dash benar dan 155 jejak kerusakan.
+
+Pembalikan lewat `iconv('UTF-8','Windows-1252')` **ditolak** — ada karakter yang
+tidak sepadan, artinya transformasinya memang kehilangan sesuatu dan membalikkan
+akan menebak. Jadi berkasnya diambil ulang dari `48eb625`, lalu lima penggantian
+nama kunci i18n yang memang disengaja dipasang kembali.
+
+Buktinya: kerangka ASCII kedua berkas — hasil pemulihan vs berkas rusak, setelah
+semua byte non-ASCII dibuang dari keduanya — **identik**. Jadi satu-satunya
+perbedaan memang di karakter non-ASCII, dan tidak ada logika yang ikut hilang.
+
+BOM di `views/document/designer.php` ikut dibuang. Yang itu bukan dari commit
+ini — ia sudah ada sejak `3d7e58e` — tapi tiga byte sebelum `<?php` tetap
+terkirim sebagai keluaran, sebelum header sempat dikirim.
+
+**Added — `EncodingIntegrityTest` (2026-08-11)**
+
+Empat pemeriksaan atas seluruh berkas terkirim: tanpa BOM, tanpa jejak
+ganda-encode, UTF-8 sah, dan satu penjaga untuk penjaganya sendiri — pemindai
+yang tidak menemukan berkas apa pun akan lulus selamanya tanpa memeriksa apa
+pun.
+
+Kerusakan ini hidup berhari-hari sambil membiarkan tes hijau dan PHPStan bersih,
+karena ia tidak menjatuhkan apa pun — hanya membuat pengguna melihat sampah.
+Kerusakan yang tidak menjatuhkan apa pun adalah yang paling lama hidup, dan
+karena itu ia butuh pemeriksa sendiri.
+
 **Fixed — tabel voucher lahir kembali sendiri (2026-08-10)**
 
 Terlihat di server: `ezdoc_otp_vouchers` ada lagi, kosong, dan catatan migrasi

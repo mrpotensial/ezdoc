@@ -1,6 +1,6 @@
-﻿<?php
+<?php
 /**
- * ezdoc/views/_partials/generate_scripts.php â€” main JS block for generate view.
+ * ezdoc/views/_partials/generate_scripts.php — main JS block for generate view.
  *
  * Extracted dari `views/document/generate.php` (v1.0-prep line target refactor).
  * Contains full generate view JavaScript: EZDOC_DEBUG diagnostic bag, form
@@ -26,12 +26,12 @@
  *
  * spec: docs/VIEWS.md (v1.0)
  */
-// @phpstan-ignore-next-line â€” vars ARE defined at runtime via include scope share
+// @phpstan-ignore-next-line — vars ARE defined at runtime via include scope share
 /** @phpstan-ignore variable.undefined */
 ?>
     <script>
-        // ===== EZDOC_DEBUG â€” client-side diagnostic bag =====
-        // Buka F12 â†’ Console tab â†’ ketik `EZDOC_DEBUG` untuk inspect load state.
+        // ===== EZDOC_DEBUG — client-side diagnostic bag =====
+        // Buka F12 → Console tab → ketik `EZDOC_DEBUG` untuk inspect load state.
         // Save log akan tampil di console tiap kali klik Simpan (via saveDocument()).
         window.EZDOC_DEBUG = window.EZDOC_DEBUG || {};
         window.EZDOC_DEBUG.load = <?= json_encode($__ezdocLoadDebug ?? ['result' => ['found' => false], 'hint' => 'No lookup performed (missing norm/nopen or new doc)'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
@@ -62,7 +62,7 @@
                 for (const cond of andParts) {
                     if (!evalSingleCond(cond.trim())) { andOk = false; break; }
                 }
-                if (andOk) return true; // any OR branch satisfied â†’ true
+                if (andOk) return true; // any OR branch satisfied → true
             }
             return false;
         }
@@ -110,7 +110,7 @@
             return false;
         }
 
-        // Apply conditional sections â€” toggle display
+        // Apply conditional sections — toggle display
         function applyConditionalSections() {
             document.querySelectorAll('.conditional-section[data-cond]').forEach(el => {
                 const expr = el.getAttribute('data-cond') || '';
@@ -150,7 +150,7 @@
             if (btn) {
                 btn.classList.add('btn-dirty');
                 btn.dataset.originalText = btn.dataset.originalText || btn.textContent;
-                if (!btn.textContent.startsWith('â— ')) btn.textContent = 'â— ' + btn.textContent;
+                if (!btn.textContent.startsWith('● ')) btn.textContent = '● ' + btn.textContent;
             }
         }
 
@@ -160,7 +160,7 @@
             const btn = document.querySelector('.btn-success');
             if (btn) {
                 btn.classList.remove('btn-dirty');
-                if (btn.textContent.startsWith('â— ')) {
+                if (btn.textContent.startsWith('● ')) {
                     btn.textContent = btn.textContent.substring(2);
                 }
             }
@@ -178,7 +178,7 @@
                 if (el.id && el.id.startsWith('ttd_'))   return; // hidden TTD inputs
                 if (el.id && el.id.startsWith('materai_img_')) return;
                 if (el.id && el.id.startsWith('materai_upload_')) return;
-                // Navigation-only controls (bukan data edit) â€” skip dirty tracking.
+                // Navigation-only controls (bukan data edit) — skip dirty tracking.
                 // Bugfix: versionSelect dropdown triggers switchVersion() navigation
                 // saja, tidak mutate document data. User yg cuma lihat-lihat ganti
                 // versi jangan sampai kena beforeunload prompt.
@@ -196,7 +196,7 @@
         // Trigger dirty mark from external events (TTD canvas save, materai upload, mode switch)
         function triggerDirty() { markDirty(); }
 
-        // Beforeunload warning â€” only prompt if dirty AND bukan intentional
+        // Beforeunload warning — only prompt if dirty AND bukan intentional
         // internal navigation. Livewire wire:navigate / HTMX hx-boost pattern:
         // handler check flag `_ezdocSuppressUnload` yg di-set oleh caller
         // sebelum navigasi terprogram (switchVersion, doCreateNewVersion, dll).
@@ -205,7 +205,7 @@
         // hanya bisa dipicu atau tidak dipicu.
         window._ezdocSuppressUnload = false;
         window.addEventListener('beforeunload', function(e) {
-            if (window._ezdocSuppressUnload) return; // intentional nav â€” silent
+            if (window._ezdocSuppressUnload) return; // intentional nav — silent
             if (isDirty) {
                 e.preventDefault();
                 e.returnValue = ''; // required, but text ignored by modern browsers
@@ -286,9 +286,9 @@
                 try {
                     result = await resp.json();
                 } catch (jsonErr) {
-                    // Response bukan JSON â€” show HTTP status + partial body untuk debug
+                    // Response bukan JSON — show HTTP status + partial body untuk debug
                     const txt = await resp.text().catch(() => '');
-                    preview.innerHTML = '<div class="p-2.5 text-red-600 text-[10px]">HTTP ' + resp.status + ' â€” ' + (txt.slice(0, 80) || 'no response') + '</div>';
+                    preview.innerHTML = '<div class="p-2.5 text-red-600 text-[10px]">HTTP ' + resp.status + ' — ' + (txt.slice(0, 80) || 'no response') + '</div>';
                     return;
                 }
                 if (result.success) {
@@ -301,7 +301,7 @@
             }
         }
 
-        // ===== Numeric field filter â€” contenteditable doesn't respect type=number =====
+        // ===== Numeric field filter — contenteditable doesn't respect type=number =====
         // Allow: digits (0-9), decimal point (single), leading minus.
         // Strip: alphabetic + other symbols.
         function filterNumeric(el) {
@@ -414,7 +414,7 @@
                         try {
                             const re = new RegExp(pattern);
                             if (!re.test(val)) err = customMsg || t('validation.pattern_mismatch', {}, 'Invalid format');
-                        } catch (e) { /* invalid regex â€” skip */ }
+                        } catch (e) { /* invalid regex — skip */ }
                     }
                 }
 
@@ -457,7 +457,7 @@
 
             const formData = new FormData(document.getElementById('mainForm'));
 
-            // spec: ezdoc-spec/slots/generate.md#save-hook-pre â€” dispatch cancelable pre-save event.
+            // spec: ezdoc-spec/slots/generate.md#save-hook-pre — dispatch cancelable pre-save event.
             // Consumers may listen on window 'ezcetak:before-save' and call event.preventDefault()
             // to abort the save, or mutate formData via event.detail.formData in place.
             try {
@@ -471,20 +471,20 @@
                     btn.disabled = false;
                     return;
                 }
-            } catch (e) { /* CustomEvent unsupported â€” skip hook */ }
+            } catch (e) { /* CustomEvent unsupported — skip hook */ }
 
             try {
                 // Snapshot FormData sent (client-side diagnostic)
                 const _postSnapshot = {};
                 for (const [k, v] of formData.entries()) {
                     // Truncate long values (signature base64 dll) untuk keep console readable
-                    _postSnapshot[k] = (typeof v === 'string' && v.length > 200) ? v.slice(0, 100) + 'â€¦(' + v.length + ' chars)' : v;
+                    _postSnapshot[k] = (typeof v === 'string' && v.length > 200) ? v.slice(0, 100) + '…(' + v.length + ' chars)' : v;
                 }
 
                 const resp = await fetch(_ezdocEndpoint('save'), { method: 'POST', body: formData });
                 const data = await resp.json();
 
-                // Push diagnostic ke debug bag + console.log â€” F12 inspect
+                // Push diagnostic ke debug bag + console.log — F12 inspect
                 const _dbg = { post: _postSnapshot, response: data };
                 (window.EZDOC_DEBUG = window.EZDOC_DEBUG || {}).saves = (window.EZDOC_DEBUG.saves || []);
                 window.EZDOC_DEBUG.saves.push(_dbg);
@@ -503,7 +503,7 @@
                     document.querySelectorAll('input[id^="_sign_token_"]').forEach(function (el) {
                         el.remove();
                     });
-                    // spec: ezdoc-spec/slots/generate.md#save-hook-post â€” dispatch after-save event
+                    // spec: ezdoc-spec/slots/generate.md#save-hook-post — dispatch after-save event
                     // for analytics, external sync (audit trail, notification, webhook), or auto-print.
                     try {
                         window.dispatchEvent(new CustomEvent('ezcetak:after-save', {
@@ -541,7 +541,7 @@
                     // Tanda tangan baru tercatat pada penyimpanan ini: muat ulang.
                     //
                     // Markup yang masih di layar dirender SEBELUM tanda tangan itu
-                    // ada â€” tombol Edit dan Hapus masih menempel, field yang kini
+                    // ada — tombol Edit dan Hapus masih menempel, field yang kini
                     // beku masih terlihat bisa diketik, dan nama penanda tangan
                     // masih bisa diedit. Menekan Edit di situ menghasilkan
                     // penolakan "sudah tercatat" atas tanda tangan yang baru saja
@@ -564,7 +564,7 @@
                         const docIdInput = document.getElementById('docIdInput');
                         if (docIdInput) docIdInput.value = data.doc_id;
                         // Defensive: .doc-info bisa null di layout yg beda (mis. deleted-mode
-                        // header). Skip DOM update kalau tidak ada â€” data sudah masuk DB.
+                        // header). Skip DOM update kalau tidak ada — data sudah masuk DB.
                         const docInfoEl = document.querySelector('.doc-info');
                         if (docInfoEl) {
                             docInfoEl.textContent = t('toolbar.doc_info_id_edit', {id: data.doc_id}, 'ID: {id} (Edit)');
@@ -589,7 +589,7 @@
         // Penolakan simpan yang menyebut dokumen lain harus menawarkan jalan ke
         // dokumen itu.
         //
-        // Sebuah dokumen dialamati oleh slot-nya â€” (template, NORM, Nopen, label).
+        // Sebuah dokumen dialamati oleh slot-nya — (template, NORM, Nopen, label).
         // Mengisi NORM/Nopen yang sama dengan dokumen sebelumnya berarti menuju
         // dokumen yang SAMA, walau layarnya bilang "baru". Kalau yang di sana
         // terkunci, simpannya ditolak untuk dokumen yang petugas tidak merasa
@@ -599,8 +599,8 @@
         // yang bisa diklik. Padahal server sudah mengirim slot yang cocok, jadi
         // tautan ke dokumennya bisa dibangun tepat.
         async function handleSaveRejection(data) {
-            // Penolakan Â§7b: isi dokumen beku karena sudah ada tanda tangan.
-            // Remedinya bukan "buka dokumen lain" â€” dokumennya sudah terbuka â€”
+            // Penolakan §7b: isi dokumen beku karena sudah ada tanda tangan.
+            // Remedinya bukan "buka dokumen lain" — dokumennya sudah terbuka —
             // tapi membuat versi baru. Toast tidak bisa menawarkan itu, dan tanpa
             // tawaran itu petugas kehabisan jalan: field yang berubah tidak akan
             // pernah bisa disimpan di versi ini.
@@ -622,7 +622,7 @@
                 );
                 if (go && typeof showNewVersionModal === 'function') {
                     // Versi baru menyalin isi versi ini, jadi apa yang diketik
-                    // petugas tidak hilang â€” ia pindah ke versi yang belum
+                    // petugas tidak hilang — ia pindah ke versi yang belum
                     // ditandatangani, tempat ia boleh berubah.
                     await showNewVersionModal();
                 }
@@ -650,7 +650,7 @@
                 norm: slot.norm || '-',
                 nopen: slot.nopen || '-',
                 label: slot.label || '-'
-            }, 'Document #{id} (version {version}) already occupies this slot â€” MR {norm}, Reg {nopen}, label "{label}".');
+            }, 'Document #{id} (version {version}) already occupies this slot — MR {norm}, Reg {nopen}, label "{label}".');
 
             const go = await ezdocConfirm(data.message + '\n\n' + detail, {
                 title: t('alert.locked_slot_title', {}, 'Slot already taken'),
@@ -661,7 +661,7 @@
 
             // Membuka dokumennya bukan tindakan merusak, tapi apa pun yang belum
             // tersimpan di form ini akan hilang. Karena simpannya baru saja
-            // ditolak, tidak ada yang tersimpan â€” jadi peringatan navigasi biasa
+            // ditolak, tidak ada yang tersimpan — jadi peringatan navigasi biasa
             // yang justru menyesatkan di sini.
             if (go) {
                 if (typeof markClean === 'function') markClean();
@@ -669,17 +669,17 @@
             }
         }
 
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-        // Verify QR Mode â€” toggle global untuk ganti TTD gambar dengan QR verifikasi
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // ═══════════════════════════════════════════════════════════════════════
+        // Verify QR Mode — toggle global untuk ganti TTD gambar dengan QR verifikasi
+        // ═══════════════════════════════════════════════════════════════════════
         //
         // Approach: save state via submit form, lalu reload halaman dengan flag baru.
         // Server-render langsung apply mode ini. Lebih reliable dari DOM manipulation.
         //
         // Flow:
-        //   OFF â†’ ON: modal â†’ OK â†’ save form (persist ke DB) â†’ reload
-        //             (kalau doc belum save & butuh NORM/Nopen â†’ warn di modal)
-        //   ON â†’ OFF: save form dengan flag=0 â†’ reload
+        //   OFF → ON: modal → OK → save form (persist ke DB) → reload
+        //             (kalau doc belum save & butuh NORM/Nopen → warn di modal)
+        //   ON → OFF: save form dengan flag=0 → reload
         //
         // State: `_show_verify_qr` (0/1) di data_fields JSON. Support juga GET/POST override.
 
@@ -689,16 +689,16 @@
             const currentOn = stateInput.value === '1';
 
             if (currentOn) {
-                // ON â†’ OFF: langsung apply + save + reload
+                // ON → OFF: langsung apply + save + reload
                 stateInput.value = '0';
                 saveAndReloadForVerifyQr(false);
                 return;
             }
 
-            // OFF â†’ ON: buka modal konfirmasi
+            // OFF → ON: buka modal konfirmasi
             //
             // Adanya URL verifikasi tingkat dokumen dipakai sebagai penanda
-            // "dokumen sudah punya slug", bukan sebagai isi QR â€” tiap slot punya
+            // "dokumen sudah punya slug", bukan sebagai isi QR — tiap slot punya
             // pointer-nya sendiri. Tanpa slug, tidak ada satu pun pointer yang
             // bisa dibangun, jadi dokumennya harus disimpan lebih dulu.
             const vu = document.getElementById('verifyUrlInput')?.value || '';
@@ -724,7 +724,7 @@
                 const isGeneral = <?= (isset($isGeneralDoc) && $isGeneralDoc) ? 'true' : 'false' ?>;
                 if (!isGeneral && (!norm || !nopen)) {
                     document.getElementById('verifyQrModalWarnMsg').textContent =
-                        t('modal.verify_qr.identity_required_warning', {}, 'NORM & Nopen must be filled in first. Close this modal â†’ fill them in the right sidebar â†’ click toggle again.');
+                        t('modal.verify_qr.identity_required_warning', {}, 'NORM & Nopen must be filled in first. Close this modal → fill them in the right sidebar → click toggle again.');
                     confirmBtn.disabled = true;
                 } else {
                     confirmBtn.disabled = false;
@@ -732,7 +732,7 @@
             }
 
             const modal = document.getElementById('verifyQrConfirmModal');
-            // Tailwind `hidden` !important â€” must remove class BEFORE inline display works.
+            // Tailwind `hidden` !important — must remove class BEFORE inline display works.
             modal.classList.remove('hidden');
             modal.style.display = 'flex';
         }
@@ -758,13 +758,13 @@
 
         // Dulu di sini ada generateVerifyQr() + initVerifyQrOnLoad(): jalur render
         // ketiga yang mengisi area .ttd-area-verify-qr dengan URL verifikasi
-        // dokumen â€” nilai yang sama untuk setiap slot. Areanya sudah tidak
+        // dokumen — nilai yang sama untuk setiap slot. Areanya sudah tidak
         // dirender lagi; mode ini sekarang cuma memaksa semua slot ke mode QR, dan
         // isinya diurus generateTtdQr() lewat jalur per-tanda-tangan yang sama.
         // Tidak ada fitur yang hilang: yang berkurang hanya duplikasinya.
 
         // Save form via fetch (persist state), lalu reload URL dengan `_show_verify_qr=X`.
-        // Server-render akan handle semua visual change (TTD â†’ verify QR atau balik).
+        // Server-render akan handle semua visual change (TTD → verify QR atau balik).
         async function saveAndReloadForVerifyQr(targetOn) {
             const norm = (document.getElementById('inputNorm')?.value || '').trim();
             const nopen = (document.getElementById('inputNopen')?.value || '').trim();
@@ -780,12 +780,12 @@
                 const data = await resp.json();
                 if (!data.success) {
                     closeVerifyQrModal();
-                    // Jalur penolakan yang sama seperti submitForm â€” kalau yang
+                    // Jalur penolakan yang sama seperti submitForm — kalau yang
                     // menghalangi adalah dokumen lain, tawarkan jalan ke sana.
                     await handleSaveRejection(data);
                     return;
                 }
-                // Build URL untuk reload â€” pastikan doc_id + _show_verify_qr masuk
+                // Build URL untuk reload — pastikan doc_id + _show_verify_qr masuk
                 const url = new URL(window.location.href);
                 url.searchParams.set('_show_verify_qr', targetOn ? '1' : '0');
                 if (data.doc_id) {
@@ -805,9 +805,9 @@
             }
         }
 
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-        // QR Field Modal â€” untuk standalone QR (klik area QR â†’ modal â†’ OK â†’ isi)
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // ═══════════════════════════════════════════════════════════════════════
+        // QR Field Modal — untuk standalone QR (klik area QR → modal → OK → isi)
+        // ═══════════════════════════════════════════════════════════════════════
 
         let _qrFieldModalCurrentField = null;
 
@@ -825,7 +825,7 @@
 
             if (nameEl) nameEl.textContent = fieldName;
 
-            // Isi current value (kalau sudah ada) â€” untuk custom input
+            // Isi current value (kalau sudah ada) — untuk custom input
             const currentVal = (document.getElementById('qrinput_' + fieldName)?.value || '').trim();
             if (customInput) customInput.value = currentVal;
 
@@ -878,7 +878,7 @@
             const customInput = document.getElementById('qrFieldCustomInput');
             let newValue = '';
             if (radioVerify && radioVerify.checked) {
-                // Simpan MARKER `{verify_url}` supaya kalau base URL berubah (mis. dev â†’ production),
+                // Simpan MARKER `{verify_url}` supaya kalau base URL berubah (mis. dev → production),
                 // server-side render auto-resolve ke URL current. Jangan simpan URL resolved
                 // (yang bisa jadi stale kalau config berubah).
                 if (!(document.getElementById('verifyUrlInput')?.value || '')) {
@@ -916,11 +916,11 @@
 
         // Build URLSearchParams yang preserve routing prefix (mis. ezdoc_page=generate).
         // Kalau library dipakai standalone (tanpa App orchestrator), current URL tidak
-        // punya ezdoc_page â†’ params tetap kosong = backward compat.
+        // punya ezdoc_page → params tetap kosong = backward compat.
         function _preservedParams() {
             const cur = new URLSearchParams(window.location.search);
             const p = new URLSearchParams();
-            // Preserve routing prefix keys â€” jangan bawa param dokumen supaya tidak
+            // Preserve routing prefix keys — jangan bawa param dokumen supaya tidak
             // stale saat pindah context.
             ['ezdoc_page', 'ezdoc_asset'].forEach(k => {
                 if (cur.has(k)) p.set(k, cur.get(k));
@@ -931,7 +931,7 @@
         function createNew() {
             const params = _preservedParams();
             params.set('template_id', templateId);
-            // Intentional programmatic nav â€” suppress dirty prompt (Livewire pattern)
+            // Intentional programmatic nav — suppress dirty prompt (Livewire pattern)
             window._ezdocSuppressUnload = true;
             window.location.href = '?' + params.toString();
         }
@@ -952,10 +952,10 @@
         }
 
         /**
-         * 'YYYY-MM-DD HH:MM:SS[.mmm]' â†’ 'DD/MM/YYYY HH:MM'.
+         * 'YYYY-MM-DD HH:MM:SS[.mmm]' → 'DD/MM/YYYY HH:MM'.
          *
          * Fungsi terpisah, bukan penutup di dalam showDocInfo(). Dulu ia hidup di
-         * sana, lalu renderHistoryEntry() memanggilnya dari luar â€” dan JavaScript
+         * sana, lalu renderHistoryEntry() memanggilnya dari luar — dan JavaScript
          * tidak mengeluh sampai barisnya benar-benar dijalankan. Errornya baru
          * muncul saat panel riwayat dibuka, bukan saat halaman dimuat.
          */
@@ -993,7 +993,7 @@
                         statusBadge = `<span class="text-gray-500 text-[11px]">${t('modal.doc_info.materai_manual_status', {}, 'Manual stamp')}</span>`;
                     } else {
                         statusBadge = imgVal
-                            ? `<span class="text-green-600 text-[11px]">âœ“ ${t('modal.doc_info.materai_filled_status', {}, 'Filled')}</span>`
+                            ? `<span class="text-green-600 text-[11px]">✓ ${t('modal.doc_info.materai_filled_status', {}, 'Filled')}</span>`
                             : `<span class="text-red-600 text-[11px]">${t('modal.doc_info.materai_missing_status', {}, 'Not uploaded')}</span>`;
                     }
                     materaiRows += `<tr>
@@ -1014,7 +1014,7 @@
             modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:4000;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;';
             // Dua kolom, bukan satu kolom yang dilebarkan. Keterangan dokumen
             // pendek dan tetap; riwayat panjang dan bertambah terus. Menumpuknya
-            // membuat riwayat terjepit di kotak gulir setinggi lima baris â€”
+            // membuat riwayat terjepit di kotak gulir setinggi lima baris —
             // bagian yang paling sering dibaca justru dapat ruang paling sempit.
             //
             // Bentuknya mengikuti Certificate of Completion DocuSign dan panel
@@ -1033,7 +1033,7 @@
                         <div class="min-w-0">
                             <h5 class="m-0 text-[15px] font-semibold text-gray-900">${t('modal.doc_info.title', {}, 'Document Details')}</h5>
                             <div class="text-[12px] text-gray-500 mt-0.5 tabular-nums">
-                                #${meta.id} Â· v${CURRENT_VERSION} Â· ${escapeHtmlSimple(CURRENT_NORM || '-')}/${escapeHtmlSimple(CURRENT_NOPEN || '-')}
+                                #${meta.id} · v${CURRENT_VERSION} · ${escapeHtmlSimple(CURRENT_NORM || '-')}/${escapeHtmlSimple(CURRENT_NOPEN || '-')}
                             </div>
                         </div>
                         <button onclick="document.getElementById('docInfoModal').remove()"
@@ -1063,7 +1063,7 @@
                                 <h6 class="m-0 text-[12px] font-semibold text-gray-700">${t('modal.doc_info.history_heading', {}, 'History')}</h6>
                                 <span class="text-[10px] text-gray-400">${t('modal.doc_info.history_newest_first', {}, 'newest first')}</span>
                             </div>
-                            <div id="docHistoryBody" class="flex-1 min-h-[220px] overflow-y-auto text-[12px] text-gray-400 py-3 text-center">${t('modal.doc_info.history_loading', {}, 'Loading historyâ€¦')}</div>
+                            <div id="docHistoryBody" class="flex-1 min-h-[220px] overflow-y-auto text-[12px] text-gray-400 py-3 text-center">${t('modal.doc_info.history_loading', {}, 'Loading history…')}</div>
                         </div>
                     </div>
 
@@ -1085,11 +1085,11 @@
         }
 
         /**
-         * Riwayat dokumen â€” gabungan log audit dan record tanda tangan.
+         * Riwayat dokumen — gabungan log audit dan record tanda tangan.
          *
          * Bentuknya mengikuti Certificate of Completion DocuSign dan panel Activity
          * Adobe Sign: keterangan dokumen di atas, garis waktu di bawahnya. Untuk
-         * dokumen bertanda tangan ini bukan log teknis â€” ini yang menjawab "siapa
+         * dokumen bertanda tangan ini bukan log teknis — ini yang menjawab "siapa
          * menandatangani, kapan, dari mana".
          */
         async function loadDocHistory() {
@@ -1106,7 +1106,7 @@
                 // Badan respons dibaca sebagai teks dulu, baru diurai.
                 //
                 // `resp.json()` yang gagal melempar SyntaxError, dan pesannya cuma
-                // "Unexpected token <" â€” tidak menyebut apa yang sebenarnya dikirim
+                // "Unexpected token <" — tidak menyebut apa yang sebenarnya dikirim
                 // server. Padahal justru itu jawabannya: halaman error PHP, 404, atau
                 // pengalihan ke halaman login semuanya sampai ke sini sebagai HTML,
                 // dan ketiganya perlu penanganan berbeda.
@@ -1123,7 +1123,7 @@
                     box.className = 'text-[12px] text-red-600 py-3 text-center';
                     box.textContent = t('modal.doc_info.history_bad_response',
                         { status: resp.status },
-                        'The server replied with HTTP {status} instead of data â€” see the browser console');
+                        'The server replied with HTTP {status} instead of data — see the browser console');
                     return;
                 }
 
@@ -1139,7 +1139,7 @@
                 }
 
                 // Mengisi tinggi kolomnya, bukan dipatok 240px. Sejak panelnya
-                // dua kolom, riwayat punya ruang sendiri â€” memateri tingginya
+                // dua kolom, riwayat punya ruang sendiri — memateri tingginya
                 // akan menyisakan ruang kosong di bawah lalu tetap menggulir.
                 box.className = 'flex-1 min-h-[220px] overflow-y-auto -mr-1 pr-1';
                 box.innerHTML = data.entries.map(renderHistoryEntry).join('')
@@ -1152,7 +1152,7 @@
                 console.error('[ezdoc:history] gagal memuat riwayat', e);
                 box.className = 'text-[12px] text-red-600 py-3 text-center';
                 box.textContent = t('modal.doc_info.history_failed', {}, 'History could not be loaded')
-                    + (e && e.message ? ' â€” ' + e.message : '');
+                    + (e && e.message ? ' — ' + e.message : '');
             }
         }
 
@@ -1196,7 +1196,7 @@
                 'otp.voucher_claimed_override': { icon: 'bi-pencil-square', tone: 'text-amber-600', label: t('history_event.otp_voucher_claimed_override', {}, 'Patient code verified against a different number') },
                 'otp.voucher_lookup_manual':    { icon: 'bi-search',        tone: 'text-gray-500', label: t('history_event.otp_voucher_lookup_manual', {}, 'Status checked for a typed number') },
 
-                // V6 â€” kode terikat dokumen. Lima kejadian voucher di atas
+                // V6 — kode terikat dokumen. Lima kejadian voucher di atas
                 // dipertahankan walau jalurnya sudah pensiun: baris lama masih
                 // ada di log audit, dan riwayat yang menampilkan nama kejadian
                 // mentah untuk dokumen lama sama saja dengan riwayat yang rusak.
@@ -1205,7 +1205,7 @@
             };
 
             // Kejadian yang tidak dikenali tetap ditampilkan, memakai nama mentahnya.
-            // Menyembunyikannya akan membuat riwayat terlihat lengkap padahal bolong â€”
+            // Menyembunyikannya akan membuat riwayat terlihat lengkap padahal bolong —
             // dan yang hilang justru kejadian yang paling baru ditambahkan.
             const spec = EVENTS[e.event] || { icon: 'bi-dot', tone: 'text-gray-400', label: escapeHtmlSimple(e.event) };
             let title = spec.label;
@@ -1215,7 +1215,7 @@
                     { slot: e.detail.ttd_label || '-' },
                     'Signed "{slot}"');
                 if (e.detail.signer_name) {
-                    title += ' â€” ' + escapeHtmlSimple(e.detail.signer_name);
+                    title += ' — ' + escapeHtmlSimple(e.detail.signer_name);
                 }
             }
 
@@ -1228,14 +1228,14 @@
 
             // `roles` bisa saja tidak ada di respons: server menghapusnya untuk
             // yang tidak berhak melihat detail audit. Tidak ada yang perlu
-            // dilakukan di sini â€” bagian itu memang tinggal hilang.
+            // dilakukan di sini — bagian itu memang tinggal hilang.
             const whoLabel = actorLabel(e.actor, e.actor_name);
             const who = whoLabel
-                ? `${escapeHtmlSimple(whoLabel)}${e.roles ? ' Â· ' + escapeHtmlSimple(e.roles) : ''}`
+                ? `${escapeHtmlSimple(whoLabel)}${e.roles ? ' · ' + escapeHtmlSimple(e.roles) : ''}`
                 : t('history_event.unknown_actor', {}, 'unknown');
 
             // Riwayat mencakup seluruh slot, jadi tiap baris harus menyebut versi
-            // mana yang dimaksud â€” kalau tidak, sepuluh baris "Dokumen disimpan"
+            // mana yang dimaksud — kalau tidak, sepuluh baris "Dokumen disimpan"
             // terlihat seperti sepuluh penyimpanan pada versi yang sedang dibuka.
             // Versi yang sedang dilihat ditandai supaya mudah dicari.
             const isCurrent = e.version === CURRENT_VERSION;
@@ -1249,7 +1249,7 @@
                     <div class="min-w-0 flex-1">
                         <div class="text-[12px] text-gray-800 leading-tight">${ver}${title}${revoked}${failed}</div>
                         <div class="text-[10px] text-gray-500 leading-tight mt-0.5">
-                            ${fmtDate(e.at)} Â· ${who}${e.ip ? ' Â· ' + escapeHtmlSimple(e.ip) : ''}
+                            ${fmtDate(e.at)} · ${who}${e.ip ? ' · ' + escapeHtmlSimple(e.ip) : ''}
                         </div>
                     </div>
                 </div>`;
@@ -1262,14 +1262,14 @@
         /**
          * Bagaimana seorang pelaku ditulis: nama, nomor, atau keduanya.
          *
-         * Satu fungsi untuk semua tempat â€” riwayat, "Dibuat oleh", dan nanti
+         * Satu fungsi untuk semua tempat — riwayat, "Dibuat oleh", dan nanti
          * halaman audit. Aturan yang berbeda-beda per layar adalah cara sebuah
          * kebijakan pengungkapan berhenti jadi kebijakan.
          *
-         * - nama ada, tanpa hak detail  â†’ "Ahmad Qaedi"
-         * - nama ada, dengan hak detail â†’ "Ahmad Qaedi (#18)"
-         * - nama tidak ketemu           â†’ "#18"
-         * - tidak ada nama maupun id    â†’ "" (pemanggil yang memilih katanya)
+         * - nama ada, tanpa hak detail  → "Ahmad Qaedi"
+         * - nama ada, dengan hak detail → "Ahmad Qaedi (#18)"
+         * - nama tidak ketemu           → "#18"
+         * - tidak ada nama maupun id    → "" (pemanggil yang memilih katanya)
          *
          * Yang terakhir dikembalikan kosong, bukan "-", supaya riwayat bisa
          * bilang "tidak diketahui" sementara panel keterangan cukup "-". Id `0`
@@ -1278,10 +1278,10 @@
          *
          * Nomor pegawai selalu dikirim server karena ia penampilan cadangan.
          * Yang diputuskan di sini cuma apakah ia ikut tampil ketika namanya ADA
-         * â€” kosmetik, bukan batas keamanan. Batas keamanannya di server, yang
+         * — kosmetik, bukan batas keamanan. Batas keamanannya di server, yang
          * menghapus `ip` dan `roles` dari respons untuk yang tidak berhak.
          *
-         * @returns {string} teks mentah, BELUM di-escape â€” pemanggilnya yang escape
+         * @returns {string} teks mentah, BELUM di-escape — pemanggilnya yang escape
          */
         function actorLabel(id, name) {
             const hasId = id !== undefined && id !== null && String(id) !== '' && String(id) !== '0';
@@ -1334,12 +1334,12 @@
             params.set('nopen', CURRENT_NOPEN);
             if (CURRENT_LABEL !== '-') params.set('label', CURRENT_LABEL);
             params.set('version', version);
-            // Intentional programmatic nav â€” suppress dirty prompt (Livewire pattern)
+            // Intentional programmatic nav — suppress dirty prompt (Livewire pattern)
             window._ezdocSuppressUnload = true;
             window.location.href = '?' + params.toString();
         }
 
-        // Tidak ada lagi tombol yang memanggil ini â€” Lock Final/Unlock sudah dibuang
+        // Tidak ada lagi tombol yang memanggil ini — Lock Final/Unlock sudah dibuang
         // dari toolbar. Fungsinya dibiarkan, dan itu keputusan, bukan kelalaian:
         // action `toggle_lock` di server masih ada dan masih dipakai jalur lain
         // (mis. dokumen terhapus dirender baca-saja lewat flag yang sama).
@@ -1396,27 +1396,27 @@
             const resp = await fetch(_ezdocEndpoint('docAction'), { method: 'POST', body: fd });
             const data = await resp.json();
             if (data.success) {
-                // Reload latest version after delete â€” preserve ezdoc_page prefix
+                // Reload latest version after delete — preserve ezdoc_page prefix
                 const params = _preservedParams();
                 params.set('template_id', templateId);
                 params.set('norm', CURRENT_NORM);
                 params.set('nopen', CURRENT_NOPEN);
                 if (CURRENT_LABEL !== '-') params.set('label', CURRENT_LABEL);
-                // Intentional programmatic nav â€” suppress dirty prompt (Livewire pattern)
+                // Intentional programmatic nav — suppress dirty prompt (Livewire pattern)
                 window._ezdocSuppressUnload = true;
                 window.location.href = '?' + params.toString();
                 return;
             }
 
             // Versi terakhir: menghapusnya sama artinya dengan menghapus dokumennya,
-            // dan `delete_version` memang tidak melakukan itu â€” cakupannya satu versi.
+            // dan `delete_version` memang tidak melakukan itu — cakupannya satu versi.
             // Memisahkan keduanya adalah pola biasa (Google Docs, WordPress, Git:
             // entitas dan versinya dihapus dengan perintah berbeda).
             //
             // Yang tidak biasa adalah menyebut jalan keluar lalu menyembunyikannya.
             // `delete_slot` tidak pernah punya tombol, jadi dokumen bervesi tunggal
             // tidak bisa dihapus sama sekali. Ditawarkan di sini, dengan konfirmasi
-            // yang menyebut akibatnya â€” bukan diam-diam dieskalasi.
+            // yang menyebut akibatnya — bukan diam-diam dieskalasi.
             if (data.remedy === 'delete_slot' && data.slot) {
                 await deleteWholeDocument(data.slot);
                 return;
@@ -1461,7 +1461,7 @@
                 return;
             }
 
-            // Dokumennya sudah tidak ada â€” memuat ulang slot yang sama akan
+            // Dokumennya sudah tidak ada — memuat ulang slot yang sama akan
             // menampilkan form kosong seolah tidak terjadi apa-apa. Kembali ke
             // daftar, tempat penghapusannya terlihat.
             const params = _preservedParams();
@@ -1486,13 +1486,13 @@
             const data = await resp.json();
             if (data.success) {
                 ezdocAlert(t('alert.restore_success', {count: data.affected || 0}, 'Restored successfully ({count} version(s))'), { title: 'Restored', variant: 'success' });
-                // Reload sebagai dokumen aktif â€” preserve ezdoc_page prefix
+                // Reload sebagai dokumen aktif — preserve ezdoc_page prefix
                 const params = _preservedParams();
                 params.set('template_id', templateId);
                 params.set('norm', CURRENT_NORM);
                 params.set('nopen', CURRENT_NOPEN);
                 if (CURRENT_LABEL !== '-') params.set('label', CURRENT_LABEL);
-                // Intentional programmatic nav â€” suppress dirty prompt (Livewire pattern)
+                // Intentional programmatic nav — suppress dirty prompt (Livewire pattern)
             window._ezdocSuppressUnload = true;
             window.location.href = '?' + params.toString();
             } else {
@@ -1566,7 +1566,7 @@
             const data = await resp.json();
             if (data.success) {
                 document.getElementById('newVersionModal')?.remove();
-                // Redirect to new version â€” preserve ezdoc_page=generate supaya
+                // Redirect to new version — preserve ezdoc_page=generate supaya
                 // App router tidak fallback ke default_page (list).
                 const params = _preservedParams();
                 params.set('template_id', templateId);
@@ -1574,7 +1574,7 @@
                 params.set('nopen', CURRENT_NOPEN);
                 if (CURRENT_LABEL !== '-') params.set('label', CURRENT_LABEL);
                 params.set('version', data.version);
-                // Intentional programmatic nav â€” suppress dirty prompt (Livewire pattern)
+                // Intentional programmatic nav — suppress dirty prompt (Livewire pattern)
             window._ezdocSuppressUnload = true;
             window.location.href = '?' + params.toString();
             } else {
@@ -1615,12 +1615,12 @@
         const configTtdMap = <?= json_encode($configTtd ?? [], JSON_UNESCAPED_UNICODE) ?>;
         let _otpState = {
             // Challenge currently awaiting a code. Scoped to whichever slot the
-            // modal has open â€” see the reset in openSign().
+            // modal has open — see the reset in openSign().
             currentChallengeId: null,
             signTokens: {},
             timerInterval: null,
 
-            // â”€â”€ V6: kode diminta lewat QR di layar ini â”€â”€
+            // ── V6: kode diminta lewat QR di layar ini ──
             scanPoll: null,
             scanCountdown: null
         };
@@ -1632,8 +1632,8 @@
             }
             // Drop any challenge left over from another slot. Without this,
             // sending a code for slot A then opening slot B and typing a code
-            // would verify against A's challenge and file the resulting token â€”
-            // which the server bound to A â€” under B.
+            // would verify against A's challenge and file the resulting token —
+            // which the server bound to A — under B.
             if (currentTtdId !== id) {
                 _otpState.currentChallengeId = null;
             }
@@ -1667,7 +1667,7 @@
 
             // Nama penanda tangan diminta di sini, sekali, sebelum tanda tangan
             // diambil. Setelah slot ditandatangani, nama masuk ke hash dan tidak
-            // bisa berubah â€” jadi satu-satunya tempat yang masuk akal untuk
+            // bisa berubah — jadi satu-satunya tempat yang masuk akal untuk
             // mengisinya adalah sebelum menandatangani, bukan sesudahnya.
             //
             // Slot yang sudah ditandatangani tidak menampilkan field ini: nilainya
@@ -1697,13 +1697,13 @@
                 if (asEl) {
                     // Nama kalau aplikasi pemakai menyambungkan ActorDirectory,
                     // kalau tidak `#18`. Baris ini dibaca orang tepat sebelum ia
-                    // menandatangani â€” nomor internal tidak membantunya
+                    // menandatangani — nomor internal tidak membantunya
                     // memastikan apa pun. Daftar role tidak lagi dikirim: tidak
                     // berguna untuk konfirmasi, dan mengirimnya menaruh daftar
                     // role di HTML setiap halaman generate.
                     asEl.textContent = (signer.id && signer.id !== '0')
                         ? (signer.name ? signer.name : `#${signer.id}`)
-                        : t('modal.sign_qr.no_identity', {}, 'no identity â€” check access configuration');
+                        : t('modal.sign_qr.no_identity', {}, 'no identity — check access configuration');
                 }
                 if (slotEl) slotEl.textContent = label || id;
             }
@@ -1739,7 +1739,7 @@
                     // The DOM is checked before the server value because the
                     // operator may have just typed a correction that has not
                     // been saved yet. The server value is the fallback, and it
-                    // is what makes a number passed via GET/POST work at all â€”
+                    // is what makes a number passed via GET/POST work at all —
                     // without a matching field in the template there is nothing
                     // in the DOM to read, which is why the input used to come
                     // up empty despite the number being in the URL.
@@ -1755,7 +1755,7 @@
                     patientPhone = patientPhone.trim();
 
                     // Hanya jalur kirim yang butuh nomor. Jalur pindaian tidak
-                    // punya kolom nomor sama sekali â€” nomornya ketahuan dari
+                    // punya kolom nomor sama sekali — nomornya ketahuan dari
                     // siapa yang memindai.
                     const phoneInput = document.getElementById('signOtpPhoneInput');
                     if (phoneInput) phoneInput.value = patientPhone;
@@ -1764,8 +1764,8 @@
                     // tautannya; kalau belum, jalur kirim OTP.
                     //
                     // Cadangannya jalur kirim, BUKAN voucher. Voucher lahir untuk
-                    // satu alasan â€” kode diminta sebelum ada yang tahu untuk
-                    // dokumen mana â€” dan alasan itu hilang begitu QR-nya pindah ke
+                    // satu alasan — kode diminta sebelum ada yang tahu untuk
+                    // dokumen mana — dan alasan itu hilang begitu QR-nya pindah ke
                     // layar ini. Yang tersisa darinya cuma kelemahannya: nomor
                     // yang diketik tangan, beserta jeda, pencatatan, dan batas
                     // sepuluh-per-menit yang dibangun untuk menahannya.
@@ -1785,7 +1785,7 @@
                 stopScanPoll();
             }
 
-            // Nilai slot yang bukan data URI tidak bisa digambar ke canvas â€”
+            // Nilai slot yang bukan data URI tidak bisa digambar ke canvas —
             // penanda mode QR akan berakhir sebagai src dan memicu error load.
             const existing = document.getElementById('ttd_' + id)?.value;
             if (existing && existing.startsWith('data:')) {
@@ -1890,7 +1890,7 @@
                 const data = await resp.json();
 
                 if (data.success) {
-                    // Sama persis dengan jalur voucher â€” lihat applySignToken().
+                    // Sama persis dengan jalur voucher — lihat applySignToken().
                     applySignToken(data.sign_token, data.message);
                 } else {
                     showToast(data.message || 'Verifikasi gagal.', 'error');
@@ -1912,13 +1912,13 @@
             document.getElementById('signOtpStep1').classList.remove('hidden');
         }
 
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        // Jalur voucher â€” pasien meminta kodenya sendiri lewat QR
+        // ─────────────────────────────────────────────────────────────────
+        // Jalur voucher — pasien meminta kodenya sendiri lewat QR
         //
         // Jalur utama. Yang lama (petugas menekan "Kirim OTP") tetap ada di
-        // balik satu tautan, karena tidak semua pasien bisa memindai â€” tapi ia
+        // balik satu tautan, karena tidak semua pasien bisa memindai — tapi ia
         // berbayar, jadi ia tidak boleh jadi jalan yang paling mudah ditekan.
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─────────────────────────────────────────────────────────────────
 
         function _hideAllOtpSteps() {
             ['signOtpStepScan', 'signOtpStepVoucher', 'signOtpStep1', 'signOtpStep2'].forEach(id => {
@@ -1927,13 +1927,13 @@
             });
         }
 
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        // V6 â€” kode diminta penanda tangan lewat QR di layar ini
+        // ─────────────────────────────────────────────────────────────────
+        // V6 — kode diminta penanda tangan lewat QR di layar ini
         //
         // Bedanya dengan jalur voucher yang digantikannya: kodenya terikat ke
         // dokumen dan slot ini sejak diterbitkan, jadi tidak ada kolom nomor HP
         // sama sekali. Nomornya ketahuan dari siapa yang memindai.
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─────────────────────────────────────────────────────────────────
 
         function _scanState(which) {
             ['signScanIdle', 'signScanWaiting', 'signScanEntry'].forEach(id => {
@@ -1953,7 +1953,7 @@
         /**
          * Jalur cadangan: petugas mengirim kode ke nomor yang tercatat.
          *
-         * Dipakai dua arah â€” dari tautan "tidak bisa memindai" di panel pindaian,
+         * Dipakai dua arah — dari tautan "tidak bisa memindai" di panel pindaian,
          * dan sebagai jalur bawaan saat pemasangan belum mengonfigurasi pola
          * tautan QR-nya.
          *
@@ -1975,7 +1975,7 @@
          * Identitas dokumen di samping QR, supaya penanda tangan bisa mencocokkan.
          *
          * Tidak pernah melempar. Ia dipanggil di tengah requestScanCode(),
-         * setelah gambar QR terpasang tapi sebelum keadaannya berpindah â€” jadi
+         * setelah gambar QR terpasang tapi sebelum keadaannya berpindah — jadi
          * kegagalan di sini meninggalkan petugas di layar setengah jadi: QR sudah
          * ada di DOM tapi tidak terlihat, dan pemeriksaan berkala tidak pernah
          * mulai. Teks ini hiasan; ia tidak berhak menghentikan alurnya.
@@ -2001,20 +2001,20 @@
                 if (nama) bagian.push(escapeHtmlSimple(nama));
             }
 
-            // Nomor kunjungan, bukan nomor rekam medis â€” lihat
-            // docs/PLAN-OTP-JALUR-KEDUA.md Â§8h. Yang menjawab "dokumen yang mana"
+            // Nomor kunjungan, bukan nomor rekam medis — lihat
+            // docs/PLAN-OTP-JALUR-KEDUA.md §8h. Yang menjawab "dokumen yang mana"
             // adalah nomor kunjungannya, dan penanda tangan bisa mencocokkannya
             // dengan karcis yang dipegangnya.
             if (CURRENT_NOPEN) bagian.push(escapeHtmlSimple(CURRENT_NOPEN));
 
-            return bagian.join(' Â· ');
+            return bagian.join(' · ');
         }
 
         async function requestScanCode() {
             const btn = document.getElementById('btnRequestScan');
             const btnText = document.getElementById('btnRequestScanText');
             if (btn) btn.disabled = true;
-            if (btnText) btnText.textContent = t('modal.otp.scan_requesting', {}, 'Menyiapkanâ€¦');
+            if (btnText) btnText.textContent = t('modal.otp.scan_requesting', {}, 'Menyiapkan…');
 
             try {
                 const fd = new FormData();
@@ -2032,7 +2032,7 @@
                     return;
                 }
 
-                // Dipakai verify_ttd_otp nanti â€” jalur verifikasi yang sudah ada.
+                // Dipakai verify_ttd_otp nanti — jalur verifikasi yang sudah ada.
                 _otpState.currentChallengeId = data.challenge_id;
 
                 const img = document.getElementById('signScanQr');
@@ -2077,7 +2077,7 @@
                     clearInterval(_otpState.scanCountdown);
                     _otpState.scanCountdown = null;
                     stopScanPoll();
-                    if (box) box.textContent = t('modal.otp.scan_expired', {}, 'QR kedaluwarsa â€” tampilkan ulang');
+                    if (box) box.textContent = t('modal.otp.scan_expired', {}, 'QR kedaluwarsa — tampilkan ulang');
                     _scanState('signScanIdle');
                     return;
                 }
@@ -2089,7 +2089,7 @@
          * Tanyakan berkala apakah sudah dipindai.
          *
          * Tidak perlu jeda maupun pencatatan, tidak seperti pemeriksaan status
-         * pada jalur voucher: yang dikirim `challenge_id` â€” nilai acak yang baru
+         * pada jalur voucher: yang dikirim `challenge_id` — nilai acak yang baru
          * saja diterbitkan untuk layar ini sendiri. Tidak ada yang bisa dipetakan
          * dengan menebaknya.
          */
@@ -2099,7 +2099,7 @@
             // Versi pertama memanggil stopScanPoll() di sini, dan itu ikut
             // mematikan hitung mundur yang baru saja dinyalakan requestScanCode()
             // satu baris sebelumnya. Akibatnya angkanya membeku di nilai awal dan
-            // QR tidak pernah terlihat kedaluwarsa â€” petugas menunggu sesuatu
+            // QR tidak pernah terlihat kedaluwarsa — petugas menunggu sesuatu
             // yang sudah mati.
             _clearScanPoll();
             _otpState.scanPoll = setInterval(refreshScanStatus, 3000);
@@ -2174,7 +2174,7 @@
 
             try {
                 // Jalur verifikasi yang sudah ada. Challenge hasil pindaian adalah
-                // challenge biasa â€” itu yang membuat tidak perlu endpoint baru.
+                // challenge biasa — itu yang membuat tidak perlu endpoint baru.
                 const fd = new FormData();
                 fd.append('_doc_action', 'verify_ttd_otp');
                 fd.append('challenge_id', _otpState.currentChallengeId);
@@ -2207,7 +2207,7 @@
          * Terima sign token dan buka kanvasnya.
          *
          * Dipakai KEDUA jalur. Kalau tiap jalur membuka kunci dengan caranya
-         * sendiri, keduanya harus dijaga sejajar â€” dan yang paling mudah
+         * sendiri, keduanya harus dijaga sejajar — dan yang paling mudah
          * tertinggal justru input tersembunyi yang dibaca saat menyimpan, yang
          * tanpanya penyimpanan ditolak dengan pesan "verifikasi OTP diperlukan"
          * padahal petugas baru saja memverifikasi.
@@ -2274,22 +2274,22 @@
         }
 
         // Penanda "slot ini ditandatangani lewat mode QR".
-        // Harus sama dengan Ezdoc\Signature\SignatureValue::QR_ACT â€” kalau berbeda,
+        // Harus sama dengan Ezdoc\Signature\SignatureValue::QR_ACT — kalau berbeda,
         // dokumennya tersimpan tapi tidak ada record tanda tangan yang tertulis.
         const EZDOC_QR_ACT = 'qr:v1';
 
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // ═══════════════════════════════════════════════════════════════════════
         // Normalisasi gambar tanda tangan sebelum disimpan
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // ═══════════════════════════════════════════════════════════════════════
         //
-        // Canvas-nya 850Ã—400 dan diekspor apa adanya: 340.000 piksel RGBA yang
+        // Canvas-nya 850×400 dan diekspor apa adanya: 340.000 piksel RGBA yang
         // mayoritasnya kosong. Terukur 16,5 KB per dokumen, dan `signature_values`
         // jadi 97,3% dari seluruh data dokumen.
         //
-        // Ditampilkan, gambar itu maksimal 120Ã—60 px (.ttd-signature). Jadi yang
+        // Ditampilkan, gambar itu maksimal 120×60 px (.ttd-signature). Jadi yang
         // disimpan tujuh kali lebih besar dari yang pernah dilihat siapa pun.
         //
-        // Dua langkah, keduanya di sisi klien â€” jadi hemat di jaringan juga, bukan
+        // Dua langkah, keduanya di sisi klien — jadi hemat di jaringan juga, bukan
         // cuma di disk:
         //
         //   1. Pangkas ke kotak tinta. Sisa kanvas tidak membawa informasi.
@@ -2299,7 +2299,7 @@
         // artefak pada garis tipis, dan ini artefak yang orang anggap bukti.
         // Penghematannya tidak sebanding dengan pertanyaan "kenapa tanda tangan
         // saya kelihatan beda".
-        const EZDOC_SIG_MAX_SIDE = 400;   // ~3,3x ukuran tampil â€” cukup untuk cetak
+        const EZDOC_SIG_MAX_SIDE = 400;   // ~3,3x ukuran tampil — cukup untuk cetak
         const EZDOC_SIG_PAD = 4;          // > lineWidth/2, supaya ujung bulat tidak terpotong
 
         /**
@@ -2308,7 +2308,7 @@
          * Alasannya penting: modal ini juga memuat tanda tangan yang sudah ada ke
          * kanvas untuk diedit. Pelacakan goresan tidak melihat piksel yang datang
          * dari gambar itu, jadi menyimpan tanpa menggambar apa pun akan memangkas
-         * habis tanda tangan yang sudah ada. Memindai alpha melihat semuanya â€”
+         * habis tanda tangan yang sudah ada. Memindai alpha melihat semuanya —
          * goresan baru, gambar yang dimuat, dan hasil penghapusan.
          *
          * Latar putih kanvas berasal dari CSS, bukan dicat ke bitmap-nya, jadi
@@ -2324,7 +2324,7 @@
             let minX = w, minY = h, maxX = -1, maxY = -1;
             for (let y = 0; y < h; y++) {
                 for (let x = 0; x < w; x++) {
-                    // Alpha saja. Warna goresan tidak diasumsikan â€” template boleh
+                    // Alpha saja. Warna goresan tidak diasumsikan — template boleh
                     // memakai tinta biru, dan memeriksa "bukan putih" akan salah
                     // menghitung piksel transparan sebagai tinta.
                     if (data[(y * w + x) * 4 + 3] !== 0) {
@@ -2352,13 +2352,13 @@
         /**
          * PNG yang sudah dipangkas dan diturunkan resolusinya.
          *
-         * Mengembalikan null kalau kanvasnya kosong â€” pemanggil yang memutuskan
+         * Mengembalikan null kalau kanvasnya kosong — pemanggil yang memutuskan
          * apa artinya, dan di sini artinya "tidak ada yang ditandatangani".
          *
          * Kegagalan apa pun jatuh kembali ke ekspor utuh. Ini optimasi
          * penyimpanan; kehilangan tanda tangan karenanya akan jadi pertukaran yang
          * bodoh. `getImageData` bisa melempar kalau kanvasnya ternoda oleh gambar
-         * lintas-asal â€” tidak terjadi sekarang (semua data URI), tapi menaruh
+         * lintas-asal — tidak terjadi sekarang (semua data URI), tapi menaruh
          * jaring di bawahnya jauh lebih murah daripada mengetahuinya nanti.
          */
         function normaliseSignaturePng(sourceCanvas) {
@@ -2398,7 +2398,7 @@
         //
         // Urutannya penting: hash tanda tangan dihitung server dari field yang
         // dikirim pada simpan yang sama. Kalau namanya menyusul, ia jadi perubahan
-        // isi setelah penandatanganan â€” ditolak, dan tidak ada nama yang bisa
+        // isi setelah penandatanganan — ditolak, dan tidak ada nama yang bisa
         // masuk lagi selamanya.
         //
         // Mengembalikan false kalau petugas memilih tidak melanjutkan.
@@ -2429,14 +2429,14 @@
             const hiddenInput = document.getElementById('ttd_' + currentTtdId);
             if (!hiddenInput) { closeSign(); return; }
 
-            // Nama kosong tidak diblokir â€” sebagian slot memang tidak mencetak nama
+            // Nama kosong tidak diblokir — sebagian slot memang tidak mencetak nama
             // (cap, saksi tanpa identitas). Tapi ia dikonfirmasi, karena sesudah ini
             // tidak ada kesempatan kedua.
             const nameRow = document.getElementById('signNameRow');
             const nameInput = document.getElementById('signNameInput');
             if (nameRow && !nameRow.classList.contains('hidden') && nameInput && nameInput.value.trim() === '') {
                 const proceed = await ezdocConfirm(
-                    t('confirm.sign_without_name', {}, 'The name under this signature is empty. It cannot be filled in after signing â€” only by creating a new version. Sign anyway?'),
+                    t('confirm.sign_without_name', {}, 'The name under this signature is empty. It cannot be filled in after signing — only by creating a new version. Sign anyway?'),
                     {
                         title: t('modal.sign.name_missing_title', {}, 'Name is empty'),
                         variant: 'warning',
@@ -2466,7 +2466,7 @@
                 if (typeof triggerDirty === 'function') triggerDirty();
                 closeSign();
 
-                // Menandatangani adalah tindakan commit â€” tanda tangan tidak punya
+                // Menandatangani adalah tindakan commit — tanda tangan tidak punya
                 // keadaan draft. Recordnya baru tertulis saat dokumen disimpan, jadi
                 // menunggu petugas menekan Simpan berarti QR sudah terlihat di layar
                 // sementara record yang ditunjuknya belum ada.
@@ -2478,16 +2478,16 @@
                 return;
             }
 
-            // Dipangkas ke kotak tinta dan diturunkan resolusinya â€” lihat
+            // Dipangkas ke kotak tinta dan diturunkan resolusinya — lihat
             // normaliseSignaturePng(). Tetap PNG lossless.
             const data = normaliseSignaturePng(canvas);
 
-            // Kanvas kosong. Dulu ini tersimpan sebagai data URI 850Ã—400 penuh
+            // Kanvas kosong. Dulu ini tersimpan sebagai data URI 850×400 penuh
             // transparansi: sebuah "tanda tangan" yang tidak menggambarkan apa pun,
-            // yang menandai slotnya sudah ditandatangani dan â€” sejak Fase 1 â€”
+            // yang menandai slotnya sudah ditandatangani dan — sejak Fase 1 —
             // menuliskan record tanda tangan untuk goresan yang tidak ada.
             if (data === null) {
-                showToast(t('toast.signature_empty', {}, 'Nothing was drawn â€” the signature was not saved.'), 'error');
+                showToast(t('toast.signature_empty', {}, 'Nothing was drawn — the signature was not saved.'), 'error');
                 return;
             }
 
@@ -2510,7 +2510,7 @@
 
             // Mode gambar ikut menyimpan sendiri, sama seperti mode QR.
             //
-            // Menandatangani adalah tindakan commit â€” tanda tangan tidak punya
+            // Menandatangani adalah tindakan commit — tanda tangan tidak punya
             // keadaan draft, dan dua mode untuk satu tindakan yang sama tidak boleh
             // punya aturan simpan yang berbeda. Sebelumnya mode gambar menunggu
             // petugas menekan Simpan, jadi ada jendela ketika layar menunjukkan
@@ -2649,7 +2649,7 @@
             const preview = document.getElementById('ttd_qr_preview_' + ttdId);
             if (!preview) return;
 
-            // Urutan resolusi â€” harus sama dengan sisi server (generate.php),
+            // Urutan resolusi — harus sama dengan sisi server (generate.php),
             // kalau tidak QR yang dilihat petugas berbeda dari yang tercetak:
             //   1. isi tersimpan  2. pattern template  3. pointer per tanda tangan
 
@@ -2658,14 +2658,14 @@
 
             // Priority 3 disiapkan dulu supaya cabang di bawah bisa memilih.
             // Nilainya dihitung server dari slug + ttd_id, jadi tidak berubah saat
-            // form diedit â€” tidak perlu ikut regenerasi per-field.
+            // form diedit — tidak perlu ikut regenerasi per-field.
             const area = document.getElementById('ttd_area_qr_' + ttdId);
             const ttdVerifyUrl = (area?.dataset.ttdVerifyUrl || '').trim();
             const qrDataTpl = document.getElementById('ttd_qr_data_' + ttdId)?.value || '';
 
             // Slot belum ditandatangani dan tidak ada apa pun yang dikonfigurasi:
             // server merender tombol tanda tangan di sini. Jangan ditimpa dengan
-            // pesan status â€” tombol itu satu-satunya jalan maju yang ada.
+            // pesan status — tombol itu satu-satunya jalan maju yang ada.
             const isSigned = area?.dataset.ttdSigned === '1';
             if (!qrData && !qrDataTpl && !isSigned) return;
 
@@ -2680,7 +2680,7 @@
                 }).trim();
 
                 // Pattern disetel template tapi field-nya masih kosong. Jangan
-                // diganti diam-diam dengan pointer verifikasi â€” itu menampilkan
+                // diganti diam-diam dengan pointer verifikasi — itu menampilkan
                 // sesuatu yang artinya lain dari yang template minta.
                 if (!qrData) {
                     preview.innerHTML = '<small class="text-gray-400 text-[10px]">' + t('ttd.fill_field_first', {}, 'Fill in the field first') + '</small>';
@@ -2688,13 +2688,13 @@
                 }
             }
 
-            // Priority 3: tidak ada isi tersimpan, tidak ada pattern â†’ pointer ke
+            // Priority 3: tidak ada isi tersimpan, tidak ada pattern → pointer ke
             // tanda tangan slot ini. Ini yang membuat mode QR punya arti: yang
             // memindai mendarat di record tanda tangan ini, bukan di teks yang
             // siapa pun bisa mengarang.
             //
             // Syaratnya slot sudah ditandatangani. Pointer ke record yang belum
-            // ada adalah klaim palsu â€” kertasnya terlihat bertanda tangan, tapi
+            // ada adalah klaim palsu — kertasnya terlihat bertanda tangan, tapi
             // yang memindai dapat "tanda tangan tidak dikenal".
             if (!qrData && isSigned) qrData = ttdVerifyUrl;
 
@@ -2737,8 +2737,8 @@
             // selamanya tanpa cara terlihat untuk mengembalikannya ke otomatis.
             //
             // Keterangannya menyebut apa yang sebenarnya kembali kalau dikosongkan
-            // â€” pattern template kalau template menyetelnya, kalau tidak pointer
-            // ke tanda tangan ini â€” supaya tidak menjanjikan hal yang salah.
+            // — pattern template kalau template menyetelnya, kalau tidak pointer
+            // ke tanda tangan ini — supaya tidak menjanjikan hal yang salah.
             let hint = '';
             if (resolvedPattern) {
                 hint = t('ttd.edit_qr_prompt_default_hint', {pattern: resolvedPattern},
@@ -2823,10 +2823,10 @@
         canvas.addEventListener('touchend', () => drawing = false);
 
         // ===== Keyboard shortcuts (#21) =====
-        // Admin capability flag â€” resolved server-side via RoleProvider (see $adminRoleSlug config).
+        // Admin capability flag — resolved server-side via RoleProvider (see $adminRoleSlug config).
         // spec: ezdoc-spec/context/role_provider.md#capabilities
         const IS_ADMIN_JS      = <?= $isSuperadmin ? 'true' : 'false' ?>;
-        // Legacy alias â€” kept for backward compat with existing JS references (do not use in new code)
+        // Legacy alias — kept for backward compat with existing JS references (do not use in new code)
         const IS_SUPERADMIN_JS = IS_ADMIN_JS;
 
         function showShortcutsHelp() {
@@ -2862,14 +2862,14 @@
         document.addEventListener('keydown', function(e) {
             const mod = e.ctrlKey || e.metaKey;
 
-            // Ctrl+S â€” Save
+            // Ctrl+S — Save
             if (mod && !e.shiftKey && (e.key === 's' || e.key === 'S')) {
                 e.preventDefault();
                 if (typeof submitForm === 'function') submitForm();
                 return;
             }
 
-            // Ctrl+Shift+P â€” View PDF (superadmin only)
+            // Ctrl+Shift+P — View PDF (superadmin only)
             if (mod && e.shiftKey && (e.key === 'p' || e.key === 'P')) {
                 if (IS_SUPERADMIN_JS && typeof viewPdfRaw === 'function') {
                     e.preventDefault();
@@ -2878,13 +2878,13 @@
                 return;
             }
 
-            // Ctrl+P â€” Print (let default also work, but ensure)
+            // Ctrl+P — Print (let default also work, but ensure)
             if (mod && !e.shiftKey && (e.key === 'p' || e.key === 'P')) {
-                // Don't preventDefault â€” let browser print dialog open natively
+                // Don't preventDefault — let browser print dialog open natively
                 return;
             }
 
-            // Ctrl+L â€” focus label input
+            // Ctrl+L — focus label input
             if (mod && (e.key === 'l' || e.key === 'L')) {
                 const lbl = document.getElementById('inputLabel');
                 if (lbl) {
@@ -2895,14 +2895,14 @@
                 return;
             }
 
-            // Ctrl+/ â€” show shortcuts help
+            // Ctrl+/ — show shortcuts help
             if (mod && e.key === '/') {
                 e.preventDefault();
                 showShortcutsHelp();
                 return;
             }
 
-            // Esc â€” close active modal / sign canvas
+            // Esc — close active modal / sign canvas
             if (e.key === 'Escape') {
                 // Sign canvas modal
                 const signModal = document.getElementById('signModal');

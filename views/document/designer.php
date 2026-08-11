@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * ezdoc/views/document/designer.php — full-featured WYSIWYG template designer.
  * Ported dari reference implementation (monolith consumer app).

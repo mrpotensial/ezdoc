@@ -1,14 +1,14 @@
-﻿<?php
+<?php
 /**
- * ezdoc/views/document/generate.php â€” full-featured document generator + printer.
+ * ezdoc/views/document/generate.php — full-featured document generator + printer.
  * Ported dari reference implementation (monolith consumer app cetak view).
  *
- * Expected vars in scope (all optional â€” bootstrap fallback below):
+ * Expected vars in scope (all optional — bootstrap fallback below):
  *   @var \Ezdoc\Context   $ctx      DB + role provider + verify service
  *   @var \Ezdoc\UI\Config $config   App config (URLs, brand, slot identity)
  *   @var \Ezdoc\UI\Theme  $theme    Branding + asset URLs (optional)
  *
- * Cross-framework portability: this view is DUMB â€” no business logic.
+ * Cross-framework portability: this view is DUMB — no business logic.
  * All server operations via fetch to actions/*.php REST endpoints,
  * with endpoint URLs resolved via `$config` (see $ezdocUrls bag).
  * Consumer library user may swap Context to PDO/Doctrine backend.
@@ -22,10 +22,10 @@
  * spec: ezdoc-spec/schemas/document.json
  */
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// Bootstrap fallback â€” support standalone invocation dari consumer's page/ dir
+// ═══════════════════════════════════════════════════════════════
+// Bootstrap fallback — support standalone invocation dari consumer's page/ dir
 // (kalau consumer wire manual, $ctx sudah ter-inject sebelum include ini)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════
 if (!isset($ctx) || !($ctx instanceof \Ezdoc\Context)) {
     if (!class_exists(\Ezdoc\Context::class)) {
         $__bootstrapCandidates = [
@@ -45,7 +45,7 @@ if (!isset($config) || !($config instanceof \Ezdoc\UI\Config)) {
 }
 
 // Translator resolution: consumer OR default (Indonesian) locale.
-// $GLOBALS promotion is REQUIRED (not just convenience) â€” same scope-isolation
+// $GLOBALS promotion is REQUIRED (not just convenience) — same scope-isolation
 // trap already fixed for $dbFields/$dbTtd in commit 1c4a12a: this view can be
 // include()'d from Ezdoc\Http\Router::renderView(), a METHOD, in which case
 // top-level vars here live in method-local scope, not global. The global t()
@@ -56,12 +56,12 @@ if (!isset($translator) || !($translator instanceof \Ezdoc\UI\Translator)) {
 }
 $GLOBALS['translator'] = $translator;
 
-// Consumer-app globals â†’ abstracted via Context DI
+// Consumer-app globals → abstracted via Context DI
 $conn              = $ctx->db;
 $author_id         = $ctx->roleProvider->currentUserId();
 $author_role_array = $ctx->roleProvider->currentUserRoles();
 
-// AJAX action dispatcher â€” extract AJAX endpoint handlers.
+// AJAX action dispatcher — extract AJAX endpoint handlers.
 // Endpoints handled: generate_qr, save_document, toggle_doc_lock, list_versions,
 // new_version, delete_version, delete_slot, restore_slot.
 // spec: ezdoc-spec/actions/document.md
@@ -69,7 +69,7 @@ if (is_file(__DIR__ . '/../../actions/_dispatcher.php')) {
     require_once __DIR__ . '/../../actions/_dispatcher.php';
 }
 
-// Extracted helpers (v0.6.5) â€” pure SELECT lookups + template expression evaluators.
+// Extracted helpers (v0.6.5) — pure SELECT lookups + template expression evaluators.
 // Cari di 2 lokasi: library `ezdoc/lib/` (kalau sudah copied) atau consumer app
 // `<consumer>/lib/` (fallback untuk monolith consumer yang masih share helpers).
 // v0.9.9 target: move helpers wholly ke library, deprecate consumer-side fallback.
@@ -89,14 +89,14 @@ foreach (['doc_meta_helpers.php', 'doc_template_helpers.php', 'doc_verify_helper
     }
 }
 
-// Local helper â€” escape output (keeps existing h() call sites working)
+// Local helper — escape output (keeps existing h() call sites working)
 if (!function_exists('h')) {
     function h($s): string {
         return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
     }
 }
 
-// Local helper â€” translate a dot-notation i18n key (see lang/id/*.php).
+// Local helper — translate a dot-notation i18n key (see lang/id/*.php).
 // $default preserves the original Indonesian copy so a missing/mistyped key
 // still displays correct text instead of a raw key or blank string.
 if (!function_exists('t')) {
@@ -114,7 +114,7 @@ if (!function_exists('safeDataImg')) {
      * Aman untuk dipasang ke `<img src>`.
      *
      * Hanya data URI gambar. Dipakai di tempat yang benar-benar mengeluarkan
-     * atribut src â€” BUKAN untuk menyaring nilai slot tanda tangan, lihat
+     * atribut src — BUKAN untuk menyaring nilai slot tanda tangan, lihat
      * safeSignatureValue() di bawah.
      */
     function safeDataImg(string $s): string {
@@ -122,7 +122,7 @@ if (!function_exists('safeDataImg')) {
 
         // Dijangkar di KEDUA ujung, dengan alfabet base64 yang eksplisit.
         // Sebelumnya hanya awalannya yang diperiksa, jadi apa pun boleh mengikuti
-        // `base64,` â€” termasuk `AAA" onerror="alert(1)`. Keluarannya selalu lewat
+        // `base64,` — termasuk `AAA" onerror="alert(1)`. Keluarannya selalu lewat
         // h(), jadi itu bukan XSS yang hidup, tapi "sesuatu yang bukan gambar
         // diterima sebagai gambar" tetap tidak boleh berhenti pada satu lapis.
         return preg_match('#^data:image/(png|jpe?g|gif);base64,[A-Za-z0-9+/=\r\n]+$#', $s) ? $s : '';
@@ -134,8 +134,8 @@ if (!function_exists('safeSignatureValue')) {
      * Nilai slot tanda tangan yang dikenali, atau string kosong.
      *
      * Dulu penyaringnya safeDataImg(), dan itu benar selama nilai slot cuma bisa
-     * berupa gambar. Kosakatanya bertambah dua kali sejak itu â€” penanda mode QR
-     * (`qr:v1`) dan referensi objek (`blob:sha256-â€¦`) â€” dan penyaringnya tidak
+     * berupa gambar. Kosakatanya bertambah dua kali sejak itu — penanda mode QR
+     * (`qr:v1`) dan referensi objek (`blob:sha256-…`) — dan penyaringnya tidak
      * ikut diperbarui. Keduanya bukan data URI, jadi keduanya **dihapus diam-diam
      * saat halaman dirender**.
      *
@@ -147,7 +147,7 @@ if (!function_exists('safeSignatureValue')) {
      *      Input tersembunyinya kosong, jadi menyimpan tampilan terbaca sebagai
      *      MENGHAPUS tanda tangan yang sudah tercatat.
      *
-     * Yang kedua justru bukti guard Â§7b bekerja: tanpanya, mengubah tampilan akan
+     * Yang kedua justru bukti guard §7b bekerja: tanpanya, mengubah tampilan akan
      * menghapus tanda tangan sungguhan dan meninggalkan recordnya menunjuk
      * ketiadaan.
      *
@@ -170,10 +170,10 @@ if (!function_exists('safeSignatureValue')) {
     }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// Config-driven URLs + copy â€” swap-able per consumer
+// ═══════════════════════════════════════════════════════════════
+// Config-driven URLs + copy — swap-able per consumer
 // spec: ezdoc-spec/config/urls.md
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════
 $urlGenerateQr    = (string) $config->get('urls.actions.document.generate_qr',     '?action=generate_qr');
 $urlSaveDocument  = (string) $config->get('urls.actions.document.save',            '');
 $urlDocAction     = (string) $config->get('urls.actions.document.doc_action',      '');
@@ -183,7 +183,7 @@ $urlPicker        = (string) $config->get('urls.picker',                        
 $urlTrashList     = (string) $config->get('urls.trash_list',                       '');
 $urlSelf          = (string) $config->get('urls.self',                             '?');
 
-// Genericized copy â€” consumer overrides for branding
+// Genericized copy — consumer overrides for branding
 $pickerPageTitle  = (string) $config->get('generate.picker_page_title',            'Select Template');
 $pickerHeader     = (string) $config->get('generate.picker_header',                'Select Template');
 $pickerManageLabel= (string) $config->get('generate.picker_manage_label',          'Manage');
@@ -202,7 +202,7 @@ $ezdocUrls = [
     'picker'      => $urlPicker,
 ];
 
-// Superadmin capability â€” driven by RoleProvider + config-driven role slug
+// Superadmin capability — driven by RoleProvider + config-driven role slug
 $isSuperadmin = $ctx->roleProvider->hasRole($adminRoleSlug);
 
 $template_id = isset($_GET['template_id']) ? (int)$_GET['template_id'] : 0;
@@ -223,7 +223,7 @@ $docMeta = [
     'updated_at' => null,
 ];
 
-// Template selection â€” allow caller override $templates (demo/consumer bypass DB)
+// Template selection — allow caller override $templates (demo/consumer bypass DB)
 // spec: ezdoc-spec/views/generate.md#picker-templates-injection
 if ($template_id <= 0) {
     if (!isset($templates) || !is_array($templates)) {
@@ -236,7 +236,7 @@ if ($template_id <= 0) {
     // Fragment mode: picker di-wrap layout.php (dapat primary nav).
     $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 
-    // v0.9.11 view separation â€” template picker extracted ke standalone file
+    // v0.9.11 view separation — template picker extracted ke standalone file
     // untuk industry-standard MVC one-view-per-action pattern (Laravel/Filament/
     // Symfony convention). Inherits parent scope for shared vars.
     require __DIR__ . '/generate_list.php';
@@ -247,7 +247,7 @@ if ($template_id <= 0) {
     return;
 }
 
-// Load template â€” pakai alias supaya kode rendering existing tetap works
+// Load template — pakai alias supaya kode rendering existing tetap works
 $stmt = mysqli_prepare($conn, "
     SELECT id, uuid, version,
            name AS nama_template,
@@ -275,7 +275,7 @@ if (!$template) {
     exit;
 }
 
-// v0.9.12 sidecar rehydration â€” inject floating markers dari JSON column
+// v0.9.12 sidecar rehydration — inject floating markers dari JSON column
 // balik ke templateHtml supaya renderContent pipeline unchanged. Backward-
 // compat: legacy rows dgn floating markers still in HTML tetap works.
 $templateHtml = $template['template_html'] ?: '';
@@ -297,7 +297,7 @@ $hasTtdPlaceholders = strpos($templateHtml, 'ttd-placeholder') !== false;
 // If using placeholders, extract TTD config from placeholders (not from old configTtd)
 $configTtd = [];
 if ($hasTtdPlaceholders) {
-    // Extract TTD info from placeholders in content â€” robust to attribute ordering
+    // Extract TTD info from placeholders in content — robust to attribute ordering
     preg_match_all('/<div([^>]*class="[^"]*ttd-placeholder[^"]*"[^>]*)>/s', $templateHtml, $ttdMatches, PREG_SET_ORDER);
     foreach ($ttdMatches as $m) {
         $attrs = $m[1];
@@ -378,7 +378,7 @@ $padTop = (int)($padding['top'] ?? 20);
 $padRight = (int)($padding['right'] ?? 20);
 $padBottom = (int)($padding['bottom'] ?? 20);
 
-// Layout mode: 'continuous' (default â€” satu kontainer scroll, tanpa page
+// Layout mode: 'continuous' (default — satu kontainer scroll, tanpa page
 // break) atau 'paged' (kartu multi-halaman dengan mask/spacer). Aturan
 // padding berlaku di kedua mode.
 //
@@ -418,7 +418,7 @@ if ($doc_id > 0) {
         $isEditMode = true;
         $dbFields = json_decode($dokumen['field_values'] ?: '{}', true) ?: [];
         $dbTtd = json_decode($dokumen['signature_values'] ?: '{}', true) ?: [];
-        // BUG FIX (see note near line 344) â€” promote ke GLOBALS untuk v()/vRaw()
+        // BUG FIX (see note near line 344) — promote ke GLOBALS untuk v()/vRaw()
         $GLOBALS['dbFields'] = $dbFields;
         $GLOBALS['dbTtd']    = $dbTtd;
         $param_norm = $dokumen['norm'] ?? $param_norm;
@@ -441,7 +441,7 @@ if ($doc_id > 0) {
 
 // Lookup dokumen existing:
 //   - Kalau scope=patient: lookup by (template_id, norm, nopen, label, version)
-//   - Kalau scope=general: lookup by (template_id, label, version) â€” norm/nopen kosong OK
+//   - Kalau scope=general: lookup by (template_id, label, version) — norm/nopen kosong OK
 $canLookup = false;
 if ($isGeneralDoc) {
     $canLookup = ($param_label !== '' && $param_label !== '-') || $param_version > 0;
@@ -480,7 +480,7 @@ if (!$dokumen && $canLookup) {
         $dbFields = json_decode($dokumen['field_values'] ?: '{}', true) ?: [];
         $dbTtd = json_decode($dokumen['signature_values'] ?: '{}', true) ?: [];
 
-        // v0.9.12 sidecar per-doc floating override â€” kalau doc punya
+        // v0.9.12 sidecar per-doc floating override — kalau doc punya
         // `floating_elements` non-null, override template default (rehydrate
         // ke $templateHtml supaya rendering pipeline unchanged). Kalau NULL,
         // inherit template.floating_elements yg sudah rehydrated earlier.
@@ -502,7 +502,7 @@ if (!$dokumen && $canLookup) {
         // isolation antara caller method dan include file).
         $GLOBALS['dbFields'] = $dbFields;
         $GLOBALS['dbTtd']    = $dbTtd;
-        // Client-side debug â€” expose diagnostic ke window.EZDOC_DEBUG.load
+        // Client-side debug — expose diagnostic ke window.EZDOC_DEBUG.load
         // supaya user cek via F12 Console tanpa akses server error log.
         $__ezdocLoadDebug = [
             'query'  => compact('template_id') + ['norm' => $param_norm, 'nopen' => $param_nopen, 'label' => $param_label],
@@ -530,13 +530,13 @@ if (!$dokumen && $canLookup) {
             'updated_at' => $dokumen['updated_at'] ?? null,
         ];
     } else {
-        // Client-side debug â€” dokumen not found scenario
+        // Client-side debug — dokumen not found scenario
         $__ezdocLoadDebug = [
             'query'  => ['template_id' => $template_id, 'norm' => $param_norm, 'nopen' => $param_nopen, 'label' => $param_label, 'version' => $param_version, 'scope' => $isGeneralDoc ? 'general' : 'patient'],
             'result' => ['found' => false, 'doc_id' => null],
             'raw'    => null,
             'parsed' => null,
-            'hint'   => 'Query no match â€” cek exact values (whitespace, case-sensitive) vs DB row',
+            'hint'   => 'Query no match — cek exact values (whitespace, case-sensitive) vs DB row',
         ];
     }
 }
@@ -549,7 +549,7 @@ if ($param_is_deleted) {
 // For new doc (no match), default version = 1
 if (!$dokumen) $param_version = 1;
 
-// Nama pembuat dokumen. Satu pintu â€” ezdoc_actor_names() yang memutuskan dari
+// Nama pembuat dokumen. Satu pintu — ezdoc_actor_names() yang memutuskan dari
 // mana namanya datang, dan ia yang menyimpan jalur usangnya. Sebelumnya blok ini
 // memanggil $ctx->roleProvider->displayName() lewat method_exists: metode yang
 // tidak ada di antarmuka RoleProvider, tanpa implementasi, dan merujuk berkas
@@ -581,19 +581,19 @@ function vRaw($name) {
 }
 
 // Load whitelisted default variables (extracted to ezdoc/lib/doc_meta_helpers.php)
-// resolveDefault() moved to ezdoc/lib/doc_template_helpers.php â€” reads $whitelistedVars via global.
+// resolveDefault() moved to ezdoc/lib/doc_template_helpers.php — reads $whitelistedVars via global.
 $whitelistedVars = ezdoc_load_whitelisted_vars($conn);
 
-// â”€â”€â”€ OTP phone, resolved server-side â”€â”€â”€
+// ─── OTP phone, resolved server-side ───
 // The signing modal looks for the number in the DOM, which only finds it when
 // the phone happens to be one of the template's own fields. A caller that
-// passes it in the request instead â€” opening the letter from a patient record,
-// say â€” left the modal with nothing to read, so the operator had to retype a
+// passes it in the request instead — opening the letter from a patient record,
+// say — left the modal with nothing to read, so the operator had to retype a
 // number the application already knew.
 //
 // Resolved here rather than where $configTtd is built: vRaw() reads $dbFields,
 // and that is not populated until the document has been loaded further up.
-// Same precedence as every other field â€” saved value, then POST, then GET.
+// Same precedence as every other field — saved value, then POST, then GET.
 foreach ($configTtd as $__i => $__ttd) {
     if (empty($__ttd['require_otp'])) {
         continue;
@@ -667,33 +667,33 @@ function executeDynQuery($query, $param_norm, $param_nopen, $dbFields, $conn) {
 /**
  * Process `{{tabledb.<ns>.<selector>[|<format>[:<args>]]}}` references inside <tr> rows.
  *
- * Enhanced marker syntax (v0.9.14b) â€” user bebas design table di TinyMCE,
+ * Enhanced marker syntax (v0.9.14b) — user bebas design table di TinyMCE,
  * marker mendukung format/formula/aggregate directly di cells:
  *
  * ## Selector variants
  *
- * - `col_name`              â€” raw column value dari row
- * - `=<expression>`         â€” computed formula dgn bare column names, e.g. `=qty*harga`
- * - `sum:<col_or_formula>`  â€” SUM aggregate across all rows
- * - `avg:<col_or_formula>`  â€” AVG aggregate
- * - `count:<col_or_star>`   â€” COUNT of non-null (use `*` untuk count all rows)
- * - `min:<col_or_formula>`  â€” MIN
- * - `max:<col_or_formula>`  â€” MAX
+ * - `col_name`              — raw column value dari row
+ * - `=<expression>`         — computed formula dgn bare column names, e.g. `=qty*harga`
+ * - `sum:<col_or_formula>`  — SUM aggregate across all rows
+ * - `avg:<col_or_formula>`  — AVG aggregate
+ * - `count:<col_or_star>`   — COUNT of non-null (use `*` untuk count all rows)
+ * - `min:<col_or_formula>`  — MIN
+ * - `max:<col_or_formula>`  — MAX
  *
  * ## Format modifiers (|)
  *
- * - `|text`                 â€” HTML escape (default)
- * - `|number[:decimals]`    â€” 1500 â†’ 1.500 (id) or 1,500 (en)
- * - `|currency[:code]`      â€” 1500000 â†’ Rp 1.500.000 (default IDR)
- * - `|percent[:decimals]`   â€” 0.5 â†’ 50,00% (as-ratio default)
- * - `|date[:format]`        â€” 2026-07-24 â†’ 24/07/2026 (default d/m/Y)
- * - `|datetime[:format]`    â€” default d/m/Y H:i
+ * - `|text`                 — HTML escape (default)
+ * - `|number[:decimals]`    — 1500 → 1.500 (id) or 1,500 (en)
+ * - `|currency[:code]`      — 1500000 → Rp 1.500.000 (default IDR)
+ * - `|percent[:decimals]`   — 0.5 → 50,00% (as-ratio default)
+ * - `|date[:format]`        — 2026-07-24 → 24/07/2026 (default d/m/Y)
+ * - `|datetime[:format]`    — default d/m/Y H:i
  *
  * ## Row classification
  *
- * - Row dgn raw col OR formula â†’ **cloned per data row** (existing behavior)
- * - Row dgn HANYA aggregate markers â†’ **rendered once** (footer-style)
- * - Row mixed â†’ treated as clone (aggregate evaluated with row context â€” rarely useful)
+ * - Row dgn raw col OR formula → **cloned per data row** (existing behavior)
+ * - Row dgn HANYA aggregate markers → **rendered once** (footer-style)
+ * - Row mixed → treated as clone (aggregate evaluated with row context — rarely useful)
  *
  * ## Examples
  *
@@ -719,7 +719,7 @@ function executeDynQuery($query, $param_norm, $param_nopen, $dbFields, $conn) {
  *
  * ## Backward compatibility
  *
- * Old marker `{{tabledb.ns.col}}` (no format) tetap works â€” no format pipe =
+ * Old marker `{{tabledb.ns.col}}` (no format) tetap works — no format pipe =
  * text (HTML escape). Same behavior as pre-v0.9.14b.
  *
  * spec: docs/DYNAMIC-TABLES.md
@@ -746,7 +746,7 @@ function processTabledbRows($html, $tableDbQueries, $param_norm, $param_nopen, $
         $ns = $refs[0][1] !== '' ? $refs[0][1] : 'default';
         $cfg = $tableDbQueries[$ns] ?? null;
         if (!$cfg || empty($cfg['sql'])) {
-            return preg_replace($markerRegex, 'â€”', $rowHtml);
+            return preg_replace($markerRegex, '—', $rowHtml);
         }
 
         // Execute query (cached per namespace)
@@ -758,16 +758,16 @@ function processTabledbRows($html, $tableDbQueries, $param_norm, $param_nopen, $
         // Classify row: aggregate-only, clone (per-row), atau mixed
         $rowType = _tabledbClassifyRow($refs);
 
-        // Empty result: kalau aggregate row â†’ tetap render dgn aggregate=0 or â€”,
-        // kalau clone row â†’ keep 1 row w/ placeholders replaced by â€”
+        // Empty result: kalau aggregate row → tetap render dgn aggregate=0 or —,
+        // kalau clone row → keep 1 row w/ placeholders replaced by —
         if (empty($rows)) {
             if ($rowType === 'aggregate') {
                 return _tabledbRenderRow($rowHtml, $markerRegex, [], null, $rows);
             }
-            return preg_replace($markerRegex, 'â€”', $rowHtml);
+            return preg_replace($markerRegex, '—', $rowHtml);
         }
 
-        // Aggregate row â†’ render ONCE (footer-style)
+        // Aggregate row → render ONCE (footer-style)
         if ($rowType === 'aggregate') {
             return _tabledbRenderRow($rowHtml, $markerRegex, [], null, $rows);
         }
@@ -797,7 +797,7 @@ function _tabledbClassifyRow(array $refs): string {
         elseif ($parsed['type'] === 'raw' || $parsed['type'] === 'formula') $hasPerRow = true;
     }
     if ($hasAggregate && !$hasPerRow) return 'aggregate';
-    return 'clone'; // includes mixed (aggregate + per-row â€” evaluated per-row)
+    return 'clone'; // includes mixed (aggregate + per-row — evaluated per-row)
 }
 
 /**
@@ -825,8 +825,8 @@ function _tabledbParseSelector(string $sel): array {
 }
 
 /**
- * Parse format pipe: 'currency' â†’ ['type' => 'currency', 'args' => []],
- * 'currency:USD:2' â†’ ['type' => 'currency', 'args' => ['USD', '2']].
+ * Parse format pipe: 'currency' → ['type' => 'currency', 'args' => []],
+ * 'currency:USD:2' → ['type' => 'currency', 'args' => ['USD', '2']].
  *
  * @param string|null $fmt
  * @return array
@@ -840,7 +840,7 @@ function _tabledbParseFormat(?string $fmt): array {
 }
 
 /**
- * Render one row instance â€” substitute markers dgn computed/formatted values.
+ * Render one row instance — substitute markers dgn computed/formatted values.
  *
  * @param string      $rowHtml     original <tr>...</tr> HTML w/ markers
  * @param string      $markerRegex regex to match tabledb markers
@@ -900,11 +900,11 @@ function _tabledbRenderRow(string $rowHtml, string $markerRegex, array $rowConte
 
         // Format
         if ($rawValue === null || $rawValue === '') {
-            // Show dash BUT dgn title tooltip yg explain WHY â€” user bisa hover cek
+            // Show dash BUT dgn title tooltip yg explain WHY — user bisa hover cek
             $titleAttr = $nullReason !== ''
                 ? ' title="' . htmlspecialchars($nullReason, ENT_QUOTES) . '" style="text-decoration:underline dotted #c00;cursor:help;"'
                 : '';
-            return '<span' . $titleAttr . '>â€”</span>';
+            return '<span' . $titleAttr . '>—</span>';
         }
         return _tabledbFormatValue($rawValue, $format);
     }, $rowHtml);
@@ -925,9 +925,9 @@ function _tabledbComputeAggregate(string $verb, string $target, array $allRows) 
     }
 
     // Detect formula:
-    // - Explicit prefix `=` â†’ definitely formula (strip =)
+    // - Explicit prefix `=` → definitely formula (strip =)
     // - Implicit: target contains operators (+ - * /) atau parens atau space
-    //   â†’ user probably meant formula tanpa prefix (kuantiti * harga_satuan)
+    //   → user probably meant formula tanpa prefix (kuantiti * harga_satuan)
     // - Otherwise: plain column name lookup
     $isFormula = false;
     $expr = null;
@@ -1004,7 +1004,7 @@ function _tabledbFormatValue($value, array $format): string {
     }
 }
 
-// renderDynTable() removed â€” replaced by processTabledbRows() (v0.9.14b enhanced marker system).
+// renderDynTable() removed — replaced by processTabledbRows() (v0.9.14b enhanced marker system).
 
 // Conditional section evaluators + processConditionalSections extracted to
 // ezdoc/lib/doc_template_helpers.php (evalCondExprPHP, evalSingleCondPHP,
@@ -1020,7 +1020,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['_save'])) {
     $label = trim($_POST['_label'] ?? '-');
     if ($label === '') $label = '-';
 
-    // spec: ezdoc-spec/schemas/slot_identity.md â€” patient-slot fields (norm, nopen) enforced when scope=patient
+    // spec: ezdoc-spec/schemas/slot_identity.md — patient-slot fields (norm, nopen) enforced when scope=patient
     if ($norm === '' || $nopen === '') {
         $saveMessage = (string) $config->get('generate.error_missing_identity', 'Patient identity fields (norm, nopen) are required');
     } else {
@@ -1064,7 +1064,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['_save'])) {
             $stmt = mysqli_prepare($conn, "UPDATE ezdoc_documents SET norm=?, nopen=?, label=?, field_values=?, signature_values=? WHERE id=?");
             mysqli_stmt_bind_param($stmt, "sssssi", $norm, $nopen, $label, $jsonFields, $jsonTtd, $doc_id);
         } else {
-            // INSERT baru â€” generate UUID + populate template snapshot
+            // INSERT baru — generate UUID + populate template snapshot
             // Fetch template_uuid + version untuk konsistensi
             $tplUuid = (string)($template['uuid'] ?? '');
             $tplVer  = (int)($template['version'] ?? 1);
@@ -1106,21 +1106,21 @@ $ttdValues = [];
 foreach ($configTtd as $ttd) {
     $ttdId = $ttd['id'];
     $val = $dbTtd[$ttdId] ?? $_POST[$ttdId] ?? '';
-    // Nilai MENTAH yang dikenali â€” bukan yang sudah aman untuk `src`. Ia harus
+    // Nilai MENTAH yang dikenali — bukan yang sudah aman untuk `src`. Ia harus
     // kembali utuh ke input tersembunyi, kalau tidak penyimpanan berikutnya
     // mengirimkannya kosong dan terbaca sebagai penghapusan tanda tangan.
     // Untuk ditampilkan, ezdoc_resolve_signature_image() yang membukanya.
     $ttdValues[$ttdId] = safeSignatureValue((string) $val);
 }
 
-// â”€â”€â”€ Keadaan penandatanganan â€” DIHITUNG, bukan disetel â”€â”€â”€
+// ─── Keadaan penandatanganan — DIHITUNG, bukan disetel ───
 //
 // Tidak ada tombol yang menentukan ini. Dulu ada ("Lock Final"), dan itu justru
 // sumber kebingungannya: tombol yang mengulang pembekuan yang sudah dikerjakan
 // tanda tangan, sambil merangkap menyatakan selesai.
 //
 // Semua slot dianggap wajib. Kalau nanti ada slot opsional, di sinilah tempat
-// pembedaannya masuk â€” dan hanya di sini.
+// pembedaannya masuk — dan hanya di sini.
 $__recordedSlots = ezdoc_recorded_signature_slots($conn, (int) $doc_id);
 $__slotCount     = count($configTtd);
 $__signedCount   = 0;
@@ -1135,7 +1135,7 @@ $docSigningState = $__slotCount === 0
 
 // Selesai berarti tidak ada lagi yang bisa diubah lewat tombol Update: setiap
 // field sudah dicakup tanda tangan, dan setiap slot sudah terisi. Tombolnya
-// dimatikan DI SINI saja â€” jangan lebih awal, karena penanda tangan kedua
+// dimatikan DI SINI saja — jangan lebih awal, karena penanda tangan kedua
 // menyimpan tanda tangannya lewat tombol yang sama.
 $docSigningComplete = ($docSigningState === 'complete');
 
@@ -1179,7 +1179,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
     // Note: TTD placeholder has 3 nested divs inside, so we match each inner div pair then outer close
     // Slot mana yang sudah punya BARIS di ezdoc_signatures.
     //
-    // Dibedakan dari "ada nilainya": slot bisa berisi gambar tanpa record â€”
+    // Dibedakan dari "ada nilainya": slot bisa berisi gambar tanpa record —
     // dokumen yang dibuat sebelum pencatatan diaktifkan, atau tanda tangan yang
     // belum tersimpan. Yang mengunci UI harus recordnya, karena itu yang membuat
     // server menolak perubahan.
@@ -1198,7 +1198,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         preg_match('/data-ttd-qr-data="([^"]+)"/', $tag, $qm); $qrDataTpl = html_entity_decode($qm[1] ?? '');
         // Default value untuk nama (fallback kalau field belum diisi)
         preg_match('/data-default-nama="([^"]*)"/', $tag, $dnm); $defaultNama = html_entity_decode($dnm[1] ?? '');
-        // RBAC per-TTD (siapa yang boleh sign) â€” parse dari data-allowed-* attributes
+        // RBAC per-TTD (siapa yang boleh sign) — parse dari data-allowed-* attributes
         preg_match('/data-allowed-roles="([^"]*)"/', $tag, $arm); $allowedRolesRaw = $arm[1] ?? '';
         preg_match('/data-allowed-users="([^"]*)"/', $tag, $aum); $allowedUsersRaw = $aum[1] ?? '';
         $ttdRbac = function_exists('ezdoc_parse_ttd_config')
@@ -1244,9 +1244,9 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         $savedMode = $pick('_ttd_mode_' . $ttdId);
         $activeMode = $savedMode ?: ($hasImage ? 'image' : 'qr');
 
-        // â”€â”€â”€ Verify QR mode (dokumen-level) â”€â”€â”€
+        // ─── Verify QR mode (dokumen-level) ───
         // Artinya: "pakai mode QR untuk semua slot sekaligus". Dulu ia jalur
-        // render ketiga yang menimpa tiap slot dengan URL verifikasi dokumen â€”
+        // render ketiga yang menimpa tiap slot dengan URL verifikasi dokumen —
         // nilai yang sama untuk semua slot, jadi tidak ada cara tahu QR yang mana
         // milik siapa. Sekarang ia cuma memaksa modenya; isinya ikut jalur
         // per-tanda-tangan yang sama seperti toggle per slot.
@@ -1254,7 +1254,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         // Alasan mode ini tetap ada: ia menyembunyikan SEMUA gambar tanda tangan.
         // Gambar bisa disalin ke dokumen lain; pointer ke record server tidak.
         // Karena itu ia memaksa QR bahkan pada slot yang template-nya cuma
-        // mengizinkan gambar â€” kalau tidak, satu gambar tetap tampil dan gunanya
+        // mengizinkan gambar — kalau tidak, satu gambar tetap tampil dan gunanya
         // hilang.
         $showVerifyQrMode = ($dbFields['_show_verify_qr'] ?? '') === '1'
             || ($_POST['_show_verify_qr'] ?? '') === '1'
@@ -1275,14 +1275,14 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
 
         // Nilai slot bisa berupa gambar inline, referensi ke objek tersimpan, atau
         // penanda tindakan mode QR. Cuma yang pertama boleh langsung masuk ke
-        // atribut src â€” lihat Ezdoc\Signature\SignatureValue dan
+        // atribut src — lihat Ezdoc\Signature\SignatureValue dan
         // Ezdoc\Storage\SignatureImageStore.
         //
         // Gambarnya dibuka jadi data URI di sisi server, bukan dilayani lewat URL
         // tersendiri. Alasannya bukan kesederhanaan: URL gambar tanda tangan yang
         // bisa diambil sendiri akan bocor lewat riwayat browser, log proxy, dan
         // header referer. Di dalam halaman, byte-nya ikut kontrol akses halaman
-        // itu. Jalur PDF juga menuntut byte inline â€” dompdf tidak membawa sesi.
+        // itu. Jalur PDF juga menuntut byte inline — dompdf tidak membawa sesi.
         $ttdDisplaySrc = ezdoc_resolve_signature_image($conn, $ttdImg);
         $ttdIsImage = $ttdDisplaySrc !== '';
         $ttdIsSigned = \Ezdoc\Signature\SignatureValue::isSigned($ttdImg);
@@ -1290,9 +1290,9 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         // Tanda tangan yang SUDAH TERCATAT tidak boleh menawarkan ubah maupun
         // hapus.
         //
-        // Bukan sekadar kerapian UI: keduanya ditolak server (Â§7b) karena hash
+        // Bukan sekadar kerapian UI: keduanya ditolak server (§7b) karena hash
         // tanda tangan mencakup nilai slot. Menawarkan tombol yang pasti ditolak
-        // hanya memancing petugas ke dinding â€” persis seperti field nama sebelum
+        // hanya memancing petugas ke dinding — persis seperti field nama sebelum
         // diperbaiki.
         //
         // Ini juga yang dilakukan setiap sistem tanda tangan: begitu ditandatangani,
@@ -1301,7 +1301,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         // sama sekali.
         $ttdRecorded = $ttdIsSigned && in_array($ttdId, $signedTtdIds, true);
 
-        // Image area â€” kalau user tidak allowed sign, disable interaksi + tampil badge lock
+        // Image area — kalau user tidak allowed sign, disable interaksi + tampil badge lock
         if ($canSignThisTtd && !$ttdRecorded) {
             $actionsHtml = '<div class="ttd-actions">
                 <button type="button" class="btn-edit" onclick="openSign(\'' . h($ttdId) . '\', \'' . h($label) . '\')">&#9998; ' . h(t('actions.edit', [], 'Edit')) . '</button>
@@ -1313,12 +1313,12 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         } elseif ($ttdRecorded) {
             // Tercatat: tampilkan apa adanya, dengan lencana yang menyebut
             // ALASANNYA. "Tidak bisa diklik" tanpa penjelasan terbaca sebagai rusak.
-            $sealBadge = '<div class="ttd-sealed-badge" title="' . h(t('title.signature_sealed', [], 'Already signed and recorded â€” create a new version to revise')) . '"><i class="fa fa-lock"></i></div>';
+            $sealBadge = '<div class="ttd-sealed-badge" title="' . h(t('title.signature_sealed', [], 'Already signed and recorded — create a new version to revise')) . '"><i class="fa fa-lock"></i></div>';
             $imgContent = $ttdIsImage
                 ? '<img src="' . h($ttdDisplaySrc) . '" class="ttd-signature" alt="TTD">' . $sealBadge
                 : '<div class="ttd-canvas-placeholder ttd-locked" style="cursor:default;background:#f9fafb;position:relative;">' . $sealBadge . '</div>';
         } else {
-            // Not allowed â€” read-only display, no edit button, no clickable canvas
+            // Not allowed — read-only display, no edit button, no clickable canvas
             $rolesHint = $allowedRolesRaw !== '' ? ' (' . h($allowedRolesRaw) . ')' : '';
             $lockBadge = '<div class="ttd-locked-badge" style="position:absolute;top:2px;right:2px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:600;z-index:5;pointer-events:none;" title="' . h(t('title.no_sign_permission', ['roles' => $rolesHint], 'Not authorized to sign{roles}')) . '"><i class="fa fa-lock"></i></div>';
             $imgContent = $ttdIsImage
@@ -1337,7 +1337,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         //
         // A signature QR carries a pointer to *this signature*, not to the
         // document. Four signers on one page must not produce four identical
-        // codes â€” a reader scanning "Head of Unit" has to land on the record for
+        // codes — a reader scanning "Head of Unit" has to land on the record for
         // Head of Unit, with the signer, the role, and the time it was signed.
         //
         // Signed content stays out of the code deliberately. Anything printed
@@ -1349,7 +1349,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         // `{verify_url}` marker. Those two exist for different jobs and answering
         // both from one value is what made the earlier attempt wrong.
         // `$conn` diperiksa, bukan diasumsikan. Ia parameter ber-default null,
-        // dan hook consumer-nya mysqli-only â€” memanggilnya dengan null memberi
+        // dan hook consumer-nya mysqli-only — memanggilnya dengan null memberi
         // "Call to a member function query() on null", pesan yang menuding tempat
         // yang sama sekali salah.
         $ttdVerifyUrl = '';
@@ -1373,7 +1373,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         if ($qrDataTpl !== '') {
             $resolvedPattern = preg_replace_callback('/\{([^}]+)\}/', function($pm) use ($pick, $conn) {
                 $key = $pm[1];
-                // Magic variable: {verify_url} â†’ URL verifikasi dokumen (untuk QR scannable)
+                // Magic variable: {verify_url} → URL verifikasi dokumen (untuk QR scannable)
                 if ($key === 'verify_url' || $key === 'verify') {
                     $docId = (int)($_GET['doc_id'] ?? $_POST['_doc_id'] ?? 0);
                     if ($docId > 0 && function_exists('doc_verify_ensure_slug')) {
@@ -1386,7 +1386,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             }, $qrDataTpl);
         }
 
-        // QR area â€” konten QR disembunyikan, ada tombol edit
+        // QR area — konten QR disembunyikan, ada tombol edit
         $qrArea = '';
         if ($hasQr) {
             $qrDisplay = $activeMode === 'qr' ? '' : 'display:none;';
@@ -1399,7 +1399,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             //
             // Isi tersimpan dan pattern template tidak ikut aturan ini. Keduanya
             // nilai yang sengaja diisi orang atau ditetapkan template, dan tidak
-            // pernah mengklaim ada record di server â€” cuma pointer otomatis yang
+            // pernah mengklaim ada record di server — cuma pointer otomatis yang
             // mengklaim itu. Aturan ini juga yang membuat dokumen lama dengan QR
             // yang diisi tangan tetap tampil apa adanya.
             $qrNeedsSigning = !$ttdIsSigned && $qrContent === '' && $qrDataTpl === '';
@@ -1407,7 +1407,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             // `data-ttd-verify-url` adalah pilihan terakhir saat tidak ada isi
             // tersimpan dan template tidak menyetel pattern. Ditaruh di atribut,
             // bukan di input tersembunyi, supaya tidak pernah ikut terkirim dan
-            // membeku jadi nilai tersimpan â€” nilainya selalu dihitung ulang dari
+            // membeku jadi nilai tersimpan — nilainya selalu dihitung ulang dari
             // slug + ttd_id di setiap render.
             $qrArea = '<div class="ttd-area-qr" id="ttd_area_qr_' . h($ttdId) . '" style="' . $qrDisplay . '"'
                 . ' data-ttd-verify-url="' . h($ttdVerifyUrl) . '"'
@@ -1423,7 +1423,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
                 ) . '</div>
                 <input type="hidden" class="ttd-qr-content-input" name="' . h($qrContentKey) . '" id="ttd_qr_content_' . h($ttdId) . '" value="' . h($qrContent) . '">' . (
                     // Isi QR hidup di `<namaField>_qr`, yang ada di dalam
-                    // `field_values` â€” jadi ia ikut hash tanda tangan. Setelah
+                    // `field_values` — jadi ia ikut hash tanda tangan. Setelah
                     // slotnya tercatat, mengubahnya ditolak server, dan yang lebih
                     // penting: kalau bisa diubah, QR pada dokumen yang SUDAH
                     // ditandatangani bisa diarahkan ke mana saja dengan diketik
@@ -1440,13 +1440,13 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         //
         // Bukan pengetatan sewenang-wenang: hash tanda tangan mencakup seluruh
         // `fields`, dan nama ini salah satunya. Kalau bisa diubah sesudahnya,
-        // tanda tangan yang sama bisa diatributkan ke orang lain â€” dan verifikasi
+        // tanda tangan yang sama bisa diatributkan ke orang lain — dan verifikasi
         // akan melaporkan `tampered` untuk perubahan yang aplikasinya sendiri
         // mengizinkan. Yang lebih buruk dari melarang adalah membolehkan lalu
         // menyebutnya palsu.
         //
         // Sebelum ini field-nya tetap terlihat bisa diedit, jadi petugas mengetik
-        // namanya, menekan simpan, dan ditolak â€” tanpa jalan maju, karena nama
+        // namanya, menekan simpan, dan ditolak — tanpa jalan maju, karena nama
         // yang benar tidak akan pernah bisa masuk. Sekarang namanya diminta di
         // dalam modal tanda tangan, jadi ia sudah selesai saat menandatangani.
         // Pola yang sama dipakai DocuSign dan Adobe Sign: nama penanda tangan
@@ -1455,7 +1455,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         $namaEditable = $ttdIsSigned ? 'false' : 'true';
         $namaClass = $ttdIsSigned ? 'f ttd-name-locked' : 'f';
         $namaTitle = $ttdIsSigned
-            ? ' title="' . h(t('title.name_locked_after_signing', [], 'Already signed â€” the name is part of what the signature covers. Create a new version to revise.')) . '"'
+            ? ' title="' . h(t('title.name_locked_after_signing', [], 'Already signed — the name is part of what the signature covers. Create a new version to revise.')) . '"'
             : '';
 
         return '<div class="' . $ttdClass . '" style="' . $style . '">
@@ -1558,7 +1558,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             $serialInput = '<input type="hidden" name="' . h($serialKey) . '" value="' . $matSerial . '">';
         }
 
-        // Optional label â€” hide entirely if empty
+        // Optional label — hide entirely if empty
         $labelHtml = ($label !== '') ? '<div class="materai-label">' . h($label) . '</div>' : '';
 
         return '<div class="materai-wrap ' . $cls . '" data-materai-id="' . h($materaiId) . '" data-materai-mode="' . h($matMode) . '" style="' . $style . '">
@@ -1580,7 +1580,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         // Get raw field value for QR data (not escaped, for QR generation)
         $qrDataRaw = vRaw($fieldName);
 
-        // Auto-heal stale verify URL / resolve {verify_url} marker â†’ pakai base URL current.
+        // Auto-heal stale verify URL / resolve {verify_url} marker → pakai base URL current.
         // Kalau nilai tersimpan mengandung /verifikasi/<slug>?s=<hex> dengan base yang beda
         // (mis. dulu di-save saat local dev), auto-replace ke DOC_VERIFY_BASE_URL sekarang.
         if ($qrDataRaw !== '' && function_exists('doc_verify_resolve_qr_value') && function_exists('doc_verify_ensure_slug')) {
@@ -1602,19 +1602,19 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             $style .= "position:absolute;left:{$adjX}px;top:{$adjY}px;";
         }
 
-        // QR image or placeholder â€” klik area â†’ buka modal untuk generate QR
+        // QR image or placeholder — klik area → buka modal untuk generate QR
         // Modal support: default isi = verify_url dokumen (untuk kemudahan) atau user override manual
         $qrImgHtml = '';
         if ($qrDataRaw) {
             $qrSrc = generateQrForDompdf($qrDataRaw, 200, 5);
-            // Kalau sudah ada value â†’ tampil QR. Klik â†’ modal untuk edit
+            // Kalau sudah ada value → tampil QR. Klik → modal untuk edit
             $qrImgHtml = '<img src="' . $qrSrc . '" class="qr-img" style="width:100%;height:auto;cursor:pointer;" alt="QR" id="qrimg_' . h($fieldName) . '" onclick="openQrFieldModal(\'' . h($fieldName) . '\')" title="' . h(t('title.click_edit_qr', [], 'Click to edit QR content')) . '">';
         } else {
-            // Kosong â†’ placeholder clickable. Klik â†’ modal muncul dengan default verify_url
+            // Kosong → placeholder clickable. Klik → modal muncul dengan default verify_url
             $qrImgHtml = '<div class="qr-canvas-placeholder" onclick="openQrFieldModal(\'' . h($fieldName) . '\')" style="cursor:pointer;" title="' . h(t('title.click_generate_qr', [], 'Click to generate QR (default: verification URL)')) . '"></div>';
         }
 
-        // Klik container QR â†’ buka modal (onclick di parent, jadi bekerja bahkan setelah updateQrPreview replace innerHTML)
+        // Klik container QR → buka modal (onclick di parent, jadi bekerja bahkan setelah updateQrPreview replace innerHTML)
         return '<div class="' . $qrClass . '" style="' . $style . '" data-qr-field="' . h($fieldName) . '">
             <div class="qr-preview" id="qrpreview_' . h($fieldName) . '" onclick="openQrFieldModal(\'' . h($fieldName) . '\')" style="cursor:pointer;" title="' . h(t('title.click_fill_edit_qr', [], 'Click to fill/edit QR')) . '">' . $qrImgHtml . '</div>
             <div class="qr-input" style="display:none;">
@@ -1638,7 +1638,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
     //
     // Dipakai untuk membuat field itu TERLIHAT beku. Sebelumnya pembekuan baru
     // terasa saat menyimpan: petugas mengetik, menekan simpan, dan ditolak. Batas
-    // sebenarnya tetap guard Â§7b di sisi simpan â€” ini supaya tidak ada yang
+    // sebenarnya tetap guard §7b di sisi simpan — ini supaya tidak ada yang
     // menabraknya tanpa peringatan.
     $frozenFields = ezdoc_frozen_field_keys($conn, (int) $doc_id);
 
@@ -1658,7 +1658,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         if (preg_match('/data-label=["\']([^"\']+)["\']/', $attrs, $lm)) $label = html_entity_decode($lm[1]);
         if (preg_match('/data-default=["\']([^"\']+)["\']/', $attrs, $dm)) $default = html_entity_decode($dm[1]);
 
-        // Validation attributes (#6) â€” pass through to renderFieldInput as 6th arg
+        // Validation attributes (#6) — pass through to renderFieldInput as 6th arg
         $validation = [];
         if (preg_match('/data-required=["\']1["\']/', $attrs)) $validation['required'] = '1';
         if (preg_match('/data-min=["\']([^"\']+)["\']/', $attrs, $mn)) $validation['min'] = $mn[1];
@@ -1731,7 +1731,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
  *
  * Memakai mekanisme yang SAMA dengan dokumen terkunci (`edit-off`), cuma
  * cakupannya satu field. Itu disengaja: sebelumnya field beku dirender ulang
- * sebagai teks biasa, dan itu jadi cara KEDUA untuk pekerjaan yang sama â€”
+ * sebagai teks biasa, dan itu jadi cara KEDUA untuk pekerjaan yang sama —
  * dengan hasil yang lebih buruk. Field tanggal tampil `2026-08-03` mentah,
  * padahal input aslinya menampilkan format lokal browser.
  *
@@ -1741,17 +1741,17 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
  *   - `contenteditable="false"` untuk field berbasis span
  *   - `pointer-events: none` (dari CSS) menghentikan klik dan pemilih tanggal
  *
- * Nilainya tetap terkirim karena input-nya tetap input â€” tidak perlu input
+ * Nilainya tetap terkirim karena input-nya tetap input — tidak perlu input
  * tersembunyi tambahan, dan tidak ada nilai yang hilang saat menyimpan.
  */
 function freezeFieldHtml(string $html, string $title): string
 {
     $t = ' title="' . h($title) . '"';
 
-    // Span contenteditable â†’ matikan penyuntingannya, bukan sekadar tampilannya.
+    // Span contenteditable → matikan penyuntingannya, bukan sekadar tampilannya.
     $html = str_replace('contenteditable="true"', 'contenteditable="false"' . $t, $html);
 
-    // Input teks/date/time/number â†’ readonly. `readonly` dipilih daripada
+    // Input teks/date/time/number → readonly. `readonly` dipilih daripada
     // `disabled` karena input yang disabled TIDAK ikut terkirim, dan menyimpan
     // dokumen akan terbaca sebagai mengosongkan field.
     $html = preg_replace('/<input(?![^>]*\btype="hidden")/', '<input readonly' . $t, $html);
@@ -1766,9 +1766,9 @@ function freezeFieldHtml(string $html, string $title): string
 // Render field input based on type. $validation = ['required'=>'1','min'=>...,'max'=>...,'pattern'=>...,'errorMsg'=>...]
 //
 // $frozen: field ini dicakup tanda tangan yang sudah ada, jadi mengubahnya akan
-// ditolak guard Â§7b. Dirender tidak bisa diedit supaya penolakan itu tidak
+// ditolak guard §7b. Dirender tidak bisa diedit supaya penolakan itu tidak
 // datang sebagai kejutan setelah petugas mengetik. Batas sebenarnya tetap di
-// sisi simpan â€” ini keterlihatan, bukan keamanan.
+// sisi simpan — ini keterlihatan, bukan keamanan.
 function renderFieldInput($name, $type, $val, $options, $label, $validation = [], $frozen = false) {
     $html = renderFieldInputRaw($name, $type, $val, $options, $label, $validation);
 
@@ -1777,12 +1777,12 @@ function renderFieldInput($name, $type, $val, $options, $label, $validation = []
     }
 
     // Dibekukan SESUDAH dirender, bukan dirender berbeda. Field beku dan field
-    // biasa harus tetap satu markup â€” begitu keduanya dibangun terpisah, yang
+    // biasa harus tetap satu markup — begitu keduanya dibangun terpisah, yang
     // satu akan tertinggal dari yang lain (dan itu sudah terjadi sekali: versi
     // teks-biasa menampilkan tanggal mentah `2026-08-03` alih-alih format lokal).
     return freezeFieldHtml(
         $html,
-        t('title.field_frozen_by_signature', [], 'Already signed â€” the content can no longer change. Create a new version to revise.')
+        t('title.field_frozen_by_signature', [], 'Already signed — the content can no longer change. Create a new version to revise.')
     );
 }
 
@@ -1872,7 +1872,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         /* @page margin: reserves padT/padR/padB/padL di SETIAP physical page
            (CSS Paged Media Level 3 spec). dompdf paginator apply per-page.
            Sebelumnya .page{padding} approach cuma apply padding di element
-           start+end (once), middle pages tidak dapat margin â†’ content flush
+           start+end (once), middle pages tidak dapat margin → content flush
            against physical edge.
            Fix: @page margin + .page padding=0 + .page shrunk ke printable area.
            Floating elements need translate compensation (see rule below). */
@@ -1881,13 +1881,13 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
             margin: ' . $padTop . 'mm ' . $padRight . 'mm ' . $padBottom . 'mm ' . $padLeft . 'mm;
         }
         /* Global box-sizing only. Selective reset (body, .page margin/padding
-           handled below). Blanket "* { margin: 0; padding: 0 }" reset removed â€”
+           handled below). Blanket "* { margin: 0; padding: 0 }" reset removed —
            previously stripped ol/ul/li/p margins that we want per screen behavior. */
         * { box-sizing: border-box; }
         /* Font-family: "Times" first (native PDF core font, dompdf renders exact
            Times metrics). "Times New Roman" (browser name) + serif fallbacks.
-           Sebelumnya "Times New Roman" first â†’ dompdf tidak resolve â†’ fallback
-           DejaVu Sans (SANS-SERIF) â†’ sangat beda visual dari screen. */
+           Sebelumnya "Times New Roman" first → dompdf tidak resolve → fallback
+           DejaVu Sans (SANS-SERIF) → sangat beda visual dari screen. */
         body {
             font-family: "Times", "Times New Roman", serif;
             font-size: 12pt;
@@ -1897,7 +1897,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
             word-wrap: break-word;
             overflow-wrap: break-word;
         }
-        /* Heading defaults â€” dompdf tidak apply browser default h1-h6 sizes/margins.
+        /* Heading defaults — dompdf tidak apply browser default h1-h6 sizes/margins.
            Explicit sesuai browser standard (h1 2em, h2 1.5em, dst.) supaya render
            sesuai designer/screen. */
         h1, h2, h3, h4, h5, h6 { line-height: 1.25; page-break-after: avoid; }
@@ -1909,10 +1909,10 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         h6 { font-size: 0.75em; font-weight: bold; margin: 1.67em 0; }
         strong, b { font-weight: bold; }
         em, i { font-style: italic; }
-        /* Inheritance safeguard â€” semua content dari .content, .page, body
+        /* Inheritance safeguard — semua content dari .content, .page, body
            inherit line-height 1.6 kecuali override eksplisit (heading). */
         .page, .content { line-height: inherit; }
-        /* .page shrunk ke printable area (paperW - padL - padR Ã— paperH - padT -
+        /* .page shrunk ke printable area (paperW - padL - padR × paperH - padT -
            padB). @page margin di atas sudah reserve per-page margin. .page padding
            = 0 supaya no double margin. */
         .page {
@@ -1922,7 +1922,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
             padding: 0;
             position: relative;
         }
-        /* Floating position compensation â€” @page margin shifts .page origin ke
+        /* Floating position compensation — @page margin shifts .page origin ke
            (padL, padT) di physical page coord. Floating stored di designer coord
            (from .page top-left = paper corner). Translate back ke visual paper
            corner position: -padL horizontal, -padT vertical. */
@@ -1931,12 +1931,12 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         .materai-behind, .materai-front {
             transform: translate(-' . $padLeft . 'mm, -' . $padTop . 'mm);
         }
-        /* Content baseline â€” shared via Ezdoc\UI\ContentCss (single source of
+        /* Content baseline — shared via Ezdoc\UI\ContentCss (single source of
            truth designer + generate + PDF). Historically these rules duplicated
            and drifted. Centralized now. */
         .content {
             line-height: 1.6;
-            /* EXPLICIT WIDTH â€” dompdf tidak fully respect box-sizing: border-box
+            /* EXPLICIT WIDTH — dompdf tidak fully respect box-sizing: border-box
                untuk padding calc. Bypass dgn set .content width eksplisit
                = paper width - horizontal padding. Ensures text wraps at exact
                same width as designer (170mm untuk A4 dgn 20mm padding). */
@@ -1969,7 +1969,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         .logo-front { z-index: 100; }
         .logo-empty { display: none; }
 
-        /* TTD â€” sync dgn screen generate rules exactly */
+        /* TTD — sync dgn screen generate rules exactly */
         .ttd-item-inline {
             display: inline-block;
             text-align: center;
@@ -2013,7 +2013,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         .dyntable-rendered tr { page-break-inside: avoid; }
         .dyntable-empty { color: #999; font-style: italic; text-align: center; padding: 10px; }
     </style>';
-    // Slot: pdf-head-extra â€” consumer may inject additional CSS, @page rules, embedded fonts, or PDF metadata tags
+    // Slot: pdf-head-extra — consumer may inject additional CSS, @page rules, embedded fonts, or PDF metadata tags
     // spec: ezdoc-spec/slots/generate.md#pdf-head-extra
     $pdfHtml .= \Ezdoc\UI\Slot::render('generate:pdf-head-extra', [
         'template' => $template,
@@ -2024,7 +2024,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
 </head>
 <body>
     <div class="page">';
-    // Slot: pdf-body-start â€” top of every rendered PDF page (letterhead, security banner, top stamp/QR)
+    // Slot: pdf-body-start — top of every rendered PDF page (letterhead, security banner, top stamp/QR)
     // spec: ezdoc-spec/slots/generate.md#pdf-body-start
     $pdfHtml .= \Ezdoc\UI\Slot::render('generate:pdf-body-start', [
         'template' => $template,
@@ -2077,7 +2077,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         $pdfHtml .= '</div>';
     }
 
-    // Slot: pdf-body-end â€” bottom of every rendered PDF (page number, disclaimer, verify footer, QR verify text)
+    // Slot: pdf-body-end — bottom of every rendered PDF (page number, disclaimer, verify footer, QR verify text)
     // spec: ezdoc-spec/slots/generate.md#pdf-body-end
     $pdfHtml .= \Ezdoc\UI\Slot::render('generate:pdf-body-end', [
         'template' => $template,
@@ -2092,7 +2092,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         exit;
     }
 
-    // Generate filename â€” config-driven prefix, safe slug of label
+    // Generate filename — config-driven prefix, safe slug of label
     // spec: ezdoc-spec/generate/pdf_filename.md
     $labelPart = ($param_label !== '-' && $param_label !== '') ? '_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $param_label) : '';
     $filename = $pdfFilenamePrefix . '_' . ($param_norm ?: 'draft') . $labelPart . '_' . date('Ymd_His') . '.pdf';
@@ -2100,12 +2100,12 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
     // echo $pdfHtml;
     // exit;
 
-    // Render PDF â€” library-native pattern (Ezdoc\Rendering\PdfRenderer contract).
+    // Render PDF — library-native pattern (Ezdoc\Rendering\PdfRenderer contract).
     //
     // Priority:
-    //   1. Consumer-injected renderer via Context::withPdf() â†’ $ctx->pdf
+    //   1. Consumer-injected renderer via Context::withPdf() → $ctx->pdf
     //   2. Ezdoc-native DompdfRenderer default (kalau dompdf/dompdf composer
-    //      package tersedia â€” most common case)
+    //      package tersedia — most common case)
     //   3. Error page (no PDF backend available)
     //
     // Zero dependency ke consumer's local functions (generatePDF or bootstrap-specific helpers).
@@ -2120,7 +2120,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         $pdfRenderer = $ctx->pdf;
     } elseif (isset($ctx->pdf) && is_object($ctx->pdf) && method_exists($ctx->pdf, 'stream')) {
         // Backward-compat: consumer wired object dgn stream() method but
-        // tidak implement PdfRenderer interface â€” duck-typing accept.
+        // tidak implement PdfRenderer interface — duck-typing accept.
         $pdfRenderer = $ctx->pdf;
     } elseif (class_exists('\\Dompdf\\Dompdf')) {
         // Auto-instantiate ezdoc-native DompdfRenderer (default fallback).
@@ -2220,10 +2220,10 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
         $savedMode = $pickPdf('_ttd_mode_' . $ttdId);
         $activeMode = $savedMode ?: ($hasImage ? 'image' : 'qr');
 
-        // â”€â”€â”€ Verify QR mode (dokumen-level) â”€â”€â”€
+        // ─── Verify QR mode (dokumen-level) ───
         // Artinya sekarang: "pakai mode QR untuk semua slot sekaligus".
         //
-        // Dulu ia merender jalur sendiri dengan URL verifikasi dokumen â€” nilai
+        // Dulu ia merender jalur sendiri dengan URL verifikasi dokumen — nilai
         // yang sama untuk setiap slot, jadi empat penanda tangan menghasilkan
         // empat QR identik dan tidak ada cara tahu QR yang mana milik siapa.
         // Sekarang ia hanya memaksa modenya, dan isinya ikut jalur
@@ -2232,7 +2232,7 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
         // Yang dipertahankan dari mode ini: ia menyembunyikan SEMUA gambar tanda
         // tangan. Gambar bisa disalin ke dokumen lain; pointer ke record server
         // tidak bisa. Karena itu mode ini memaksa QR bahkan pada slot yang
-        // template-nya cuma mengizinkan gambar â€” kalau tidak, satu gambar tetap
+        // template-nya cuma mengizinkan gambar — kalau tidak, satu gambar tetap
         // tercetak dan gunanya hilang.
         $showVerifyQrModePdf = ($dbFields['_show_verify_qr'] ?? '') === '1'
             || ($_POST['_show_verify_qr'] ?? '') === '1'
@@ -2244,7 +2244,7 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
 
         // Render based on active mode
         if ($activeMode === 'qr' && $hasQr) {
-            // Pointer per tanda tangan â€” lihat penjelasan panjangnya di
+            // Pointer per tanda tangan — lihat penjelasan panjangnya di
             // renderContent(). Dihitung ulang tiap render, tidak pernah disimpan.
             $ttdVerifyUrlPdf = '';
             $__slugPdfTtd = '';
@@ -2265,7 +2265,7 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
             if ($qrData === '' && $qrDataTpl !== '') {
                 $qrData = preg_replace_callback('/\{([^}]+)\}/', function($pm) use ($pickPdf, $conn) {
                     $key = $pm[1];
-                    // Magic variable: {verify_url} â†’ URL verifikasi dokumen
+                    // Magic variable: {verify_url} → URL verifikasi dokumen
                     if ($key === 'verify_url' || $key === 'verify') {
                         $docId = (int)($_GET['doc_id'] ?? $_POST['_doc_id'] ?? 0);
                         if ($docId > 0 && function_exists('doc_verify_ensure_slug')) {
@@ -2278,7 +2278,7 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
                 }, $qrDataTpl);
             }
             // Pattern yang disetel template tapi field-nya masih kosong tidak
-            // diganti diam-diam dengan pointer â€” itu akan mencetak sesuatu yang
+            // diganti diam-diam dengan pointer — itu akan mencetak sesuatu yang
             // artinya lain dari yang template minta. Pointer hanya mengisi
             // kekosongan saat memang tidak ada yang dikonfigurasi.
             //
@@ -2293,12 +2293,12 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
                 try {
                     // Size 250px (up dari 150) + margin 6 supaya scannable saat di-print
                     $qrSrc = generateQrForDompdf($qrData, 250, 6);
-                    // Display size 100x100px â€” cukup besar untuk scan HP dari jarak wajar
+                    // Display size 100x100px — cukup besar untuk scan HP dari jarak wajar
                     // max-width/max-height none supaya tidak kena override dari CSS parent
                     $contentHtml = '<img src="' . $qrSrc . '" style="width:100px;height:100px;max-width:none;max-height:none;" alt="QR">';
                     // Keterangan hanya saat isinya benar-benar pointer verifikasi.
-                    // QR berisi pattern template bisa berisi apa saja â€” nomor
-                    // barcode, kode antrian â€” dan "pindai untuk verifikasi" di
+                    // QR berisi pattern template bisa berisi apa saja — nomor
+                    // barcode, kode antrian — dan "pindai untuk verifikasi" di
                     // bawahnya akan jadi janji yang tidak dipenuhi.
                     if ($qrData === $ttdVerifyUrlPdf && $ttdVerifyUrlPdf !== '') {
                         $contentHtml .= '<div style="font-size:9px;color:#666;margin-top:2px;">'
@@ -2507,7 +2507,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
         case 'checkbox':
             $checked = ($val === '1' || $val === 'true' || $val === 'yes' || $val === 'Ya');
             // DejaVu Sans supports the box glyphs; default DOMPDF fonts (Helvetica/Times) don't
-            $icon = '<span style="font-family: DejaVu Sans, sans-serif;">' . ($checked ? 'â˜‘' : 'â˜') . '</span>';
+            $icon = '<span style="font-family: DejaVu Sans, sans-serif;">' . ($checked ? '☑' : '☐') . '</span>';
             $labelSuffix = $label !== '' ? ' ' . h($label) : '';
             return '<span class="f-pdf">' . $icon . $labelSuffix . '</span>';
 
@@ -2550,7 +2550,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        // important:true â†’ all Tailwind utility classes get !important. Needed karena
+        // important:true → all Tailwind utility classes get !important. Needed karena
         // <style> block existing pakai selectors dengan specificity tinggi (mis. .toolbar button),
         // yang tanpa !important akan menang atas utility classes single-class.
         tailwind.config = { important: true };
@@ -2562,7 +2562,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
     //
     // Like the designer, this view renders its own <head> rather than going
     // through layout.php, so `assets.custom_css` used to apply to the template
-    // picker but not to the document being filled in â€” the screen a consumer
+    // picker but not to the document being filled in — the screen a consumer
     // is most likely to want restyled.
     //
     // The PDF <head> further up is deliberately left alone: dompdf gets only
@@ -2587,8 +2587,8 @@ function renderFieldForPdf($name, $type, $val, $label) {
         <input type="hidden" name="template_id" value="<?= $template_id ?>">
         <input type="hidden" name="_doc_id" id="docIdInput" value="<?= $doc_id ?>">
         <?php
-        // Hidden field verify_url â€” supaya QR pattern {verify_url} bisa di-resolve di JS
-        // Nilainya ter-precompute server-side (kalau doc sudah tersimpan â†’ ada slug; kalau belum â†’ kosong)
+        // Hidden field verify_url — supaya QR pattern {verify_url} bisa di-resolve di JS
+        // Nilainya ter-precompute server-side (kalau doc sudah tersimpan → ada slug; kalau belum → kosong)
         $verifyUrlPreComputed = '';
         if ($doc_id > 0) {
             $__slug = doc_verify_ensure_slug($conn, (int)$doc_id);
@@ -2597,7 +2597,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
         ?>
         <input type="hidden" name="verify_url" id="verifyUrlInput" value="<?= h($verifyUrlPreComputed) ?>">
         <?php
-        // Verify QR mode state â€” persist di data_fields JSON via key `_show_verify_qr`
+        // Verify QR mode state — persist di data_fields JSON via key `_show_verify_qr`
         $__showVerifyQrInit = ($dbFields['_show_verify_qr'] ?? '') === '1'
             || ($_POST['_show_verify_qr'] ?? '') === '1'
             || ($_GET['_show_verify_qr'] ?? '') === '1';
@@ -2612,7 +2612,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
         endif; ?>
 
         <div class="page">
-            <?php // Slot: watermark â€” preview-mode overlay ('DRAFT'/'COPY'/state-based watermarks)
+            <?php // Slot: watermark — preview-mode overlay ('DRAFT'/'COPY'/state-based watermarks)
             // spec: ezdoc-spec/slots/generate.md#watermark ?>
             <?= \Ezdoc\UI\Slot::render('generate:watermark', [
                 'doc_id'      => (int)$doc_id,
@@ -2624,7 +2624,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 <?= renderContent($templateHtml, $logos, $logoSizes, $configTtd, $ttdValues, $dbFields, $dynamicTables ?? [], $conn, $param_norm, $param_nopen, $param_is_locked, $tableDbQueries, (int)$doc_id) ?>
             </div>
 
-            <?php // Slot: before-signatures â€” closing phrase, place/date, witness list ahead of TTD wrap
+            <?php // Slot: before-signatures — closing phrase, place/date, witness list ahead of TTD wrap
             // spec: ezdoc-spec/slots/generate.md#before-signatures ?>
             <?= \Ezdoc\UI\Slot::render('generate:before-signatures', [
                 'doc_id'   => (int)$doc_id,
@@ -2638,7 +2638,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 <div class="ttd-item">
                     <div class="ttd-label"><?= h($ttd['label'] ?? t('fallback.signature', [], 'Signature')) ?></div>
                     <div class="ttd-img" id="preview_<?= h($ttd['id']) ?>">
-                        <?php // Nilai slot dibuka dulu: `qr:v1` dan `blob:sha256-â€¦` bukan
+                        <?php // Nilai slot dibuka dulu: `qr:v1` dan `blob:sha256-…` bukan
                         // gambar, dan menaruhnya di `src` mencetak ikon rusak.
                         $__src = ezdoc_resolve_signature_image($conn, (string) ($ttdValues[$ttd['id']] ?? ''));
                         if ($__src !== ''): ?>
@@ -2654,7 +2654,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
             </div>
             <?php endif; ?>
 
-            <?php // Slot: after-signatures â€” signature legend, notaris stamp, distribution list ('Tembusan')
+            <?php // Slot: after-signatures — signature legend, notaris stamp, distribution list ('Tembusan')
             // spec: ezdoc-spec/slots/generate.md#after-signatures ?>
             <?= \Ezdoc\UI\Slot::render('generate:after-signatures', [
                 'doc_id' => (int)$doc_id,
@@ -2666,33 +2666,33 @@ function renderFieldForPdf($name, $type, $val, $label) {
         <div class="toolbar" id="toolbarPanel">
             <button type="button" class="toolbar-toggle" id="toolbarToggleBtn" onclick="toggleToolbar()" title="<?= h(t('title.toggle_toolbar', [], 'Show/Hide Toolbar')) ?>">&#9776;</button>
             <div class="toolbar-body">
-                <!-- â•â•â• HEADER (compact 1-line stack) â•â•â• -->
+                <!-- ═══ HEADER (compact 1-line stack) ═══ -->
                 <div class="flex items-center justify-between gap-1 mb-1">
                     <div class="min-w-0 flex-1">
                         <div class="text-[11px] text-gray-200 font-medium truncate leading-tight" title="<?= h($template['nama_template']) ?>"><?= h($template['nama_template']) ?></div>
                         <div class="text-[9px] text-gray-400 leading-tight">
-                            <?= h($paperSize) ?> <?= $paperDim['width'] ?>Ã—<?= $paperDim['height'] ?>
+                            <?= h($paperSize) ?> <?= $paperDim['width'] ?>×<?= $paperDim['height'] ?>
                             <?php if ($isEditMode): ?>
-                                Â· <span class="doc-info <?= $param_is_deleted ? 'text-red-400' : ($param_is_locked ? 'text-amber-400' : 'text-emerald-400') ?>">
+                                · <span class="doc-info <?= $param_is_deleted ? 'text-red-400' : ($param_is_locked ? 'text-amber-400' : 'text-emerald-400') ?>">
                                     #<?= $doc_id ?> v<?= $param_version ?>
                                     <?php if ($param_is_deleted): ?><i class="bi bi-trash-fill"></i>
                                     <?php elseif ($param_is_locked): ?><i class="bi bi-lock-fill"></i>
                                     <?php endif; ?>
                                 </span>
                             <?php else: ?>
-                                Â· <span class="doc-info new text-amber-400"><?= t('toolbar.new', [], 'New') ?></span>
+                                · <span class="doc-info new text-amber-400"><?= t('toolbar.new', [], 'New') ?></span>
                             <?php endif; ?>
                         </div>
 
-                        <?php // Keadaan penandatanganan â€” baris sendiri, bukan disambung.
+                        <?php // Keadaan penandatanganan — baris sendiri, bukan disambung.
                         //
-                        // Disambung dengan "Â·" ia ikut membungkus di tengah kata dan terpotong,
+                        // Disambung dengan "·" ia ikut membungkus di tengah kata dan terpotong,
                         // sementara ini justru satu-satunya keterangan yang menjelaskan kenapa
                         // sebagian field tidak bisa diketik.
                         //
                         // Satu tempat, dan cuma tulisan. Sebelumnya keadaan yang sama muncul di
-                        // tiga tempat â€” indikator, label tombol Update ("Locked"), dan tombol
-                        // lock yang mati â€” masing-masing dengan syarat tampilnya sendiri, jadi
+                        // tiga tempat — indikator, label tombol Update ("Locked"), dan tombol
+                        // lock yang mati — masing-masing dengan syarat tampilnya sendiri, jadi
                         // bisa saling bertentangan.
                         //
                         // Tidak ditampilkan kalau template tidak punya slot tanda tangan:
@@ -2721,13 +2721,13 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 </div>
                 <?php if ($param_is_deleted): ?>
                 <div class="bg-red-900 text-white p-1.5 rounded-md mb-1.5 text-[10px] text-center border border-dashed border-red-300">
-                    <i class="bi bi-trash-fill"></i> <strong><?= t('toolbar.deleted', [], 'DELETED') ?></strong> Â· <?= h(date('d/m/Y', strtotime($param_deleted_at))) ?>
+                    <i class="bi bi-trash-fill"></i> <strong><?= t('toolbar.deleted', [], 'DELETED') ?></strong> · <?= h(date('d/m/Y', strtotime($param_deleted_at))) ?>
                     <div class="text-[9px] text-[#fecaca]"><?= t('toolbar.deleted_by', ['name' => h($param_deleted_by ?: '-')], 'By: {name}') ?></div>
                 </div>
                 <?php endif; ?>
                 <div class="border-t border-gray-700 mb-2"></div>
 
-                <?php // Slot: toolbar-metadata â€” barcode, workflow status, external system ref, badge chips
+                <?php // Slot: toolbar-metadata — barcode, workflow status, external system ref, badge chips
                 // spec: ezdoc-spec/slots/generate.md#toolbar-metadata ?>
                 <?= \Ezdoc\UI\Slot::render('generate:toolbar-metadata', [
                     'doc_id'    => (int)$doc_id,
@@ -2767,11 +2767,11 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     <?php endif; ?>
                 </div>
 
-                <!-- â•â•â• PRIMARY ROW: Update (2/3) + Print (1/3 icon) â•â•â• -->
+                <!-- ═══ PRIMARY ROW: Update (2/3) + Print (1/3 icon) ═══ -->
                 <div class="grid grid-cols-3 gap-1 mt-1">
                     <?php
                     // Kalau tidak ada lagi yang bisa di-update, tombolnya BERGANTI jadi
-                    // aksi yang memang bisa dilakukan â€” bukan tombol mati.
+                    // aksi yang memang bisa dilakukan — bukan tombol mati.
                     //
                     // Tombol mati tidak menjelaskan dirinya. Orang menekannya, tidak terjadi
                     // apa-apa, dan tooltip cuma muncul kalau kebetulan berhenti di atasnya.
@@ -2781,7 +2781,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     // Dokumen yang tanda tangannya lengkap cuma punya satu langkah maju:
                     // versi baru. Jadi itu yang ditawarkan.
                     if ($docSigningComplete && $isEditMode && !$param_is_locked): ?>
-                        <button type="button" class="col-span-2 !m-0 !py-1.5 !text-[12px] !bg-violet-500 hover:!bg-violet-600" onclick="showNewVersionModal()" title="<?= h(t('title.update_off_all_signed', [], 'Every signature is in place â€” create a new version to revise')) ?>">
+                        <button type="button" class="col-span-2 !m-0 !py-1.5 !text-[12px] !bg-violet-500 hover:!bg-violet-600" onclick="showNewVersionModal()" title="<?= h(t('title.update_off_all_signed', [], 'Every signature is in place — create a new version to revise')) ?>">
                             <i class="bi bi-plus-circle"></i> <?= h(t('toolbar.new_version', [], 'New Version')) ?>
                         </button>
                     <?php else: ?>
@@ -2792,7 +2792,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     <button type="button" class="!m-0 !py-1.5 !px-1 !text-[11px]" onclick="window.print()" title="<?= h(t('title.print_shortcut', [], 'Print (Ctrl+P)')) ?>"><i class="bi bi-printer"></i> <?= h(t('toolbar.print', [], 'Print')) ?></button>
                 </div>
 
-                <?php // Slot: toolbar-extra-actions â€” consumer buttons (Export Excel, WhatsApp, Email PDF, e-Sign, Copy Link) ?>
+                <?php // Slot: toolbar-extra-actions — consumer buttons (Export Excel, WhatsApp, Email PDF, e-Sign, Copy Link) ?>
                 <?= \Ezdoc\UI\Slot::render('generate:toolbar-extra-actions', [
                     'doc_id'    => (int)$doc_id,
                     'template'  => $template,
@@ -2812,10 +2812,10 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     <?php endif; ?>
                 <?php else: ?>
 
-                    <!-- â•â•â• Accordion: hanya 1 section terbuka biar hemat ruang â•â•â• -->
+                    <!-- ═══ Accordion: hanya 1 section terbuka biar hemat ruang ═══ -->
                     <div x-data="{ open: '' }" class="mt-2">
 
-                        <!-- â–¸ LAINNYA (icon grid 2-col) -->
+                        <!-- ▸ LAINNYA (icon grid 2-col) -->
                         <div class="border-t border-gray-700 pt-1.5">
                             <button type="button" @click="open = (open === 'more' ? '' : 'more')"
                                     class="!bg-transparent !text-gray-400 hover:!text-gray-100 !py-0.5 !px-1 !text-[10px] !m-0 flex items-center gap-1 w-full uppercase tracking-wider">
@@ -2835,7 +2835,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                                         //
                                         // Namanya menggabungkan dua pekerjaan: "Lock" (bekukan isi) dan
                                         // "Final" (nyatakan selesai). Yang pertama sudah dikerjakan tanda
-                                        // tangan â€” isi beku otomatis begitu ada yang menandatangani. Yang
+                                        // tangan — isi beku otomatis begitu ada yang menandatangani. Yang
                                         // kedua bisa dihitung: semua slot terisi berarti selesai.
                                         //
                                         // Unlock hanya ada karena Lock ada. Dan tombol "Locked" yang mati
@@ -2845,16 +2845,16 @@ function renderFieldForPdf($name, $type, $val, $label) {
                                         // DocuSign dan Adobe Sign tidak punya tombol kunci sama sekali:
                                         // tanda tangannya yang jadi kunci, status penyelesaian dihitung.
                                         //
-                                        // Kolom `is_locked` TIDAK dihapus â€” masih dipakai merender dokumen
+                                        // Kolom `is_locked` TIDAK dihapus — masih dipakai merender dokumen
                                         // terhapus dalam mode baca-saja. Yang hilang cuma tombolnya. ?>
-                                        <?php // Disembunyikan kalau sudah naik ke baris utama â€” tombol yang
+                                        <?php // Disembunyikan kalau sudah naik ke baris utama — tombol yang
                                         // sama di dua tempat membuat orang mengira keduanya berbeda.
                                         if (!$docSigningComplete): ?>
                                         <button class="bg-violet-500" type="button" onclick="showNewVersionModal()" title="<?= h(t('title.new_version', [], 'Create new version')) ?>"><i class="bi bi-plus-circle"></i><?= h(t('toolbar.new_version', [], 'New Version')) ?></button>
                                         <?php endif; ?>
                                     <?php endif; ?>
                                     <?php // `wide` cuma dipakai saat tombolnya akan tertinggal sendirian di
-                                    // barisnya. Dua tombol per baris, rata â€” bukan satu setengah lebar
+                                    // barisnya. Dua tombol per baris, rata — bukan satu setengah lebar
                                     // dengan ruang kosong di sebelahnya.
                                     $__shortcutsWide = ($isEditMode && !$docSigningComplete); ?>
                                     <button class="!bg-slate-600<?= $__shortcutsWide ? ' wide' : '' ?>" type="button" onclick="showShortcutsHelp()" title="<?= h(t('title.shortcuts', [], 'Keyboard shortcuts (Ctrl+/)')) ?>"><i class="bi bi-keyboard"></i><?= h(t('toolbar.shortcuts', [], 'Shortcuts')) ?></button>
@@ -2863,7 +2863,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                         </div>
 
                         <?php if ($isSuperadmin): ?>
-                        <!-- â–¸ ADMIN (icon grid) -->
+                        <!-- ▸ ADMIN (icon grid) -->
                         <div class="border-t border-gray-700 mt-1 pt-1.5">
                             <button type="button" @click="open = (open === 'admin' ? '' : 'admin')"
                                     class="!bg-transparent !text-amber-400 hover:!text-amber-200 !py-0.5 !px-1 !text-[10px] !m-0 flex items-center gap-1 w-full uppercase tracking-wider">
@@ -2906,7 +2906,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
             <!-- OTP Container: jalur voucher (utama) + Step 1 & 2 (cadangan) -->
             <div id="signOtpContainer" class="hidden p-4 bg-slate-50 border-b border-slate-200">
 
-                <?php // â”€â”€ Jalur utama: pasien meminta kodenya sendiri lewat QR â”€â”€
+                <?php // ── Jalur utama: pasien meminta kodenya sendiri lewat QR ──
                 // Nomornya terkunci ke nomor dokumen. Itu menghapus dua hal sekaligus:
                 // salah ketik (tidak ada yang diketik) dan kemungkinan petugas
                 // mengarahkan kode ke nomornya sendiri. "Ubah nomor" tetap ada untuk
@@ -2915,10 +2915,10 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 // Petunjuk status di bawah kolom nomor adalah inti perbaikannya:
                 // tanpa itu, satu digit salah terbaca sebagai tiga kali "kode salah".
                 ?>
-                <?php // â”€â”€ V6: kode diminta penanda tangan lewat QR di layar ini â”€â”€
+                <?php // ── V6: kode diminta penanda tangan lewat QR di layar ini ──
                 //
-                // Tiga keadaan dalam satu panel: belum diminta â†’ menunggu dipindai
-                // â†’ sudah dipindai. Dipisah jadi tiga panel akan membuat perpindahan
+                // Tiga keadaan dalam satu panel: belum diminta → menunggu dipindai
+                // → sudah dipindai. Dipisah jadi tiga panel akan membuat perpindahan
                 // terasa seperti melompat halaman, padahal ini satu urusan.
                 //
                 // Tidak ada kolom nomor HP di sini, dan itu inti perbaikannya:
@@ -2932,7 +2932,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                         <span><?= h(t('modal.otp.scan_title', [], 'Minta Kode ke Penanda Tangan')) ?></span>
                     </h6>
 
-                    <?php // Keadaan 1 â€” belum diminta ?>
+                    <?php // Keadaan 1 — belum diminta ?>
                     <div id="signScanIdle">
                         <p class="text-xs text-slate-600 mb-3"><?= h(t('modal.otp.scan_idle_desc', [], 'Tampilkan QR di layar ini, lalu minta penanda tangan memindainya.')) ?></p>
                         <button type="button" id="btnRequestScan" onclick="requestScanCode()"
@@ -2942,15 +2942,15 @@ function renderFieldForPdf($name, $type, $val, $label) {
                         </button>
                     </div>
 
-                    <?php // Keadaan 2 â€” menunggu dipindai ?>
+                    <?php // Keadaan 2 — menunggu dipindai ?>
                     <div id="signScanWaiting" class="hidden text-center">
                         <div id="signScanDocIdentity" class="text-[11px] text-slate-600 mb-2 leading-tight"></div>
                         <img id="signScanQr" alt="" class="mx-auto rounded border border-slate-300 bg-white p-1.5" style="width:180px;height:180px;object-fit:contain;">
-                        <p class="text-xs text-slate-600 mt-2 mb-1"><?= h(t('modal.otp.scan_waiting', [], 'Menunggu penanda tangan memindaiâ€¦')) ?></p>
+                        <p class="text-xs text-slate-600 mt-2 mb-1"><?= h(t('modal.otp.scan_waiting', [], 'Menunggu penanda tangan memindai…')) ?></p>
                         <div id="signScanCountdown" class="text-[11px] text-slate-500 tabular-nums"></div>
                     </div>
 
-                    <?php // Keadaan 3 â€” sudah dipindai, kodenya sudah di tangan orangnya ?>
+                    <?php // Keadaan 3 — sudah dipindai, kodenya sudah di tangan orangnya ?>
                     <div id="signScanEntry" class="hidden">
                         <div class="text-[11px] text-emerald-700 mb-2 flex items-center gap-1">
                             <i class="bi bi-check-circle-fill"></i>
@@ -2997,7 +2997,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     // salah menekan tautan cadangan hanya punya satu pilihan:
                     // mengirim pesan berbayar.
                     //
-                    // Hanya muncul kalau jalur pindaian memang tersedia â€” kalau
+                    // Hanya muncul kalau jalur pindaian memang tersedia — kalau
                     // pemasangan belum mengonfigurasinya, tidak ada tempat untuk
                     // kembali. ?>
                     <div class="mt-3 text-[11px]" id="signOtpBackToScan" style="display:none;">
@@ -3033,7 +3033,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
             </div>
 
             <?php // Nama penanda tangan diminta DI SINI, bukan diedit di dokumen setelahnya.
-            // Hash tanda tangan mencakup seluruh field, nama ini termasuk â€” jadi setelah
+            // Hash tanda tangan mencakup seluruh field, nama ini termasuk — jadi setelah
             // ditandatangani ia tidak bisa berubah tanpa membuat tanda tangannya tidak sah.
             // Sebelum ini field-nya tetap terlihat bisa diedit, jadi petugas mengetik nama,
             // menekan simpan, dan ditolak tanpa jalan maju. DocuSign dan Adobe Sign
@@ -3045,7 +3045,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 <input type="text" id="signNameInput" maxlength="120"
                        class="w-full text-sm p-2 border border-slate-300 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                        placeholder="<?= h(t('modal.sign.name_placeholder', [], 'e.g. Dr. Budi Santoso')) ?>">
-                <small class="text-[11px] text-slate-500"><?= h(t('modal.sign.name_hint', [], 'Part of what the signature covers â€” it cannot be changed after signing.')) ?></small>
+                <small class="text-[11px] text-slate-500"><?= h(t('modal.sign.name_hint', [], 'Part of what the signature covers — it cannot be changed after signing.')) ?></small>
             </div>
 
             <!-- Modal Body Canvas -->
@@ -3055,7 +3055,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
 
                     <?php // Mode QR memakai modal yang SAMA, cuma menukar isi tengahnya.
                     // Ditulis begini supaya OTP, RBAC, cek dokumen terkunci, dan pengelolaan
-                    // sign token tetap satu jalur â€” bukan alur kedua yang harus dijaga sejajar.
+                    // sign token tetap satu jalur — bukan alur kedua yang harus dijaga sejajar.
                     // Tidak ada yang digambar di mode ini: yang mengikat adalah recordnya,
                     // gambarnya cuma tampilan. Sama seperti tanda tangan tak terlihat di PAdES. ?>
                     <div id="signQrConfirmArea" class="hidden py-10 px-6 text-center">
@@ -3063,14 +3063,14 @@ function renderFieldForPdf($name, $type, $val, $label) {
                             <i class="bi bi-qr-code"></i>
                         </div>
                         <h6 class="text-sm font-semibold text-slate-800 mb-1.5"><?= h(t('modal.sign_qr.title', [], 'Sign with QR')) ?></h6>
-                        <p class="text-xs text-slate-500 max-w-md mx-auto mb-4"><?= h(t('modal.sign_qr.desc', [], 'A QR code is placed in this slot. Scanning it opens the verification page for this signature â€” showing who signed, in what role, and when.')) ?></p>
+                        <p class="text-xs text-slate-500 max-w-md mx-auto mb-4"><?= h(t('modal.sign_qr.desc', [], 'A QR code is placed in this slot. Scanning it opens the verification page for this signature — showing who signed, in what role, and when.')) ?></p>
                         <dl class="inline-grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-left text-xs">
                             <dt class="text-slate-400"><?= h(t('modal.sign_qr.as_label', [], 'Signing as')) ?></dt>
-                            <dd class="text-slate-700 font-medium" id="signQrAs">â€”</dd>
+                            <dd class="text-slate-700 font-medium" id="signQrAs">—</dd>
                             <dt class="text-slate-400"><?= h(t('modal.sign_qr.slot_label', [], 'Slot')) ?></dt>
-                            <dd class="text-slate-700 font-medium" id="signQrSlot">â€”</dd>
+                            <dd class="text-slate-700 font-medium" id="signQrSlot">—</dd>
                         </dl>
-                        <p class="text-[11px] text-slate-400 mt-4 max-w-md mx-auto"><?= h(t('modal.sign_qr.commit_note', [], 'Signing saves the document â€” a signature has no draft state.')) ?></p>
+                        <p class="text-[11px] text-slate-400 mt-4 max-w-md mx-auto"><?= h(t('modal.sign_qr.commit_note', [], 'Signing saves the document — a signature has no draft state.')) ?></p>
                     </div>
 
                     <div id="signCanvasOverlay" class="hidden absolute inset-0 bg-slate-100/90 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center p-6 text-center">
@@ -3091,7 +3091,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
         </div>
     </div>
 
-    <!-- QR Field Generate Modal â€” untuk standalone QR field, klik area â†’ modal â†’ OK â†’ isi verify_url -->
+    <!-- QR Field Generate Modal — untuk standalone QR field, klik area → modal → OK → isi verify_url -->
     <div class="modal hidden" id="qrFieldModal">
         <div class="modal-box max-w-[520px]">
             <div class="modal-header" style="background:linear-gradient(90deg,#3b82f6 0%,#6366f1 100%);color:#fff;">
@@ -3135,11 +3135,11 @@ function renderFieldForPdf($name, $type, $val, $label) {
             <div class="modal-body p-5">
                 <div id="verifyQrModalMain">
                     <p style="margin:0 0 12px;"><?= t('modal.verify_qr.main_desc_1', [], 'Every <strong>signature image</strong> in this document is replaced with a <strong>QR code</strong>.') ?></p>
-                    <p class="text-xs text-gray-500" style="margin:0 0 8px;"><?= h(t('modal.verify_qr.main_desc_2', [], 'Each QR points at its own signature â€” whoever scans it sees who signed, in what role, and when.')) ?></p>
+                    <p class="text-xs text-gray-500" style="margin:0 0 8px;"><?= h(t('modal.verify_qr.main_desc_2', [], 'Each QR points at its own signature — whoever scans it sees who signed, in what role, and when.')) ?></p>
                     <p class="text-xs text-gray-500" style="margin:0 0 12px;"><?= h(t('modal.verify_qr.main_desc_3', [], 'A signature image can be copied into another document; a pointer to the record on the server cannot.')) ?></p>
                     <?php // Dulu di sini ada input readonly "URL Verifikasi" berisi URL dokumen.
                     // Setelah tiap slot punya pointer-nya sendiri, URL itu tidak ada di QR mana
-                    // pun â€” menampilkannya cuma memberi kesan salah tentang apa yang dipindai.
+                    // pun — menampilkannya cuma memberi kesan salah tentang apa yang dipindai.
                     // Keadaan "belum disimpan" tetap disampaikan lewat kotak peringatan di bawah. ?>
                     <div class="hidden text-amber-700 text-xs mt-2.5 p-2 bg-amber-100 rounded" id="verifyQrModalWarn">
                         <i class="bi bi-exclamation-triangle-fill"></i>
@@ -3158,14 +3158,14 @@ function renderFieldForPdf($name, $type, $val, $label) {
         </div>
     </div>
 
-    <?php // Slot: modals-extra â€” consumer modals (export options, share dialog, e-sign integration, custom prompts)
+    <?php // Slot: modals-extra — consumer modals (export options, share dialog, e-sign integration, custom prompts)
     // spec: ezdoc-spec/slots/generate.md#modals-extra ?>
     <?= \Ezdoc\UI\Slot::render('generate:modals-extra', [
         'doc_id'   => (int)$doc_id,
         'template' => $template,
     ]) ?>
 
-    <?php // Hook mount points for JS event bridge (before-save / after-save) â€”
+    <?php // Hook mount points for JS event bridge (before-save / after-save) —
     // consumers listen on window.ezcetak:before-save / window.ezcetak:after-save
     // spec: ezdoc-spec/slots/generate.md#save-hook-pre
     // spec: ezdoc-spec/slots/generate.md#save-hook-post ?>
@@ -3173,7 +3173,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
     <?= \Ezdoc\UI\Slot::render('generate:save-hook-post', ['doc_id' => (int)$doc_id]) ?>
 
     <script>
-        // spec: ezdoc-spec/js/url_bag.md â€” endpoint URLs injected server-side, JS reads from EZDOC_URLS
+        // spec: ezdoc-spec/js/url_bag.md — endpoint URLs injected server-side, JS reads from EZDOC_URLS
         window.EZDOC_URLS = <?= json_encode($ezdocUrls, JSON_UNESCAPED_SLASHES) ?>;
 
         <?php
@@ -3181,7 +3181,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
         //
         // Nama kalau aplikasi pemakai menyambungkan Ezdoc\Auth\ActorDirectory,
         // kalau tidak jatuh ke `#18`. Konfirmasi "Menandatangani sebagai" dibaca
-        // manusia tepat sebelum ia menandatangani â€” nomor internal tidak
+        // manusia tepat sebelum ia menandatangani — nomor internal tidak
         // membantunya memastikan apa pun.
         //
         // Daftar role sengaja TIDAK dikirim. Ia tidak berguna untuk konfirmasi,
@@ -3201,7 +3201,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
         <?php
         // Bolehkah pengguna ini melihat nomor pegawai di samping namanya?
         //
-        // Gerbang yang sama dengan alamat IP dan daftar role di riwayat â€”
+        // Gerbang yang sama dengan alamat IP dan daftar role di riwayat —
         // EZDOC_AUDIT_DETAIL_ROLES, tanpa nama role yang dipaku di library.
         //
         // Penting: ini KOSMETIK, bukan batas keamanan. Batas keamanannya ada di
@@ -3217,7 +3217,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
         // dikonfigurasi, tombolnya cuma akan menghasilkan 503. ?>
         window.EZDOC_SCAN_ENABLED = <?= (defined('EZDOC_SCAN_URL_TEMPLATE') && EZDOC_SCAN_URL_TEMPLATE !== '' && strpos((string) EZDOC_SCAN_URL_TEMPLATE, '{token}') !== false) ? 'true' : 'false' ?>;
 
-        // i18n dictionary â€” mirrors EZDOC_URLS above. spec: docs/I18N.md
+        // i18n dictionary — mirrors EZDOC_URLS above. spec: docs/I18N.md
         window.EZDOC_I18N = <?= json_encode($translator->all(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
 
         // Translate a dot-notation key against EZDOC_I18N, with {param} interpolation.
@@ -3238,7 +3238,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
         var t = window.t;
 
         // Resolve an endpoint URL by bag key. Falls back to same-page (window.location.href) for POST
-        // routes (save, docAction) and to '?action=<key>' for generate_qr â€” preserves legacy behavior
+        // routes (save, docAction) and to '?action=<key>' for generate_qr — preserves legacy behavior
         // when consumer has not overridden the URL bag.
         window._ezdocEndpoint = function(key, fallback) {
             var v = (window.EZDOC_URLS || {})[key];
@@ -3262,7 +3262,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
     </script>
     <?php include __DIR__ . '/../_partials/generate_scripts.php'; ?>
 
-    <!-- Screen pagination â€” visual multi-paper cards + JS spacer at boundary.
+    <!-- Screen pagination — visual multi-paper cards + JS spacer at boundary.
          Loaded LAST supaya semua content sudah settled (fields, floating elements,
          TTD modal ready). Runs on DOMContentLoaded. -->
     <script>
