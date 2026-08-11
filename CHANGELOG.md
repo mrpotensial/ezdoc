@@ -124,7 +124,7 @@ lengkap dengan penanda, dan pesannya mengingatkan agar penandanya dihapus lagi.
 
 **Added — `ezdoc_document_artifacts` + `FreezeService` (2026-08-08)**
 
-Lihat `docs/PLAN-PSRE-METERAI.md` §7b. Sampai sekarang dokumen dirender ulang
+Lihat `docs/260805-psre-meterai.md` §7b. Sampai sekarang dokumen dirender ulang
 dari template setiap kali dibuka. Tanda tangan kita tetap terverifikasi kalau
 templatenya berubah — ia mencakup **data**, bukan tampilan — tapi yang **dibaca**
 orang jadi berbeda dari yang dulu mereka setujui. Itu lubangnya, dan bukan
@@ -163,7 +163,7 @@ membekukan tidak boleh ikut memaksakannya.
 
 **Added — `IncrementalPdfSigner`: tanda tangan masuk ke dalam berkas PDF (2026-08-08)**
 
-`docs/PLAN-PSRE-METERAI.md` §7b (P8). Inilah yang membuat berkas keluaran bisa
+`docs/260805-psre-meterai.md` §7b (P8). Inilah yang membuat berkas keluaran bisa
 dibuktikan sendiri **tanpa PSrE**: ubah satu byte, pembaca PDF mana pun langsung
 melaporkan dokumen sudah diubah. Itu huruf c dan d UU ITE Pasal 11(1), dan ia
 tidak menunggu kontrak siapa pun.
@@ -276,7 +276,7 @@ Disk tanpa path **ditolak**, bukan diam-diam jatuh ke database. Baris metadata
 tetap di `ezdoc_blobs` — yang pindah cuma byte-nya, jadi identitas kunci-isi dan
 pemeriksaan keutuhan tidak berubah sedikit pun.
 
-Ini sekaligus menjawab keputusan terbuka §8 nomor 5 di `PLAN-PSRE-METERAI.md`.
+Ini sekaligus menjawab keputusan terbuka §8 nomor 5 di `260805-psre-meterai.md`.
 
 **Documented — koreksi: tanda tangan ke berkas PDF tidak menunggu PSrE (2026-08-08)**
 
@@ -315,7 +315,7 @@ milik library umum.
 
 **Added — QR pindah ke layar petugas, kode terikat satu dokumen (2026-08-05)**
 
-Lihat `docs/PLAN-OTP-JALUR-KEDUA.md` §8h. Voucher V1–V5 hanya tahu nomor
+Lihat `docs/260803-otp-jalur-kedua.md` §8h. Voucher V1–V5 hanya tahu nomor
 pengirimnya: kode yang sama bisa dipakai untuk dokumen apa pun, dan pasien tidak
 diberi tahu ia sedang menyetujui apa. Kode yang tidak menyebut apa yang
 disetujui bukan persetujuan.
@@ -395,7 +395,7 @@ memang bilang begitu".
 
 **Added — tiga kolom generik, tahap expand/contract (2026-08-04 … 2026-08-05)**
 
-Lihat `docs/PLAN-SUBJECT-SCHEMA.md`. Skema dokumen menyebut `norm` dan `nopen`,
+Lihat `docs/260804-skema-subjek.md`. Skema dokumen menyebut `norm` dan `nopen`,
 dua nama yang tidak berarti apa-apa di luar rumah sakit, di dalam paket yang
 visinya sendiri berbunyi "no Indonesian-specific field name di core schema".
 
@@ -433,7 +433,7 @@ ditulis kode benar-benar ada".
 
 **Documented — PSrE dan e-Meterai (2026-08-05)**
 
-`docs/PLAN-PSRE-METERAI.md`. `PSRE-INTEGRATION.md` menyatakan
+`docs/260805-psre-meterai.md`. `PSRE-INTEGRATION.md` menyatakan
 `BaseRemoteProvider`/`HttpClient`/`SignSession` "belum di-implement"; berkasnya
 802 baris tanpa penanda TODO. Dikoreksi.
 
@@ -495,7 +495,7 @@ tidak tergantung dari pintu mana request masuk.
 
 **Added — voucher OTP lewat QR, V1–V5 (2026-08-03 … 2026-08-04)**
 
-Lihat `docs/PLAN-OTP-JALUR-KEDUA.md`. Pesan yang dimulai bisnis berbayar, jadi
+Lihat `docs/260803-otp-jalur-kedua.md`. Pesan yang dimulai bisnis berbayar, jadi
 arahnya dibalik: pasien memindai QR di ruang tunggu, bot membalas kode sekali
 pakai, petugas memasukkannya.
 

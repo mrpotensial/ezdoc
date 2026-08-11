@@ -14,7 +14,7 @@ use Ezdoc\Support\Clock;
 /**
  * Membekukan sebuah dokumen jadi artefak, dan mencabutnya kembali.
  *
- * Lihat docs/PLAN-PSRE-METERAI.md §7b (A2).
+ * Lihat docs/260805-psre-meterai.md §7b (A2).
  *
  * ## Apa yang sebenarnya diperbaiki
  *

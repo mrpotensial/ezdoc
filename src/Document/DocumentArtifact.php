@@ -7,7 +7,7 @@ namespace Ezdoc\Document;
 /**
  * Satu rendering dokumen yang sudah dibekukan jadi byte tetap.
  *
- * Lihat docs/PLAN-PSRE-METERAI.md §7b (A2). Sebelum ini dokumen selalu dirender
+ * Lihat docs/260805-psre-meterai.md §7b (A2). Sebelum ini dokumen selalu dirender
  * ulang dari template. Tanda tangan data kita tetap terverifikasi kalau
  * templatenya berubah — ia mencakup data, bukan tampilan — tapi yang dibaca
  * orang jadi berbeda dari yang dulu mereka setujui. Artefak menutup selisih itu.

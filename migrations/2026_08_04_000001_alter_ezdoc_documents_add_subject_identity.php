@@ -2,7 +2,7 @@
 /**
  * Tahap EXPAND — tambahkan identitas subjek yang generik di `ezdoc_documents`.
  *
- * Lihat docs/PLAN-SUBJECT-SCHEMA.md. Ini langkah E1 + E2: kolom baru berdiri
+ * Lihat docs/260804-skema-subjek.md. Ini langkah E1 + E2: kolom baru berdiri
  * berdampingan dengan `norm`/`nopen`, lalu diisi dari keduanya. **Belum ada
  * satu pun kode yang membacanya.** Migrasi ini tidak bisa merusak apa pun, dan
  * bisa ditinggalkan begitu saja kalau rencananya berubah.

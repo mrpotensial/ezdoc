@@ -90,7 +90,7 @@ $publishedAt = date('Y-m-d H:i:s');
 
 try {
     $db->execute(
-        // Penulisan ganda selama peralihan — lihat docs/PLAN-SUBJECT-SCHEMA.md.
+        // Penulisan ganda selama peralihan — lihat docs/260804-skema-subjek.md.
         'INSERT INTO ezdoc_documents
          (uuid, template_id, template_uuid, template_version,
           norm, nopen, label, version,

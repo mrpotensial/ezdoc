@@ -107,7 +107,7 @@ function ezdoc_scan_context(string $scanToken): array
 
             if ($doc !== null) {
                 // Nomor kunjungan ditampilkan, nomor rekam medis TIDAK — lihat
-                // docs/PLAN-OTP-JALUR-KEDUA.md §8h. Yang menjawab "dokumen yang
+                // docs/260803-otp-jalur-kedua.md §8h. Yang menjawab "dokumen yang
                 // mana" adalah nomor kunjungan, dan yang memindai bisa
                 // mencocokkannya dengan karcis yang dipegangnya. Nomor rekam
                 // medis permanen dan menghubungkan seluruh riwayat.

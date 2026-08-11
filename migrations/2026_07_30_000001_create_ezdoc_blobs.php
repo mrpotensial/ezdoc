@@ -14,7 +14,7 @@
  *
  * `key` adalah SHA-256 dari byte-nya. Bukan pilihan gaya:
  *
- *   - Hash tanda tangan (§5 docs/PLAN-SIGNATURE-RECORDS.md) mencakup `ttd_value`.
+ *   - Hash tanda tangan (§5 docs/260730-catatan-tanda-tangan.md) mencakup `ttd_value`.
  *     Begitu gambarnya keluar dari baris dokumen, `ttd_value` jadi referensi.
  *     Referensi yang menyebut LOKASI bisa menunjuk byte lain besok; referensi
  *     yang menyebut ISI tidak bisa.

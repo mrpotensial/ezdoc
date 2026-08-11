@@ -607,7 +607,7 @@ try {
         if ($nextVersion < 1) $nextVersion = 1;
 
         // Penulisan ganda selama peralihan: kolom lama DAN yang baru.
-        // Yang dibaca masih yang lama — lihat docs/PLAN-SUBJECT-SCHEMA.md.
+        // Yang dibaca masih yang lama — lihat docs/260804-skema-subjek.md.
         $db->execute(
             'INSERT INTO ezdoc_documents
              (uuid, template_id, template_uuid, template_version,
@@ -667,7 +667,7 @@ try {
 // jadi satu baris di `ezdoc_signatures`, dengan hash isi yang diikatnya.
 //
 // Berlaku untuk mode gambar maupun QR — keduanya tampilan untuk tindakan yang
-// sama. Lihat docs/PLAN-SIGNATURE-RECORDS.md.
+// sama. Lihat docs/260730-catatan-tanda-tangan.md.
 //
 // Seperti audit log, kegagalan di sini tidak boleh menjatuhkan penyimpanan yang
 // sudah berhasil: dokumennya sudah tertulis, dan memberi tahu user bahwa

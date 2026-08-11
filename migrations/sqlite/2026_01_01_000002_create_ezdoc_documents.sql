@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS ezdoc_documents (
     -- Identity
     title TEXT NULL,
 
-    -- Identitas subjek yang generik. Lihat docs/PLAN-SUBJECT-SCHEMA.md dan
+    -- Identitas subjek yang generik. Lihat docs/260804-skema-subjek.md dan
     -- migrations/2026_08_04_000001_alter_ezdoc_documents_add_subject_identity.php.
     --
     -- Di sisi MySQL kolom ini datang lewat ALTER, karena di sana ada data hidup.

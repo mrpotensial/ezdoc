@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Identitas subjek dokumen — tahap EXPAND, penulisan ganda.
  *
- * Lihat docs/PLAN-SUBJECT-SCHEMA.md. Selama masa peralihan setiap penyimpanan
+ * Lihat docs/260804-skema-subjek.md. Selama masa peralihan setiap penyimpanan
  * menulis ke kolom lama (`norm`, `nopen`) **dan** yang baru
  * (`subject_id`, `context_id`, `subject_type`). Yang dibaca masih yang lama,
  * jadi langkah ini tidak mengubah perilaku apa pun — ia cuma membuat kolom baru
@@ -34,7 +34,7 @@ define('EZDOC_SUBJECT_IDENTITY_LOADED', true);
  *   2. `''` — belum dinyatakan
  *
  * **Sumber per-template belum ada, dan itu keputusan yang masih terbuka**
- * (PLAN-SUBJECT-SCHEMA §8/§9). Template surat persetujuan pasien dan template
+ * (260804-skema-subjek §8/§9). Template surat persetujuan pasien dan template
  * SK karyawan bisa hidup di pemasangan yang sama, jadi satu nilai global pada
  * akhirnya tidak cukup — tapi menambahkannya sekarang berarti membaca konten
  * template di setiap penyimpanan, dan `save_document.php` tidak memuatnya.

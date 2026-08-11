@@ -30,7 +30,7 @@ declare(strict_types=1);
  * (A future payload version could canonicalise `ttd_value` to the hash of the
  * image bytes, which would make the two forms hash identically and let signed
  * slots migrate too. `content_hash_algo` already names the payload shape, so the
- * two could coexist. Out of scope here — see docs/PLAN-SIGNATURE-RECORDS.md.)
+ * two could coexist. Out of scope here — see docs/260730-catatan-tanda-tangan.md.)
  *
  * ## What it does not do
  *

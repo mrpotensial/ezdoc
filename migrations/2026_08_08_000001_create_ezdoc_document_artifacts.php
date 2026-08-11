@@ -2,7 +2,7 @@
 /**
  * Create ezdoc_document_artifacts — rendering yang dibekukan jadi byte tetap.
  *
- * Lihat docs/PLAN-PSRE-METERAI.md §7b (A2). Sampai sekarang dokumen dirender
+ * Lihat docs/260805-psre-meterai.md §7b (A2). Sampai sekarang dokumen dirender
  * ulang dari template setiap kali dibuka. Tanda tangan kita tetap terverifikasi
  * kalau templatenya berubah — ia mencakup data, bukan tampilan — tapi yang
  * DIBACA orang jadi berbeda dari yang dulu mereka setujui. Tabel ini yang

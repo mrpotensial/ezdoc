@@ -343,7 +343,7 @@ volume komitmen tahunan.*
 > benar — `BaseRemoteProvider` (802 baris), `HttpClient`, `SignSession`, dan
 > `OtpChallenge` semuanya sudah ada dan tanpa penanda TODO. Yang masih benar
 > adalah butir stub-nya, dan itu memang yang menunggu kredensial sandbox.
-> Keadaan lengkapnya di `docs/PLAN-PSRE-METERAI.md` §1.
+> Keadaan lengkapnya di `docs/260805-psre-meterai.md` §1.
 
 - **Stubs**: Peruri (17 penanda TODO) + Privy (14) masih skeleton. Real API
   mapping (endpoint, payload schema, response field names, auth path) menunggu

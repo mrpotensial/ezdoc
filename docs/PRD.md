@@ -210,7 +210,7 @@ padahal providernya belum bisa di-instansiasi.
 >
 > Yang **masih** benar dan lebih menusuk: `PeruriProvider` (17 penanda TODO)
 > dan `PrivyProvider` (14) **belum punya satu pun test**. Rencana lengkapnya di
-> `docs/PLAN-PSRE-METERAI.md`.
+> `docs/260805-psre-meterai.md`.
 
 > **Note pola pikir**: Level 1-3 = "**siapa** yang tanda tangan + integritas isi". Anchoring (A1) = "**bukti publik** bahwa dokumen ini exist pada waktu X yang tidak bisa diubah setelah ter-anchor". Anchoring bisa combined dengan any level — L3 + A1 = signature legally binding + audit trail publik immutable.
 
@@ -298,7 +298,7 @@ Kopling ke konvensi host terkurung di satu kelas shim.
  sekali per proses, dan membedakan "auth belum diwiring" dari "role ada tapi
  identitas tidak" — asimetri kedua itu yang paling menipu.
 
-### 3.9b Tanda tangan sebagai record — ✅ selesai 2026-07-30, lihat `docs/PLAN-SIGNATURE-RECORDS.md`
+### 3.9b Tanda tangan sebagai record — ✅ selesai 2026-07-30, lihat `docs/260730-catatan-tanda-tangan.md`
 
 Keadaan awal: `ezdoc_signatures` lengkap (`signer_id`, `signer_role`,
 `signed_at DATETIME(3)`, `content_hash`, `tsa_response`, `verify_status`) dan
@@ -373,7 +373,7 @@ ulang.
 generik, dan ironisnya nama yang dituju (`subject_type`, `subject_id`) memang
 sudah ada di migrasi SQLite lama sebagai sisa desain generik yang ditinggalkan.
 
-### 3.14 Identitas subjek generik — 🔄 sedang berjalan, lihat `docs/PLAN-SUBJECT-SCHEMA.md`
+### 3.14 Identitas subjek generik — 🔄 sedang berjalan, lihat `docs/260804-skema-subjek.md`
 
 `norm` (nomor rekam medis) dan `nopen` (nomor pendaftaran) diganti identitas
 subjek yang generik. Alasannya visi §1 sendiri: "no Indonesian-specific field
@@ -422,7 +422,7 @@ tersendiri yang disengaja.
 dari konstanta `EZDOC_DEFAULT_SUBJECT_TYPE`, jatuh ke `''`. Sumber per-template
 lebih benar — template surat pasien dan template SK karyawan bisa hidup di
 pemasangan yang sama — tapi kandidatnya kolom di `ezdoc_templates`, bukan
-atribut HTML yang harus diurai tiap penyimpanan. Lihat PLAN-SUBJECT-SCHEMA §8.
+atribut HTML yang harus diurai tiap penyimpanan. Lihat 260804-skema-subjek §8.
 
 ### 3.10 Pintu `public/` — syarat mount, ditemukan 2026-07-29
 
@@ -485,7 +485,7 @@ filesystem menang.
 
 ### 3.12 OTP jalur kedua — penanda tangan yang meminta kode ✅ selesai 2026-08-05
 
-Lihat `docs/PLAN-OTP-JALUR-KEDUA.md`. Ringkasnya: pesan yang dimulai bisnis
+Lihat `docs/260803-otp-jalur-kedua.md`. Ringkasnya: pesan yang dimulai bisnis
 berbayar, jadi arahnya dibalik — penanda tangan memindai QR, bot membalas kode
 sekali pakai, petugas memasukkannya.
 
@@ -508,7 +508,7 @@ Yang tetap berlaku dari fase itu:
 | Verifikasi | Tetap bermuara ke `ezdoc_ttd_otp_challenges`, jadi seluruh mesin `sign_token` — termasuk `save_document.php` — tidak berubah sebaris pun |
 
 **✅ V6 selesai 2026-08-05 — kode terikat dokumen.** Lihat
-`docs/PLAN-OTP-JALUR-KEDUA.md` §8h.
+`docs/260803-otp-jalur-kedua.md` §8h.
 
 Kelemahan V1–V5: pasien mengirim `TTD-OTP` dan menerima enam angka **tanpa tahu
 untuk apa**. Secara hukum itu lemah — persetujuan seharusnya sadar.
@@ -545,7 +545,7 @@ Tiga aturan yang lahir dari diskusinya, ketiganya soal bukti:
 
 ### 3.14 Artefak beku — 🔄 fondasi selesai 2026-08-08
 
-Lihat `docs/PLAN-PSRE-METERAI.md` §7b. Dokumen selama ini dirender ulang dari
+Lihat `docs/260805-psre-meterai.md` §7b. Dokumen selama ini dirender ulang dari
 template setiap dibuka. Tanda tangan tetap terverifikasi kalau templatenya
 berubah — ia mencakup data, bukan tampilan — tapi yang **dibaca** orang jadi
 berbeda dari yang dulu disetujui.
@@ -564,7 +564,7 @@ simpan, dan jalur baca yang menyajikan artefak alih-alih render ulang.
 
 ### 3.13 Pengungkapan identitas — ✅ selesai 2026-08-04
 
-Lihat `docs/PLAN-IDENTITY-DISCLOSURE.md`.
+Lihat `docs/260804-pengungkapan-identitas.md`.
 
 Panel riwayat dulu menampilkan id internal, daftar role, dan **alamat IP**
 setiap pelaku, ke siapa pun yang punya hak `view` di template. IP adalah data
@@ -2619,7 +2619,7 @@ Berikut point yang perlu decision dari stakeholder:
 
 ### 10.2 Signature & PSrE (v0.6-v0.9)
 
-> Ditinjau ulang 2026-08-05 — lihat `docs/PLAN-PSRE-METERAI.md`. Yang paling
+> Ditinjau ulang 2026-08-05 — lihat `docs/260805-psre-meterai.md`. Yang paling
 > menentukan dan belum ada di daftar lama:
 >
 > 5a. **Sertifikat per penanda tangan, atau satu sertifikat institusi?** Ini

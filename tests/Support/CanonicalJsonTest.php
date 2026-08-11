@@ -279,7 +279,7 @@ final class CanonicalJsonTest extends TestCase
     // ─── The real shape this will be used on ───
 
     /**
-     * Per-signature hash input from PLAN-SIGNATURE-RECORDS §5. Signing order
+     * Per-signature hash input from 260730-catatan-tanda-tangan §5. Signing order
      * must not matter, and one slot's value must not affect another's hash.
      */
     public function testSignaturePayloadIsOrderIndependent(): void

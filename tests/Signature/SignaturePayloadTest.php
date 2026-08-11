@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Covers what a signature attests to — the rules from
- * `docs/PLAN-SIGNATURE-RECORDS.md` §5.
+ * `docs/260730-catatan-tanda-tangan.md` §5.
  *
  * Every test here is one row of the consequence table in that section. They are
  * written as pairs — change one thing, assert the hash moves or does not — since

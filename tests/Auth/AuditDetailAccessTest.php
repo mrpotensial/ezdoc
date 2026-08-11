@@ -21,7 +21,7 @@ use PHPUnit\Framework\TestCase;
  * later "cleanup" makes consistent with its neighbour and quietly reopens. What
  * is being guarded is not a feature but somebody else's personal data.
  *
- * @see \docs\PLAN-IDENTITY-DISCLOSURE.md
+ * @see \docs\260804-pengungkapan-identitas.md
  */
 final class AuditDetailAccessTest extends TestCase
 {

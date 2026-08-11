@@ -73,7 +73,7 @@ const EZDOC_HISTORY_LIMIT = 60;
 /**
  * Dua tingkat. Yang boleh membuka dokumen melihat siapa, kapan, dan apa. Alamat
  * IP dan daftar role orang lain butuh izin tersendiri — lihat
- * ezdoc_can_view_audit_detail() dan docs/PLAN-IDENTITY-DISCLOSURE.md.
+ * ezdoc_can_view_audit_detail() dan docs/260804-pengungkapan-identitas.md.
  *
  * Disaring di sini, bukan di tampilan. Yang bocor adalah JSON-nya; menyembunyikan
  * kolom di JavaScript meninggalkan datanya utuh satu klik di balik tab Network.

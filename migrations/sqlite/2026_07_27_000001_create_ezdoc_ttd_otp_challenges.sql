@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS ezdoc_ttd_otp_challenges (
     ttd_id TEXT NOT NULL,
 
     -- V6 — kode terikat dokumen sejak lahir. Lihat
-    -- docs/PLAN-OTP-JALUR-KEDUA.md §8h dan migrasi MySQL
+    -- docs/260803-otp-jalur-kedua.md §8h dan migrasi MySQL
     -- 2026_08_05_000001_alter_ttd_otp_challenges_add_scan_token.php.
     --
     -- Di MySQL kolom ini datang lewat ALTER, karena di sana ada data hidup.

@@ -12,7 +12,7 @@ declare(strict_types=1);
  *   - ttd_id      : string (wajib) slot tanda tangannya
  *   - doc_id      : int    (opsional)
  *
- * Lihat docs/PLAN-OTP-JALUR-KEDUA.md §8h.
+ * Lihat docs/260803-otp-jalur-kedua.md §8h.
  *
  * ## Kenapa tautannya dirakit di sini, bukan di sisi tampilan
  *

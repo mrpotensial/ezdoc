@@ -296,7 +296,7 @@ final class DocumentRepository
         $actorForInsert = $actorId > 0 ? $actorId : null;
 
         // Penulisan ganda selama peralihan: kolom lama DAN identitas subjek yang
-        // generik. Yang dibaca masih yang lama — docs/PLAN-SUBJECT-SCHEMA.md.
+        // generik. Yang dibaca masih yang lama — docs/260804-skema-subjek.md.
         $sql = 'INSERT INTO ezdoc_documents '
             . '(uuid, template_id, template_uuid, template_version, title, norm, nopen, label, '
             . 'subject_type, subject_id, context_id, '

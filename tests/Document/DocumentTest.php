@@ -139,7 +139,7 @@ final class DocumentTest extends TestCase
     {
         $doc = new Document(
             // Argumen ke-10 `contextId` (dulu `nopen`) — lihat
-            // docs/PLAN-SUBJECT-SCHEMA.md.
+            // docs/260804-skema-subjek.md.
             1, 'u', 1, 't', 1, null, null, null, null, null,
             [], ['ttd_a' => 'x'], [], 'draft', null, null, 1, null, null, null
         );
@@ -152,7 +152,7 @@ final class DocumentTest extends TestCase
     {
         $doc = new Document(
             // Argumen ke-10 `contextId` (dulu `nopen`) — lihat
-            // docs/PLAN-SUBJECT-SCHEMA.md.
+            // docs/260804-skema-subjek.md.
             1, 'u', 1, 't', 1, null, null, null, null, null,
             [], [], [], 'draft', null, null, 1, null, null, null,
             false

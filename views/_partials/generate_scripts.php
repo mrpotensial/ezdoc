@@ -2002,7 +2002,7 @@
             }
 
             // Nomor kunjungan, bukan nomor rekam medis — lihat
-            // docs/PLAN-OTP-JALUR-KEDUA.md §8h. Yang menjawab "dokumen yang mana"
+            // docs/260803-otp-jalur-kedua.md §8h. Yang menjawab "dokumen yang mana"
             // adalah nomor kunjungannya, dan penanda tangan bisa mencocokkannya
             // dengan karcis yang dipegangnya.
             if (CURRENT_NOPEN) bagian.push(escapeHtmlSimple(CURRENT_NOPEN));

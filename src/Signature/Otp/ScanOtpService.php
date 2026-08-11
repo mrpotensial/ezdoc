@@ -13,7 +13,7 @@ use Ezdoc\Support\SystemClock;
  * Kode sekali pakai yang diminta penanda tangan sendiri, dan terikat ke satu
  * dokumen sejak lahir.
  *
- * Lihat docs/PLAN-OTP-JALUR-KEDUA.md §8h.
+ * Lihat docs/260803-otp-jalur-kedua.md §8h.
  *
  * ## Kenapa ini menggantikan voucher
  *

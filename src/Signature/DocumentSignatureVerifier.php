@@ -26,7 +26,7 @@ use Ezdoc\Db\Connection;
  * directly, or the signing key changed. The first is a workflow problem, the
  * second wants investigating.
  *
- * @see docs/PLAN-SIGNATURE-RECORDS.md
+ * @see docs/260730-catatan-tanda-tangan.md
  */
 final class DocumentSignatureVerifier
 {

@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * Identitas subjek yang generik — tahap EXPAND.
  *
- * Lihat docs/PLAN-SUBJECT-SCHEMA.md. Yang diuji di sini bukan bahwa kolomnya
+ * Lihat docs/260804-skema-subjek.md. Yang diuji di sini bukan bahwa kolomnya
  * ada — itu bagian yang mudah — melainkan satu keputusan yang gampang dibalik
  * oleh orang berikutnya karena kelihatan seperti kelewatan: `subject_type`
  * NOT NULL DEFAULT '', bukan NULL.

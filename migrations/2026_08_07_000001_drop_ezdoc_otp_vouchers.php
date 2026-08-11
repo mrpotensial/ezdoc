@@ -2,7 +2,7 @@
 /**
  * Buang `ezdoc_otp_vouchers` — jalur voucher sudah tidak ada kodenya.
  *
- * Lihat docs/PLAN-OTP-JALUR-KEDUA.md §8h. Voucher lahir karena kode dibuat
+ * Lihat docs/260803-otp-jalur-kedua.md §8h. Voucher lahir karena kode dibuat
  * sebelum ada yang tahu untuk dokumen mana, jadi ia hanya bisa terikat ke nomor
  * HP. Sejak QR pindah ke layar petugas, kodenya terikat dokumen sejak lahir dan
  * alasan tabel ini hilang seluruhnya.
