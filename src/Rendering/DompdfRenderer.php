@@ -77,7 +77,33 @@ final class DompdfRenderer implements PdfRenderer
         $this->basePath = $basePath;
     }
 
+    public function render(string $html, array $paperMm, string $orientation): string
+    {
+        return (string) $this->build($html, $paperMm, $orientation)->output();
+    }
+
     public function stream(string $html, string $filename, array $paperMm, string $orientation): void
+    {
+        // Sengaja memakai stream() milik dompdf, bukan render() di atas lalu
+        // mencetak sendiri. Header yang benar untuk PDF inline lebih banyak
+        // seluk-beluknya daripada kelihatannya, dan menuliskannya ulang di sini
+        // berarti dua tempat yang bisa berselisih.
+        //
+        // Caller bertanggung jawab exit() setelah return.
+        $this->build($html, $paperMm, $orientation)->stream($filename, ['Attachment' => false]);
+    }
+
+    /**
+     * Satu tempat penyiapan dompdf untuk kedua jalur.
+     *
+     * Sebelumnya seluruh penyiapan ini hidup di dalam `stream()`. Menyalinnya
+     * untuk `render()` berarti dua salinan pengaturan kertas dan basePath yang
+     * bisa berbeda diam-diam — dan bedanya baru terlihat sebagai dokumen beku
+     * yang tidak sama dengan yang dicetak.
+     *
+     * @param array<int,float|int> $paperMm
+     */
+    private function build(string $html, array $paperMm, string $orientation): Dompdf
     {
         $options = new Options();
         foreach ($this->options as $key => $value) {
@@ -94,14 +120,12 @@ final class DompdfRenderer implements PdfRenderer
         // dompdf setPaper accepts either named size ('a4') or rectangle in points.
         // Convert paperMm [w, h] to [0, 0, w_pt, h_pt] rectangle.
         // 1mm ≈ 2.83465 pt (72 pt/inch ÷ 25.4 mm/inch).
-        $widthPt  = (float)($paperMm[0] ?? 210) * 2.83465;
-        $heightPt = (float)($paperMm[1] ?? 297) * 2.83465;
+        $widthPt  = (float) ($paperMm[0] ?? 210) * 2.83465;
+        $heightPt = (float) ($paperMm[1] ?? 297) * 2.83465;
         $dompdf->setPaper([0.0, 0.0, $widthPt, $heightPt], $orientation);
 
         $dompdf->render();
 
-        // Inline stream (browser render vs Attachment download).
-        // Caller responsible untuk exit() setelah return.
-        $dompdf->stream($filename, ['Attachment' => false]);
+        return $dompdf;
     }
 }

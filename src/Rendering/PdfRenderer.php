@@ -16,6 +16,26 @@ namespace Ezdoc\Rendering;
 interface PdfRenderer
 {
     /**
+     * Hasilkan byte PDF-nya, tanpa mengirim apa pun ke browser.
+     *
+     * Ini yang dibutuhkan setiap kali PDF-nya harus disimpan alih-alih
+     * ditampilkan: pembekuan dokumen, penyegelan dengan sertifikat, lampiran
+     * surel, dan pengiriman ke penyedia tanda tangan.
+     *
+     * Dulu antarmuka ini hanya punya {@see stream()}, dan itu membuat
+     * pembekuan mustahil — byte-nya sudah terlanjur pergi ke browser sebelum
+     * ada yang bisa memegangnya. Bentuk dua metode ini mengikuti mesinnya
+     * sendiri: dompdf punya `output()` dan `stream()`, mPDF punya
+     * `Output()` dengan tujuan `STRING_RETURN`.
+     *
+     * @param string             $html        Dokumen HTML lengkap
+     * @param array<int,float|int> $paperMm   `[lebar, tinggi]` dalam milimeter
+     * @param string             $orientation `'portrait'` | `'landscape'`
+     * @return string Byte PDF mentah
+     */
+    public function render(string $html, array $paperMm, string $orientation): string;
+
+    /**
      * Stream/inline PDF response ke browser dari HTML input.
      *
      * Sends HTTP headers (Content-Type: application/pdf) + PDF binary body.
