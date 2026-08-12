@@ -132,6 +132,34 @@ berarti ikut memindahkan yang menyiapkan masukannya.
 Dan ini jalur yang **paling sering dipakai** di seluruh sistem. Kalau rusak,
 semua cetakan rusak.
 
+### Jebakan: dua perender yang mirip tapi sudah menyimpang
+
+`generate.php` punya **dua** fungsi perender isi yang hampir sama:
+
+| | |
+|---|---|
+| `renderContent()` (baris 1143) | untuk layar, 24 baris |
+| `renderContentForPdf()` (baris 2144) | untuk PDF, 32 baris |
+
+Godaan saat memindahkan: "keduanya hampir sama, satukan saja." **Jangan.**
+Bedanya sebagian disengaja, dan menyatukannya akan mengubah salah satu:
+
+| Beda | Disengaja? |
+|---|---|
+| Logo tidak ketemu → layar menulis `<span class="logo-empty">[nama]</span>`, PDF menulis kosong | **Ya.** Dokumen cetak tidak boleh memuat tulisan `[logo_kop]` |
+| Layar menambahkan `alt="nama"` pada gambar, PDF tidak | Tidak penting, tapi mengubahnya tetap mengubah keluaran |
+| Regex layar punya satu grup tangkap lagi (`style="..."`) yang **tidak pernah dipakai** callback-nya | Kelihatannya kecelakaan — tapi grup tambahan mengubah apa yang **cocok**, bukan cuma apa yang ditangkap |
+| `$posOffsetQR` dan `$posOffsetTTD` di versi PDF, keduanya diisi 0 dan tidak pernah dibaca | Kode mati |
+| Layar menerima `$param_is_locked`, PDF tidak | Ya — PDF tidak punya field yang bisa disunting |
+
+**Aturan untuk Tahap 1: pindahkan apa adanya, jangan rapikan apa pun.** Kode
+mati ikut dipindah, perbedaan yang kelihatan tidak masuk akal ikut dipindah.
+Merapikan sambil memindahkan membuat tidak ada yang bisa menjawab pertanyaan
+"kalau keluarannya berubah, karena pemindahannya atau karena perapiannya".
+
+Rapikan setelah pemindahannya terbukti utuh, sebagai perubahan tersendiri yang
+punya buktinya sendiri.
+
 ---
 
 ## 4. Rencana: dua tahap, dan alasan memecahnya
@@ -155,6 +183,20 @@ Sesudah:  Composer      → $pdfHtml  → harus SAMA PERSIS
 ```
 
 Kalau tidak sama, ada yang berubah, dan Tahap 2 tidak boleh dimulai.
+
+**Alatnya: `scripts/ezdoc_capture_pdf_html.php`** (sudah ada sejak 2026-08-11).
+Ia menjalankan halaman cetak untuk dokumen sungguhan di server, menangkap
+HTML-nya, dan membandingkannya dengan tangkapan sebelumnya.
+
+Dokumen yang diambil dipilih yang **paling beragam**, bukan yang paling baru:
+satu per template, ditambah yang tanda tangannya terbanyak dan yang tanpa tanda
+tangan sama sekali. Perubahan pada perakitan akan patah di kasus yang tidak
+biasa, dan contoh yang seragam justru meloloskan kerusakan yang paling mungkin
+terjadi.
+
+**Urutannya tidak bisa dibalik.** Tangkapan "sebelum" harus diambil di server
+**sebelum** satu baris pun dipindahkan. Tidak ada cara membuatnya belakangan —
+kode lamanya sudah tidak ada di sana.
 
 **Belum ada perilaku baru di tahap ini.** Tidak ada pembekuan, tidak ada
 penyegelan. Murni pemindahan.
