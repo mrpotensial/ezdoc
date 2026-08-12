@@ -6,6 +6,42 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v1.0-prep track — "Perakitan PDF keluar dari view"
+
+**Changed — `lib/pdf_compose.php` + `lib/view_helpers.php` (2026-08-12)**
+
+Lihat `docs/260811-beku-pdf-tiap-tanda-tangan.md` §4 Tahap 1.
+
+Perakitan HTML untuk PDF hidup di dalam `views/document/generate.php`, dan
+karena itu hanya bisa dijalankan oleh permintaan yang membuka halaman cetak.
+Membekukan dokumen saat tanda tangan masuk membutuhkan HTML yang sama, dari
+tempat yang sama sekali berbeda.
+
+221 baris pindah ke `lib/pdf_compose.php`: CSS, `@page`, tiga titik sisipan
+consumer, blok tanda tangan format lama, penutupnya. `h()` dan `t()` ikut ke
+`lib/view_helpers.php` — keduanya dideklarasikan di dalam view dengan penjaga
+`function_exists`, yang bekerja selama hanya berkas itu yang memakainya.
+
+**Dipindah apa adanya. Tidak ada yang dirapikan** — termasuk komentar panjang,
+penamaan tak konsisten, dan spasi ganjil. Merapikan sambil memindahkan membuat
+tidak ada yang bisa menjawab "kalau keluarannya berubah, karena pemindahannya
+atau karena perapiannya".
+
+**Buktinya, atas dokumen sungguhan di server: 10 dari 10 identik byte per byte.**
+Ukuran total kedua tangkapan sama persis, 2.386.255 byte, dari sepuluh template
+berbeda berukuran 15 KB sampai 1,1 MB.
+
+Yang dibandingkan HTML sebelum masuk mesin PDF, bukan PDF-nya: PDF memuat
+`/CreationDate` dan `/ID` acak, jadi dua render dari masukan yang sama tidak
+pernah identik. Pemeriksaan yang mustahil lulus bukan pemeriksaan.
+
+**Ditemukan, dan menghalangi langkah berikutnya:** `renderContentForPdf()`
+membaca `$_POST` dan `$_GET` langsung sebagai cadangan nilai field. Dipanggil
+dari penyimpanan dokumen, ia akan mengambil dari permintaan **simpan** alih-alih
+permintaan cetak. Itu bisa kebetulan menghasilkan yang benar — dan "kebetulan
+benar" tidak boleh ada di jalur pembuat bukti. Dicatat sebagai pekerjaan
+tersendiri, bukan diselundupkan ke pemindahan ini.
+
 ### v1.0-prep track — "Kegagalan yang jauh dari sebabnya"
 
 **Fixed — teks berubah jadi `Â·` dan `â€"` di layar (2026-08-11)**

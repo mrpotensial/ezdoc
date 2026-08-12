@@ -164,7 +164,41 @@ punya buktinya sendiri.
 
 ## 4. Rencana: dua tahap, dan alasan memecahnya
 
-### Tahap 1 — pindahkan, tanpa mengubah perilaku sedikit pun
+### Tahap 1 — ✅ selesai 2026-08-12
+
+**Hasilnya: 10 dari 10 dokumen identik byte per byte.** Ukuran total kedua
+tangkapan sama persis — 2.386.255 byte. Sepuluh template berbeda, dari 15 KB
+sampai 1,1 MB.
+
+Yang pindah ke `lib/pdf_compose.php`: kerangka dokumennya — CSS, `@page`, tiga
+titik sisipan consumer, blok tanda tangan format lama, penutupnya. 221 baris
+keluar dari view.
+
+Ikut pindah ke `lib/view_helpers.php`: `h()` dan `t()`. Keduanya dideklarasikan
+di dalam `generate.php` dengan penjaga `function_exists` — bekerja selama hanya
+berkas itu yang memakainya, dan berhenti bekerja begitu perakitannya pindah.
+
+**Yang BELUM ikut pindah, dan ini menghalangi Tahap 2:** perenderan isi
+(`renderContentForPdf()`). Ia membaca permintaan yang sedang berjalan:
+
+```php
+$pickPdf = function($key) use ($dbFields) {
+    if (isset($dbFields[$key]) …) return $dbFields[$key];
+    if (isset($_POST[$key])   …) return $_POST[$key];    // ← permintaan
+    if (isset($_GET[$key])    …) return $_GET[$key];     // ← permintaan
+};
+```
+
+Dipanggil dari `save_document.php`, ia akan mengambil dari permintaan
+**simpan**, bukan permintaan cetak. Itu bisa saja kebetulan menghasilkan yang
+benar — dan "kebetulan benar" persis yang tidak boleh ada di jalur pembuat
+bukti.
+
+**Tahap 1b (baru):** buat `renderContentForPdf()` menerima nilainya secara
+eksplisit, bukan mengambil dari `$_POST`/`$_GET`. Dibuktikan dengan cara yang
+sama: tangkap, ubah, banding.
+
+### Tahap 1 — cara mengerjakannya (arsip)
 
 Perakitan + penyiapan masukannya jadi kelas tersendiri. `generate.php`
 memanggilnya. Keluarannya harus sama persis.
@@ -184,9 +218,17 @@ Sesudah:  Composer      → $pdfHtml  → harus SAMA PERSIS
 
 Kalau tidak sama, ada yang berubah, dan Tahap 2 tidak boleh dimulai.
 
-**Alatnya: `scripts/ezdoc_capture_pdf_html.php`** (sudah ada sejak 2026-08-11).
-Ia menjalankan halaman cetak untuk dokumen sungguhan di server, menangkap
-HTML-nya, dan membandingkannya dengan tangkapan sebelumnya.
+**Alatnya: `page/ezdoc_capture_pdf.php`**, dibuka dari peramban dalam keadaan
+sudah login. Sekali tekan, seluruh dokumen contoh terambil jadi satu berkas.
+
+Versi baris perintahnya sempat dibuat lalu **dibuang**. `koneksi.php` menuntut
+sesi login, jadi menjalankannya dari CLI berarti memalsukan login di server
+produksi. Sesi palsu untuk sekadar membaca adalah pintu yang tidak semestinya
+dibuka, dan pintu semacam itu tidak pernah tertutup lagi.
+
+Peramban sudah punya sesi yang sah dan semua yang dibutuhkan halaman cetak. Yang
+kurang cuma cara mengambil banyak dokumen sekaligus — dan itu satu halaman kecil,
+bukan lapisan tiruan konteks web.
 
 Dokumen yang diambil dipilih yang **paling beragam**, bukan yang paling baru:
 satu per template, ditambah yang tanda tangannya terbanyak dan yang tanpa tanda

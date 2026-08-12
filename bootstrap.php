@@ -43,6 +43,14 @@ require_once EZDOC_LIB . '/doc_meta_helpers.php';
 require_once EZDOC_LIB . '/actor_names.php';
 require_once EZDOC_LIB . '/subject_identity.php';
 require_once EZDOC_LIB . '/scan_otp.php';
+// h() dan t(). Dulu dideklarasikan di dalam views/document/generate.php dengan
+// penjaga function_exists — bekerja selama hanya berkas itu yang memakainya,
+// dan berhenti bekerja begitu perakitan PDF pindah keluar.
+require_once EZDOC_LIB . '/view_helpers.php';
+// Perakit kerangka HTML untuk PDF. Di sini, bukan di dalam view, supaya
+// pembekuan dokumen bisa merakit HTML yang sama dari tempat berbeda —
+// lihat docs/260811-beku-pdf-tiap-tanda-tangan.md.
+require_once EZDOC_LIB . '/pdf_compose.php';
 
 // Auto-run migrations (menggunakan Ezdoc\Migrations\Runner via wrapper)
 if (EZDOC_AUTO_MIGRATE && isset($GLOBALS['conn']) && $GLOBALS['conn']) {

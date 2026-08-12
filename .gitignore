@@ -66,6 +66,12 @@ desktop.ini
 .nova/
 .zed/
 
+# ─── Tangkapan pembanding ─────────────────────────────────────────────────
+# Hasil page/ezdoc_capture_pdf.php — berukuran megabyte dan memuat isi dokumen
+# sungguhan. Ia bukti sesaat untuk satu pemindahan, bukan dokumentasi, dan
+# tidak boleh ikut terbawa ke paket yang dipublikasikan.
+docs/pdf-html-*.txt
+
 # ─── Penanda diagnosa ─────────────────────────────────────────────────────
 # public/.debug membuka pesan kegagalan di layar. Ia dibuat sesaat saat ada
 # masalah lalu dihapus lagi — yang ter-commit akan menyalakannya di tempat
