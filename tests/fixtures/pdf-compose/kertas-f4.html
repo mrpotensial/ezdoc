@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Surat Uji &lt;Bentuk&gt; &amp; &quot;Kutip&quot;</title>
+    <style>
+        /* @page margin: reserves padT/padR/padB/padL di SETIAP physical page
+           (CSS Paged Media Level 3 spec). dompdf paginator apply per-page.
+           Sebelumnya .page{padding} approach cuma apply padding di element
+           start+end (once), middle pages tidak dapat margin → content flush
+           against physical edge.
+           Fix: @page margin + .page padding=0 + .page shrunk ke printable area.
+           Floating elements need translate compensation (see rule below). */
+        @page {
+            size: 215mm 330mm;
+            margin: 10mm 15mm 12.5mm 30mm;
+        }
+        /* Global box-sizing only. Selective reset (body, .page margin/padding
+           handled below). Blanket "* { margin: 0; padding: 0 }" reset removed —
+           previously stripped ol/ul/li/p margins that we want per screen behavior. */
+        * { box-sizing: border-box; }
+        /* Font-family: "Times" first (native PDF core font, dompdf renders exact
+           Times metrics). "Times New Roman" (browser name) + serif fallbacks.
+           Sebelumnya "Times New Roman" first → dompdf tidak resolve → fallback
+           DejaVu Sans (SANS-SERIF) → sangat beda visual dari screen. */
+        body {
+            font-family: "Times", "Times New Roman", serif;
+            font-size: 12pt;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        /* Heading defaults — dompdf tidak apply browser default h1-h6 sizes/margins.
+           Explicit sesuai browser standard (h1 2em, h2 1.5em, dst.) supaya render
+           sesuai designer/screen. */
+        h1, h2, h3, h4, h5, h6 { line-height: 1.25; page-break-after: avoid; }
+        h1 { font-size: 2em; font-weight: bold; margin: 0.67em 0; }
+        h2 { font-size: 1.5em; font-weight: bold; margin: 0.75em 0; }
+        h3 { font-size: 1.17em; font-weight: bold; margin: 0.83em 0; }
+        h4 { font-size: 1em; font-weight: bold; margin: 1.12em 0; }
+        h5 { font-size: 0.83em; font-weight: bold; margin: 1.5em 0; }
+        h6 { font-size: 0.75em; font-weight: bold; margin: 1.67em 0; }
+        strong, b { font-weight: bold; }
+        em, i { font-style: italic; }
+        /* Inheritance safeguard — semua content dari .content, .page, body
+           inherit line-height 1.6 kecuali override eksplisit (heading). */
+        .page, .content { line-height: inherit; }
+        /* .page shrunk ke printable area (paperW - padL - padR × paperH - padT -
+           padB). @page margin di atas sudah reserve per-page margin. .page padding
+           = 0 supaya no double margin. */
+        .page {
+            width: 170mm;
+            min-height: 307.5mm;
+            margin: 0;
+            padding: 0;
+            position: relative;
+        }
+        /* Floating position compensation — @page margin shifts .page origin ke
+           (padL, padT) di physical page coord. Floating stored di designer coord
+           (from .page top-left = paper corner). Translate back ke visual paper
+           corner position: -padL horizontal, -padT vertical. */
+        .logo-floating, .ttd-item-floating, .qr-item-floating,
+        .qr-behind, .qr-front, .materai-floating,
+        .materai-behind, .materai-front {
+            transform: translate(-30mm, -10mm);
+        }
+        /* Content baseline — shared via Ezdoc\UI\ContentCss (single source of
+           truth designer + generate + PDF). Historically these rules duplicated
+           and drifted. Centralized now. */
+        .content {
+            line-height: 1.6;
+            /* EXPLICIT WIDTH — dompdf tidak fully respect box-sizing: border-box
+               untuk padding calc. Bypass dgn set .content width eksplisit
+               = paper width - horizontal padding. Ensures text wraps at exact
+               same width as designer (170mm untuk A4 dgn 20mm padding). */
+            width: 170mm;
+            max-width: 170mm;
+        }
+        /* Semua descendant `.content` inherit overflow protection. */
+        .content * { max-width: 100%; }
+        /* ─── Shared content CSS (Ezdoc\UI\ContentCss) ─── */
+
+/* Paragraph baseline — 8px vertical margin, min-height 1.2em keeps empty
+   paragraphs at consistent height (matches typography rhythm across
+   designer/generate/PDF). */
+.content p {
+    margin: 8px 0;
+    min-height: 1.2em;
+}
+
+/* Paragraph containing ONLY floating/absolute elements collapses to zero
+   height — floating logo/TTD/QR anchored ke wrapper p tidak boleh push
+   text flow (visual position = fixed top/left, tidak boleh add height).
+   !important untuk override TinyMCE's default paragraph rendering yg
+   sometimes wins specificity war di iframe editor context. */
+.content p.floating-only {
+    min-height: 0 !important;
+    margin: 0 !important;
+    line-height: 0 !important;
+    padding: 0 !important;
+    font-size: 0 !important;
+    height: 0 !important;
+    overflow: visible !important;
+}
+
+/* Print widow/orphan protection disabled — designer's page break visualization
+   uses background gradient at pixel boundary (no widow/orphan concept).
+   Setting both to 1 makes browser print break at pixel boundary matching
+   designer, tidak push paragraph ke next page untuk hindari 1-line orphan. */
+.content p, .content li {
+    orphans: 1;
+    widows: 1;
+}
+
+/* ─── Lists (restore browser defaults yang di-strip Tailwind preflight) ─── */
+.content ol, .content ul {
+    margin: 8px 0;
+    padding-left: 2.5em;
+}
+.content ol { list-style: decimal; }
+.content ul { list-style: disc; }
+.content ol ol { list-style: lower-alpha; }
+.content ol ol ol { list-style: lower-roman; }
+.content ul ul { list-style: circle; }
+.content ul ul ul { list-style: square; }
+.content li { display: list-item; }
+
+/* ─── Tables ─── */
+.content table {
+    border-collapse: collapse;
+    width: 100%;
+}
+/* Opt-in fixed layout via class="tbl-fixed" — force equal columns, prevents
+   auto-layout column width drift when cell content lengths differ between
+   designer placeholder text dan generate actual field values. */
+.content table.tbl-fixed {
+    table-layout: fixed;
+}
+.content td, .content th {
+    border: 1px solid #ccc;
+    padding: 6px;
+    vertical-align: top;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+/* HTML5 border="0" attribute → no visible border (semantic HTML backward-compat) */
+.content table[border="0"] td,
+.content table[border="0"] th {
+    border: none;
+}
+
+/* ─── Images ─── */
+.content img {
+    max-width: 100%;
+    height: auto;
+}
+.content .logo-img { display: inline-block; }
+
+/* ─── Headings — explicit defaults (dompdf tidak apply browser default h1-h6) ─── */
+.content h1, .content h2, .content h3,
+.content h4, .content h5, .content h6 {
+    line-height: 1.25;
+    page-break-after: avoid;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+.content h1 { font-size: 2em;    font-weight: bold; margin: 0.67em 0; }
+.content h2 { font-size: 1.5em;  font-weight: bold; margin: 0.75em 0; }
+.content h3 { font-size: 1.17em; font-weight: bold; margin: 0.83em 0; }
+.content h4 { font-size: 1em;    font-weight: bold; margin: 1.12em 0; }
+.content h5 { font-size: 0.83em; font-weight: bold; margin: 1.5em 0; }
+.content h6 { font-size: 0.75em; font-weight: bold; margin: 1.67em 0; }
+
+/* ─── Overflow protection ─── */
+.content a {
+    word-break: break-all; /* long URLs tidak overflow */
+}
+.content pre, .content code {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+        /* Logo images inline-block (max-width sudah declared di .content img rule
+           di block sebelumnya). */
+        .content .logo-img { display: inline-block; }
+
+        /* Field values - just show text */
+        .f-wrap { display: inline; }
+        .f, .f-pdf {
+            font-family: inherit;
+            font-size: inherit;
+            font-weight: inherit;
+            font-style: inherit;
+            color: inherit;
+            line-height: inherit;
+            display: inline;
+        }
+
+        /* Logo */
+        .logo-img { height: auto; vertical-align: middle; }
+        .logo-floating { position: absolute; }
+        .logo-behind { z-index: -1; }
+        .logo-front { z-index: 100; }
+        .logo-empty { display: none; }
+
+        /* TTD — sync dgn screen generate rules exactly */
+        .ttd-item-inline {
+            display: inline-block;
+            text-align: center;
+            min-width: 120px;
+            vertical-align: top;
+            margin: 5px;
+        }
+        .ttd-item-floating {
+            position: absolute;
+            text-align: center;
+            min-width: 120px;
+        }
+        .ttd-behind { z-index: -1; }
+        .ttd-front { z-index: 100; }
+        .ttd-label { font-size: 12pt; margin-bottom: 5px; }
+        .ttd-img { min-height: 50px; text-align: center; }
+        .ttd-signature { max-height: 60px; max-width: 120px; }
+        .ttd-name { font-size: 11pt; margin-top: 3px; }
+        .ttd-canvas-placeholder { display: none; }
+        .ttd-actions { display: none; }
+
+        /* TTD wrap for old format */
+        .ttd-wrap { margin-top: 40px; text-align: center; }
+        .ttd-item { display: inline-block; min-width: 130px; text-align: center; margin: 0 20px; vertical-align: top; }
+
+        /* QR Code */
+        .qr-item-inline { display: inline-block; text-align: center; vertical-align: top; }
+        .qr-item-floating { position: absolute; text-align: center; }
+        .qr-behind { z-index: -1; }
+        .qr-front { z-index: 100; }
+        .qr-preview { text-align: center; }
+        .qr-img { max-width: 100%; height: auto; }
+        .qr-input { display: none; }
+        .qr-canvas-placeholder { display: none; }
+
+        /* Dynamic Tables */
+        .dyntable-rendered { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+        .dyntable-rendered th, .dyntable-rendered td { padding: 4px 8px; vertical-align: top; }
+        .dyntable-rendered th { font-weight: bold; }
+        .dyntable-rendered thead { display: table-header-group; }
+        .dyntable-rendered tr { page-break-inside: avoid; }
+        .dyntable-empty { color: #999; font-style: italic; text-align: center; padding: 10px; }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="content"><p>Isi dokumen uji.</p></div></div></body></html>

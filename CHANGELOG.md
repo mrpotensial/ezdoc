@@ -8,6 +8,45 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ### v1.0-prep track — "Perakitan PDF keluar dari view"
 
+**Added — golden master kerangka PDF, ikut ter-commit (2026-08-12)**
+
+Pembuktian pemindahan kemarin memakai tangkapan sepuluh dokumen sungguhan dari
+server. Hasilnya meyakinkan, tapi **sekali pakai**: berkasnya 2,4 MB berisi isi
+dokumen pasien, jadi ia tidak bisa ikut ter-commit — dan tidak ada yang menjaga
+bulan depan.
+
+`PdfComposeSnapshotTest` menggantinya dengan yang permanen. Datanya sintetis
+("Pasien Uji", tanggal tetap, gambar tanda tangan satu piksel), jadi boleh hidup
+di repositori. Yang dijaga bukan datanya melainkan **bentuknya**: CSS, `@page`,
+urutan blok, cara nilai disisipkan.
+
+Menyembunyikan data sensitif sebelum menyimpan snapshot adalah praktik baku —
+pustaka Verify menyebutnya *scrubber*. Di sini caranya lebih sederhana: data
+sensitifnya tidak pernah dipakai sejak awal.
+
+Empat snapshot: kerangka minimal, blok tanda tangan format lama (bergambar,
+tanpa gambar, tanpa nama), ukuran kertas dan margin lain, serta jalur
+terjemahan. Ditambah enam pemeriksaan sifat yang berdiri sendiri — judul dilolosi
+HTML, isi tidak dilolosi, angka kertas benar-benar sampai ke `@page` — supaya
+snapshot yang diperbarui sembarangan tetap tertahan.
+
+Empat angka margin sengaja dibuat berbeda semua (21/22/23/24), supaya tertukarnya
+`padTop` dan `padBottom` langsung terlihat alih-alih lolos diam-diam.
+
+**Fixed — snapshot yang bergantung pada urutan tes (2026-08-12)**
+
+Versi pertamanya lulus kalau dijalankan sendirian dan **gagal di suite penuh**.
+Sebabnya tes lain memasang penerjemah global, dan label bawaan `Signature`
+berubah jadi `Tanda Tangan`.
+
+Snapshot yang hasilnya bergantung pada tes mana yang jalan lebih dulu tidak
+menjaga apa pun — ia cuma bergiliran salah. Penerjemah global sekarang
+dikendalikan di `setUp()` dan dikembalikan di `tearDown()`.
+
+Dan karena perilaku terjemahannya sendiri benar, ia dapat snapshot sendiri.
+Kalau tidak, satu-satunya cara ia terlihat adalah dengan mencemari tes lain —
+persis yang baru saja terjadi.
+
 **Changed — `lib/pdf_compose.php` + `lib/view_helpers.php` (2026-08-12)**
 
 Lihat `docs/260811-beku-pdf-tiap-tanda-tangan.md` §4 Tahap 1.
