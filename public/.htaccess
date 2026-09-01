@@ -1,0 +1,17 @@
+# Membatalkan penolakan di ezdoc/.htaccess untuk folder ini saja.
+#
+# public/ memang dijangkau langsung oleh peramban:
+#   public/ — pintu masuk halaman ezdoc
+#   assets/ — ezdoc.css dan ezdoc.js yang dimuat setiap halaman
+#
+# Yang mengizinkan hanyalah baris di bawah. Berkas PHP di dalam public/ tetap
+# menjalankan pemeriksaan loginnya sendiri lewat koneksi.php.
+
+<IfModule mod_authz_core.c>
+    Require all granted
+</IfModule>
+
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Allow from all
+</IfModule>

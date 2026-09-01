@@ -1,0 +1,35 @@
+# Hanya public/ dan assets/ yang boleh dijangkau lewat web.
+#
+# Selebihnya — lib/, views/, actions/, src/, migrations/, tests/, dan berkas
+# konfigurasi — memang dimuat aplikasi lewat `require` dengan path di disk.
+# `require` tidak melewati Apache, jadi menutupnya di sini tidak mematikan apa
+# pun. Yang tertutup hanyalah kemampuan orang luar mengambilnya lewat URL.
+#
+# Yang diperbaiki, terukur (diperiksa 2026-09-01 lewat HTTP):
+#
+#   composer.lock  200, 68 KB  -> daftar persis versi tiap dependensi, bahan
+#                                 empuk untuk mencocokkan CVE yang sudah dikenal
+#   composer.json  200,  3 KB
+#   .gitignore     200,  5 KB
+#   phpunit.xml    200
+#   lib/*.php      200         -> berkas pustaka DIEKSEKUSI saat diambil
+#                                 langsung. Hari ini tidak berbahaya (isinya
+#                                 cuma deklarasi), tapi itu sifat yang bisa
+#                                 berubah tanpa ada yang menyadarinya
+#
+# Pola "hanya pintu depan yang terjangkau" ini bawaan setiap framework PHP
+# modern: Laravel, Symfony, dan Slim semuanya menaruh document root di public/.
+# Ezdoc tidak bisa menuntut itu — ia dipasang ke dalam aplikasi yang sudah ada —
+# jadi penjagaannya dilakukan di sini.
+#
+# Ditulis untuk Apache 2.2 maupun 2.4. Yang salah versi gagal DIAM-DIAM, dan
+# kegagalan diam-diam pada berkas seperti ini tidak boleh terjadi.
+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
