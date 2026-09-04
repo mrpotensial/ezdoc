@@ -72,6 +72,7 @@ return [
         'signature_removal_needs_new_version' => 'Signature "{ttd}" is already recorded and cannot be removed by saving. Create a new version instead.',
         'save_failed' => 'Failed: {error}',
         'document_saved' => 'Document saved successfully',
+        'document_unchanged' => 'No changes — nothing was saved',
         'document_locked' => 'Document locked',
         'document_unlocked' => 'Document unlocked',
         'update_lock_failed' => 'Failed to update lock: {error}',

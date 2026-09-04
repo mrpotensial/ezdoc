@@ -27,6 +27,45 @@ punya nama, jadi markup tidak bisa menanyakannya.
 - tombol versi memakai `wide` saat sendirian di barisnya; grid dua kolom dengan
   satu tombol separuh terbaca seperti ada yang gagal dimuat
 
+**Changed — penyimpanan yang tidak mengubah apa pun tidak ditulis (2026-09-04)**
+
+Kelanjutan dari yang di atas, menutup akarnya. Menyembunyikan ajakannya menolong
+sesudah ada tanda tangan; sebelum itu, menekan Simpan berulang kali masih
+menulis baris audit yang sama.
+
+Pelacakan perubahan biasa, bukan optimasi — Rails melewati UPDATE untuk record
+yang tidak `changed?`, UnitOfWork Doctrine menghitung changeset dan melewati
+entity yang tidak berubah, dan pustaka audit (Laravel Auditable, papertrail)
+tidak mencatat changeset kosong.
+
+Tiga tulisan dilewati saat tidak ada yang berubah:
+
+1. `UPDATE ezdoc_documents`
+2. baris audit `doc.updated` — baris audit menjanjikan sesuatu terjadi
+3. `doc_verify_compute_and_store_hash()`, yang menulis `content_hash_at` tiap
+   kali dipanggil; melewatkannya perlu, kalau tidak derainya cuma pindah dari
+   tabel audit ke baris dokumennya
+
+Yang dibandingkan tepat kolom yang ditulis UPDATE. `updated_by` sengaja tidak
+ikut: kalau tidak ada isi yang berubah, mencatat siapa yang menekan tombol justru
+bentuk lain dari derau yang sama.
+
+JSON dibandingkan sebagai **data**, bukan teks. Urutan kunci bisa berbeda antara
+dua penyandian yang isinya sama — perbandingan teks akan menyebutnya perubahan,
+dan melewatkan justru kasus yang paling sering terjadi.
+
+- aturannya di `ezdoc_save_is_unchanged()`, fungsi murni di kepala
+  `save_document.php`, dengan gerbang `EZDOC_SAVE_SELFTEST` supaya bisa diuji
+  tanpa menjalankan actionnya
+- jawabannya membawa `unchanged: true` dan pesan `response.document_unchanged`;
+  melaporkan sukses yang menyiratkan sesuatu tersimpan tidak jujur
+- `tests/Document/SaveUnchangedTest.php` — 14 tes. Tiap kolom yang ditulis UPDATE
+  punya kasusnya sendiri, karena arah yang berbahaya bukan derau yang lolos, tapi
+  perubahan yang tidak terdeteksi: itu berarti simpanan hilang diam-diam.
+  Termasuk kasus tanda tangan baru dan tanda tangan yang ditukar.
+- ikut dijaga: keputusannya benar-benar tersambung ke ketiga tulisannya. Fungsi
+  murni yang benar tapi menganggur adalah kegagalan yang paling mudah lolos.
+
 **Changed — tombol utama berganti begitu ada satu tanda tangan (2026-09-04)**
 
 Dilaporkan dari pemakaian: sesudah menandatangani, orang menekan Simpan berulang

@@ -110,6 +110,7 @@ return [
         'signature_removal_needs_new_version' => 'Tanda tangan "{ttd}" sudah tercatat dan tidak bisa dihapus lewat penyimpanan. Buat versi baru.',
         'save_failed'                 => 'Gagal: {error}',
         'document_saved'              => 'Dokumen berhasil disimpan',
+        'document_unchanged'          => 'Tidak ada perubahan — tidak ada yang disimpan',
 
         // ── document/toggle_lock.php ──
         'document_locked'        => 'Dokumen dilock',

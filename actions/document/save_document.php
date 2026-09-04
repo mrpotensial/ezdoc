@@ -31,6 +31,68 @@ use Ezdoc\Context;
 
 global $author_id;
 
+/**
+ * Apakah penyimpanan ini benar-benar mengubah sesuatu.
+ *
+ * Dilaporkan dari pemakaian: orang menekan Simpan berulang kali, dan tiap
+ * tekanan menulis baris audit untuk perubahan yang tidak ada. Riwayat yang penuh
+ * simpanan kosong membuat yang benar-benar terjadi sulit dilihat.
+ *
+ * Ini pelacakan perubahan biasa, bukan optimasi: Rails melewati UPDATE untuk
+ * record yang tidak `changed?`, UnitOfWork Doctrine menghitung changeset dan
+ * melewati entity yang tidak berubah, dan pustaka audit (Laravel Auditable,
+ * papertrail) tidak mencatat changeset kosong.
+ *
+ * Yang dibandingkan tepat kolom yang ditulis UPDATE. `updated_by` sengaja TIDAK
+ * ikut: kalau tidak ada isi yang berubah, mencatat siapa yang menekan tombol
+ * justru bentuk lain dari derau yang sama.
+ *
+ * @param array<string,mixed> $sebelum baris yang tersimpan
+ * @param array<string,mixed> $sesudah nilai yang hendak ditulis
+ */
+function ezdoc_save_is_unchanged(array $sebelum, array $sesudah): bool
+{
+    $samaTeks = static fn ($kiri, $kanan): bool => (string) ($kiri ?? '') === (string) ($kanan ?? '');
+
+    foreach (['title', 'norm', 'nopen', 'label', 'floating_elements'] as $kolom) {
+        if (!$samaTeks($sebelum[$kolom] ?? null, $sesudah[$kolom] ?? null)) {
+            return false;
+        }
+    }
+
+    // JSON dibandingkan sebagai data, bukan sebagai teks. Urutan kunci bisa
+    // berbeda antara dua penyandian yang isinya sama, dan perbandingan teks akan
+    // menyebutnya perubahan — melewatkan justru kasus yang paling sering terjadi.
+    //
+    // `==` pada array PHP membandingkan pasangan kunci-nilai tanpa peduli
+    // urutannya, jadi itu memang perbandingan yang dimaksud di sini.
+    foreach (['field_values', 'signature_values'] as $kolom) {
+        $kiri  = json_decode((string) ($sebelum[$kolom] ?? ''), true);
+        $kanan = json_decode((string) ($sesudah[$kolom] ?? ''), true);
+
+        if (is_array($kiri) && is_array($kanan)) {
+            if ($kiri != $kanan) {
+                return false;
+            }
+            continue;
+        }
+
+        // Salah satunya bukan JSON yang sah. Membandingkan teksnya lebih jujur
+        // daripada menganggap keduanya sama karena sama-sama gagal diurai.
+        if (!$samaTeks($sebelum[$kolom] ?? null, $sesudah[$kolom] ?? null)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// Berkas ini sebuah action: memuatnya menjalankan penyimpanan. Gerbang ini
+// membuat fungsi di atas bisa diuji tanpa ikut menjalankan sisanya.
+if (defined('EZDOC_SAVE_SELFTEST')) {
+    return;
+}
+
 $template_id = (int)($_POST['template_id'] ?? 0);
 // Menerima _subject_id/_context_id maupun nama lamanya — lihat ezdoc_slot_identity().
 [$norm, $nopen] = ezdoc_slot_identity($_POST, '_');
@@ -390,9 +452,15 @@ if ($isEdit && $existingLocked) {
 // Diambil di sini: $doc_id sudah final, tulisan belum terjadi.
 $ttdBeforeSave = [];
 $fieldsBeforeSave = [];
+// Kolomnya diperlebar, query-nya tidak bertambah. Selain memutuskan tanda tangan
+// mana yang baru, baris ini juga yang dipakai untuk melihat apakah penyimpanan
+// ini benar-benar mengubah sesuatu — lihat $isiSama di bawah.
+$beforeRow = null;
 if ($doc_id > 0) {
     $beforeRow = $db->fetchOne(
-        'SELECT `field_values`, `signature_values` FROM `ezdoc_documents` WHERE `id` = ? LIMIT 1',
+        'SELECT `field_values`, `signature_values`, `title`, `norm`, `nopen`, `label`,
+                `floating_elements`, `content_hash`, `content_hash_at`
+         FROM `ezdoc_documents` WHERE `id` = ? LIMIT 1',
         [$doc_id]
     );
     if ($beforeRow) {
@@ -564,9 +632,24 @@ if ($docFloatingRaw !== '' && $docFloatingRaw !== 'null' && $docFloatingRaw !== 
     }
 }
 
+// ─── Penyimpanan yang tidak mengubah apa pun tidak ditulis ───
+// Aturannya di ezdoc_save_is_unchanged(), di kepala berkas ini.
+$isiSama = $isEdit && is_array($beforeRow) && ezdoc_save_is_unchanged($beforeRow, [
+    'title'             => $computedTitle,
+    'norm'              => $norm,
+    'nopen'             => $nopen,
+    'label'             => $label,
+    'floating_elements' => $docFloatingJson,
+    'field_values'      => $jsonFields,
+    'signature_values'  => $jsonTtd,
+]);
+
 // ─── Save (update / insert) via Connection ───
 try {
-    if ($isEdit) {
+    if ($isEdit && $isiSama) {
+        // Sengaja tidak menulis apa pun. Menandatangani selalu mengubah
+        // signature_values, jadi jalur ini tidak pernah menelan tanda tangan.
+    } elseif ($isEdit) {
         // UPDATE — uuid, template_uuid, template_version immutable per doc
         $db->execute(
             // subject_type sengaja TIDAK ikut diperbarui. Ia bagian dari identitas
@@ -871,7 +954,15 @@ if ($rawDb instanceof \mysqli) {
         if ($verifySlug) $verifyUrl = doc_verify_build_url($verifySlug);
     }
 
-    if (function_exists('doc_verify_compute_and_store_hash')) {
+    // Hook-nya menulis content_hash + content_hash_at tiap kali dipanggil. Kalau
+    // tidak ada isi yang berubah, hash-nya juga tidak — menghitung ulang cuma
+    // memindahkan derainya dari tabel audit ke baris dokumennya.
+    if ($isiSama) {
+        $hashInfo = [
+            'hash'    => $beforeRow['content_hash'] ?? null,
+            'hash_at' => $beforeRow['content_hash_at'] ?? null,
+        ];
+    } elseif (function_exists('doc_verify_compute_and_store_hash')) {
         $hashInfo = doc_verify_compute_and_store_hash($rawDb, (int) $doc_id);
     }
 } elseif (function_exists('doc_verify_ensure_slug')) {
@@ -879,28 +970,36 @@ if ($rawDb instanceof \mysqli) {
         . (is_object($rawDb) ? get_class($rawDb) : gettype($rawDb)));
 }
 
-ezdoc_audit_log($isEdit ? 'doc.updated' : 'doc.created', [
-    'target_type' => 'document',
-    'target_id'   => (string) $doc_id,
-    'template_id' => (int) $template_id,
-    'doc_id'      => (int) $doc_id,
-    'metadata'    => [
-        'norm'             => $norm,
-        'nopen'            => $nopen,
-        'label'            => $label,
-        'ttd_count'        => count($ttdData),
-        'data_hash'        => $hashInfo['hash'] ?? null,
-        'template_uuid'    => $templateUuid,
-        'template_version' => $templateVersion,
-    ],
-    'message' => $isEdit
-        ? "Update dokumen (template {$template_id}, norm {$norm}, label {$label})"
-        : "Buat dokumen baru (template {$template_id}, norm {$norm}, label {$label})",
-]);
+// Tidak ada perubahan berarti tidak ada yang perlu dicatat. Baris audit
+// menjanjikan sesuatu terjadi pada dokumennya.
+if (!$isiSama) {
+    ezdoc_audit_log($isEdit ? 'doc.updated' : 'doc.created', [
+        'target_type' => 'document',
+        'target_id'   => (string) $doc_id,
+        'template_id' => (int) $template_id,
+        'doc_id'      => (int) $doc_id,
+        'metadata'    => [
+            'norm'             => $norm,
+            'nopen'            => $nopen,
+            'label'            => $label,
+            'ttd_count'        => count($ttdData),
+            'data_hash'        => $hashInfo['hash'] ?? null,
+            'template_uuid'    => $templateUuid,
+            'template_version' => $templateVersion,
+        ],
+        'message' => $isEdit
+            ? "Update dokumen (template {$template_id}, norm {$norm}, label {$label})"
+            : "Buat dokumen baru (template {$template_id}, norm {$norm}, label {$label})",
+        ]);
+}
 
 ezdoc_respond_success([
     'doc_id'       => $doc_id,
     'isEdit'       => $isEdit,
+    // Penyimpanan ini tidak menulis apa pun. Pemanggil boleh mengabaikannya,
+    // tapi mengatakannya lebih jujur daripada melaporkan sukses yang menyiratkan
+    // sesuatu tersimpan.
+    'unchanged'    => $isiSama,
     'label'        => $label,
     'verify_url'   => $verifyUrl,
     'data_hash'    => $hashInfo['hash'] ?? null,
@@ -917,4 +1016,6 @@ ezdoc_respond_success([
     // tidak perlu diganggu.
     'signatures_recorded' => $recordedSignatureCount,
     'debug'        => $__ezdocSaveDebug,
-], t('response.document_saved', [], 'Document saved successfully'));
+], $isiSama
+    ? t('response.document_unchanged', [], 'No changes — nothing was saved')
+    : t('response.document_saved', [], 'Document saved successfully'));
