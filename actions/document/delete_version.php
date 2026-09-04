@@ -36,20 +36,45 @@ $doc = $db->fetchOne(
 );
 if (!$doc) ezdoc_respond_error(t('response.document_not_found', [], 'Document not found'));
 
-// RBAC delete check — beda dgn create/edit/lock: kalau kosong, default superadmin only.
+// Aturan izinnya dipakai empat tempat — menyembunyikan, mengembalikan,
+// mendaftar yang tersembunyi, dan membukanya. Karena itu ia tinggal di
+// lib/authorization.php, bukan disalin ke sini.
 $accessConfig = ezdoc_parse_access_config($doc['access_config'] ?? null);
-$deleteCfg = $accessConfig['delete'] ?? null;
-$hasExplicitDeleteConfig = is_array($deleteCfg) && (
-    !empty($deleteCfg['roles']) || !empty($deleteCfg['users'])
-);
-if (!$hasExplicitDeleteConfig) {
-    ezdoc_require_role('superadmin', 'Hapus versi hanya bisa dilakukan superadmin. Set access_config.delete di template untuk allow role lain.');
-} else {
-    ezdoc_require_on_template($accessConfig, 'delete', 'Tidak berhak hapus dokumen dari template ini');
-}
+ezdoc_require_hide_versions($accessConfig);
 
 if ((int) $doc['is_locked'] === 1) {
-    ezdoc_respond_error(t('response.version_locked_cannot_delete', [], 'Locked version cannot be deleted. Unlock it first.'));
+    ezdoc_respond_error(t('response.version_locked_cannot_hide', [], 'Locked version cannot be hidden. Unlock it first.'));
+}
+
+// ─── Versi bertanda tangan menuntut alasan ───
+//
+// Tanda tangan adalah pernyataan seseorang. Menyembunyikannya dari daftar tidak
+// menghapusnya, tapi ia jadi tidak terlihat — dan yang menandatangani tidak
+// pernah diberi tahu.
+//
+// Sengaja MENUNTUT ALASAN, bukan menolak. Dokumen uji dan salah-isi memang perlu
+// disingkirkan, dan aturan tanpa jalan keluar yang sah akan dilangkahi lewat SQL
+// langsung — yang tidak tercatat sama sekali.
+//
+// Berlaku untuk semua peran, superadmin sekalipun. Penjaga yang bisa dilewati
+// akan dilewati, dan yang tersisa hanya rasa aman.
+$jumlahTtd = (int) $db->fetchScalar(
+    'SELECT COUNT(*) FROM ezdoc_signatures WHERE document_id = ? AND deleted_at IS NULL',
+    [$did]
+);
+
+$alasan = trim((string) ($_POST['reason'] ?? ''));
+
+if ($jumlahTtd > 0 && mb_strlen($alasan) < EZDOC_HIDE_REASON_MIN) {
+    ezdoc_respond_error(
+        t(
+            'response.hide_signed_needs_reason',
+            ['count' => $jumlahTtd, 'min' => EZDOC_HIDE_REASON_MIN],
+            'This version carries {count} signature(s). Give a reason of at least {min} characters before hiding it.'
+        ),
+        422,
+        ['needs_reason' => true, 'signature_count' => $jumlahTtd, 'min_length' => EZDOC_HIDE_REASON_MIN]
+    );
 }
 
 // Cek apakah ini versi terakhir di slot (search by template_uuid untuk lintas versi template)
@@ -107,8 +132,13 @@ ezdoc_audit_log('doc.deleted', [
         'norm'  => $doc['norm'],
         'nopen' => $doc['nopen'],
         'label' => $doc['label'],
+        // Alasannya masuk ke SINI, bukan cuma ditampilkan di layar. Yang diminta
+        // lalu dibuang lebih buruk daripada tidak diminta — ia memberi kesan ada
+        // catatan padahal tidak.
+        'signature_count' => $jumlahTtd,
+        'reason'          => $alasan !== '' ? $alasan : null,
     ],
     'message' => "Soft delete versi dokumen (norm {$doc['norm']}, label {$doc['label']})",
 ]);
 
-ezdoc_respond_success([], t('response.version_deleted', [], 'Version deleted successfully (soft delete)'));
+ezdoc_respond_success([], t('response.version_hidden', [], 'Version hidden from the list. Nothing was removed — it can be restored.'));

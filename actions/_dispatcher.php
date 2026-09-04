@@ -106,6 +106,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['_doc_action'])) {
         'delete_version'  => 'delete_version.php',
         'delete_slot'     => 'delete_slot.php',
         'restore_slot'    => 'restore_slot.php',
+        // Per VERSI, bukan per slot. restore_slot menghidupkan semua yang pernah
+        // disembunyikan di slot itu — termasuk yang memang sengaja disingkirkan.
+        'restore_version' => 'restore_version.php',
         'send_ttd_otp'    => 'send_ttd_otp.php',
         'verify_ttd_otp'  => 'verify_ttd_otp.php',
         // Jalur yang dimulai penanda tangan. Pemenuhannya sengaja tidak punya

@@ -547,3 +547,66 @@ function ezdoc_check_access(?string $accessConfigJson, string $action): \Ezdoc\A
     return ezdoc_access_control()->can(ezdoc_current_user_id(), $action, $config);
 }
 
+
+/**
+ * Boleh menyembunyikan versi dokumen dari daftar?
+ *
+ * Aturannya gabungan, dan itu sebabnya ia berdiri sendiri di sini: **superadmin
+ * bawaannya, kecuali templatenya mengatur sendiri lewat `access_config.delete`.**
+ *
+ * Sebelumnya aturan ini hidup di dalam `delete_version.php`. Selama hanya satu
+ * berkas yang memakainya itu tidak masalah — dan berhenti tidak masalah begitu
+ * ada empat: menyembunyikan, mengembalikan, mendaftar yang tersembunyi, dan
+ * membuka yang tersembunyi.
+ *
+ * Empat salinan aturan izin akan menyimpang, dan menyimpangnya tidak berisik:
+ * yang muncul cuma "kenapa saya bisa menyembunyikan tapi tidak bisa
+ * mengembalikan". Satu tempat, empat pemanggil.
+ *
+ * Kuncinya tetap `delete` supaya `access_config` yang sudah tersimpan di
+ * template mana pun tidak berubah artinya. Yang berganti nama hanya yang
+ * dibaca orang.
+ */
+function ezdoc_can_hide_versions(?array $accessConfig): bool
+{
+    $cfg = $accessConfig['delete'] ?? null;
+    $diaturTemplate = is_array($cfg) && (!empty($cfg['roles']) || !empty($cfg['users']));
+
+    return $diaturTemplate
+        ? ezdoc_can_on_template($accessConfig, 'delete')
+        : ezdoc_has_role('superadmin');
+}
+
+/**
+ * Sama dengan {@see ezdoc_can_hide_versions()}, tapi menolak permintaannya.
+ *
+ * Pesannya menyebutkan jalan keluarnya. Penolakan yang cuma bilang "tidak
+ * berhak" mengirim orang bertanya ke tempat yang salah — biasanya ke admin
+ * sistem, padahal yang menentukan ada di templatenya.
+ */
+function ezdoc_require_hide_versions(?array $accessConfig, string $message = ''): void
+{
+    if (ezdoc_can_hide_versions($accessConfig)) {
+        return;
+    }
+
+    $cfg = $accessConfig['delete'] ?? null;
+    $diaturTemplate = is_array($cfg) && (!empty($cfg['roles']) || !empty($cfg['users']));
+
+    if ($diaturTemplate) {
+        ezdoc_require_on_template(
+            $accessConfig,
+            'delete',
+            $message !== '' ? $message : 'Tidak berhak menyembunyikan versi dari template ini'
+        );
+
+        return;
+    }
+
+    ezdoc_require_role(
+        'superadmin',
+        $message !== ''
+            ? $message
+            : 'Menyembunyikan versi hanya bisa dilakukan superadmin. Set access_config.delete di template untuk mengizinkan peran lain.'
+    );
+}

@@ -7,6 +7,16 @@
 // Prevent double-load
 if (defined('EZDOC_CONFIG_LOADED')) return;
 define('EZDOC_CONFIG_LOADED', true);
+// Panjang minimum alasan saat menyembunyikan versi yang sudah ditandatangani.
+//
+// Angkanya sengaja kecil: penjaga ini menangkap "ok" dan ".", bukan menilai mutu
+// tulisan. Batas yang terlalu tinggi cuma melahirkan "aaaaaaaaaa", dan catatan
+// yang penuh itu lebih buruk daripada kosong karena ia terlihat seperti catatan.
+//
+// Sama dengan FreezeService::MIN_REASON_LENGTH — dua tindakan yang sama beratnya
+// sebaiknya menuntut hal yang sama.
+if (!defined('EZDOC_HIDE_REASON_MIN')) define('EZDOC_HIDE_REASON_MIN', 10);
+
 
 // ─── Version ───
 if (!defined('EZDOC_VERSION')) define('EZDOC_VERSION', '1.0.0-phaseA');

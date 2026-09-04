@@ -182,6 +182,17 @@ $urlDesignerCreate= (string) $config->get('urls.designer_create',               
 $urlPicker        = (string) $config->get('urls.picker',                           '');
 $urlTrashList     = (string) $config->get('urls.trash_list',                       '');
 $urlSelf          = (string) $config->get('urls.self',                             '?');
+// Nama rute yang BENAR-BENAR memiliki halaman ini.
+//
+// Beberapa rute cuma meneruskan ke sini: `view` menyelesaikan uuid lalu
+// memanggil handleGenerate(), `download` menyalakan download=1, dan
+// `generate_list` MEMAKSA template_id=0. Ketiganya pintu, bukan tujuan.
+//
+// Tanpa ini, navigasi mandiri halaman (ganti versi, simpan, kembalikan)
+// membawa nama rute yang mengantar — lalu mengirim param milik generate
+// tanpa yang dituntut rute itu. `view` tanpa uuid menjawab "Document Not
+// Found"; `generate_list` melempar balik ke pemilih template.
+$selfPage         = (string) $config->get('urls.self_page',                        'generate');
 
 // Genericized copy — consumer overrides for branding
 $pickerPageTitle  = (string) $config->get('generate.picker_page_title',            'Select Template');
@@ -200,6 +211,9 @@ $ezdocUrls = [
     'docAction'   => $urlDocAction,
     'trashList'   => $urlTrashList,
     'picker'      => $urlPicker,
+    // Dipakai _preservedParams(): halaman ini menavigasi ke NAMANYA SENDIRI,
+    // bukan ke nama rute yang kebetulan mengantarnya ke sini.
+    'selfPage'    => $selfPage,
 ];
 
 // Superadmin capability — driven by RoleProvider + config-driven role slug
@@ -400,8 +414,22 @@ $dbTtd = [];
 $GLOBALS['dbFields'] = $dbFields;
 $GLOBALS['dbTtd']    = $dbTtd;
 $isEditMode = false;
-// Allow superadmin to preview soft-deleted document via ?preview_deleted=1 (read-only mode)
-$preview_deleted = !empty($_GET['preview_deleted']) && $isSuperadmin;
+// Membuka versi yang disembunyikan lewat ?preview_deleted=1 — SELALU baca-saja.
+//
+// Haknya sama persis dengan hak menyembunyikan, bukan superadmin saja seperti
+// dulu. Yang bisa menyembunyikan harus bisa melihat apa yang ia sembunyikan;
+// kalau tidak, tiap salah ketuk jadi tiket ke superadmin.
+//
+// Aturannya diambil dari lib/authorization.php — satu tempat, empat pemanggil.
+//
+// Dinamai dan dihitung sekali, karena markup toolbar juga memakainya. Sebelumnya
+// jawabannya cuma hidup di dalam ekspresi ini, jadi tombol Hide/Restore Version
+// masih ikut $isSuperadmin — hak yang sudah dinaikkan tidak pernah sampai ke
+// tombolnya, dan servernya mengizinkan sesuatu yang tidak ada tombolnya.
+$bolehSembunyikanVersi = ezdoc_can_hide_versions(
+    ezdoc_parse_access_config($template['access_config'] ?? null)
+);
+$preview_deleted = !empty($_GET['preview_deleted']) && $bolehSembunyikanVersi;
 $param_is_deleted = 0;
 $param_deleted_at = null;
 $param_deleted_by = null;
@@ -560,6 +588,26 @@ if (!empty($docMeta['created_by'])) {
     if (isset($__creatorNames[$__creatorId])) {
         $docMeta['created_by_name'] = $__creatorNames[$__creatorId];
     }
+}
+
+// Nama yang menyembunyikan versi ini. Lewat pintu yang sama dengan panel
+// riwayat: dua tempat yang menyebut orang yang sama tidak boleh menyebutnya
+// dengan cara yang berbeda.
+//
+// Aturan tampilnya menyalin actorLabel() di generate_scripts.php — tanpa nama
+// tampil `#18`, yaitu id yang jelas-jelas id dan bukan angka telanjang yang
+// menyamar jadi nama; dengan nama tampil namanya saja; dan id-nya baru ikut
+// untuk yang memang boleh melihat detail audit.
+$param_deleted_by_label = '';
+if ((int) ($param_deleted_by ?? 0) > 0) {
+    $__hidId     = (int) $param_deleted_by;
+    $__hidNames  = function_exists('ezdoc_actor_names') ? ezdoc_actor_names([$__hidId]) : [];
+    $__hidName   = $__hidNames[$__hidId] ?? '';
+    $__hidDetail = function_exists('ezdoc_can_view_audit_detail') && ezdoc_can_view_audit_detail();
+
+    $param_deleted_by_label = $__hidName === ''
+        ? '#' . $__hidId
+        : ($__hidDetail ? $__hidName . ' (#' . $__hidId . ')' : $__hidName);
 }
 
 // Get field value (escaped for HTML output)
@@ -1134,9 +1182,18 @@ $docSigningState = $__slotCount === 0
     : ($__signedCount === 0 ? 'draft' : ($__signedCount >= $__slotCount ? 'complete' : 'in_progress'));
 
 // Selesai berarti tidak ada lagi yang bisa diubah lewat tombol Update: setiap
-// field sudah dicakup tanda tangan, dan setiap slot sudah terisi. Tombolnya
-// dimatikan DI SINI saja — jangan lebih awal, karena penanda tangan kedua
-// menyimpan tanda tangannya lewat tombol yang sama.
+// field sudah dicakup tanda tangan, dan setiap slot sudah terisi.
+//
+// Tombolnya berganti DI SINI saja — jangan lebih awal. Alasannya bukan lagi
+// soal cara menyimpan tanda tangan: saveSign() memanggil submitForm() sendiri,
+// jadi penanda tangan berikutnya tidak menekan Update.
+//
+// Alasan sebenarnya ada di save_document.php: setelah satu tanda tangan, yang
+// beku hanya field yang DICAKUP tanda tangan itu — bukan seluruh isi dokumen.
+// Sisanya sengaja tetap bisa disimpan, karena kalau tidak, dokumen dua penanda
+// tangan mustahil: orang kedua mengisi nama di bawah tanda tangannya sendiri.
+// Menyembunyikan Update saat baru sebagian ditandatangani akan menutup satu-
+// satunya cara menyimpan field yang memang masih boleh diisi.
 $docSigningComplete = ($docSigningState === 'complete');
 
 // Render HTML: replace placeholders with inputs, logos with images, TTD with signature areas
@@ -2391,7 +2448,18 @@ function renderFieldForPdf($name, $type, $val, $label) {
     <?php endforeach;
     endif; ?>
 </head>
-<body class="<?= $param_is_locked ? 'edit-off' : 'edit-on' ?>">
+<?php
+// Versi tersembunyi dibuka dalam keadaan baca-saja, memakai mekanisme yang SAMA
+// dengan dokumen terkunci.
+//
+// Dulu komentarnya mengaku "(read-only mode)" tapi kodenya tidak menegakkannya:
+// halamannya terbuka dan tampak bisa disunting. Penyimpanannya memang menahan —
+// save_document.php menyaring `deleted_at IS NULL` — tapi yang dilihat pengguna
+// adalah halaman yang mengundang disunting, dan suntingannya lalu menghilang
+// tanpa penjelasan. Itu jenis kebingungan yang mahal dicari sebabnya.
+$__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
+?>
+<body class="<?= $__bacaSaja ? 'edit-off' : 'edit-on' ?>">
     <?php if ($saveMessage): ?>
     <div class="toast <?= $saveSuccess ? 'success' : 'error' ?>"><?= h($saveMessage) ?></div>
     <?php endif; ?>
@@ -2535,8 +2603,8 @@ function renderFieldForPdf($name, $type, $val, $label) {
                 </div>
                 <?php if ($param_is_deleted): ?>
                 <div class="bg-red-900 text-white p-1.5 rounded-md mb-1.5 text-[10px] text-center border border-dashed border-red-300">
-                    <i class="bi bi-trash-fill"></i> <strong><?= t('toolbar.deleted', [], 'DELETED') ?></strong> · <?= h(date('d/m/Y', strtotime($param_deleted_at))) ?>
-                    <div class="text-[9px] text-[#fecaca]"><?= t('toolbar.deleted_by', ['name' => h($param_deleted_by ?: '-')], 'By: {name}') ?></div>
+                    <i class="bi bi-trash-fill"></i> <strong><?= t('toolbar.hidden', [], 'HIDDEN FROM LIST') ?></strong> · <?= h(date('d/m/Y', strtotime($param_deleted_at))) ?>
+                    <div class="text-[9px] text-[#fecaca]"><?= t('toolbar.hidden_by', ['name' => h($param_deleted_by_label ?: '-')], 'By: {name} — can be restored') ?></div>
                 </div>
                 <?php endif; ?>
                 <div class="border-t border-gray-700 mb-2"></div>
@@ -2578,6 +2646,27 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     <select id="versionSelect" onchange="switchVersion(this.value)">
                         <option value="<?= $param_version ?>">v<?= $param_version ?> <?= h(t('toolbar.version_current_suffix', [], '(current)')) ?></option>
                     </select>
+                        <?php
+                        // Penyaring versi tersembunyi. Sengaja disembunyikan sejak awal
+                        // dan baru ditampilkan JS setelah server menjawab bahwa
+                        // penggunanya memang boleh mengurusnya — lihat refreshVersionList().
+                        //
+                        // Digambar di sini, bukan dibuat JS, supaya ia tetap ada di
+                        // markup dan bisa diperiksa tes cakupan fungsi.
+                        //
+                        // id-nya SENGAJA beda dari nama fungsinya. Tombol ini ada di
+                        // dalam <form id="mainForm">, dan `onclick` sebaris dicari
+                        // lewat rantai: elemen -> form induk -> document -> window.
+                        // Form mengekspos kontrolnya berdasarkan id, jadi id yang sama
+                        // dengan nama fungsi membuat nama itu ketemu TOMBOLNYA lebih
+                        // dulu -- lalu tombol dipanggil sebagai fungsi. Gejalanya
+                        // "toggleHiddenVersions is not a function", padahal fungsinya
+                        // ada dan global. Semua tombol lain di berkas ini sudah
+                        // memakai awalan btn* karena alasan yang sama.
+                        ?>
+                        <button type="button" id="btnToggleHidden" onclick="toggleHiddenVersions()" style="display:none"
+                                class="!bg-transparent !text-gray-400 hover:!text-gray-200 !text-[9px] !py-0 !px-1 !m-0 underline"
+                                title="<?= h(t('title.toggle_hidden_versions', [], 'Show or hide versions that were hidden from the list')) ?>"><?= h(t('toolbar.show_hidden_versions', [], 'Show hidden')) ?></button>
                     <?php endif; ?>
                 </div>
 
@@ -2676,7 +2765,11 @@ function renderFieldForPdf($name, $type, $val, $label) {
                             </div>
                         </div>
 
-                        <?php if ($isSuperadmin): ?>
+                        <?php
+                        // Bagiannya terbuka kalau ada SATU saja isinya yang boleh
+                        // dipakai. Tiap tombol tetap dijaga haknya sendiri di dalam:
+                        // membuka bagiannya bukan memberi seluruh isinya.
+                        if ($isSuperadmin || $bolehSembunyikanVersi): ?>
                         <!-- ▸ ADMIN (icon grid) -->
                         <div class="border-t border-gray-700 mt-1 pt-1.5">
                             <button type="button" @click="open = (open === 'admin' ? '' : 'admin')"
@@ -2685,15 +2778,34 @@ function renderFieldForPdf($name, $type, $val, $label) {
                             </button>
                             <div x-show="open === 'admin'" x-collapse>
                                 <div class="icon-grid mt-1.5">
+                                    <?php
+                                    // PDF Raw memperlihatkan keluaran mentah dokumen milik
+                                    // siapa pun — itu tetap urusan superadmin, dan tidak ikut
+                                    // naik bersama hak menyembunyikan versi.
+                                    if ($isSuperadmin): ?>
                                     <button class="!bg-emerald-700 hover:!bg-emerald-600<?= $isEditMode ? '' : ' wide' ?>" type="button" onclick="viewPdfRaw()" title="<?= h(t('title.view_pdf_raw', [], 'View raw PDF output')) ?>"><i class="bi bi-file-earmark-pdf"></i><?= h(t('toolbar.pdf_raw', [], 'PDF Raw')) ?></button>
-                                    <?php if ($isEditMode): ?>
-                                        <button type="button" onclick="deleteThisVersion()" class="!bg-red-700 hover:!bg-red-600" <?= $param_is_locked ? 'disabled title="' . h(t('title.delete_version_locked', [], 'Locked - unlock first')) . '"' : 'title="' . h(t('title.delete_version', [], 'Delete this version')) . '"' ?>><i class="bi bi-trash"></i><?php
+                                    <?php endif; ?>
+                                    <?php
+                                    // Sendirian di barisnya kalau PDF Raw tidak ikut tampil.
+                                    // Grid-nya dua kolom, dan tombol tunggal yang cuma mengisi
+                                    // separuh terbaca seperti ada yang gagal dimuat.
+                                    $__versiSendirian = !$isSuperadmin ? ' wide' : '';
+                                    if ($bolehSembunyikanVersi && $isEditMode && $param_is_deleted): ?>
+                                        <?php
+                                        // Versi yang sedang dilihat memang tersembunyi. Yang
+                                        // masuk akal di sini cuma mengembalikannya —
+                                        // menyembunyikan yang sudah tersembunyi tidak berarti
+                                        // apa-apa, dan tombolnya cuma akan ditolak server.
+                                        ?>
+                                        <button type="button" onclick="restoreThisVersion()" class="!bg-sky-700 hover:!bg-sky-600<?= $__versiSendirian ?>" title="<?= h(t('title.restore_version', [], 'Bring this version back into the list')) ?>"><i class="bi bi-arrow-counterclockwise"></i><?= h(t('toolbar.restore_version', [], 'Restore Version')) ?></button>
+                                    <?php elseif ($bolehSembunyikanVersi && $isEditMode): ?>
+                                        <button type="button" onclick="deleteThisVersion()" class="!bg-red-700 hover:!bg-red-600<?= $__versiSendirian ?>" <?= $param_is_locked ? 'disabled title="' . h(t('title.hide_version_locked', [], 'Locked - unlock first')) . '"' : 'title="' . h(t('title.hide_version', [], 'Hide this version from the list — it stays openable and can be restored')) . '"' ?>><i class="bi bi-trash"></i><?php
                                         // "Hapus Versi", bukan "Hapus". Tombolnya menjalankan
                                         // penghapusan SATU versi, dan label umum menjanjikan
                                         // dokumennya yang hilang. Kalau ini versi terakhir,
                                         // alirannya menawarkan hapus dokumen dengan konfirmasi
                                         // yang menyebut akibatnya.
-                                        echo h(t('toolbar.delete_version', [], 'Delete Version'));
+                                        echo h(t('toolbar.hide_version', [], 'Hide Version'));
                                     ?></button>
                                     <?php endif; ?>
                                 </div>

@@ -30,12 +30,14 @@
 
 return [
     'actions' => [
+        'restore' => 'Kembalikan',
         'save'   => 'Simpan',
         'cancel' => 'Batal',
         'delete' => 'Hapus',
         'close'  => 'Tutup',
         'ok'     => 'OK',
         'edit'   => 'Edit',
+        'hide'   => 'Sembunyikan',
         'view_document' => 'Lihat dokumen itu',
     ],
     'fallback' => [
@@ -46,6 +48,11 @@ return [
         'signature' => 'Tanda Tangan',
     ],
     'response' => [
+        'hide_signed_needs_reason' => 'Versi ini memuat {count} tanda tangan. Beri alasan minimal {min} karakter sebelum menyembunyikannya.',
+        'version_not_hidden'       => 'Versi ini tidak tersembunyi — tidak ada yang perlu dikembalikan.',
+        'version_restored'         => 'Versi v{version} kembali ke daftar.',
+        'version_hidden'             => 'Versi disembunyikan dari daftar. Tidak ada yang dibuang — bisa dikembalikan.',
+        'version_locked_cannot_hide' => 'Versi terkunci tidak bisa disembunyikan. Buka kuncinya dulu.',
         // AJAX endpoint response messages (actions/**/*.php) — populated
         // incrementally as call sites are converted. See comment above.
 
@@ -76,10 +83,8 @@ return [
         'slot_deleted'             => 'Slot berhasil dihapus ({count} versi)',
 
         // ── document/delete_version.php ──
-        'version_locked_cannot_delete' => 'Versi locked tidak bisa dihapus. Unlock dulu.',
         'last_version_in_slot'         => 'Ini versi terakhir di slot. Pakai "Hapus Slot" untuk hapus seluruh slot.',
         'slot_version_conflict'        => 'Dokumen ini baru saja dibuat oleh penyimpanan lain. Muat ulang halaman untuk melanjutkan dari versi yang sudah ada.',
-        'version_deleted'              => 'Versi berhasil dihapus (soft delete)',
 
         // ── document/generate_qr.php ──
         'qr_data_empty'          => 'Data QR kosong',

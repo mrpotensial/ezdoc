@@ -23,11 +23,18 @@
 
 return [
     'toolbar' => [
+        'restore_version'      => 'Kembalikan Versi',
+        'hidden_short'         => '[tersembunyi]',
+        'show_hidden_versions' => 'Tampilkan tersembunyi',
+        'hide_hidden_versions' => 'Sembunyikan lagi',
+        // "Sembunyikan", bukan "Hapus": barisnya tidak pernah dibuang, dokumennya
+        // tetap bisa dibuka, dan yang sudah terbit tetap berlaku.
+        'hide_version'  => 'Sembunyikan Versi',
+        'hidden'        => 'DISEMBUNYIKAN DARI DAFTAR',
+        'hidden_by'     => 'Oleh: {name} — bisa dikembalikan',
         'print'                 => 'Print',
         'new'                   => 'Baru',
         'document_details'      => 'Detail dokumen',
-        'deleted'               => 'TERHAPUS',
-        'deleted_by'            => 'Oleh: {name}',
         'general_letter'        => 'Surat Umum',
         'label'                 => 'Label',
         'optional'              => 'opsional',
@@ -42,7 +49,6 @@ return [
         'more'                  => 'Lainnya',
         'admin'                 => 'Admin',
         'lock_final'            => 'Lock Final',
-        'delete_version'        => 'Hapus Versi',
         'unlock'                => 'Unlock',
         'new_version'           => 'Versi Baru',
         'shortcuts'             => 'Shortcuts',
@@ -55,6 +61,10 @@ return [
         'doc_info_id_edit'      => 'ID: {id} (Edit)',
     ],
     'title' => [
+        'restore_version'        => 'Kembalikan versi ini ke daftar',
+        'toggle_hidden_versions' => 'Tampilkan atau sembunyikan versi yang disingkirkan dari daftar',
+        'hide_version'        => 'Sembunyikan versi ini dari daftar — tetap bisa dibuka dan bisa dikembalikan',
+        'hide_version_locked' => 'Terkunci — buka kuncinya dulu',
         'print_shortcut'         => 'Print (Ctrl+P)',
         'toggle_toolbar'         => 'Tampilkan/Sembunyikan Toolbar',
         'show_toolbar'           => 'Tampilkan Toolbar',
@@ -66,9 +76,7 @@ return [
         'new_version'            => 'Buat versi baru',
         'shortcuts'              => 'Keyboard shortcuts (Ctrl+/)',
         'view_pdf_raw'           => 'Lihat hasil PDF mentah',
-        'delete_version_locked'  => 'Locked - unlock dulu',
         'locked_cannot_update'   => 'Locked - tidak bisa update',
-        'delete_version'         => 'Hapus versi ini',
         'restore_slot'           => 'Pulihkan slot ini',
         'no_sign_permission'     => 'Anda tidak berhak sign{roles}',
         'name_locked_after_signing' => 'Sudah ditandatangani — nama ini bagian dari yang ditandatangani. Buat versi baru untuk merevisi.',
@@ -187,10 +195,20 @@ return [
         'frozen_changed_detail' => 'Field beku yang berubah: {fields}',
     ],
     'confirm' => [
+        'restore_version'         => 'Kembalikan versi v{version} ke daftar?',
+        'restore_version_title'   => 'Kembalikan Versi',
+        // Ditanyakan hanya kalau versinya bertanda tangan. Menanyakannya pada semua
+        // penyembunyian membuat orang mengetik 'asdf', dan catatan yang penuh itu
+        // lebih buruk daripada kosong — ia terlihat seperti catatan.
+        'hide_signed_reason'      => 'Versi ini memuat {count} tanda tangan. Menyembunyikannya menghilangkannya dari daftar — tanda tangannya tetap utuh dan bisa dikembalikan. Kenapa disembunyikan?',
+        'hide_signed_title'       => 'Alasan Diperlukan',
+        'hide_signed_placeholder' => 'mis. salah pasien, entri ganda',
+        'hide_signed_hint'        => 'kurang {n} karakter',
+        'hide_version'       => 'Sembunyikan versi v{version}? Ia hilang dari daftar versi, tapi tetap bisa dibuka dan bisa dikembalikan.',
+        'hide_version_title' => 'Sembunyikan Versi',
         'sign_without_name' => 'Nama di bawah tanda tangan ini masih kosong. Setelah menandatangani, nama itu tidak bisa diisi lagi — hanya dengan membuat versi baru. Tetap tanda tangani?',
         'sign_anyway'       => 'Tetap tanda tangani',
         'fill_name_first'   => 'Isi namanya dulu',
-        'delete_version' => 'Hapus versi v{version}? Aksi ini tidak bisa di-undo.',
         // Versi terakhir: menghapusnya sama artinya dengan menghapus dokumennya.
         // Disebut apa adanya, karena tombolnya bertuliskan "Hapus Versi".
         'delete_whole_document'       => 'Ini satu-satunya versi, jadi menghapusnya akan menghapus SELURUH dokumen (No RM {norm}, No Pendaftaran {nopen}) beserta semua versinya. Lanjutkan?',

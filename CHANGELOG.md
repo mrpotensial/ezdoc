@@ -6,6 +6,235 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v1.0-prep track — "Hide Version cuma untuk admin"
+
+**Fixed — hak menyembunyikan versi tidak pernah sampai ke tombolnya (2026-09-04)**
+
+Dilaporkan dari pemakaian. `delete_version.php` dan `restore_version.php` sudah
+memakai penjaga bersama `ezdoc_can_hide_versions()`, tapi tombolnya masih duduk
+di dalam blok toolbar yang dijaga `$isSuperadmin`. Servernya mengizinkan sesuatu
+yang tidak ada tombolnya.
+
+Jawaban izinnya cuma hidup di dalam ekspresi `$preview_deleted` dan tidak pernah
+punya nama, jadi markup tidak bisa menanyakannya.
+
+- `$bolehSembunyikanVersi` dihitung sekali dan dipakai bersama
+- bagian ADMIN terbuka kalau ada satu saja isinya yang boleh dipakai; tiap
+  tombol tetap dijaga haknya sendiri di dalam
+- **PDF Raw tetap superadmin** — ia memperlihatkan keluaran mentah dokumen milik
+  siapa pun, dan membuka satu bagian toolbar tidak boleh diam-diam membagikan
+  seluruh isinya. Ini ikut dijaga tes.
+- tombol versi memakai `wide` saat sendirian di barisnya; grid dua kolom dengan
+  satu tombol separuh terbaca seperti ada yang gagal dimuat
+
+**Docs — alasan tombol Update baru berganti saat semua ttd lengkap**
+
+Komentarnya menyebut sebab yang sudah tidak berlaku ("penanda tangan kedua
+menyimpan lewat tombol yang sama"): `saveSign()` memanggil `submitForm()`
+sendiri, di mode gambar maupun QR.
+
+Sebab sebenarnya ada di `save_document.php`: setelah satu tanda tangan, yang beku
+hanya field yang DICAKUP tanda tangan itu, bukan seluruh isi dokumen. Sisanya
+sengaja tetap bisa disimpan — kalau tidak, dokumen dua penanda tangan mustahil,
+karena orang kedua mengisi nama di bawah tanda tangannya sendiri. Menyembunyikan
+Update saat baru sebagian ditandatangani akan menutup satu-satunya cara
+menyimpan field yang memang masih boleh diisi.
+
+Alasan yang basi mengundang "perbaikan" yang salah, jadi ia diperbaiki di
+tempatnya. Perilakunya tidak berubah.
+
+### v1.0-prep track — "By: 18"
+
+**Fixed — banner versi tersembunyi menyebut id, bukan nama (2026-09-02)**
+
+Dilaporkan dari pemakaian: bannernya berbunyi `By: 18`, sementara panel riwayat
+di halaman yang sama sudah menyebut namanya. Dua tempat yang menunjuk orang yang
+sama, dengan dua cara berbeda — dan yang satu tidak bisa dibaca siapa pun tanpa
+membuka tabel.
+
+`$param_deleted_by` dicetak apa adanya. Penyelesai namanya sudah ada dan sudah
+dipakai di halaman itu untuk nama pembuat dan nama penanda tangan; banner ini
+saja yang belum lewat sana.
+
+- namanya lewat `ezdoc_actor_names()`, pintu yang sama dengan panel riwayat
+- aturan tampilnya menyalin `actorLabel()`: tanpa nama tampil `#18` — id yang
+  jelas-jelas id, bukan angka telanjang yang menyamar jadi nama; dengan nama
+  tampil namanya saja; id-nya baru ikut untuk yang boleh melihat detail audit
+- satu query untuk satu id, di jalur yang sudah ada — tidak ada query baru
+- penjaga di `tests/Auth/HideVersionsAccessTest.php`, diverifikasi merah pada
+  markup lama dan hijau setelah perbaikan
+
+### v1.0-prep track — "Show hidden tidak bisa ditekan"
+
+**Fixed — `id` tombol menimpa fungsi penangannya (2026-09-02)**
+
+Dilaporkan dari pemakaian: tombol **Show hidden** muncul, ditekan, dan peramban
+menjawab `Uncaught TypeError: toggleHiddenVersions is not a function` — padahal
+fungsinya ada, global, dan berada di blok skrip yang sama.
+
+Sebabnya aturan lama HTML. Penangan sebaris tidak berjalan di lingkup global;
+ia dibungkus rantai lingkup:
+
+    elemen  ->  form induknya  ->  document  ->  window
+
+`<form>` mengekspos kontrolnya sebagai properti bernama, dengan kunci `name`
+**maupun `id`**. Tombolnya ada di dalam `<form id="mainForm">` dan ber-`id`
+persis sama dengan nama fungsinya, jadi nama itu ketemu **tombolnya sendiri**
+lebih dulu. `window` tidak pernah tercapai, dan tombol dipanggil sebagai fungsi.
+
+Yang membuatnya mahal: tidak ada yang merah. PHP-nya benar, JS-nya lolos
+`node --check`, fungsinya benar-benar terbentuk di global (diperiksa ulang
+lewat `vm` Node), dan tes cakupan fungsi pun lulus. Satu-satunya yang tahu
+adalah peramban, saat tombolnya ditekan.
+
+Sisa markup di berkas ini sudah memakai awalan `btn*` justru karena itu
+(`btnSendOtp`/`sendTtdOtp`, `toolbarToggleBtn`/`toggleToolbar`). Yang satu ini
+menyimpang, dan menyimpangnya tidak kelihatan sampai ada yang menekan.
+
+- `id="toggleHiddenVersions"` -> `id="btnToggleHidden"`, di markup dan di
+  `refreshVersionList()` yang mencarinya
+- alasannya ditulis di sebelah markup-nya, supaya tidak "dirapikan" kembali
+- `tests/UI/InlineHandlerIdCollisionTest.php` — menolak `id` yang sama dengan
+  nama fungsi di penangan sebarisnya, di seluruh view. Diverifikasi merah pada
+  markup lama, hijau setelah perbaikan.
+
+### v1.0-prep track — "Dokumen hilang setelah ganti versi"
+
+**Fixed — navigasi mandiri membawa nama rute yang salah (2026-09-02)**
+
+Dilaporkan dari pemakaian: buka dokumen dari daftar, ganti versi, dan halamannya
+menjawab **"Document Not Found"**. Hanya terjadi lewat `?ezdoc_page=list`.
+
+Rantainya masuk akal di tiap langkah, dan justru itu yang membuatnya sulit:
+
+1. daftar menaut ke `?ezdoc_page=view&uuid=…`
+2. `handleView()` menyelesaikan uuid, mengisi `template_id` + `doc_id`, lalu
+   memanggil `handleGenerate()` — halaman generate yang tampil
+3. `_preservedParams()` membaca `ezdoc_page=view` dari URL peramban dan
+   membawanya apa adanya
+4. navigasi berikutnya jadi `?ezdoc_page=view&template_id=…&version=…`, **tanpa
+   uuid**
+5. `handleView()` tanpa uuid menjawab 404
+
+`view` bukan tujuan; ia **pintu**. Dan bukan satu-satunya: `download`
+menyalakan `download=1`, `generate_list` **memaksa `template_id=0`**. Ketiganya
+meneruskan ke `handleGenerate()`, dan ketiganya rusak dengan cara berbeda —
+yang terakhir melempar balik ke pemilih template alih-alih 404, dan itu
+menjelaskan kenapa gejalanya terasa "kadang-kadang".
+
+Halaman sekarang menavigasi ke **nama rutenya sendiri**, dikirim server lewat
+`urls.self_page` (bawaan `generate`, bisa diatur consumer) alih-alih ditebak
+dari URL yang mengantarnya. Parameter milik rute penerus — `uuid`, `download`,
+`print` — ikut dibuang; yang tertinggal akan menempel di setiap navigasi
+berikutnya, dan `download` yang menempel membuat tiap ganti versi memicu
+unduhan.
+
+Ditulis ulang **hanya kalau `ezdoc_page` memang dipakai mount itu**. Menambahkan
+di mount yang merutekan lewat path akan merusak yang tadinya jalan.
+
+Tujuh tes menjaganya, termasuk satu yang memastikan rute penerusnya masih ada —
+pemeriksa yang menjaga sesuatu yang sudah tidak berlaku akan lulus selamanya
+tanpa memeriksa apa pun — dan satu yang menuntut semua navigasi lewat satu
+pintu. Yang merakit URL sendiri akan melewatkan perbaikan ini, dan bug-nya
+kembali hanya di jalur itu.
+
+
+### v1.0-prep track — "Hapus versi sebenarnya sembunyikan"
+
+**Added — pintu masuk, tombol kembalikan, dan alasan (2026-09-01)**
+
+Melengkapi bagian yang tersisa dari `docs/260901-hapus-versi-dan-izinnya.md`.
+
+**Cara melihat versi tersembunyi sudah lama ada** lewat `&preview_deleted=1` —
+tapi superadmin saja, `doc_id`-nya harus sudah diketahui, dan tidak satu pun
+tombol menambahkan parameternya. Itu sebabnya dua dokumen *Discharge Planning*
+terasa hilang: secara teknis ada, secara praktis tidak bisa ditemukan siapa pun.
+
+Sekarang: penyaring **"Tampilkan tersembunyi"** di pemilih versi, penanda
+`[tersembunyi]` per versi, dan `switchVersion()` yang membawa parameternya
+sendiri. Tanpa yang terakhir, memilih versi tersembunyi dari daftar menjawab
+"dokumen tidak ditemukan" — pada versi yang baru saja dipilih orang.
+
+**`restore_version`** — mengembalikan SATU versi. `restore_slot` yang ada
+mengenai seluruh slot, jadi salah ketuk pada v3 hanya bisa dibatalkan dengan
+ikut menghidupkan v1 dan v2 yang memang tidak diinginkan lagi. Keduanya tetap
+ada; yang baru menambah, bukan mengganti.
+
+**Baca-saja akhirnya ditegakkan.** Komentar lama mengaku *"(read-only mode)"*
+tapi `$isEditMode = true` tetap dipasang. Penyimpanannya memang menahan, tapi
+yang dilihat pengguna adalah halaman yang mengundang disunting dan suntingannya
+lalu menghilang tanpa penjelasan.
+
+**Alasan wajib untuk versi bertanda tangan.** Ditanyakan SETELAH server menolak,
+bukan sebelum: kebanyakan versi tidak bertanda tangan, dan menanyakannya pada
+semua membuat orang mengetik "asdf" — catatan yang penuh itu lebih buruk
+daripada kosong, karena ia terlihat seperti catatan. Alasannya masuk ke audit
+beserta jumlah tanda tangannya, bukan cuma ditampilkan di layar.
+
+Sengaja **tidak menolak mutlak**: aturan tanpa jalan keluar yang sah akan
+dilangkahi lewat SQL langsung, yang tidak tercatat sama sekali.
+
+**`ezdocPrompt()`** ditambahkan ke `dialog_helper.php` — tombolnya mati sampai
+isiannya cukup, dan sisa karakternya dihitung di layar. Menolak sesudah ditekan
+membuat orang mengetik ulang tanpa tahu berapa yang kurang. Ia mengembalikan
+`null` saat dibatalkan, bukan `false`: alasan kosong yang sah dan pembatalan
+adalah dua hal berbeda.
+
+**Aturan izinnya diangkat ke `lib/authorization.php`** sebagai
+`ezdoc_can_hide_versions()`. Dulu ia hidup di dalam `delete_version.php`, dan
+itu tidak masalah selama hanya satu berkas memakainya. Sekarang pemakainya
+empat — dan empat salinan aturan izin akan menyimpang tanpa berisik: yang muncul
+cuma "kenapa saya bisa menyembunyikan tapi tidak bisa mengembalikan".
+
+Sembilan tes menjaganya, termasuk satu yang memastikan aturannya **tidak disalin
+kembali** ke keempat pemanggilnya, dan satu yang menuntut bentuk `access_config`
+yang aneh dijawab boolean alih-alih melempar — kolom JSON yang sudah
+bertahun-tahun disunting orang bisa berisi apa saja, dan yang melempar di jalur
+permintaan web menjatuhkan halamannya.
+
+Dicatat sebagai keputusan tertulis, bukan kejutan: **superadmin tetap lolos
+walau template menyebut peran lain.** Jadi `access_config.delete` hanya bisa
+memperluas, tidak pernah membatasi.
+
+
+**Fixed — layar mengatakan yang tidak benar (2026-09-01)**
+
+Konfirmasi hapus versi berbunyi *"This cannot be undone."* — dan versi
+Indonesianya *"Aksi ini tidak bisa di-undo."* Keduanya **tidak benar**. Ini soft
+delete: `deleted_at` + `deleted_by`, barisnya tidak pernah dibuang, dan
+`restore_slot` sudah lama membuktikan ia bisa dikembalikan.
+
+Kalimat itu merusak ke dua arah. Yang **seharusnya** membuang versi salah-isi
+jadi ragu, mengira permanen. Yang **sudah** membuang tidak pernah meminta
+pengembalian, karena diberi tahu itu mustahil.
+
+Data mendukung arah kedua: 11 versi bertanda tangan sudah tersembunyi, dua di
+antaranya dokumen pasien nyata, dan tidak ada yang menanyakannya kembali.
+Semuanya masih utuh.
+
+Peringatan yang salah lebih berbahaya daripada tidak ada peringatan — orang
+menyesuaikan perilakunya dengan yang dikatakan sistem.
+
+**Changed — kata kerjanya jadi "Sembunyikan", bukan "Hapus" (2026-09-01)**
+
+Nama yang jujur untuk yang benar-benar terjadi: barisnya tetap ada, dokumennya
+tetap bisa dibuka (spanduk `HIDDEN FROM LIST` beserta pelakunya), dokumen yang
+sudah terbit tetap berlaku, dan ia bisa dikembalikan.
+
+Pemisahan *Archive* dari *Delete* ini pola yang sudah baku — Gmail, Trello, dan
+GitHub semuanya memakainya. Yang membedakan keduanya selalu satu hal: apakah ada
+yang benar-benar hilang.
+
+Sepuluh kunci baru di dua bahasa, dan tujuh kunci lama dibuang supaya tidak ada
+dua kosakata untuk satu hal. Diperiksa lewat `Translator` sungguhan bahwa yang
+baru terpanggil dan yang lama benar-benar hilang.
+
+Lihat `docs/260901-hapus-versi-dan-izinnya.md`. Yang belum: pintu masuk ke
+dokumen tersembunyi (sudah ada lewat `&preview_deleted=1`, tapi superadmin saja
+dan harus diketik sendiri), pengembalian per versi, dan alasan wajib untuk versi
+bertanda tangan.
+
+
 ### v1.0-prep track — "Perakitan PDF keluar dari view"
 
 **Added — golden master kerangka PDF, ikut ter-commit (2026-08-12)**

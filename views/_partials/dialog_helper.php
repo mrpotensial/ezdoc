@@ -67,7 +67,10 @@
         const cancelText = opts.cancelText || 'Cancel';
         const iconDef = ICONS[variant] || ICONS.info;
         const btnCls = BTN_PRIMARY[variant] || BTN_PRIMARY.info;
-        const isConfirm = mode === 'confirm';
+        const isPrompt = mode === 'prompt';
+        // Prompt ikut punya tombol Batal: kotak isian tanpa jalan mundur
+        // memaksa orang mengetik apa saja demi keluar dari dialognya.
+        const isConfirm = mode === 'confirm' || isPrompt;
         const previousFocus = document.activeElement;
 
         return new Promise(function (resolve) {
@@ -82,6 +85,7 @@
                                 <div class="flex-1 min-w-0 pt-0.5">
                                     ${title ? `<h3 id="ezdocDialogTitle" class="text-base font-semibold text-gray-900 mb-1">${esc(title)}</h3>` : ''}
                                     <div class="text-sm text-gray-600 whitespace-pre-line leading-relaxed">${esc(message)}</div>
+                                    ${isPrompt ? `<textarea data-ezdoc-dialog-input rows="3" placeholder="${esc(opts.placeholder || '')}" class="mt-3 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 px-3 py-2" ></textarea><div data-ezdoc-dialog-hint class="mt-1 text-xs text-gray-400"></div>` : ''}
                                 </div>
                             </div>
                         </div>
@@ -97,10 +101,26 @@
             const panel = root.querySelector('[role="dialog"]');
             const btnConfirm = root.querySelector('[data-ezdoc-dialog-confirm]');
             const btnCancel = root.querySelector('[data-ezdoc-dialog-cancel]');
+            const input = root.querySelector('[data-ezdoc-dialog-input]');
+            const hint = root.querySelector('[data-ezdoc-dialog-hint]');
+            const minLen = opts.minLength || 0;
+            // Tombolnya mati sampai isiannya cukup, dan sisanya dihitung di layar.
+            // Menolak SESUDAH ditekan membuat orang mengetik ulang tanpa tahu
+            // berapa yang kurang.
+            function sync() {
+                if (!input) return;
+                const n = input.value.trim().length;
+                const ok = n >= minLen;
+                btnConfirm.disabled = !ok;
+                btnConfirm.classList.toggle('opacity-50', !ok);
+                btnConfirm.classList.toggle('cursor-not-allowed', !ok);
+                if (hint) hint.textContent = ok ? '' : (opts.hint || '').replace('{n}', String(minLen - n));
+            }
+            if (input) { input.addEventListener('input', sync); sync(); }
             requestAnimationFrame(function () {
                 overlay.classList.remove('opacity-0'); overlay.classList.add('opacity-100');
                 panel.classList.remove('scale-95'); panel.classList.add('scale-100');
-                btnConfirm.focus();
+                (input || btnConfirm).focus();
             });
             function close(result) {
                 overlay.classList.remove('opacity-100'); overlay.classList.add('opacity-0');
@@ -112,13 +132,24 @@
                     resolve(result);
                 }, 150);
             }
-            btnConfirm.addEventListener('click', function () { close(true); });
-            if (btnCancel) btnCancel.addEventListener('click', function () { close(false); });
+            btnConfirm.addEventListener('click', function () {
+                if (input && input.value.trim().length < minLen) return;
+                close(input ? input.value.trim() : true);
+            });
+            if (btnCancel) btnCancel.addEventListener('click', function () { close(isPrompt ? null : false); });
             backdrop.addEventListener('click', function () { close(isConfirm ? false : true); });
             const FOCUSABLE_SEL = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
             function keyHandler(e) {
                 if (e.key === 'Escape') { e.preventDefault(); close(isConfirm ? false : true); return; }
-                if (e.key === 'Enter' && document.activeElement !== btnCancel) { e.preventDefault(); close(true); return; }
+                if (e.key === 'Enter' && document.activeElement !== btnCancel) {
+                    // Di kotak alasan, Enter berarti baris baru. Mengirim di sini
+                    // memotong kalimat orang di tengah.
+                    if (input && document.activeElement === input) return;
+                    e.preventDefault();
+                    if (input && input.value.trim().length < minLen) return;
+                    close(input ? input.value.trim() : true);
+                    return;
+                }
                 if (e.key === 'Tab') {
                     const focusables = panel.querySelectorAll(FOCUSABLE_SEL);
                     if (focusables.length === 0) return;
@@ -134,6 +165,26 @@
     window.ezdocAlert = function (message, opts) {
         opts = opts || {};
         return show({ mode: 'alert', variant: opts.variant || 'info', title: opts.title || '', message: message, confirmText: opts.confirmText || 'OK' });
+    };
+    /**
+     * Minta sepotong teks. Mengembalikan isiannya, atau null kalau dibatalkan.
+     *
+     * null, bukan false: alasan kosong yang sah dan pembatalan adalah dua hal
+     * berbeda, dan pemanggil harus bisa membedakannya.
+     */
+    window.ezdocPrompt = function (message, opts) {
+        opts = opts || {};
+        return show({
+            mode: 'prompt',
+            variant: opts.variant || 'warning',
+            title: opts.title || '',
+            message: message,
+            confirmText: opts.confirmText || 'OK',
+            cancelText: opts.cancelText || 'Cancel',
+            placeholder: opts.placeholder || '',
+            minLength: opts.minLength || 0,
+            hint: opts.hint || ''
+        });
     };
     window.ezdocConfirm = function (message, opts) {
         opts = opts || {};

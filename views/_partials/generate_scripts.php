@@ -925,6 +925,34 @@
             ['ezdoc_page', 'ezdoc_asset'].forEach(k => {
                 if (cur.has(k)) p.set(k, cur.get(k));
             });
+
+            // Halaman ini menavigasi ke NAMA RUTENYA SENDIRI, bukan ke nama yang
+            // kebetulan mengantarnya ke sini.
+            //
+            // Beberapa rute cuma meneruskan ke generate: `view` menyelesaikan uuid
+            // lebih dulu, `download` menyalakan download=1, `generate_list` memaksa
+            // template_id=0. Membawa namanya lalu mengirim param milik generate
+            // menghasilkan permintaan yang tidak dimengerti rute itu:
+            //
+            //   view tanpa uuid       -> "Document Not Found"
+            //   generate_list         -> template_id dipaksa 0, balik ke pemilih
+            //   download              -> tiap pindah versi memicu unduhan
+            //
+            // Hanya ditulis ulang kalau ezdoc_page memang dipakai mount ini —
+            // menambahkannya di mount yang merutekan lewat path akan merusak
+            // yang tadinya jalan.
+            if (p.has('ezdoc_page')) {
+                const milikSendiri = (window.EZDOC_URLS || {}).selfPage;
+                if (milikSendiri) p.set('ezdoc_page', milikSendiri);
+            }
+
+            // Rute penerus membawa parameternya sendiri; kalau ikut terbawa, ia
+            // menempel di setiap navigasi berikutnya. `download` yang tertinggal
+            // membuat tiap ganti versi memicu unduhan.
+            p.delete('uuid');
+            p.delete('download');
+            p.delete('print');
+
             return p;
         }
 
@@ -1300,6 +1328,11 @@
         const CURRENT_NOPEN = <?= json_encode($param_nopen) ?>;
         const CURRENT_LABEL = <?= json_encode($param_label) ?>;
 
+        // Apakah versi tersembunyi ikut ditampilkan. Tidak disimpan ke mana pun:
+        // ia keadaan sesaat, dan penyaring yang bertahan antar-muat halaman
+        // membuat orang lupa bahwa daftarnya sedang tidak seperti biasa.
+        let SHOW_HIDDEN = false;
+
         // Load all versions for the current slot & populate dropdown
         async function refreshVersionList() {
             if (!CURRENT_NORM || !CURRENT_NOPEN) return;
@@ -1309,6 +1342,7 @@
             fd.append('norm', CURRENT_NORM);
             fd.append('nopen', CURRENT_NOPEN);
             fd.append('label', CURRENT_LABEL);
+            if (SHOW_HIDDEN) fd.append('include_hidden', '1');
             const resp = await fetch(_ezdocEndpoint('docAction'), { method: 'POST', body: fd });
             const data = await resp.json();
             const sel = document.getElementById('versionSelect');
@@ -1318,15 +1352,80 @@
                 const opt = document.createElement('option');
                 opt.value = v.version;
                 const lockIcon = v.is_locked ? ' [Locked]' : '';
+                const hiddenMark = v.is_hidden ? ' ' + t('toolbar.hidden_short', {}, '[hidden]') : '';
                 const currMark = v.version === CURRENT_VERSION ? ' ' + t('toolbar.version_current_suffix', {}, '(current)') : '';
-                opt.textContent = `v${v.version}${lockIcon}${currMark}`;
+                opt.textContent = 'v' + v.version + lockIcon + hiddenMark + currMark;
+                // Dipakai switchVersion: yang tersembunyi hanya terbuka dengan
+                // preview_deleted=1, dan tanpa penanda ini ia akan menjawab
+                // "dokumen tidak ditemukan" pada versi yang baru saja dipilih
+                // orang dari daftar.
+                opt.dataset.hidden = v.is_hidden ? '1' : '0';
                 if (v.version === CURRENT_VERSION) opt.selected = true;
                 sel.appendChild(opt);
             });
+
+            // Penyaringnya hanya muncul untuk yang memang boleh mengurusnya.
+            // Tombol yang muncul lalu selalu ditolak lebih buruk daripada tombol
+            // yang tidak ada sama sekali.
+            const tombol = document.getElementById('btnToggleHidden');
+            if (tombol) {
+                tombol.style.display = (data.may_hide || SHOW_HIDDEN) ? '' : 'none';
+                tombol.textContent = SHOW_HIDDEN
+                    ? t('toolbar.hide_hidden_versions', {}, 'Hide hidden')
+                    : t('toolbar.show_hidden_versions', {}, 'Show hidden');
+            }
+        }
+
+        async function toggleHiddenVersions() {
+            SHOW_HIDDEN = !SHOW_HIDDEN;
+            await refreshVersionList();
+        }
+
+        /** Kembalikan SATU versi ke daftar. */
+        async function restoreThisVersion() {
+            if (!CURRENT_DOC_ID) return;
+            if (!(await ezdocConfirm(
+                t('confirm.restore_version', {version: CURRENT_VERSION},
+                    'Bring version v{version} back into the list?'),
+                {
+                    title: t('confirm.restore_version_title', {}, 'Restore Version'),
+                    variant: 'info',
+                    confirmText: t('actions.restore', {}, 'Restore')
+                }
+            ))) return;
+
+            const fd = new FormData();
+            fd.append('_doc_action', 'restore_version');
+            fd.append('doc_id', CURRENT_DOC_ID);
+            const resp = await fetch(_ezdocEndpoint('docAction'), { method: 'POST', body: fd });
+            const data = await resp.json();
+
+            if (!data.success) {
+                showToast(data.message || t('alert.generic_failed', {reason: '?'}, 'Failed: {reason}'), 'error');
+                return;
+            }
+
+            // Dimuat ulang TANPA preview_deleted — ia tidak tersembunyi lagi, dan
+            // membiarkan parameternya menempel membuat halaman tetap baca-saja
+            // padahal alasannya sudah hilang.
+            const params = _preservedParams();
+            params.delete('preview_deleted');
+            params.set('template_id', templateId);
+            params.set('norm', CURRENT_NORM);
+            params.set('nopen', CURRENT_NOPEN);
+            if (CURRENT_LABEL !== '-') params.set('label', CURRENT_LABEL);
+            params.set('version', CURRENT_VERSION);
+            window._ezdocSuppressUnload = true;
+            window.location.href = '?' + params.toString();
         }
 
         function switchVersion(version) {
             if (parseInt(version) === CURRENT_VERSION) return;
+            // Versi tersembunyi hanya terbuka dengan preview_deleted=1. Tanpa ini
+            // ia menjawab "dokumen tidak ditemukan" — pada versi yang baru saja
+            // dipilih orang dari daftar, dan itu terbaca sebagai data hilang.
+            const _optVer = document.querySelector('#versionSelect option[value="' + version + '"]');
+            const _verTersembunyi = _optVer && _optVer.dataset.hidden === '1';
             // Preserve ezdoc_page=generate supaya App router tidak fallback ke default_page.
             const params = _preservedParams();
             params.set('template_id', templateId);
@@ -1334,6 +1433,7 @@
             params.set('nopen', CURRENT_NOPEN);
             if (CURRENT_LABEL !== '-') params.set('label', CURRENT_LABEL);
             params.set('version', version);
+            if (_verTersembunyi) { params.set('preview_deleted', '1'); } else { params.delete('preview_deleted'); }
             // Intentional programmatic nav — suppress dirty prompt (Livewire pattern)
             window._ezdocSuppressUnload = true;
             window.location.href = '?' + params.toString();
@@ -1387,14 +1487,51 @@
         async function deleteThisVersion() {
             if (!CURRENT_DOC_ID) return;
             if (!(await ezdocConfirm(
-                t('confirm.delete_version', {version: CURRENT_VERSION}, 'Delete version v{version}? This cannot be undone.'),
-                { title: 'Delete Version', variant: 'danger', confirmText: 'Delete' }
+                t('confirm.hide_version', {version: CURRENT_VERSION},
+                    'Hide version v{version}? It disappears from the version list but stays openable, and can be restored.'),
+                {
+                    title: t('confirm.hide_version_title', {}, 'Hide Version'),
+                    variant: 'warning',
+                    confirmText: t('actions.hide', {}, 'Hide')
+                }
             ))) return;
             const fd = new FormData();
             fd.append('_doc_action', 'delete_version');
             fd.append('doc_id', CURRENT_DOC_ID);
-            const resp = await fetch(_ezdocEndpoint('docAction'), { method: 'POST', body: fd });
-            const data = await resp.json();
+            let resp = await fetch(_ezdocEndpoint('docAction'), { method: 'POST', body: fd });
+            let data = await resp.json();
+
+            // Versi bertanda tangan menuntut alasan. Server yang memutuskan,
+            // bukan halaman ini — halaman tidak tahu berapa tanda tangan yang
+            // ada, dan pemeriksaan yang cuma di sisi peramban bukan pemeriksaan.
+            //
+            // Ditanyakan SETELAH ditolak, bukan sebelum: kebanyakan versi tidak
+            // bertanda tangan, dan menanyakan alasan pada semuanya membuat orang
+            // mengetik "asdf". Catatan yang penuh "asdf" lebih buruk daripada
+            // kosong — ia terlihat seperti catatan.
+            if (!data.success && data.needs_reason) {
+                const alasan = await ezdocPrompt(
+                    t('confirm.hide_signed_reason', {count: data.signature_count},
+                        'This version carries {count} signature(s). Hiding it removes it from the list — the signatures stay intact and it can be restored. Why is it being hidden?'),
+                    {
+                        title: t('confirm.hide_signed_title', {}, 'Reason Required'),
+                        variant: 'warning',
+                        confirmText: t('actions.hide', {}, 'Hide'),
+                        placeholder: t('confirm.hide_signed_placeholder', {}, 'e.g. wrong patient, duplicate entry'),
+                        minLength: data.min_length || 10,
+                        hint: t('confirm.hide_signed_hint', {}, '{n} more characters')
+                    }
+                );
+                if (alasan === null) return;
+
+                const fd2 = new FormData();
+                fd2.append('_doc_action', 'delete_version');
+                fd2.append('doc_id', CURRENT_DOC_ID);
+                fd2.append('reason', alasan);
+                resp = await fetch(_ezdocEndpoint('docAction'), { method: 'POST', body: fd2 });
+                data = await resp.json();
+            }
+
             if (data.success) {
                 // Reload latest version after delete — preserve ezdoc_page prefix
                 const params = _preservedParams();

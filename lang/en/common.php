@@ -16,18 +16,25 @@
 
 return [
     'actions' => [
+        'restore' => 'Restore',
         'save' => 'Save',
         'cancel' => 'Cancel',
         'delete' => 'Delete',
         'close' => 'Close',
         'ok' => 'OK',
         'edit' => 'Edit',
+        'hide' => 'Hide',
         'view_document' => 'View that document',
     ],
     'fallback' => [
         'signature' => 'Signature',
     ],
     'response' => [
+        'hide_signed_needs_reason' => 'This version carries {count} signature(s). Give a reason of at least {min} characters before hiding it.',
+        'version_not_hidden' => 'This version is not hidden — there is nothing to restore.',
+        'version_restored' => 'Version v{version} is back in the list.',
+        'version_hidden' => 'Version hidden from the list. Nothing was removed — it can be restored.',
+        'version_locked_cannot_hide' => 'Locked version cannot be hidden. Unlock it first.',
         'invalid_id' => 'Invalid ID',
         'invalid_doc_id' => 'Invalid document ID',
         'invalid_template_id' => 'Invalid template ID',
@@ -46,10 +53,8 @@ return [
         'slot_has_locked_versions' => 'Slot has {count} locked version(s). Unlock them first before deleting.',
         'delete_slot_failed' => 'Failed to delete slot: {error}',
         'slot_deleted' => 'Slot deleted successfully ({count} version(s))',
-        'version_locked_cannot_delete' => 'Locked version cannot be deleted. Unlock it first.',
         'last_version_in_slot' => 'This is the last version in the slot. Use "Delete Slot" to remove the entire slot.',
         'slot_version_conflict' => 'This document was created by another save a moment ago. Reload the page to continue from the existing version.',
-        'version_deleted' => 'Version deleted successfully (soft delete)',
         'qr_data_empty' => 'QR data is empty',
         'qr_generator_unavailable' => 'QR generator unavailable (generateQrForDompdf missing)',
         'qr_generate_failed' => 'Failed to generate QR: {error}',

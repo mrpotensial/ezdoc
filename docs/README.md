@@ -48,3 +48,4 @@ paling dibutuhkan setelah orang yang membangunnya lupa — atau pergi.
 | [260804-skema-subjek.md](260804-skema-subjek.md) | `norm`/`nopen` jadi identitas subjek yang generik |
 | [260805-psre-meterai.md](260805-psre-meterai.md) | Tanda tangan tersertifikasi, e-Meterai, dan artefak beku |
 | [260811-beku-pdf-tiap-tanda-tangan.md](260811-beku-pdf-tiap-tanda-tangan.md) | Tiap penanda tangan dapat potret dokumen yang dia lihat |
+| [260901-hapus-versi-dan-izinnya.md](260901-hapus-versi-dan-izinnya.md) | Hapus = sembunyikan, dan sebaiknya layar jujur begitu |

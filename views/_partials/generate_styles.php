@@ -128,6 +128,42 @@
             content: '........';
             color: #9ca3af;
         }
+
+        /* Field KOSONG di perangkat sentuh — Safari iPad tidak bisa menaruh
+           kursor di dalamnya tanpa ini.
+
+           Sebabnya: `.f` kosong adalah kotak `inline` tanpa isi. Titik-titik
+           yang terlihat digambar `::before`, dan isi buatan CSS bukan sasaran
+           ketukan. Jadi luas yang bisa disentuh praktis nol.
+
+           Di desktop tidak terasa: penunjuk mouse presisi, dan peramban
+           desktop murah hati menaruh kursor di elemen kosong terdekat.
+           Safari iOS jauh lebih ketat soal apa yang boleh jadi sasaran ketuk.
+
+           Gejalanya khas, dan itu yang memastikan diagnosisnya: field yang
+           SUDAH ada isinya bisa disunting, keyboard muncul, dan field tanggal
+           maupun dropdown — yang memang `<input>` sungguhan — baik-baik saja.
+           Hanya yang kosong yang tidak bisa.
+
+           44px mengikuti ukuran sasaran sentuh minimum di Human Interface
+           Guidelines Apple.
+
+           Dibatasi dua kali supaya tidak menyentuh apa pun di luar kasusnya:
+             - `(hover: none) and (pointer: coarse)` — hanya perangkat sentuh,
+               jadi tampilan di PC tidak bergeser sedikit pun
+             - `:empty` — begitu terisi ia kembali `inline`, jadi perataan
+               teks dokumen yang sudah ada tidak berubah
+
+           CSS layar dan CSS PDF terpisah sejak lib/pdf_compose.php, jadi ini
+           tidak menyentuh hasil cetak maupun golden master-nya. */
+        @media (hover: none) and (pointer: coarse) {
+            .f:empty {
+                display: inline-block;
+                min-width: 44px;
+                min-height: 1.2em;
+                vertical-align: baseline;
+            }
+        }
         .edit-off .f {
             border-bottom: none;
             background: transparent;
