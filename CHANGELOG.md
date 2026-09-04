@@ -27,21 +27,33 @@ punya nama, jadi markup tidak bisa menanyakannya.
 - tombol versi memakai `wide` saat sendirian di barisnya; grid dua kolom dengan
   satu tombol separuh terbaca seperti ada yang gagal dimuat
 
-**Docs — alasan tombol Update baru berganti saat semua ttd lengkap**
+**Changed — tombol utama berganti begitu ada satu tanda tangan (2026-09-04)**
 
-Komentarnya menyebut sebab yang sudah tidak berlaku ("penanda tangan kedua
-menyimpan lewat tombol yang sama"): `saveSign()` memanggil `submitForm()`
-sendiri, di mode gambar maupun QR.
+Dilaporkan dari pemakaian: sesudah menandatangani, orang menekan Simpan berulang
+kali. Tiap tekanan menulis baris audit untuk perubahan yang tidak ada, dan
+riwayat yang penuh simpanan kosong membuat yang benar-benar terjadi sulit
+dilihat.
 
-Sebab sebenarnya ada di `save_document.php`: setelah satu tanda tangan, yang beku
-hanya field yang DICAKUP tanda tangan itu, bukan seluruh isi dokumen. Sisanya
-sengaja tetap bisa disimpan — kalau tidak, dokumen dua penanda tangan mustahil,
-karena orang kedua mengisi nama di bawah tanda tangannya sendiri. Menyembunyikan
-Update saat baru sebagian ditandatangani akan menutup satu-satunya cara
-menyimpan field yang memang masih boleh diisi.
+Tombolnya sudah berganti jadi **New Version** saat seluruh slot terisi, tapi baru
+saat itu — jadi dokumen dua atau tiga penanda tangan menghabiskan sebagian besar
+hidupnya menawarkan Simpan yang tidak lagi menyimpan apa pun.
 
-Alasan yang basi mengundang "perbaikan" yang salah, jadi ia diperbaiki di
-tempatnya. Perilakunya tidak berubah.
+Sekarang pemicunya ada-tidaknya tanda tangan, bukan lengkap-tidaknya.
+
+**Yang berubah hanya tampilan tombolnya.** Menyimpan tetap boleh sampai seluruh
+slot terisi:
+
+- `saveSign()` memanggil `submitForm()` sendiri, di mode gambar maupun QR
+- penjaga di `save_document.php` tidak ikut diubah — yang beku tetap hanya field
+  yang dicakup tanda tangan yang sudah ada, bukan seluruh isi dokumen
+- penanda tangan kedua dan ketiga berjalan persis seperti sebelumnya
+
+Kedua sifat itu yang membuat penggantian ini aman, jadi keduanya ikut dijaga tes
+di `tests/UI/SignedDocumentActionsTest.php` — kalau `saveSign()` berhenti
+menyimpan, penanda tangan kedua kehilangan satu-satunya jalannya.
+
+Tooltipnya dibedakan: `title.update_off_signed` untuk yang baru sebagian,
+`title.update_off_all_signed` untuk yang lengkap. Dua bahasa.
 
 ### v1.0-prep track — "By: 18"
 

@@ -81,6 +81,7 @@ return [
         'no_sign_permission'     => 'Anda tidak berhak sign{roles}',
         'name_locked_after_signing' => 'Sudah ditandatangani — nama ini bagian dari yang ditandatangani. Buat versi baru untuk merevisi.',
         'update_off_all_signed' => 'Semua tanda tangan sudah lengkap — buat versi baru untuk merevisi',
+        'update_off_signed' => 'Sudah ditandatangani — penanda tangan berikutnya menyimpan saat menandatangani; buat versi baru untuk merevisi',
         'signing_state'         => 'Isi yang sudah dicakup tanda tangan tidak bisa diubah lagi',
         'field_frozen_by_signature' => 'Sudah ditandatangani — isinya tidak bisa lagi berubah. Buat versi baru untuk merevisi.',
         'no_sign_permission_as'  => 'Anda tidak berhak sign sebagai {label}{roles}',

@@ -1184,16 +1184,22 @@ $docSigningState = $__slotCount === 0
 // Selesai berarti tidak ada lagi yang bisa diubah lewat tombol Update: setiap
 // field sudah dicakup tanda tangan, dan setiap slot sudah terisi.
 //
-// Tombolnya berganti DI SINI saja — jangan lebih awal. Alasannya bukan lagi
-// soal cara menyimpan tanda tangan: saveSign() memanggil submitForm() sendiri,
-// jadi penanda tangan berikutnya tidak menekan Update.
+// Tombolnya berganti jadi New Version begitu ADA SATU tanda tangan, bukan
+// menunggu semuanya.
 //
-// Alasan sebenarnya ada di save_document.php: setelah satu tanda tangan, yang
-// beku hanya field yang DICAKUP tanda tangan itu — bukan seluruh isi dokumen.
-// Sisanya sengaja tetap bisa disimpan, karena kalau tidak, dokumen dua penanda
-// tangan mustahil: orang kedua mengisi nama di bawah tanda tangannya sendiri.
-// Menyembunyikan Update saat baru sebagian ditandatangani akan menutup satu-
-// satunya cara menyimpan field yang memang masih boleh diisi.
+// Yang berubah HANYA tampilan tombolnya. Menyimpan tetap boleh sampai seluruh
+// slot terisi — saveSign() memanggil submitForm() sendiri di mode gambar maupun
+// QR, dan penjaga di save_document.php tidak ikut diubah: yang beku tetap hanya
+// field yang dicakup tanda tangan yang sudah ada. Penanda tangan kedua dan
+// ketiga berjalan persis seperti sebelumnya.
+//
+// Yang dihilangkan cuma ajakannya. Dilaporkan dari pemakaian: sesudah
+// menandatangani, orang menekan Simpan berulang kali, dan tiap tekanan menulis
+// baris audit untuk perubahan yang tidak ada. Riwayat yang penuh simpanan kosong
+// membuat yang benar-benar terjadi jadi sulit dilihat.
+//
+// $docSigningComplete tetap dipakai di tempat lain — ia menjawab pertanyaan yang
+// berbeda, yaitu apakah dokumennya sudah lengkap.
 $docSigningComplete = ($docSigningState === 'complete');
 
 // Render HTML: replace placeholders with inputs, logos with images, TTD with signature areas
@@ -2681,10 +2687,18 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                     // Pola yang dipakai GitHub pada PR yang sudah di-merge: tombol Merge
                     // tidak jadi abu-abu, ia digantikan aksi berikutnya.
                     //
-                    // Dokumen yang tanda tangannya lengkap cuma punya satu langkah maju:
-                    // versi baru. Jadi itu yang ditawarkan.
-                    if ($docSigningComplete && $isEditMode && !$param_is_locked): ?>
-                        <button type="button" class="col-span-2 !m-0 !py-1.5 !text-[12px] !bg-violet-500 hover:!bg-violet-600" onclick="showNewVersionModal()" title="<?= h(t('title.update_off_all_signed', [], 'Every signature is in place — create a new version to revise')) ?>">
+                    // Dokumen yang sudah ditandatangani cuma punya satu langkah maju yang
+                    // perlu tombol: versi baru. Jadi itu yang ditawarkan.
+                    //
+                    // Pemicunya ada-tidaknya tanda tangan, bukan lengkap-tidaknya.
+                    // Satu tanda tangan sudah cukup: sesudah itu tidak ada lagi yang
+                    // perlu disimpan dengan menekan tombol.
+                    $__adaTtd = ($__signedCount > 0);
+
+                    if ($__adaTtd && $isEditMode && !$param_is_locked): ?>
+                        <button type="button" class="col-span-2 !m-0 !py-1.5 !text-[12px] !bg-violet-500 hover:!bg-violet-600" onclick="showNewVersionModal()" title="<?= h($docSigningComplete
+                            ? t('title.update_off_all_signed', [], 'Every signature is in place — create a new version to revise')
+                            : t('title.update_off_signed', [], 'Already signed — the remaining signers save as they sign; create a new version to revise')) ?>">
                             <i class="bi bi-plus-circle"></i> <?= h(t('toolbar.new_version', [], 'New Version')) ?>
                         </button>
                     <?php else: ?>

@@ -66,6 +66,7 @@ return [
         'no_sign_permission' => 'Not authorized to sign{roles}',
         'name_locked_after_signing' => 'Already signed — the name is part of what the signature covers. Create a new version to revise.',
         'update_off_all_signed' => 'Every signature is in place — create a new version to revise',
+        'update_off_signed' => 'Already signed — the remaining signers save as they sign; create a new version to revise',
         'signing_state' => 'Content is frozen for whatever the signatures already cover',
         'field_frozen_by_signature' => 'Already signed — the content can no longer change. Create a new version to revise.',
         'no_sign_permission_as' => 'Not authorized to sign as {label}{roles}',
