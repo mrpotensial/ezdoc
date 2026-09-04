@@ -450,10 +450,28 @@
                 return;
             }
 
+            // Tombolnya bisa TIDAK ADA.
+            //
+            // Dokumen yang sudah ditandatangani menampilkan New Version di tempat
+            // Update, jadi `.btn-success` tidak dirender. Fungsi ini tetap dipanggil
+            // dari saveSign(), karena menandatangani menyimpan sendiri.
+            //
+            // Sebelum penjagaan ini, baris berikutnya melempar TypeError sebelum
+            // sempat mengirim apa pun: tanda tangannya tampil di layar, tidak pernah
+            // tersimpan, dan hilang pada muat ulang berikutnya. Dilaporkan dari
+            // pemakaian, pada tanda tangan lewat OTP.
+            //
+            // Umpan balik di tombol itu hiasan; menyimpan adalah pekerjaannya.
+            // Yang hiasan tidak boleh menjatuhkan yang pekerjaan.
             const btn = document.querySelector('.btn-success');
-            const origText = btn.textContent;
-            btn.textContent = t('toolbar.saving', {}, 'Saving...');
-            btn.disabled = true;
+            const origText = btn ? btn.textContent : '';
+            const setTombol = (teks, nonaktif) => {
+                if (!btn) return;
+                btn.textContent = teks;
+                btn.disabled = nonaktif;
+            };
+
+            setTombol(t('toolbar.saving', {}, 'Saving...'), true);
 
             const formData = new FormData(document.getElementById('mainForm'));
 
@@ -467,8 +485,7 @@
                 });
                 var _proceed = window.dispatchEvent(_pre);
                 if (!_proceed) {
-                    btn.textContent = origText;
-                    btn.disabled = false;
+                    setTombol(origText, false);
                     return;
                 }
             } catch (e) { /* CustomEvent unsupported — skip hook */ }
@@ -570,19 +587,16 @@
                             docInfoEl.textContent = t('toolbar.doc_info_id_edit', {id: data.doc_id}, 'ID: {id} (Edit)');
                             docInfoEl.classList.remove('new');
                         }
-                        btn.textContent = t('toolbar.update', {}, 'Update');
-                        btn.disabled = false;
+                        setTombol(t('toolbar.update', {}, 'Update'), false);
                         try { history.replaceState(null, '', targetUrl); } catch (e) {}
                     }
                 } else {
-                    btn.textContent = origText;
-                    btn.disabled = false;
+                    setTombol(origText, false);
                     await handleSaveRejection(data);
                 }
             } catch (e) {
                 showToast(t('toast.save_failed', {error: e.message}, 'Failed to save: {error}'), 'error');
-                btn.textContent = origText;
-                btn.disabled = false;
+                setTombol(origText, false);
             }
         }
 

@@ -61,7 +61,7 @@ final class HideVersionsAccessTest extends TestCase
         ]);
     }
 
-    // ─── Tanpa pengaturan template: superadmin saja ───
+    // ─── Tanpa pengaturan template: ikut hak edit ───
 
     public function testSuperadminBolehSaatTemplateTidakMengatur(): void
     {
@@ -71,11 +71,31 @@ final class HideVersionsAccessTest extends TestCase
         self::assertTrue(ezdoc_can_hide_versions([]));
     }
 
-    public function testPeranBiasaTidakBolehSaatTemplateTidakMengatur(): void
+    /**
+     * Tanpa pengaturan template, yang menentukan adalah hak `edit`.
+     *
+     * Bawaannya dulu superadmin, dan itu membuat fiturnya praktis tidak ada:
+     * hampir tidak ada template yang punya `access_config`, jadi tidak seorang
+     * pun selain superadmin pernah melihat tombolnya. Dilaporkan dari pemakaian.
+     *
+     * `edit` yang jadi ukurannya karena menyembunyikan versi lebih ringan
+     * daripada yang sudah boleh dilakukan pemegang hak itu: ia bisa mengubah isi
+     * dan membuat versi baru, sementara menyembunyikan tidak menghapus apa pun
+     * dan bisa dikembalikan.
+     */
+    public function testTanpaPengaturanIkutHakEdit(): void
     {
         $this->sebagai(['dokter', 'perawat']);
 
-        self::assertFalse(ezdoc_can_hide_versions(null));
+        // Deployment permissive: tanpa aturan, `edit` terbuka — jadi ini juga.
+        self::assertTrue(ezdoc_can_hide_versions(null));
+
+        // Template yang membatasi `edit` ikut membatasi ini.
+        $hanyaKepala = ['edit' => ['roles' => ['kepala_bidang'], 'users' => []]];
+        self::assertFalse(ezdoc_can_hide_versions($hanyaKepala));
+
+        $this->sebagai(['kepala_bidang']);
+        self::assertTrue(ezdoc_can_hide_versions($hanyaKepala));
     }
 
     /**
@@ -87,12 +107,18 @@ final class HideVersionsAccessTest extends TestCase
      * atau menolak semua orang, tergantung penafsiran, dan keduanya bukan yang
      * dimaksud siapa pun.
      */
-    public function testPengaturanKosongJatuhKeBawaanSuperadmin(): void
+    public function testPengaturanKosongJatuhKeBawaan(): void
     {
         $kosong = ['delete' => ['roles' => [], 'users' => []]];
 
+        // Bukan "tidak seorang pun" dan bukan "semua orang tanpa syarat":
+        // pertanyaannya diteruskan ke hak `edit`, sama seperti kalau kunci
+        // `delete` tidak pernah ada.
         $this->sebagai(['dokter']);
-        self::assertFalse(ezdoc_can_hide_versions($kosong));
+        self::assertTrue(ezdoc_can_hide_versions($kosong));
+
+        $kosongTapiEditDibatasi = $kosong + ['edit' => ['roles' => ['kepala_bidang'], 'users' => []]];
+        self::assertFalse(ezdoc_can_hide_versions($kosongTapiEditDibatasi));
 
         $this->sebagai(['superadmin']);
         self::assertTrue(ezdoc_can_hide_versions($kosong));
@@ -343,10 +369,26 @@ final class HideVersionsAccessTest extends TestCase
 
         $posPdf = strpos($kode, 'onclick="viewPdfRaw()"');
         self::assertNotFalse($posPdf, 'tombol PDF Raw hilang — premis tes ini perlu ditinjau');
-        self::assertStringContainsString(
-            'if ($isSuperadmin)',
-            substr($kode, max(0, $posPdf - 300), min($posPdf, 300)),
-            'PDF Raw ikut terbuka bersama hak menyembunyikan versi — hak yang berbeda'
+
+        // Bagian Admin dijaga superadmin saja, tanpa "atau boleh menyembunyikan".
+        self::assertStringContainsString('if ($isSuperadmin): ?>', $kode);
+        self::assertStringNotContainsString(
+            'if ($isSuperadmin || $bolehSembunyikanVersi)',
+            $kode,
+            'bagian Admin ikut terbuka untuk yang bukan admin'
         );
+
+        // Dan tombol versinya berada SEBELUM bagian Admin — artinya di MORE.
+        //
+        // Sejak haknya ikut `edit`, menyembunyikan versi bukan aksi admin. Bagian
+        // bernama ADMIN yang isinya aksi non-admin membuat orang yang berhak
+        // mengira ia sedang menyalahi wewenang. Dilaporkan dari layar pengguna.
+        foreach (['deleteThisVersion()', 'restoreThisVersion()'] as $aksi) {
+            self::assertLessThan(
+                $posPdf,
+                strpos($kode, 'onclick="' . $aksi . '"'),
+                "{$aksi} kembali masuk bagian Admin — padahal haknya bukan hak admin"
+            );
+        }
     }
 }

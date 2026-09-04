@@ -551,8 +551,24 @@ function ezdoc_check_access(?string $accessConfigJson, string $action): \Ezdoc\A
 /**
  * Boleh menyembunyikan versi dokumen dari daftar?
  *
- * Aturannya gabungan, dan itu sebabnya ia berdiri sendiri di sini: **superadmin
+ * Aturannya gabungan, dan itu sebabnya ia berdiri sendiri di sini: **hak `edit`
  * bawaannya, kecuali templatenya mengatur sendiri lewat `access_config.delete`.**
+ *
+ * Dulu bawaannya superadmin, dan itu membuat fiturnya praktis tidak ada: hampir
+ * semua template tidak punya `access_config` sama sekali, jadi tidak seorang pun
+ * selain superadmin pernah melihat tombolnya.
+ *
+ * `edit` yang jadi ukurannya karena menyembunyikan versi lebih ringan daripada
+ * yang sudah boleh dilakukan pemegang hak itu. Ia bisa mengubah isi dokumen dan
+ * membuat versi baru; menyembunyikan hanya mengeluarkan satu versi dari daftar,
+ * tidak menghapus apa pun, tidak membatalkan tanda tangan, dan bisa dikembalikan.
+ * Pembedaan Archive vs Delete yang sama dipakai Gmail dan Trello: yang menentukan
+ * bukan seberapa mencolok tombolnya, tapi apakah ada yang benar-benar hilang.
+ *
+ * Yang TIDAK ikut: `preview_deleted` memakai hak yang sama, jadi yang bisa
+ * menyembunyikan selalu bisa melihat dan mengembalikan apa yang ia sembunyikan.
+ * Hak menyembunyikan tanpa hak melihat kembali cuma memindahkan setiap salah
+ * ketuk ke meja superadmin.
  *
  * Sebelumnya aturan ini hidup di dalam `delete_version.php`. Selama hanya satu
  * berkas yang memakainya itu tidak masalah — dan berhenti tidak masalah begitu
@@ -574,7 +590,7 @@ function ezdoc_can_hide_versions(?array $accessConfig): bool
 
     return $diaturTemplate
         ? ezdoc_can_on_template($accessConfig, 'delete')
-        : ezdoc_has_role('superadmin');
+        : ezdoc_can_on_template($accessConfig, 'edit');
 }
 
 /**
@@ -603,10 +619,11 @@ function ezdoc_require_hide_versions(?array $accessConfig, string $message = '')
         return;
     }
 
-    ezdoc_require_role(
-        'superadmin',
+    ezdoc_require_on_template(
+        $accessConfig,
+        'edit',
         $message !== ''
             ? $message
-            : 'Menyembunyikan versi hanya bisa dilakukan superadmin. Set access_config.delete di template untuk mengizinkan peran lain.'
+            : 'Menyembunyikan versi butuh hak edit pada template ini. Set access_config.delete di template kalau ingin membatasinya lebih sempit.'
     );
 }

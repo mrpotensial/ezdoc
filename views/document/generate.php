@@ -2695,7 +2695,11 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                     // perlu disimpan dengan menekan tombol.
                     $__adaTtd = ($__signedCount > 0);
 
-                    if ($__adaTtd && $isEditMode && !$param_is_locked): ?>
+                    // Dinamai karena bagian MORE juga perlu menanyakannya: tombol yang
+                    // sama di dua tempat membuat orang mengira keduanya berbeda.
+                    $__versiBaruDiBarisUtama = ($__adaTtd && $isEditMode && !$param_is_locked);
+
+                    if ($__versiBaruDiBarisUtama): ?>
                         <button type="button" class="col-span-2 !m-0 !py-1.5 !text-[12px] !bg-violet-500 hover:!bg-violet-600" onclick="showNewVersionModal()" title="<?= h($docSigningComplete
                             ? t('title.update_off_all_signed', [], 'Every signature is in place — create a new version to revise')
                             : t('title.update_off_signed', [], 'Already signed — the remaining signers save as they sign; create a new version to revise')) ?>">
@@ -2766,24 +2770,66 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                                         // terhapus dalam mode baca-saja. Yang hilang cuma tombolnya. ?>
                                         <?php // Disembunyikan kalau sudah naik ke baris utama — tombol yang
                                         // sama di dua tempat membuat orang mengira keduanya berbeda.
-                                        if (!$docSigningComplete): ?>
+                                        //
+                                        // Dulu ini menanyakan $docSigningComplete, dan itu benar selama baris
+                                        // utama juga memakainya. Begitu baris utama pindah ke "ada satu tanda
+                                        // tangan", keduanya berhenti sepakat — dan pada dokumen yang baru
+                                        // sebagian ditandatangani, New Version muncul dua kali.
+                                        if (!$__versiBaruDiBarisUtama): ?>
                                         <button class="bg-violet-500" type="button" onclick="showNewVersionModal()" title="<?= h(t('title.new_version', [], 'Create new version')) ?>"><i class="bi bi-plus-circle"></i><?= h(t('toolbar.new_version', [], 'New Version')) ?></button>
+                                        <?php endif; ?>
+
+                                        <?php
+                                        // Menyembunyikan versi ada DI SINI, bukan di bagian Admin.
+                                        //
+                                        // Sejak haknya ikut `edit`, ia bukan lagi aksi admin — dan
+                                        // meninggalkannya di bawah label ADMIN membuat orang yang berhak
+                                        // mengira ia sedang memakai sesuatu yang bukan haknya. Label yang
+                                        // salah tidak sekadar membingungkan; ia membuat orang ragu memakai
+                                        // fitur yang memang untuk mereka.
+                                        //
+                                        // Yang tinggal di Admin cuma PDF Raw, yang memang superadmin.
+                                        if ($bolehSembunyikanVersi && $param_is_deleted): ?>
+                                            <?php
+                                            // Versi yang sedang dilihat memang tersembunyi. Yang masuk akal
+                                            // di sini cuma mengembalikannya — menyembunyikan yang sudah
+                                            // tersembunyi tidak berarti apa-apa, dan tombolnya cuma akan
+                                            // ditolak server.
+                                            ?>
+                                            <button type="button" onclick="restoreThisVersion()" class="!bg-sky-700 hover:!bg-sky-600" title="<?= h(t('title.restore_version', [], 'Bring this version back into the list')) ?>"><i class="bi bi-arrow-counterclockwise"></i><?= h(t('toolbar.restore_version', [], 'Restore Version')) ?></button>
+                                        <?php elseif ($bolehSembunyikanVersi): ?>
+                                            <button type="button" onclick="deleteThisVersion()" class="!bg-red-700 hover:!bg-red-600" <?= $param_is_locked ? 'disabled title="' . h(t('title.hide_version_locked', [], 'Locked - unlock first')) . '"' : 'title="' . h(t('title.hide_version', [], 'Hide this version from the list — it stays openable and can be restored')) . '"' ?>><i class="bi bi-trash"></i><?php
+                                            // "Sembunyikan Versi", bukan "Hapus". Tombolnya mengurus SATU
+                                            // versi, dan label umum menjanjikan dokumennya yang hilang.
+                                            echo h(t('toolbar.hide_version', [], 'Hide Version'));
+                                        ?></button>
                                         <?php endif; ?>
                                     <?php endif; ?>
                                     <?php // `wide` cuma dipakai saat tombolnya akan tertinggal sendirian di
                                     // barisnya. Dua tombol per baris, rata — bukan satu setengah lebar
                                     // dengan ruang kosong di sebelahnya.
-                                    $__shortcutsWide = ($isEditMode && !$docSigningComplete); ?>
+                                    //
+                                    // Dihitung, bukan ditebak. Syarat yang disalin ke sini pernah menyimpang
+                                    // dari tombol yang dijelaskannya, dan gejalanya cuma tata letak yang
+                                    // sedikit salah — jenis yang tidak pernah dilaporkan siapa pun.
+                                    $__sebelumShortcuts = 1
+                                        + (($isEditMode && !$__versiBaruDiBarisUtama) ? 1 : 0)
+                                        + (($isEditMode && $bolehSembunyikanVersi) ? 1 : 0);
+                                    $__shortcutsWide = ($__sebelumShortcuts % 2 === 0); ?>
                                     <button class="!bg-slate-600<?= $__shortcutsWide ? ' wide' : '' ?>" type="button" onclick="showShortcutsHelp()" title="<?= h(t('title.shortcuts', [], 'Keyboard shortcuts (Ctrl+/)')) ?>"><i class="bi bi-keyboard"></i><?= h(t('toolbar.shortcuts', [], 'Shortcuts')) ?></button>
                                 </div>
                             </div>
                         </div>
 
                         <?php
-                        // Bagiannya terbuka kalau ada SATU saja isinya yang boleh
-                        // dipakai. Tiap tombol tetap dijaga haknya sendiri di dalam:
-                        // membuka bagiannya bukan memberi seluruh isinya.
-                        if ($isSuperadmin || $bolehSembunyikanVersi): ?>
+                        // Isinya cuma PDF Raw, dan itu memang superadmin: ia
+                        // memperlihatkan keluaran mentah dokumen milik siapa pun.
+                        //
+                        // Menyembunyikan versi sempat ikut di sini waktu haknya masih
+                        // superadmin. Sejak haknya ikut `edit`, ia pindah ke MORE —
+                        // bagian bernama ADMIN yang isinya aksi non-admin membuat orang
+                        // yang berhak mengira ia sedang menyalahi wewenang.
+                        if ($isSuperadmin): ?>
                         <!-- ▸ ADMIN (icon grid) -->
                         <div class="border-t border-gray-700 mt-1 pt-1.5">
                             <button type="button" @click="open = (open === 'admin' ? '' : 'admin')"
@@ -2792,36 +2838,8 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                             </button>
                             <div x-show="open === 'admin'" x-collapse>
                                 <div class="icon-grid mt-1.5">
-                                    <?php
-                                    // PDF Raw memperlihatkan keluaran mentah dokumen milik
-                                    // siapa pun — itu tetap urusan superadmin, dan tidak ikut
-                                    // naik bersama hak menyembunyikan versi.
-                                    if ($isSuperadmin): ?>
-                                    <button class="!bg-emerald-700 hover:!bg-emerald-600<?= $isEditMode ? '' : ' wide' ?>" type="button" onclick="viewPdfRaw()" title="<?= h(t('title.view_pdf_raw', [], 'View raw PDF output')) ?>"><i class="bi bi-file-earmark-pdf"></i><?= h(t('toolbar.pdf_raw', [], 'PDF Raw')) ?></button>
-                                    <?php endif; ?>
-                                    <?php
-                                    // Sendirian di barisnya kalau PDF Raw tidak ikut tampil.
-                                    // Grid-nya dua kolom, dan tombol tunggal yang cuma mengisi
-                                    // separuh terbaca seperti ada yang gagal dimuat.
-                                    $__versiSendirian = !$isSuperadmin ? ' wide' : '';
-                                    if ($bolehSembunyikanVersi && $isEditMode && $param_is_deleted): ?>
-                                        <?php
-                                        // Versi yang sedang dilihat memang tersembunyi. Yang
-                                        // masuk akal di sini cuma mengembalikannya —
-                                        // menyembunyikan yang sudah tersembunyi tidak berarti
-                                        // apa-apa, dan tombolnya cuma akan ditolak server.
-                                        ?>
-                                        <button type="button" onclick="restoreThisVersion()" class="!bg-sky-700 hover:!bg-sky-600<?= $__versiSendirian ?>" title="<?= h(t('title.restore_version', [], 'Bring this version back into the list')) ?>"><i class="bi bi-arrow-counterclockwise"></i><?= h(t('toolbar.restore_version', [], 'Restore Version')) ?></button>
-                                    <?php elseif ($bolehSembunyikanVersi && $isEditMode): ?>
-                                        <button type="button" onclick="deleteThisVersion()" class="!bg-red-700 hover:!bg-red-600<?= $__versiSendirian ?>" <?= $param_is_locked ? 'disabled title="' . h(t('title.hide_version_locked', [], 'Locked - unlock first')) . '"' : 'title="' . h(t('title.hide_version', [], 'Hide this version from the list — it stays openable and can be restored')) . '"' ?>><i class="bi bi-trash"></i><?php
-                                        // "Hapus Versi", bukan "Hapus". Tombolnya menjalankan
-                                        // penghapusan SATU versi, dan label umum menjanjikan
-                                        // dokumennya yang hilang. Kalau ini versi terakhir,
-                                        // alirannya menawarkan hapus dokumen dengan konfirmasi
-                                        // yang menyebut akibatnya.
-                                        echo h(t('toolbar.hide_version', [], 'Hide Version'));
-                                    ?></button>
-                                    <?php endif; ?>
+                                    <?php // Sendirian di bagiannya, jadi selalu selebar barisnya. ?>
+                                    <button class="!bg-emerald-700 hover:!bg-emerald-600 wide" type="button" onclick="viewPdfRaw()" title="<?= h(t('title.view_pdf_raw', [], 'View raw PDF output')) ?>"><i class="bi bi-file-earmark-pdf"></i><?= h(t('toolbar.pdf_raw', [], 'PDF Raw')) ?></button>
                                 </div>
                             </div>
                         </div>

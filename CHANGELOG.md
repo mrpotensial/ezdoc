@@ -6,6 +6,108 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+### v1.0-prep track — "User biasa tetap tidak melihatnya"
+
+**Changed — menyembunyikan versi ikut hak `edit`, bukan superadmin (2026-09-04)**
+
+Dilaporkan dari pemakaian, sesudah gerbang toolbar diperbaiki: user biasa tetap
+tidak melihat Show hidden maupun Hide Version. Bukan bug — bawaannya memang
+superadmin kecuali templatenya mengatur `access_config.delete`.
+
+Diperiksa di basis data pemakai: **17 dari 19 template tidak punya
+`access_config` sama sekali**. Bawaan yang tidak pernah ditimpa bukan bawaan, itu
+aturan tunggal — dan fiturnya praktis tidak ada.
+
+Sekarang tanpa pengaturan template, yang menentukan hak `edit`.
+
+Alasannya bukan kemudahan. Pemegang hak edit sudah boleh mengubah isi dokumen dan
+membuat versi baru; menyembunyikan hanya mengeluarkan satu versi dari daftar —
+tidak menghapus apa pun, tidak membatalkan tanda tangan, dan bisa dikembalikan.
+Gerbang yang lebih ketat daripada mengubah isinya tidak menjaga apa pun.
+Pembedaan Archive vs Delete yang sama dipakai Gmail dan Trello: yang menentukan
+bukan seberapa mencolok tombolnya, tapi apakah ada yang benar-benar hilang.
+
+- template tetap bisa menimpanya lewat `access_config.delete`, dan sekarang untuk
+  **mempersempit**, bukan untuk membuka
+- `ezdoc_require_hide_versions()` menolak lewat jalur yang sama, jadi pesannya
+  menunjuk hak yang benar
+- teks di panel Access Config designer ikut diperbaiki: `(kosong = superadmin
+  only)` sudah tidak benar, dan UI yang berbohong lebih buruk daripada UI yang
+  membatasi. Dua bahasa, plus catatan di `designer_scripts.php`.
+
+**Fixed — menandatangani tidak tersimpan setelah tombol Simpan disembunyikan (2026-09-04)**
+
+Regresi yang saya buat sendiri, dan yang paling mahal dari rangkaian ini:
+**tanda tangan hilang.**
+
+Dilaporkan dari pemakaian, pada tanda tangan lewat OTP. Tanda tangannya tampil di
+layar, muat ulang memunculkan peringatan "belum tersimpan", dan memaksa muat
+ulang menghilangkannya. Console-nya:
+
+    Uncaught (in promise) TypeError: Cannot read properties of null
+        (reading 'textContent') at submitForm
+
+Dokumen yang sudah ditandatangani kini menampilkan New Version di tempat Update,
+jadi `.btn-success` tidak dirender. `submitForm()` membuka barisnya dengan
+`const origText = btn.textContent`. `saveSign()` memanggilnya — menandatangani
+menyimpan sendiri — dan TypeError-nya terjadi **sebelum permintaan apa pun
+terkirim**.
+
+Tidak ada yang kelihatan salah sampai halamannya dimuat ulang: layarnya sudah
+diperbarui `saveSign()`, dan yang gagal cuma pengirimannya.
+
+Umpan balik di tombol itu hiasan; menyimpan adalah pekerjaannya. Yang hiasan
+tidak boleh menjatuhkan yang pekerjaan.
+
+- tombolnya diambil dengan aman, dan diubah lewat satu pintu `setTombol()` yang
+  diam saja kalau tombolnya tidak ada — lima tempat, sebelumnya masing-masing
+  menyentuhnya langsung
+- `tests/UI/SubmitFormWithoutSaveButtonTest.php` + `tests/js/`. **Dijalankan,
+  bukan dibaca**: blok skripnya diurai Node, `.btn-success` sengaja dibuat tidak
+  ada, lalu `submitForm()` benar-benar dipanggil dan pengirimannya diperiksa.
+  Kegagalannya berupa pengecualian saat dijalankan, dan pemeriksaan atas teks
+  sumber akan melewatkan bentuk lain dari kesalahan yang sama.
+- diverifikasi dengan mengembalikan barisnya: tesnya merah, dengan pesan yang
+  persis sama seperti yang dilaporkan pengguna
+- pelengkap statis yang murah untuk mesin tanpa Node: tidak boleh ada yang
+  menyentuh tombolnya langsung di dalam `submitForm()`
+
+Pelajarannya: menghapus elemen dari markup adalah perubahan antarmuka bagi setiap
+kode yang mencarinya. Yang saya periksa waktu itu cuma tombolnya sendiri.
+
+**Changed — Sembunyikan Versi pindah dari Admin ke More (2026-09-04)**
+
+Dilaporkan dari layar pengguna, tepat sesudah haknya dibuka: tombolnya muncul,
+tapi masih duduk di bawah label **ADMIN** — dan bagi user biasa bagian itu berisi
+satu tombol saja, karena PDF Raw memang tersembunyi untuknya.
+
+Label yang salah tidak sekadar membingungkan. Bagian bernama ADMIN yang isinya
+aksi non-admin membuat orang yang berhak mengira ia sedang menyalahi wewenang,
+lalu ragu memakai fitur yang memang untuknya.
+
+- Hide/Restore Version pindah ke bagian **More**, bersama QR dan Shortcuts
+- bagian **Admin** kembali dijaga `$isSuperadmin` saja, isinya tinggal PDF Raw
+  — satu tombol, jadi selalu selebar barisnya
+- lebar tombol Shortcuts sekarang **dihitung** dari berapa tombol yang
+  mendahuluinya, bukan disalin dari syarat tombol lain. Salinan itu sudah sekali
+  menyimpang dan menghasilkan New Version dobel; gejala berikutnya cuma tata
+  letak yang sedikit salah — jenis yang tidak pernah dilaporkan siapa pun.
+- penjaganya ikut berubah: yang diperiksa bukan lagi jarak teks, tapi bahwa
+  tombol versinya berada sebelum bagian Admin. Diverifikasi merah saat gerbang
+  Admin dikembalikan ke `$isSuperadmin || $bolehSembunyikanVersi`.
+
+**Fixed — New Version muncul dua kali (2026-09-04)**
+
+Regresi dari perubahan tombol utama di atas. Penjaga anti-duplikat di bagian MORE
+menanyakan `$docSigningComplete`, dan itu benar selama baris utama juga
+memakainya. Begitu baris utama pindah ke "ada satu tanda tangan", keduanya
+berhenti sepakat — dan pada dokumen yang baru sebagian ditandatangani, tombolnya
+muncul dua kali. Dilaporkan dari layar pengguna.
+
+Sekarang keduanya menanyakan satu nama yang sama, `$__versiBaruDiBarisUtama`.
+Lebar tombol Shortcuts ikut nama itu juga, karena ia bergantung pada ada-tidaknya
+New Version di grid MORE.
+
 ### v1.0-prep track — "Hide Version cuma untuk admin"
 
 **Fixed — hak menyembunyikan versi tidak pernah sampai ke tombolnya (2026-09-04)**

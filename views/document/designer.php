@@ -915,13 +915,13 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                                     <i class="bi bi-trash"></i> <?= h(t('access.can_delete_label', [], 'Can DELETE document:')) ?>
                                 </label>
                                 <input type="text" class="w-full rounded border-gray-300 shadow-sm px-2 py-1 text-[11px]" id="accessDeleteRoles"
-                                       placeholder="<?= h(t('access.delete_roles_placeholder', [], 'Roles (empty = superadmin only)')) ?>"
+                                       placeholder="<?= h(t('access.delete_roles_placeholder', [], 'Roles (empty = same as Edit)')) ?>"
                                        oninput="onAccessConfigChange()">
                                 <input type="text" class="w-full rounded border-gray-300 shadow-sm mt-1 px-2 py-1 text-[11px]" id="accessDeleteUsers"
-                                       placeholder="<?= h(t('access.delete_users_placeholder', [], 'User IDs (empty = superadmin only)')) ?>"
+                                       placeholder="<?= h(t('access.delete_users_placeholder', [], 'User IDs (empty = same as Edit)')) ?>"
                                        oninput="onAccessConfigChange()">
                                 <div class="mt-1 text-[10px] text-[#7f1d1d]">
-                                    <i class="bi bi-exclamation-circle"></i> <?= h(t('access.delete_warning', [], 'Delete = destructive. Default empty = superadmin only (different from create/edit/lock).')) ?>
+                                    <i class="bi bi-exclamation-circle"></i> <?= h(t('access.delete_warning', [], 'Hiding a version is reversible — nothing is deleted. Left empty, it follows whoever may Edit. Fill this in to narrow it further.')) ?>
                                 </div>
                             </div>
 

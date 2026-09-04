@@ -82,8 +82,11 @@
         // Access config: RBAC per-template (mode + create/edit/lock/delete roles+users)
         // Format: { mode: 'strict'|'permissive', create: {roles, users}, edit: {}, lock: {}, delete: {} }
         // Backward compat: null / empty roles+users = allow all (v2 behavior).
-        // Note: kalau delete kosong, backend fallback ke superadmin-only (bukan allow-all)
-        // supaya delete tetap aman by default (delete = destructive action).
+        // Note: kalau delete kosong, backend jatuh ke hak `edit` template ini.
+        // Dulu superadmin-only, dan itu membuat fiturnya praktis tidak ada karena
+        // hampir tidak ada template yang punya access_config. Menyembunyikan versi
+        // bisa dikembalikan dan tidak menghapus apa pun, jadi ia tidak perlu gerbang
+        // yang lebih ketat daripada mengubah isinya.
         let accessConfig = {
             mode: 'strict',
             create: { roles: [], users: [] },

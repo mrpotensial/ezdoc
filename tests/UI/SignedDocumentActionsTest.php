@@ -62,13 +62,13 @@ final class SignedDocumentActionsTest extends TestCase
         // tombolnya, jadi memeriksa "sekitar" akan tetap hijau walau cabangnya
         // dikembalikan ke pemicu lama — penjaga yang tidak menjaga apa pun.
         self::assertStringContainsString(
-            'if ($__adaTtd && $isEditMode && !$param_is_locked)',
+            '$__versiBaruDiBarisUtama = ($__adaTtd && $isEditMode && !$param_is_locked);',
             $kode,
             'cabangnya tidak dipicu ada-tidaknya tanda tangan'
         );
 
         self::assertStringNotContainsString(
-            'if ($docSigningComplete && $isEditMode && !$param_is_locked)',
+            '$__versiBaruDiBarisUtama = ($docSigningComplete',
             $kode,
             'cabangnya kembali menunggu semua slot terisi'
         );
@@ -130,5 +130,49 @@ final class SignedDocumentActionsTest extends TestCase
                 "kunci tooltip belum ada di lang/{$lang}"
             );
         }
+    }
+
+    /**
+     * New Version tidak muncul dua kali.
+     *
+     * Baris utama dan bagian MORE sama-sama bisa menawarkannya, dan penjaga
+     * anti-duplikatnya dulu menanyakan $docSigningComplete — benar selama baris
+     * utama juga memakainya. Begitu baris utama pindah ke "ada satu tanda
+     * tangan", keduanya berhenti sepakat, dan pada dokumen yang baru sebagian
+     * ditandatangani tombolnya muncul dua kali. Dilaporkan dari layar pengguna.
+     *
+     * Yang dijaga: keduanya menanyakan SATU nama yang sama. Dua salinan syarat
+     * akan menyimpang lagi, dan menyimpangnya tidak berisik.
+     */
+    public function testNewVersionTidakMunculDuaKali(): void
+    {
+        $kode = $this->view();
+
+        self::assertStringContainsString(
+            '$__versiBaruDiBarisUtama = ($__adaTtd && $isEditMode && !$param_is_locked);',
+            $kode,
+            'syaratnya harus punya satu nama, bukan disalin ke dua tempat'
+        );
+
+        self::assertStringContainsString('if ($__versiBaruDiBarisUtama):', $kode);
+        self::assertStringContainsString('if (!$__versiBaruDiBarisUtama):', $kode);
+
+        // Lebar Shortcuts bergantung pada berapa tombol yang mendahuluinya di
+        // grid dua kolom. Dihitung, bukan disalin: syarat yang disalin ke sini
+        // pernah menyimpang dari tombol yang dijelaskannya, dan gejalanya cuma
+        // tata letak yang sedikit salah — jenis yang tidak pernah dilaporkan.
+        self::assertStringContainsString(
+            '$__shortcutsWide = ($__sebelumShortcuts % 2 === 0);',
+            $kode,
+            'lebar Shortcuts kembali disalin dari syarat tombol lain'
+        );
+        self::assertStringContainsString('$__sebelumShortcuts = 1', $kode);
+
+        // Dua tombol di markup, tapi tidak pernah dua-duanya sekaligus.
+        self::assertSame(
+            2,
+            substr_count($kode, 'onclick="showNewVersionModal()"'),
+            'jumlah tombol New Version berubah — premis tes ini perlu ditinjau'
+        );
     }
 }
