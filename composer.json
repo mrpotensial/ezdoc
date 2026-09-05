@@ -27,7 +27,8 @@
         "symfony/polyfill-php80": "Recommended untuk PHP 7.4 runtime — battle-tested polyfill (str_starts_with, str_ends_with, str_contains, get_debug_type). Kalau tidak install, lib/polyfill.php akan handle fallback minimal.",
         "dompdf/dompdf": "Dibutuhkan oleh Ezdoc\\Rendering\\DompdfRenderer, backend PDF bawaan. Tanpa paket ini, inject PdfRenderer sendiri (mPDF, wkhtmltopdf, Weasyprint) lewat Context::withPdf().",
         "ext-openssl": "Dibutuhkan untuk tanda tangan L2/L3 (CMS/PKCS#7, PAdES, timestamp RFC 3161). Tanda tangan L1 (HMAC) tidak memerlukannya.",
-        "ext-pdo": "Dibutuhkan kalau memakai PdoConnection (SQLite/Postgres/SQL Server). Jalur mysqli tidak memerlukannya."
+        "ext-pdo": "Dibutuhkan kalau memakai PdoConnection (SQLite/Postgres/SQL Server). Jalur mysqli tidak memerlukannya.",
+        "ext-gd": "Salah satu jalan menghasilkan QR untuk QrRenderer. Ezdoc tidak memaketkan generator QR: sediakan implementasinya sendiri (endroid/qr-code, chillerlan/php-qrcode, atau milik host) lalu suntik lewat Context::withQr(). Tanpa itu, QR dilewati dengan bersih dan sisa dokumennya tetap jadi."
     },
     "autoload": {
         "psr-4": {

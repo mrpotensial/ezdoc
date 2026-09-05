@@ -1669,7 +1669,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         // Modal support: default isi = verify_url dokumen (untuk kemudahan) atau user override manual
         $qrImgHtml = '';
         if ($qrDataRaw) {
-            $qrSrc = generateQrForDompdf($qrDataRaw, 200, 5);
+            $qrSrc = ezdoc_qr_data_uri($qrDataRaw, 200, 5);
             // Kalau sudah ada value → tampil QR. Klik → modal untuk edit
             $qrImgHtml = '<img src="' . $qrSrc . '" class="qr-img" style="width:100%;height:auto;cursor:pointer;" alt="QR" id="qrimg_' . h($fieldName) . '" onclick="openQrFieldModal(\'' . h($fieldName) . '\')" title="' . h(t('title.click_edit_qr', [], 'Click to edit QR content')) . '">';
         } else {
@@ -2203,7 +2203,7 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
             if (trim($qrData) !== '') {
                 try {
                     // Size 250px (up dari 150) + margin 6 supaya scannable saat di-print
-                    $qrSrc = generateQrForDompdf($qrData, 250, 6);
+                    $qrSrc = ezdoc_qr_data_uri($qrData, 250, 6);
                     // Display size 100x100px — cukup besar untuk scan HP dari jarak wajar
                     // max-width/max-height none supaya tidak kena override dari CSS parent
                     $contentHtml = '<img src="' . $qrSrc . '" style="width:100px;height:100px;max-width:none;max-height:none;" alt="QR">';
@@ -2312,7 +2312,7 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
 
         if ($qrData) {
             // Generate QR code
-            $qrSrc = generateQrForDompdf($qrData, 200, 5);
+            $qrSrc = ezdoc_qr_data_uri($qrData, 200, 5);
             $style = "width:" . h($width) . ";height:auto;";
             $imgClass = "qr-img";
 

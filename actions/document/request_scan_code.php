@@ -116,18 +116,13 @@ $scanUrl = str_replace('{token}', rawurlencode($issued['scan_token']), $urlTempl
 // merakit ulang QR-nya dan memindainya sendiri selama lima menit berikutnya.
 //
 // Dengan dirakit di sini, token hanya pernah ada sebagai piksel.
-$qr = null;
-if (function_exists('generateQrForDompdf')) {
-    try {
-        $qr = generateQrForDompdf($scanUrl, 220, 4);
-    } catch (\Throwable $e) {
-        @error_log('[ezdoc:scan:qr] ' . $e->getMessage());
-    }
-}
+// Satu pintu, lihat ezdoc_qr_data_uri(): kontrak QrRenderer dulu, jalur usang
+// generateQrForDompdf() menyusul. Ia tidak pernah melempar.
+$qr = ezdoc_qr_data_uri($scanUrl, 220, 4);
 
-if ($qr === null) {
+if ($qr === '') {
     ezdoc_respond_error(
-        t('response.qr_generator_unavailable', [], 'QR generator unavailable (generateQrForDompdf missing)'),
+        t('response.qr_generator_unavailable', [], 'No QR generator is configured'),
         500
     );
 }

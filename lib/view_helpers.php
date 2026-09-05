@@ -34,3 +34,56 @@ if (!function_exists('t')) {
         return $translator->t($key, $params, $default);
     }
 }
+
+
+/**
+ * Gambar QR sebagai data URI, lewat satu pintu.
+ *
+ * ## Kenapa ada
+ *
+ * Sebelumnya kode view memanggil `generateQrForDompdf()` langsung — nama fungsi
+ * global milik aplikasi pemakai, bukan milik library. Di `generate_qr.php` ia
+ * dijaga `function_exists()`; di tiga tempat lain di view **tidak**.
+ *
+ * Yang membuatnya berbahaya bukan QR-nya. Perender isi PDF juga dipanggil jalur
+ * pembekuan dokumen, dan aturannya: pembekuan gagal berarti tanda tangannya ikut
+ * gagal. Satu fungsi host yang kebetulan tidak termuat berubah dari "QR tidak
+ * tampil" jadi "tidak ada yang bisa menandatangani".
+ *
+ * ## Urutannya
+ *
+ * 1. {@see \Ezdoc\Rendering\QrRenderer} dari Context — jalur yang seharusnya
+ * 2. `generateQrForDompdf()` kalau ada — jalur USANG, dipertahankan supaya
+ *    pemasangan yang sudah terlanjur memakainya tidak rusak saat naik versi
+ * 3. string kosong — QR-nya hilang, dokumennya tetap jadi
+ *
+ * Urutan dan alasannya sama persis dengan {@see ezdoc_actor_names()}.
+ *
+ * Tidak pernah melempar. Ini jalur tampilan: generator yang rusak boleh
+ * menghilangkan QR-nya, bukan halamannya.
+ */
+function ezdoc_qr_data_uri(string $data, int $size = 200, int $margin = 5): string
+{
+    if ($data === '') {
+        return '';
+    }
+
+    try {
+        $ctx = \Ezdoc\Context::default();
+        if ($ctx->qr !== null) {
+            return $ctx->qr->render($data, $size, $margin);
+        }
+    } catch (\Throwable $e) {
+        // Context belum disetel, atau generatornya melempar. Coba jalur usang.
+    }
+
+    if (function_exists('generateQrForDompdf')) {
+        try {
+            return (string) generateQrForDompdf($data, $size, $margin);
+        } catch (\Throwable $e) {
+            return '';
+        }
+    }
+
+    return '';
+}

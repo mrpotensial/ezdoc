@@ -12,6 +12,7 @@ use Ezdoc\Db\Mysqli\MysqliConnection;
 use Ezdoc\Db\Pdo\PdoConnection;
 use Ezdoc\Exceptions\EzdocException;
 use Ezdoc\Rendering\PdfRenderer;
+use Ezdoc\Rendering\QrRenderer;
 use Ezdoc\Signature\Otp\UserOtpProvider;
 use mysqli;
 use PDO;
@@ -79,6 +80,17 @@ final class Context
      */
     public $pdf;
 
+    /**
+     * Backend QR. Null → QR dilewati dengan bersih, bukan fatal.
+     *
+     * Consumer menyuntikkannya lewat withQr(). Tidak ada implementasi bawaan,
+     * alasannya sama dengan PDF: memilihkan pustaka untuk setiap pemasangan
+     * bukan urusan library dokumen.
+     *
+     * @var QrRenderer|null
+     */
+    public $qr;
+
     /** @var UserOtpProvider|null */
     public $otpProvider;
 
@@ -105,7 +117,8 @@ final class Context
         RoleProvider $roleProvider,
         ?PdfRenderer $pdf = null,
         ?UserOtpProvider $otpProvider = null,
-        ?ActorDirectory $actorDirectory = null
+        ?ActorDirectory $actorDirectory = null,
+        ?QrRenderer $qr = null
     ) {
         if (!($db instanceof mysqli) && !($db instanceof PDO) && !($db instanceof Connection)) {
             throw new EzdocException(
@@ -118,6 +131,7 @@ final class Context
         $this->pdf = $pdf;
         $this->otpProvider = $otpProvider;
         $this->actorDirectory = $actorDirectory;
+        $this->qr = $qr;
     }
 
     /**
@@ -192,7 +206,14 @@ final class Context
             }
         }
 
-        return new self($db, new HasRoleProvider(), null, $otpProvider, self::resolveActorDirectory());
+        return new self(
+            $db,
+            new HasRoleProvider(),
+            null,
+            $otpProvider,
+            self::resolveActorDirectory(),
+            self::resolveQr()
+        );
     }
 
     /**
@@ -231,6 +252,42 @@ final class Context
     }
 
     /**
+     * Find the host's QR renderer, if it wired one.
+     *
+     * Pola tiga langkah yang sama lagi, dan itu disengaja: host yang sudah
+     * belajar satu cara menyambungkan tidak perlu belajar cara kedua.
+     *
+     * Kegagalannya ditelan. Generator yang tidak bisa dibangun berarti QR-nya
+     * hilang; membiarkannya melempar berarti dokumennya yang hilang — dan pada
+     * jalur pembekuan, tanda tangannya ikut gagal bersamanya.
+     */
+    private static function resolveQr(): ?QrRenderer
+    {
+        if (isset($GLOBALS['EZDOC_QR_RENDERER']) && $GLOBALS['EZDOC_QR_RENDERER'] instanceof QrRenderer) {
+            return $GLOBALS['EZDOC_QR_RENDERER'];
+        }
+
+        if (!defined('EZDOC_QR_RENDERER_CLASS') || EZDOC_QR_RENDERER_CLASS === '') {
+            return null;
+        }
+
+        $class = EZDOC_QR_RENDERER_CLASS;
+        if (!is_string($class) || !class_exists($class)) {
+            return null;
+        }
+
+        try {
+            $instance = method_exists($class, 'fromGlobals') ? $class::fromGlobals() : new $class();
+        } catch (\Throwable $e) {
+            @error_log('[ezdoc] QR renderer instantiation failed: ' . $e->getMessage());
+
+            return null;
+        }
+
+        return $instance instanceof QrRenderer ? $instance : null;
+    }
+
+    /**
      * Get default context (lazy-init dari globals kalau belum di-set).
      * Dipakai oleh global function wrappers (ezdoc_audit_log, dll).
      */
@@ -265,30 +322,36 @@ final class Context
      */
     public function withDb($db): self
     {
-        return new self($db, $this->roleProvider, $this->pdf, $this->otpProvider, $this->actorDirectory);
+        return new self($db, $this->roleProvider, $this->pdf, $this->otpProvider, $this->actorDirectory, $this->qr);
     }
 
     /** Immutable copy dengan roleProvider diubah. */
     public function withRoleProvider(RoleProvider $rp): self
     {
-        return new self($this->db, $rp, $this->pdf, $this->otpProvider, $this->actorDirectory);
+        return new self($this->db, $rp, $this->pdf, $this->otpProvider, $this->actorDirectory, $this->qr);
     }
 
     /** Immutable copy dengan PDF renderer diubah. */
     public function withPdf(?PdfRenderer $pdf): self
     {
-        return new self($this->db, $this->roleProvider, $pdf, $this->otpProvider, $this->actorDirectory);
+        return new self($this->db, $this->roleProvider, $pdf, $this->otpProvider, $this->actorDirectory, $this->qr);
     }
 
     /** Immutable copy dengan UserOtpProvider diubah. */
     public function withOtpProvider(?UserOtpProvider $otpProvider): self
     {
-        return new self($this->db, $this->roleProvider, $this->pdf, $otpProvider, $this->actorDirectory);
+        return new self($this->db, $this->roleProvider, $this->pdf, $otpProvider, $this->actorDirectory, $this->qr);
     }
 
     /** Immutable copy dengan ActorDirectory diubah. */
     public function withActorDirectory(?ActorDirectory $actorDirectory): self
     {
-        return new self($this->db, $this->roleProvider, $this->pdf, $this->otpProvider, $actorDirectory);
+        return new self($this->db, $this->roleProvider, $this->pdf, $this->otpProvider, $actorDirectory, $this->qr);
+    }
+
+    /** Immutable copy dengan QR renderer diubah. */
+    public function withQr(?QrRenderer $qr): self
+    {
+        return new self($this->db, $this->roleProvider, $this->pdf, $this->otpProvider, $this->actorDirectory, $qr);
     }
 }

@@ -196,6 +196,48 @@ menyimpan, penanda tangan kedua kehilangan satu-satunya jalannya.
 Tooltipnya dibedakan: `title.update_off_signed` untuk yang baru sebagian,
 `title.update_off_all_signed` untuk yang lengkap. Dua bahasa.
 
+### QR di balik kontrak
+
+**Changed — generator QR disuntik consumer, bukan dipanggil dengan namanya (2026-09-05)**
+
+Kode library memanggil `generateQrForDompdf()` — fungsi yang didefinisikan di
+`koneksi.php` milik aplikasi pemakai. Di dua action ia dijaga `function_exists()`;
+di **tiga tempat di view, tidak**.
+
+Yang membuatnya berbahaya bukan QR-nya. Perender isi PDF juga dipanggil jalur
+pembekuan dokumen, dan §5 rencananya berbunyi: pembekuan gagal berarti tanda
+tangannya ikut gagal. Jadi satu fungsi host yang kebetulan belum termuat berubah
+dari "QR tidak tampil" menjadi **"tidak ada yang bisa menandatangani"**.
+
+Ini bukan keputusan desain, cuma utang: kode lama yang tidak ikut dirapikan waktu
+`PdfRenderer` dibuat. Sekarang QR mengikuti pola yang sama persis.
+
+| | PDF | QR |
+|---|---|---|
+| Kontrak | `Ezdoc\Rendering\PdfRenderer` | `Ezdoc\Rendering\QrRenderer` |
+| Disuntik | `Context::withPdf()` | `Context::withQr()` |
+| Auto-resolve | — | `EZDOC_QR_RENDERER` / `EZDOC_QR_RENDERER_CLASS` |
+| Tanpa itu | inject sendiri | QR dilewati, dokumen tetap jadi |
+
+- `ezdoc_qr_data_uri()` di `lib/view_helpers.php` — satu pintu, tiga langkah:
+  kontrak dari Context, lalu `generateQrForDompdf()` sebagai **jalur usang** yang
+  dipertahankan supaya pemasangan lama tidak rusak, lalu string kosong. Urutan
+  dan alasannya sama persis dengan `ezdoc_actor_names()`
+- `Context::resolveQr()` memakai pola tiga langkah yang sama dengan OTP provider
+  dan ActorDirectory — host yang sudah belajar satu cara menyambungkan tidak
+  perlu belajar cara kedua
+- lima pemanggilan langsung diganti; pesan galatnya berhenti menyebut nama fungsi
+  host (`'QR generator unavailable (generateQrForDompdf missing)'` →
+  `'No QR generator is configured'`)
+- `tests/Rendering/QrRendererContractTest.php` — 10 tes, termasuk penjaga bahwa
+  tidak ada berkas library yang menyebut nama fungsi itu lagi, dan bahwa
+  generator yang melempar tidak menjatuhkan pemanggilnya
+
+**Sisi consumer** (perlu disinkron manual, di luar folder ezdoc):
+`adapters/KoneksiQrRenderer.php` membungkus `generateQrForDompdf()`, disambungkan
+di `ezdoc_otp_setup.php`. Dengan itu terpasang, jalur usangnya berhenti terpakai
+di instalasi ini.
+
 ### Variabel yang hilang di dalam closure
 
 **Fixed — `use()` yang kurang satu nama, dua kejadian (2026-09-05)**
