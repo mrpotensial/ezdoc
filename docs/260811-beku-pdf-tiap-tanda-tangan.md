@@ -271,6 +271,40 @@ kode lamanya sudah tidak ada di sana.
 **Belum ada perilaku baru di tahap ini.** Tidak ada pembekuan, tidak ada
 penyegelan. Murni pemindahan.
 
+### Tahap 2a — rantai perendernya keluar dari view — ✅ selesai 2026-09-05
+
+**Hasilnya: 24 dari 24 keluaran identik byte per byte, 340.414 byte.** Enam
+template sungguhan dari basis data, empat varian masing-masing (tanpa ttd, ttd
+lengkap, mode verify-QR, nilai dari permintaan).
+
+Sepuluh fungsi keluar dari `views/document/generate.php` ke `lib/pdf_compose.php`
+— 36.730 byte, view menyusut dari 183.316 jadi 146.586 byte:
+
+`renderContentForPdf`, `renderFieldForPdf`, `processTabledbRows`,
+`_tabledbRenderRow`, `_tabledbFormatValue`, `_tabledbComputeAggregate`,
+`_tabledbParseFormat`, `_tabledbParseSelector`, `_tabledbClassifyRow`,
+`executeDynQuery`.
+
+Ikut pindah ke `lib/view_helpers.php`: `safeDataImg()` dan `safeSignatureValue()`.
+Keduanya berpenjaga `function_exists` di view, jadi absennya dari luar view tidak
+berisik — jalur materai cuma diam, dan gambarnya hilang dari dokumen beku tanpa
+satu pun galat. Fixture-nya kebetulan tidak menyentuh materai, jadi pemindahan
+ini **tidak** ikut terbukti oleh 24 berkas di atas; ia dipindah karena alasannya
+sudah jelas, bukan karena tertangkap.
+
+**Dua ketergantungan tersembunyi ketahuan saat rantainya berdiri sendiri:**
+
+1. `processConditionalSections()` di `lib/doc_template_helpers.php` hanya dimuat
+   oleh view. Sekarang ikut `bootstrap.php` dan autoload composer.
+2. `lib/doc_meta_helpers.php` dan `lib/signature_image.php` ada di `bootstrap.php`
+   tapi **tidak** di daftar `files` composer. Consumer yang memasang lewat
+   Composer — cara distribusi yang dituju — tidak pernah mendapat keduanya.
+   Dua pemuat, dua daftar; sekarang sama.
+
+Yang dijaga tes: `tests/Rendering/PdfContentChainTest.php` memanggil rantainya
+tanpa me-require view sama sekali. Kesetaraan byte dibuktikan di luar suite,
+karena bahannya template sungguhan milik pemasangan ini.
+
 ### Tahap 2 — bekukan tiap tanda tangan masuk
 
 Setelah bisa dipanggil dari mana saja, `save_document.php` memakainya.

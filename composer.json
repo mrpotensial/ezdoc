@@ -47,6 +47,9 @@
             "lib/subject_identity.php",
             "lib/scan_otp.php",
             "lib/view_helpers.php",
+            "lib/doc_meta_helpers.php",
+            "lib/signature_image.php",
+            "lib/doc_template_helpers.php",
             "lib/pdf_compose.php"
         ]
     },

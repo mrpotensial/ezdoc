@@ -121,11 +121,17 @@ final class PdfRequestValuesTest extends TestCase
 
     // ─── Penjaga: perendernya benar-benar berhenti membaca permintaan ───
 
-    /** Badan `renderContentForPdf()`, tanpa komentar. */
+    /**
+     * Badan `renderContentForPdf()`, tanpa komentar.
+     *
+     * Sejak Tahap 2a ia tinggal di `lib/pdf_compose.php`, bukan di view lagi —
+     * itu justru syarat supaya jalur pembekuan bisa memanggilnya tanpa
+     * menjalankan seluruh halaman.
+     */
     private function badanPerender(): string
     {
         $sumber = (string) file_get_contents(
-            dirname(__DIR__, 2) . '/views/document/generate.php'
+            dirname(__DIR__, 2) . '/lib/pdf_compose.php'
         );
 
         $awal = strpos($sumber, 'function renderContentForPdf(');

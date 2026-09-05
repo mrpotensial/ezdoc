@@ -50,6 +50,13 @@ require_once EZDOC_LIB . '/view_helpers.php';
 // Perakit kerangka HTML untuk PDF. Di sini, bukan di dalam view, supaya
 // pembekuan dokumen bisa merakit HTML yang sama dari tempat berbeda —
 // lihat docs/260811-beku-pdf-tiap-tanda-tangan.md.
+// Dipakai perender isi di pdf_compose.php (processConditionalSections).
+// Dulu hanya view yang memuatnya, dan itu cukup selama perendernya juga
+// tinggal di view. Sejak Tahap 2a ia dipanggil dari mana saja.
+//
+// Setiap deklarasi di dalamnya berpenjaga function_exists, jadi pemuatan
+// oleh view lewat jalur pencariannya sendiri tetap aman.
+require_once EZDOC_LIB . '/doc_template_helpers.php';
 require_once EZDOC_LIB . '/pdf_compose.php';
 
 // Auto-run migrations (menggunakan Ezdoc\Migrations\Runner via wrapper)

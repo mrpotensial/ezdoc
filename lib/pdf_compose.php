@@ -312,3 +312,832 @@ function ezdoc_pdf_request_values(array ...$sumber): array
 
     return $hasil;
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Perenderan ISI, dipindah dari views/document/generate.php (Tahap 2a).
+//
+// Verbatim: teksnya apa adanya, termasuk docblock masing-masing. Yang berubah
+// cuma tempatnya — pembuktiannya membandingkan keluaran sebelum dan sesudah,
+// dan itu hanya berarti kalau tidak ada satu huruf pun yang ikut berubah.
+//
+// Kenapa dipindah: jalur pembekuan dokumen memanggil perender yang sama dari
+// save_document.php, dan selama fungsi-fungsi ini tinggal di dalam view,
+// memanggilnya berarti menjalankan seluruh halamannya.
+// Lihat docs/260811-beku-pdf-tiap-tanda-tangan.md §4.
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Execute a dynamic table query with parameter binding.
+ * Parameters like {nopen}, {norm}, {field_name} are replaced with prepared statement placeholders.
+ */
+function executeDynQuery($query, $param_norm, $param_nopen, $dbFields, $conn) {
+    // Validate SELECT only
+    $normalized = preg_replace('/\s+/', ' ', strtoupper(ltrim($query)));
+    if (strpos($normalized, 'SELECT') !== 0 && strpos($normalized, 'WITH') !== 0) {
+        return [];
+    }
+    $blocked = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'CREATE', 'REPLACE', 'GRANT', 'REVOKE'];
+    foreach ($blocked as $kw) {
+        if (strpos($normalized, $kw) === 0) return [];
+    }
+
+    // Extract {param} placeholders and their order
+    $paramNames = [];
+    $paramValues = [];
+    $paramTypes = '';
+
+    $safeQuery = preg_replace_callback('/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/', function($m) use (&$paramNames) {
+        $paramNames[] = $m[1];
+        return '?';
+    }, $query);
+
+    // Map param names to values
+    foreach ($paramNames as $name) {
+        $val = '';
+        if ($name === 'nopen') $val = $param_nopen;
+        elseif ($name === 'norm') $val = $param_norm;
+        else $val = $dbFields[$name] ?? '';
+        $paramValues[] = $val;
+        $paramTypes .= 's';
+    }
+
+    $stmt = @mysqli_prepare($conn, $safeQuery);
+    if (!$stmt) return [];
+
+    if (!empty($paramValues)) {
+        mysqli_stmt_bind_param($stmt, $paramTypes, ...$paramValues);
+    }
+
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return [];
+    }
+
+    $result = mysqli_stmt_get_result($stmt);
+    $rows = [];
+    while ($row = mysqli_fetch_assoc($result)) {
+        $rows[] = $row;
+    }
+    mysqli_stmt_close($stmt);
+    return $rows;
+}
+
+/**
+ * Process `{{tabledb.<ns>.<selector>[|<format>[:<args>]]}}` references inside <tr> rows.
+ *
+ * Enhanced marker syntax (v0.9.14b) — user bebas design table di TinyMCE,
+ * marker mendukung format/formula/aggregate directly di cells:
+ *
+ * ## Selector variants
+ *
+ * - `col_name`              — raw column value dari row
+ * - `=<expression>`         — computed formula dgn bare column names, e.g. `=qty*harga`
+ * - `sum:<col_or_formula>`  — SUM aggregate across all rows
+ * - `avg:<col_or_formula>`  — AVG aggregate
+ * - `count:<col_or_star>`   — COUNT of non-null (use `*` untuk count all rows)
+ * - `min:<col_or_formula>`  — MIN
+ * - `max:<col_or_formula>`  — MAX
+ *
+ * ## Format modifiers (|)
+ *
+ * - `|text`                 — HTML escape (default)
+ * - `|number[:decimals]`    — 1500 → 1.500 (id) or 1,500 (en)
+ * - `|currency[:code]`      — 1500000 → Rp 1.500.000 (default IDR)
+ * - `|percent[:decimals]`   — 0.5 → 50,00% (as-ratio default)
+ * - `|date[:format]`        — 2026-07-24 → 24/07/2026 (default d/m/Y)
+ * - `|datetime[:format]`    — default d/m/Y H:i
+ *
+ * ## Row classification
+ *
+ * - Row dgn raw col OR formula → **cloned per data row** (existing behavior)
+ * - Row dgn HANYA aggregate markers → **rendered once** (footer-style)
+ * - Row mixed → treated as clone (aggregate evaluated with row context — rarely useful)
+ *
+ * ## Examples
+ *
+ * ```html
+ * <table>
+ *   <thead><tr><th>Item</th><th>Qty</th><th>Harga</th><th>Total</th></tr></thead>
+ *   <tbody>
+ *     <tr>
+ *       <td>{{tabledb.stok.nama}}</td>
+ *       <td>{{tabledb.stok.qty}}</td>
+ *       <td>{{tabledb.stok.harga|currency}}</td>
+ *       <td>{{tabledb.stok.=qty*harga|currency}}</td>
+ *     </tr>
+ *   </tbody>
+ *   <tfoot>
+ *     <tr>
+ *       <td colspan="3"><strong>Total</strong></td>
+ *       <td>{{tabledb.stok.sum:=qty*harga|currency}}</td>
+ *     </tr>
+ *   </tfoot>
+ * </table>
+ * ```
+ *
+ * ## Backward compatibility
+ *
+ * Old marker `{{tabledb.ns.col}}` (no format) tetap works — no format pipe =
+ * text (HTML escape). Same behavior as pre-v0.9.14b.
+ *
+ * spec: docs/DYNAMIC-TABLES.md
+ */
+function processTabledbRows($html, $tableDbQueries, $param_norm, $param_nopen, $dbFields, $conn) {
+    if (!is_array($tableDbQueries) || empty($tableDbQueries)) return $html;
+
+    // Cache: run each namespace's query at most once per template render
+    $resultCache = [];
+
+    // Regex captures: (1) namespace optional, (2) selector, (3) format pipe optional
+    // Selector allows: word chars, `=`, `*`, `:` (for verb:field), operators inside formulas
+    // Selector allows spaces (untuk formulas seperti `=qty * harga`); trim di parser.
+    $markerRegex = '/\{\{tabledb(?:\.([a-zA-Z_]\w*))?\.([^|}]+?)(?:\|([^}]+))?\}\}/';
+
+    return preg_replace_callback('/<tr\b[^>]*>[\s\S]*?<\/tr>/i', function ($m) use ($tableDbQueries, $param_norm, $param_nopen, $dbFields, $conn, &$resultCache, $markerRegex) {
+        $rowHtml = $m[0];
+
+        if (!preg_match_all($markerRegex, $rowHtml, $refs, PREG_SET_ORDER)) {
+            return $rowHtml; // no tabledb markers
+        }
+
+        // Namespace dari first marker (assume all refs di 1 row share ns)
+        $ns = $refs[0][1] !== '' ? $refs[0][1] : 'default';
+        $cfg = $tableDbQueries[$ns] ?? null;
+        if (!$cfg || empty($cfg['sql'])) {
+            return preg_replace($markerRegex, '—', $rowHtml);
+        }
+
+        // Execute query (cached per namespace)
+        if (!array_key_exists($ns, $resultCache)) {
+            $resultCache[$ns] = executeDynQuery($cfg['sql'], $param_norm, $param_nopen, $dbFields, $conn);
+        }
+        $rows = $resultCache[$ns];
+
+        // Classify row: aggregate-only, clone (per-row), atau mixed
+        $rowType = _tabledbClassifyRow($refs);
+
+        // Empty result: kalau aggregate row → tetap render dgn aggregate=0 or —,
+        // kalau clone row → keep 1 row w/ placeholders replaced by —
+        if (empty($rows)) {
+            if ($rowType === 'aggregate') {
+                return _tabledbRenderRow($rowHtml, $markerRegex, [], null, $rows);
+            }
+            return preg_replace($markerRegex, '—', $rowHtml);
+        }
+
+        // Aggregate row → render ONCE (footer-style)
+        if ($rowType === 'aggregate') {
+            return _tabledbRenderRow($rowHtml, $markerRegex, [], null, $rows);
+        }
+
+        // Clone-per-row: render each data row with its context
+        $output = '';
+        foreach ($rows as $dataRow) {
+            $output .= _tabledbRenderRow($rowHtml, $markerRegex, $dataRow, $dataRow, $rows);
+        }
+        return $output;
+    }, $html);
+}
+
+/**
+ * Classify a row's markers: 'aggregate' (only sum/avg/count/min/max markers),
+ * 'clone' (has at least 1 raw col or formula), atau 'mixed' (treated as clone).
+ *
+ * @param array $refs preg_match_all matches (each: [full, ns, selector, format])
+ * @return string 'aggregate'|'clone'
+ */
+function _tabledbClassifyRow(array $refs): string {
+    $hasPerRow = false;
+    $hasAggregate = false;
+    foreach ($refs as $ref) {
+        $parsed = _tabledbParseSelector($ref[2]);
+        if ($parsed['type'] === 'aggregate') $hasAggregate = true;
+        elseif ($parsed['type'] === 'raw' || $parsed['type'] === 'formula') $hasPerRow = true;
+    }
+    if ($hasAggregate && !$hasPerRow) return 'aggregate';
+    return 'clone'; // includes mixed (aggregate + per-row — evaluated per-row)
+}
+
+/**
+ * Parse selector string. Returns ['type' => 'raw'|'formula'|'aggregate', ...].
+ *
+ * @param string $sel
+ * @return array
+ */
+function _tabledbParseSelector(string $sel): array {
+    $sel = trim($sel);
+    if ($sel === '') return ['type' => 'invalid'];
+    // Formula: starts with `=`
+    if ($sel[0] === '=') {
+        return ['type' => 'formula', 'formula' => trim(substr($sel, 1))];
+    }
+    // Aggregate: sum:field, avg:field, count:*, count:field, min:formula, max:formula
+    if (preg_match('/^(sum|avg|count|min|max):(.+)$/i', $sel, $m)) {
+        return ['type' => 'aggregate', 'verb' => strtolower($m[1]), 'target' => $m[2]];
+    }
+    // Raw column: plain identifier
+    if (preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $sel)) {
+        return ['type' => 'raw', 'field' => $sel];
+    }
+    return ['type' => 'invalid'];
+}
+
+/**
+ * Parse format pipe: 'currency' → ['type' => 'currency', 'args' => []],
+ * 'currency:USD:2' → ['type' => 'currency', 'args' => ['USD', '2']].
+ *
+ * @param string|null $fmt
+ * @return array
+ */
+function _tabledbParseFormat(?string $fmt): array {
+    if ($fmt === null || $fmt === '') {
+        return ['type' => 'text', 'args' => []];
+    }
+    $parts = explode(':', $fmt);
+    return ['type' => strtolower(trim($parts[0])), 'args' => array_slice($parts, 1)];
+}
+
+/**
+ * Render one row instance — substitute markers dgn computed/formatted values.
+ *
+ * @param string      $rowHtml     original <tr>...</tr> HTML w/ markers
+ * @param string      $markerRegex regex to match tabledb markers
+ * @param array       $rowContext  row data untuk per-row evaluation (empty untuk aggregate row)
+ * @param array|null  $rowRaw      raw row data (for direct field access without formula eval)
+ * @param array       $allRows     all rows (needed untuk aggregate computation)
+ * @return string
+ */
+function _tabledbRenderRow(string $rowHtml, string $markerRegex, array $rowContext, ?array $rowRaw, array $allRows): string {
+    return preg_replace_callback($markerRegex, function ($m) use ($rowContext, $rowRaw, $allRows) {
+        $selector = _tabledbParseSelector($m[2]);
+        $format = _tabledbParseFormat($m[3] ?? null);
+
+        // Compute raw value based on selector type
+        $rawValue = null;
+        $nullReason = ''; // untuk hover title kalau result null
+        if ($selector['type'] === 'raw') {
+            $rawValue = $rowRaw[$selector['field']] ?? null;
+            if ($rawValue === null && $rowRaw !== null) {
+                $available = array_keys($rowRaw);
+                $nullReason = 'Kolom "' . $selector['field'] . '" tidak ada di SQL rows. '
+                    . 'Kolom tersedia: ' . implode(', ', $available);
+            }
+        } elseif ($selector['type'] === 'formula') {
+            try {
+                $rawValue = \Ezdoc\Table\FormulaEvaluator::evaluateBare($selector['formula'], $rowContext);
+            } catch (\Ezdoc\Exceptions\ValidationException $e) {
+                return '<span style="color:#c00;" title="Formula error">' . htmlspecialchars($e->getMessage(), ENT_QUOTES) . '</span>';
+            }
+            if ($rawValue === null) {
+                $available = is_array($rowContext) ? implode(', ', array_keys($rowContext)) : '(no row)';
+                $nullReason = 'Formula "' . $selector['formula'] . '" return null (kolom missing/non-numeric/div-by-zero). '
+                    . 'Kolom row: ' . $available;
+            }
+        } elseif ($selector['type'] === 'aggregate') {
+            $rawValue = _tabledbComputeAggregate($selector['verb'], $selector['target'], $allRows);
+            if ($rawValue === null) {
+                $target = $selector['target'];
+                // Match auto-detection logic di _tabledbComputeAggregate
+                $isFormula = ($target !== '' && $target[0] === '=')
+                    || preg_match('/[+\-*\/()]|\s/', $target);
+                $available = !empty($allRows) && is_array($allRows[0]) ? implode(', ', array_keys($allRows[0])) : '(no rows)';
+                if (empty($allRows)) {
+                    $nullReason = 'Aggregate: 0 rows dari SQL (query returned empty result set).';
+                } elseif ($isFormula) {
+                    $exprShown = $target[0] === '=' ? substr($target, 1) : $target;
+                    $nullReason = 'Aggregate: formula "' . $exprShown . '" tidak return angka valid di ANY row. '
+                        . 'Kolom tersedia: ' . $available . '. Cek nama kolom di formula.';
+                } else {
+                    $nullReason = 'Aggregate: kolom "' . $target . '" tidak ada atau tidak numeric di SQL rows. '
+                        . 'Kolom tersedia: ' . $available . '.';
+                }
+            }
+        } else {
+            return '<span style="color:#c00;">invalid marker</span>';
+        }
+
+        // Format
+        if ($rawValue === null || $rawValue === '') {
+            // Show dash BUT dgn title tooltip yg explain WHY — user bisa hover cek
+            $titleAttr = $nullReason !== ''
+                ? ' title="' . htmlspecialchars($nullReason, ENT_QUOTES) . '" style="text-decoration:underline dotted #c00;cursor:help;"'
+                : '';
+            return '<span' . $titleAttr . '>—</span>';
+        }
+        return _tabledbFormatValue($rawValue, $format);
+    }, $rowHtml);
+}
+
+/**
+ * Compute aggregate value across all rows.
+ *
+ * @param string $verb   'sum'|'avg'|'count'|'min'|'max'
+ * @param string $target column name OR '=formula' OR '*' (for count)
+ * @param array  $allRows
+ * @return float|int|null
+ */
+function _tabledbComputeAggregate(string $verb, string $target, array $allRows) {
+    // COUNT special case: '*' means count all rows
+    if ($verb === 'count' && $target === '*') {
+        return count($allRows);
+    }
+
+    // Detect formula:
+    // - Explicit prefix `=` → definitely formula (strip =)
+    // - Implicit: target contains operators (+ - * /) atau parens atau space
+    //   → user probably meant formula tanpa prefix (kuantiti * harga_satuan)
+    // - Otherwise: plain column name lookup
+    $isFormula = false;
+    $expr = null;
+    if ($target !== '' && $target[0] === '=') {
+        $isFormula = true;
+        $expr = trim(substr($target, 1));
+    } elseif (preg_match('/[+\-*\/()]|\s/', $target)) {
+        $isFormula = true;
+        $expr = trim($target);
+    }
+
+    $values = [];
+    foreach ($allRows as $row) {
+        if ($isFormula) {
+            try {
+                $val = \Ezdoc\Table\FormulaEvaluator::evaluateBare($expr, $row);
+            } catch (\Ezdoc\Exceptions\ValidationException $e) {
+                continue; // skip row on formula error
+            }
+        } else {
+            $val = $row[$target] ?? null;
+        }
+        if ($val === null || $val === '') continue;
+        if ($verb === 'count') {
+            $values[] = 1.0; // count non-null
+            continue;
+        }
+        if (!is_numeric($val)) continue;
+        $values[] = (float) $val;
+    }
+
+    if (empty($values)) return null;
+
+    switch ($verb) {
+        case 'sum':   return array_sum($values);
+        case 'count': return (float) count($values);
+        case 'avg':   return array_sum($values) / count($values);
+        case 'min':   return (float) min($values);
+        case 'max':   return (float) max($values);
+    }
+    return null;
+}
+
+/**
+ * Format value via Ezdoc\Table\Formatter based on parsed format spec.
+ *
+ * @param mixed $value
+ * @param array $format ['type' => string, 'args' => string[]]
+ * @return string
+ */
+function _tabledbFormatValue($value, array $format): string {
+    $type = $format['type'];
+    $args = $format['args'];
+    switch ($type) {
+        case 'currency':
+            $currency = $args[0] ?? 'IDR';
+            $decimals = isset($args[1]) && is_numeric($args[1]) ? (int) $args[1] : null;
+            return \Ezdoc\Table\Formatter::formatCurrency($value, $currency, $decimals);
+        case 'number':
+            $decimals = isset($args[0]) && is_numeric($args[0]) ? (int) $args[0] : 0;
+            return \Ezdoc\Table\Formatter::formatNumber($value, $decimals);
+        case 'percent':
+            $decimals = isset($args[0]) && is_numeric($args[0]) ? (int) $args[0] : 2;
+            return \Ezdoc\Table\Formatter::formatPercent($value, $decimals);
+        case 'date':
+            $fmt = $args[0] ?? 'd/m/Y';
+            return \Ezdoc\Table\Formatter::formatDate($value, $fmt);
+        case 'datetime':
+            $fmt = $args[0] ?? 'd/m/Y H:i';
+            return \Ezdoc\Table\Formatter::formatDate($value, $fmt);
+        case 'text':
+        default:
+            return \Ezdoc\Table\Formatter::escapeHtml((string) $value);
+    }
+}
+
+// Function to render content for PDF (no form elements, just values)
+/**
+ * @param array{
+ *     values?: array<array-key,mixed>,
+ *     show_verify_qr?: bool,
+ *     verify_doc_id?: int
+ * } $permintaan Nilai yang SUDAH diputuskan pemanggil, bukan permintaan mentah.
+ *     Kosong berarti tidak ada permintaan HTTP di belakangnya — jalur
+ *     pembekuan memanggilnya begitu. Lihat docs/260811-beku-pdf-tiap-tanda-tangan.md.
+ */
+function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFields, $dynamicTables = [], $conn = null, $param_norm = '', $param_nopen = '', $tableDbQueries = [], $doc_id = 0, array $permintaan = []) {
+    // Nilai dari permintaan, kalau memang ada permintaannya. Fungsi ini tidak
+    // lagi menyentuh $_POST/$_GET: dipanggil dari jalur simpan, ia akan
+    // mengambil dari permintaan SIMPAN alih-alih permintaan cetak, dan itu bisa
+    // saja kebetulan benar — persis yang tidak boleh ada di pembuat bukti.
+    $nilaiPermintaan = $permintaan['values'] ?? [];
+
+    // Bawaannya dokumen yang sedang dirender. Pemanggil HTTP tetap mengirimkan
+    // miliknya sendiri supaya perilakunya hari ini tidak bergeser sedikit pun.
+    $verifyDocId = (int) ($permintaan['verify_doc_id'] ?? $doc_id);
+
+    // Position offset corrections to match generator/logo (same as HTML rendering)
+    // Set to 0 = no adjustment (logo is reference)
+    $posOffsetQR = 0;
+    $posOffsetTTD = 0;
+
+    // Replace logo placeholders with actual images
+    $html = preg_replace_callback('/<span[^>]*class="([^"]*logo-placeholder[^"]*)"[^>]*data-logo="([^"]+)"(?:[^>]*data-width="([^"]+)")?(?:[^>]*data-pos-mode="([^"]+)")?(?:[^>]*data-pos-x="([^"]+)")?(?:[^>]*data-pos-y="([^"]+)")?[^>]*>.*?<\/span>/s', function($m) use ($logos, $logoSizes) {
+        $classes = $m[1] ?? '';
+        $logoName = $m[2];
+        $width = $m[3] ?? $logoSizes[$logoName] ?? '80px';
+        $posX = $m[5] ?? '20';
+        $posY = $m[6] ?? '20';
+        $src = $logos[$logoName] ?? '';
+
+        $isFloating = strpos($classes, 'floating') !== false;
+        $isBehind = strpos($classes, 'behind') !== false;
+
+        if ($src) {
+            $style = "width:" . h($width) . ";";
+            $imgClass = "logo-img";
+
+            if ($isFloating) {
+                $imgClass .= " logo-floating";
+                $imgClass .= $isBehind ? " logo-behind" : " logo-front";
+                $style .= "position:absolute;left:{$posX}px;top:{$posY}px;";
+            }
+
+            return '<img src="' . h($src) . '" class="' . $imgClass . '" style="' . $style . '">';
+        }
+        return '';
+    }, $html);
+
+    // Replace TTD placeholders
+    $html = preg_replace_callback('/<div([^>]*class="[^"]*ttd-placeholder[^"]*"[^>]*)>\s*<div[^>]*>.*?<\/div>\s*<div[^>]*>.*?<\/div>\s*<div[^>]*>.*?<\/div>\s*<\/div>/s', function($m) use ($configTtd, $ttdValues, $dbFields, $posOffsetTTD, $conn, $doc_id, $nilaiPermintaan, $verifyDocId, $permintaan) {
+        $tag = $m[1];
+        preg_match('/class="([^"]*)"/', $tag, $cm); $classes = $cm[1] ?? '';
+        preg_match('/data-ttd="([^"]+)"/', $tag, $tm); $ttdId = $tm[1] ?? '';
+        preg_match('/data-label="([^"]+)"/', $tag, $lm); $label = $lm[1] ?? t('fallback.signature', [], 'Signature');
+        preg_match('/data-nama-field="([^"]+)"/', $tag, $nm); $namaField = $nm[1] ?? 'nama_' . $ttdId;
+        preg_match('/data-pos-x="([^"]+)"/', $tag, $xm); $posX = $xm[1] ?? '50';
+        preg_match('/data-pos-y="([^"]+)"/', $tag, $ym); $posY = $ym[1] ?? '100';
+        preg_match('/data-ttd-modes="([^"]+)"/', $tag, $mm); $ttdModes = $mm[1] ?? 'image';
+        preg_match('/data-ttd-qr-data="([^"]+)"/', $tag, $qm); $qrDataTpl = html_entity_decode($qm[1] ?? '');
+        preg_match('/data-default-nama="([^"]*)"/', $tag, $dnm); $defaultNama = html_entity_decode($dnm[1] ?? '');
+
+        if (!$ttdId) return $m[0];
+
+        $isFloating = strpos($classes, 'floating') !== false;
+        $isBehind = strpos($classes, 'behind') !== false;
+
+        $ttdClass = 'ttd-item-inline';
+        $style = '';
+        if ($isFloating) {
+            $ttdClass = 'ttd-item-floating';
+            $ttdClass .= $isBehind ? ' ttd-behind' : ' ttd-front';
+            $adjX = max(0, intval($posX) - $posOffsetTTD);
+            $adjY = max(0, intval($posY) - $posOffsetTTD);
+            $style = "position:absolute;left:{$adjX}px;top:{$adjY}px;";
+        }
+
+        $ttdImg = $ttdValues[$ttdId] ?? '';
+        // Resolve with fall-through on empty: dbFields -> POST -> GET
+        $pickPdf = function($key) use ($dbFields, $nilaiPermintaan) {
+            if (isset($dbFields[$key]) && $dbFields[$key] !== '') return $dbFields[$key];
+            if (isset($nilaiPermintaan[$key]) && $nilaiPermintaan[$key] !== '') return $nilaiPermintaan[$key];
+            return '';
+        };
+        $namaRawPdf = $pickPdf($namaField);
+        if ($namaRawPdf === '' && $defaultNama !== '') $namaRawPdf = $defaultNama;
+        $namaValue = h($namaRawPdf);
+
+        // Determine active mode from saved document data
+        $hasQr = strpos($ttdModes, 'qr') !== false;
+        $hasImage = strpos($ttdModes, 'image') !== false;
+        $savedMode = $pickPdf('_ttd_mode_' . $ttdId);
+        $activeMode = $savedMode ?: ($hasImage ? 'image' : 'qr');
+
+        // ─── Verify QR mode (dokumen-level) ───
+        // Artinya sekarang: "pakai mode QR untuk semua slot sekaligus".
+        //
+        // Dulu ia merender jalur sendiri dengan URL verifikasi dokumen — nilai
+        // yang sama untuk setiap slot, jadi empat penanda tangan menghasilkan
+        // empat QR identik dan tidak ada cara tahu QR yang mana milik siapa.
+        // Sekarang ia hanya memaksa modenya, dan isinya ikut jalur
+        // per-tanda-tangan yang sama seperti toggle per slot.
+        //
+        // Yang dipertahankan dari mode ini: ia menyembunyikan SEMUA gambar tanda
+        // tangan. Gambar bisa disalin ke dokumen lain; pointer ke record server
+        // tidak bisa. Karena itu mode ini memaksa QR bahkan pada slot yang
+        // template-nya cuma mengizinkan gambar — kalau tidak, satu gambar tetap
+        // tercetak dan gunanya hilang.
+        $showVerifyQrModePdf = ($dbFields['_show_verify_qr'] ?? '') === '1'
+            || !empty($permintaan['show_verify_qr']);
+        if ($showVerifyQrModePdf) {
+            $activeMode = 'qr';
+            $hasQr = true;
+        }
+
+        // Render based on active mode
+        if ($activeMode === 'qr' && $hasQr) {
+            // Pointer per tanda tangan — lihat penjelasan panjangnya di
+            // renderContent(). Dihitung ulang tiap render, tidak pernah disimpan.
+            $ttdVerifyUrlPdf = '';
+            $__slugPdfTtd = '';
+            if ($conn instanceof \mysqli && function_exists('doc_verify_ensure_slug') && (int) $doc_id > 0) {
+                $__slugPdfTtd = (string) doc_verify_ensure_slug($conn, (int) $doc_id);
+                if ($__slugPdfTtd !== '' && function_exists('doc_verify_build_url')) {
+                    $ttdVerifyUrlPdf = doc_verify_build_url($__slugPdfTtd, $ttdId);
+                }
+            }
+
+            // Urutannya harus sama dengan layar, kalau tidak QR yang dilihat
+            // petugas berbeda dari yang tercetak:
+            //   1. isi tersimpan  2. pattern template  3. pointer per tanda tangan
+            $qrData = $pickPdf($namaField . '_qr');
+            if ($qrData !== '' && $__slugPdfTtd !== '' && function_exists('doc_verify_resolve_qr_value')) {
+                $qrData = doc_verify_resolve_qr_value($qrData, $__slugPdfTtd, $ttdId);
+            }
+            if ($qrData === '' && $qrDataTpl !== '') {
+                $qrData = preg_replace_callback('/\{([^}]+)\}/', function($pm) use ($pickPdf, $conn, $verifyDocId) {
+                    $key = $pm[1];
+                    // Magic variable: {verify_url} → URL verifikasi dokumen
+                    if ($key === 'verify_url' || $key === 'verify') {
+                        $docId = $verifyDocId;
+                        if ($docId > 0 && function_exists('doc_verify_ensure_slug')) {
+                            $slug = doc_verify_ensure_slug($conn, $docId);
+                            return $slug ? doc_verify_build_url($slug) : '';
+                        }
+                        return '';
+                    }
+                    return $pickPdf($key);
+                }, $qrDataTpl);
+            }
+            // Pattern yang disetel template tapi field-nya masih kosong tidak
+            // diganti diam-diam dengan pointer — itu akan mencetak sesuatu yang
+            // artinya lain dari yang template minta. Pointer hanya mengisi
+            // kekosongan saat memang tidak ada yang dikonfigurasi.
+            //
+            // Dan pointer hanya boleh dicetak kalau slot ini SUDAH ditandatangani.
+            // Kertas beredar tanpa bisa ditarik: QR tercetak yang menunjuk record
+            // yang belum ada akan selamanya menjawab "tanda tangan tidak dikenal".
+            if (trim((string) $qrData) === '' && $qrDataTpl === ''
+                && \Ezdoc\Signature\SignatureValue::isSigned($ttdImg)) {
+                $qrData = $ttdVerifyUrlPdf;
+            }
+            if (trim($qrData) !== '') {
+                try {
+                    // Size 250px (up dari 150) + margin 6 supaya scannable saat di-print
+                    $qrSrc = ezdoc_qr_data_uri($qrData, 250, 6);
+                    // Display size 100x100px — cukup besar untuk scan HP dari jarak wajar
+                    // max-width/max-height none supaya tidak kena override dari CSS parent
+                    $contentHtml = '<img src="' . $qrSrc . '" style="width:100px;height:100px;max-width:none;max-height:none;" alt="QR">';
+                    // Keterangan hanya saat isinya benar-benar pointer verifikasi.
+                    // QR berisi pattern template bisa berisi apa saja — nomor
+                    // barcode, kode antrian — dan "pindai untuk verifikasi" di
+                    // bawahnya akan jadi janji yang tidak dipenuhi.
+                    if ($qrData === $ttdVerifyUrlPdf && $ttdVerifyUrlPdf !== '') {
+                        $contentHtml .= '<div style="font-size:9px;color:#666;margin-top:2px;">'
+                            . h(t('ttd.scan_to_verify', [], 'Scan to verify')) . '</div>';
+                    }
+                } catch (Exception $e) {
+                    $contentHtml = '<div style="height:100px;"></div>';
+                }
+            } else {
+                $contentHtml = '<div style="height:100px;"></div>';
+            }
+        } else {
+            // Penanda mode QR bukan gambar, dan referensi objek harus dibuka dulu.
+            // Tanpa ini keduanya masuk ke atribut src dan yang tercetak adalah
+            // gambar rusak di tempat tanda tangan.
+            $ttdSrcPdf = ezdoc_resolve_signature_image($conn, $ttdImg);
+            $contentHtml = $ttdSrcPdf !== ''
+                ? '<img src="' . h($ttdSrcPdf) . '" class="ttd-signature" alt="TTD">'
+                : '<div style="height:50px;"></div>';
+        }
+
+        return '<div class="' . $ttdClass . '" style="' . $style . '">
+            <div class="ttd-label">' . h($label) . '</div>
+            <div class="ttd-img">' . $contentHtml . '</div>
+            <div class="ttd-name">(' . ($namaValue !== '' ? $namaValue : '..................') . ')</div>
+        </div>';
+    }, $html);
+
+    // Replace MATERAI placeholders with image / empty area for PDF
+    $html = preg_replace_callback('/<div([^>]*class="[^"]*materai-placeholder[^"]*"[^>]*)>\s*<div[^>]*>[\s\S]*?<\/div>\s*<\/div>/s', function($m) use ($dbFields) {
+        $tag = $m[1];
+        preg_match('/class="([^"]*)"/', $tag, $cm); $classes = $cm[1] ?? '';
+        preg_match('/data-materai="([^"]+)"/', $tag, $im); $materaiId = $im[1] ?? '';
+        $label = '';
+        if (preg_match('/data-label="([^"]*)"/', $tag, $lm)) $label = $lm[1];
+        preg_match('/data-mode="([^"]+)"/', $tag, $mm); $matMode = $mm[1] ?? 'upload';
+        preg_match('/data-pos-x="([^"]+)"/', $tag, $xm); $posX = $xm[1] ?? '350';
+        preg_match('/data-pos-y="([^"]+)"/', $tag, $ym); $posY = $ym[1] ?? '500';
+        preg_match('/data-width="([^"]+)"/', $tag, $wm); $matW = max(20, intval($wm[1] ?? 100));
+        preg_match('/data-height="([^"]+)"/', $tag, $hm); $matH = max(20, intval($hm[1] ?? 140));
+
+        if (!$materaiId) return $m[0];
+
+        $isFloating = strpos($classes, 'floating') !== false;
+        $isBehind   = strpos($classes, 'behind') !== false;
+
+        $cls = 'materai-pdf-inline';
+        $style = '';
+        if ($isFloating) {
+            $cls = 'materai-pdf-floating';
+            $cls .= $isBehind ? ' materai-behind' : ' materai-front';
+            $adjX = max(0, intval($posX));
+            $adjY = max(0, intval($posY));
+            $style = "position:absolute;left:{$adjX}px;top:{$adjY}px;";
+        }
+
+        $imgKey = '_materai_' . $materaiId . '_image';
+        $matImg = '';
+        if (isset($dbFields[$imgKey]) && $dbFields[$imgKey] !== '') {
+            $rawImg = $dbFields[$imgKey];
+            if (function_exists('safeDataImg')) {
+                $matImg = safeDataImg($rawImg);
+            } else {
+                $matImg = preg_match('#^data:image/(png|jpe?g|gif);base64,#', $rawImg) ? $rawImg : '';
+            }
+        }
+
+        $body = '';
+        if ($matImg) {
+            // Embedded e-materai image with configured size
+            $body = '<img src="' . h($matImg) . '" style="width:' . $matW . 'px;height:' . $matH . 'px;object-fit:contain;" alt="Materai">';
+        } else {
+            // Empty area (manual stamping or upload mode without image yet)
+            $body = '<div style="width:' . $matW . 'px;height:' . $matH . 'px;border:1px dashed #c2410c;"></div>';
+        }
+
+        $labelHtml = ($label !== '') ? '<div style="font-size:9pt;margin-bottom:3px;color:#000;text-align:center;">' . h($label) . '</div>' : '';
+
+        return '<div class="materai-pdf ' . $cls . '" style="' . $style . 'text-align:center;">' . $labelHtml . $body . '</div>';
+    }, $html);
+
+    // Replace QR placeholders with actual QR code images
+    $html = preg_replace_callback('/<span[^>]*class="([^"]*qr-placeholder[^"]*)"[^>]*data-qr="([^"]+)"(?:[^>]*data-width="([^"]+)")?(?:[^>]*data-pos-mode="([^"]+)")?(?:[^>]*data-pos-x="([^"]+)")?(?:[^>]*data-pos-y="([^"]+)")?[^>]*>.*?<\/span>/s', function($m) use ($dbFields, $posOffsetQR, $conn, $doc_id) {
+        $classes = $m[1] ?? '';
+        $fieldName = $m[2];
+        $width = $m[3] ?? '80px';
+        $posX = $m[5] ?? '20';
+        $posY = $m[6] ?? '20';
+
+        // Get field value for QR data
+        $qrData = $dbFields[$fieldName] ?? '';
+        // Auto-heal stale verify URL supaya PDF juga pakai base URL current
+        if ($qrData !== '' && function_exists('doc_verify_resolve_qr_value') && function_exists('doc_verify_ensure_slug')) {
+            $__slugPdfQR = doc_verify_ensure_slug($conn, (int)$doc_id);
+            if ($__slugPdfQR) $qrData = doc_verify_resolve_qr_value($qrData, $__slugPdfQR);
+        }
+
+        $isFloating = strpos($classes, 'floating') !== false;
+        $isBehind = strpos($classes, 'behind') !== false;
+
+        if ($qrData) {
+            // Generate QR code
+            $qrSrc = ezdoc_qr_data_uri($qrData, 200, 5);
+            $style = "width:" . h($width) . ";height:auto;";
+            $imgClass = "qr-img";
+
+            if ($isFloating) {
+                $imgClass .= " qr-floating";
+                $imgClass .= $isBehind ? " qr-behind" : " qr-front";
+                // Apply offset correction (QR has 8px padding in generator)
+                $adjX = max(0, intval($posX) - $posOffsetQR);
+                $adjY = max(0, intval($posY) - $posOffsetQR);
+                $style .= "position:absolute;left:{$adjX}px;top:{$adjY}px;";
+            }
+
+            return '<img src="' . $qrSrc . '" class="' . $imgClass . '" style="' . $style . '" alt="QR">';
+        }
+        return ''; // No QR if no data
+    }, $html);
+
+    // ===== TABLEDB (enhanced markers v0.9.14b, PDF) =====
+    // Same processor as HTML render path.
+    if (!empty($tableDbQueries) && is_array($tableDbQueries)) {
+        $html = processTabledbRows($html, $tableDbQueries, $param_norm, $param_nopen, $dbFields, $conn);
+    }
+
+    // ===== CONDITIONAL SECTIONS (#7) =====
+    // Strip blocks where condition fails; keep inner content of blocks where it passes.
+    $html = processConditionalSections($html, $dbFields);
+
+    // Replace field placeholders with value text for PDF
+    $html = preg_replace_callback('/<span[^>]*class=["\']field-placeholder[^"\']*["\']([^>]*)>\{\{([^}:]+)(?::text)?\}\}<\/span>/', function($m) use ($dbFields) {
+        $attrs = $m[1];
+        $name = $m[2];
+        $val = isset($dbFields[$name]) && $dbFields[$name] !== '' ? $dbFields[$name] : '';
+
+        // Parse type and default
+        $type = 'text';
+        $label = '';
+        $default = '';
+        if (preg_match('/data-type=["\']([^"\']+)["\']/', $attrs, $tm)) $type = $tm[1];
+        if (preg_match('/data-label=["\']([^"\']+)["\']/', $attrs, $lm)) $label = html_entity_decode($lm[1]);
+        if (preg_match('/data-default=["\']([^"\']+)["\']/', $attrs, $dm)) $default = html_entity_decode($dm[1]);
+
+        // If no saved value, use resolved default
+        if ($val === '' && $default !== '') {
+            $val = resolveDefault($default);
+        }
+
+        return renderFieldForPdf($name, $type, $val, $label);
+    }, $html);
+
+    // Handle bare {{field}}
+    $html = preg_replace_callback('/\{\{([^}:]+)(?::text)?\}\}/', function($m) use ($dbFields) {
+        $name = $m[1];
+        $val = isset($dbFields[$name]) ? $dbFields[$name] : '';
+        return renderFieldForPdf($name, 'text', $val, '');
+    }, $html);
+
+    // Process <p> tags - mark floating-only for paragraphs with only floating elements
+    $html = preg_replace_callback('/<p([^>]*)>([\s\S]*?)<\/p>/i', function($match) {
+        $attrs = $match[1];
+        $content = $match[2];
+
+        // Check if contains floating elements
+        $floatingClasses = ['ttd-item-floating', 'qr-item-floating', 'logo-floating', 'qr-floating'];
+        $hasFloating = false;
+        foreach ($floatingClasses as $fc) {
+            if (strpos($content, $fc) !== false) {
+                $hasFloating = true;
+                break;
+            }
+        }
+
+        // If no floating elements, keep unchanged (including empty <p> for spacing)
+        if (!$hasFloating) {
+            return $match[0];
+        }
+
+        // Get text content only (strip all tags)
+        $textOnly = strip_tags($content);
+        $textOnly = preg_replace('/&nbsp;/i', ' ', $textOnly);
+        $textOnly = trim($textOnly);
+
+        // If has floating element but no text content, mark as floating-only
+        if (empty($textOnly)) {
+            if (strpos($attrs, 'class=') !== false) {
+                $attrs = preg_replace('/class=["\']([^"\']*)["\']/', 'class="$1 floating-only"', $attrs);
+            } else {
+                $attrs .= ' class="floating-only"';
+            }
+            return '<p' . $attrs . '>' . $content . '</p>';
+        }
+
+        return $match[0]; // Has floating + text, keep unchanged
+    }, $html);
+
+    return $html;
+}
+
+// Render field value for PDF (no inputs, just text)
+function renderFieldForPdf($name, $type, $val, $label) {
+    $hVal = h($val);
+
+    switch ($type) {
+        case 'checkbox':
+            $checked = ($val === '1' || $val === 'true' || $val === 'yes' || $val === 'Ya');
+            // DejaVu Sans supports the box glyphs; default DOMPDF fonts (Helvetica/Times) don't
+            $icon = '<span style="font-family: DejaVu Sans, sans-serif;">' . ($checked ? '☑' : '☐') . '</span>';
+            $labelSuffix = $label !== '' ? ' ' . h($label) : '';
+            return '<span class="f-pdf">' . $icon . $labelSuffix . '</span>';
+
+        case 'date':
+            if ($val) {
+                // Format date nicely
+                $timestamp = strtotime($val);
+                if ($timestamp) {
+                    $hVal = date('d/m/Y', $timestamp);
+                }
+            }
+            return '<span class="f-pdf">' . ($hVal ?: '........') . '</span>';
+
+        case 'time':
+            // `strtotime('14:30')` mengembalikan jam itu HARI INI, jadi hasilnya
+            // benar untuk format 'H:i' dan tidak bergantung pada tanggal apa pun.
+            // Nilai yang tersimpan sudah 24 jam, tapi tetap dilewatkan formatter
+            // supaya 'HH:MM:SS' dari sumber lain ikut tercetak rapi.
+            if ($val) {
+                $timestamp = strtotime($val);
+                if ($timestamp) {
+                    $hVal = date('H:i', $timestamp);
+                }
+            }
+            return '<span class="f-pdf">' . ($hVal ?: '.....') . '</span>';
+
+        case 'number':
+        case 'radio':
+        case 'select':
+        default:
+            return '<span class="f-pdf">' . ($hVal ?: '........') . '</span>';
+    }
+}
+
