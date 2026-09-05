@@ -26,8 +26,6 @@
  *
  * spec: docs/VIEWS.md (v1.0)
  */
-// @phpstan-ignore-next-line — vars ARE defined at runtime via include scope share
-/** @phpstan-ignore variable.undefined */
 ?>
     <script>
         // ===== EZDOC_DEBUG — client-side diagnostic bag =====

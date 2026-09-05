@@ -196,6 +196,49 @@ menyimpan, penanda tangan kedua kehilangan satu-satunya jalannya.
 Tooltipnya dibedakan: `title.update_off_signed` untuk yang baru sebagian,
 `title.update_off_all_signed` untuk yang lengkap. Dua bahasa.
 
+### Variabel yang hilang di dalam closure
+
+**Fixed — `use()` yang kurang satu nama, dua kejadian (2026-09-05)**
+
+Ditemukan saat menyiapkan penangkap keluaran untuk Tahap 2, bukan oleh tes.
+Keduanya sudah lolos suite penuh dan PHPStan.
+
+**Satu buatan sendiri, dari Tahap 1b sehari sebelumnya.** `$nilaiPermintaan` dan
+`$verifyDocId` dideklarasikan di kepala `renderContentForPdf()`, tapi `$pickPdf`
+hidup di dalam closure `ttd-placeholder` — dan closure itu tidak membawa
+keduanya. Akibatnya di jalur PDF: nama penanda tangan yang datang dari permintaan
+(bukan dari field tersimpan) tidak lagi terisi, dan `{verify_url}` menghitung
+dokumen nol.
+
+**Satu lagi sudah ada sejak lama.** Closure `qr-placeholder` di jalur layar
+memakai `$conn` dan `$doc_id` tanpa membawanya, jadi penyembuhan URL verifikasi
+yang basi diam-diam tidak pernah berjalan.
+
+Kelas kesalahan yang sama, dan mahalnya sama: `use()` yang kurang satu nama tidak
+menghasilkan galat apa pun saat dijalankan. PHP memperlakukan variabelnya sebagai
+null, `isset()` menjawab false, dan cabang yang seharusnya jalan dilewati tanpa
+suara.
+
+**Akar kenapa keduanya lolos:** PHPStan hanya menganalisis `src/`.
+`views/document/generate.php` — 3.200 baris, berkas paling rawan di proyek ini —
+tidak pernah diperiksa sama sekali.
+
+- `phpstan-views.neon` baru: level 0 untuk `views/`, `lib/`, `actions/`.
+  Terpisah dari `phpstan.neon` karena `src/` di level 5 dan ketiga folder ini
+  belum siap untuk itu — menunggu siap berarti tidak dianalisis sama sekali,
+  dan itu yang terjadi selama ini
+- level 0 sudah menangkap kelas ini, dan seluruhnya cuma 12 galat
+- `composer stan:views`, dan ikut di `composer check`
+- fungsi milik aplikasi pemakai (`doc_verify_*`, `generateQrForDompdf`)
+  diabaikan lewat config, sama seperti dompdf di `phpstan.neon`
+- dua penanda `@phpstan-ignore` basi di `generate_scripts.php` dibuang
+
+**Catatan untuk dikerjakan:** `generateQrForDompdf()` didefinisikan di
+`koneksi.php` milik aplikasi pemakai, tapi dipanggil **tanpa penjaga
+`function_exists`** dari tiga tempat di kode library. Hari ini selamat karena
+seluruh aplikasi memuat `koneksi.php` lebih dulu; ia tetap melanggar netralitas
+library dan akan meledak pada pemasangan lain.
+
 ### Beku PDF tiap tanda tangan — Tahap 1b
 
 **Changed — perender isi PDF tidak lagi membaca permintaan yang berjalan (2026-09-05)**

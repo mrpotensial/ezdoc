@@ -1633,7 +1633,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
     }, $html);
 
     // Replace QR placeholders with QR code + editable input
-    $html = preg_replace_callback('/<span[^>]*class="([^"]*qr-placeholder[^"]*)"[^>]*data-qr="([^"]+)"(?:[^>]*data-width="([^"]+)")?(?:[^>]*data-pos-mode="([^"]+)")?(?:[^>]*data-pos-x="([^"]+)")?(?:[^>]*data-pos-y="([^"]+)")?[^>]*>.*?<\/span>/s', function($m) use ($posOffsetQR) {
+    $html = preg_replace_callback('/<span[^>]*class="([^"]*qr-placeholder[^"]*)"[^>]*data-qr="([^"]+)"(?:[^>]*data-width="([^"]+)")?(?:[^>]*data-pos-mode="([^"]+)")?(?:[^>]*data-pos-x="([^"]+)")?(?:[^>]*data-pos-y="([^"]+)")?[^>]*>.*?<\/span>/s', function($m) use ($posOffsetQR, $conn, $doc_id) {
         $classes = $m[1] ?? '';
         $fieldName = $m[2];
         $width = $m[3] ?? '80px';
@@ -2088,7 +2088,7 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
     }, $html);
 
     // Replace TTD placeholders
-    $html = preg_replace_callback('/<div([^>]*class="[^"]*ttd-placeholder[^"]*"[^>]*)>\s*<div[^>]*>.*?<\/div>\s*<div[^>]*>.*?<\/div>\s*<div[^>]*>.*?<\/div>\s*<\/div>/s', function($m) use ($configTtd, $ttdValues, $dbFields, $posOffsetTTD, $conn, $doc_id) {
+    $html = preg_replace_callback('/<div([^>]*class="[^"]*ttd-placeholder[^"]*"[^>]*)>\s*<div[^>]*>.*?<\/div>\s*<div[^>]*>.*?<\/div>\s*<div[^>]*>.*?<\/div>\s*<\/div>/s', function($m) use ($configTtd, $ttdValues, $dbFields, $posOffsetTTD, $conn, $doc_id, $nilaiPermintaan, $verifyDocId, $permintaan) {
         $tag = $m[1];
         preg_match('/class="([^"]*)"/', $tag, $cm); $classes = $cm[1] ?? '';
         preg_match('/data-ttd="([^"]+)"/', $tag, $tm); $ttdId = $tm[1] ?? '';

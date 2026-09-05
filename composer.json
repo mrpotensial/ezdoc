@@ -58,9 +58,11 @@
         "test": "phpunit",
         "stan": "phpstan analyse --memory-limit=1G",
         "stan:baseline": "phpstan analyse --memory-limit=1G --generate-baseline=phpstan-baseline.neon",
+        "stan:views": "phpstan analyse --memory-limit=1G -c phpstan-views.neon",
         "check": [
             "@test",
-            "@stan"
+            "@stan",
+            "@stan:views"
         ]
     },
     "config": {

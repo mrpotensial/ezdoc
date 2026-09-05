@@ -1,0 +1,32 @@
+# PHPStan level 0 untuk views/, lib/, actions/.
+#
+# Kenapa terpisah dari phpstan.neon: `src/` dianalisis di level 5, sementara
+# ketiga folder ini belum siap untuk itu. Menunggu siap berarti tidak dianalisis
+# sama sekali — dan itu yang terjadi selama ini.
+#
+# Level 0 sudah cukup untuk kelas kesalahan yang paling mahal di berkas-berkas
+# ini: variabel yang tidak terdefinisi di dalam closure. `use()` yang kurang satu
+# nama tidak menghasilkan galat apa pun saat dijalankan — PHP cuma memperlakukan
+# variabelnya sebagai null, `isset()` menjawab false, dan cabang yang seharusnya
+# jalan diam-diam dilewati. Dua kejadian ditemukan pada hari config ini dibuat,
+# satu di jalur PDF dan satu di jalur layar; keduanya sudah ada berbulan-bulan.
+#
+#   composer stan:views
+#
+# Naikkan levelnya kalau folder-folder ini sudah rapi. Jangan menurunkan cakupan.
+
+parameters:
+    level: 0
+
+    paths:
+        - views
+        - lib
+        - actions
+
+    # Fungsi milik aplikasi pemakai, bukan milik ezdoc. Dipanggil lewat penjaga
+    # `function_exists()` dan memang tidak ada saat library dianalisis sendirian
+    # — sama seperti dompdf di phpstan.neon.
+    ignoreErrors:
+        -
+            identifier: function.notFound
+            message: '#Function (doc_verify_[a-z_]+|generateQrForDompdf) not found\.#'
