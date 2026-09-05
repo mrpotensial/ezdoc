@@ -194,9 +194,37 @@ Dipanggil dari `save_document.php`, ia akan mengambil dari permintaan
 benar — dan "kebetulan benar" persis yang tidak boleh ada di jalur pembuat
 bukti.
 
-**Tahap 1b (baru):** buat `renderContentForPdf()` menerima nilainya secara
-eksplisit, bukan mengambil dari `$_POST`/`$_GET`. Dibuktikan dengan cara yang
-sama: tangkap, ubah, banding.
+### Tahap 1b — ✅ selesai 2026-09-05
+
+`renderContentForPdf()` menerima nilainya, bukan mengambilnya. Badan fungsinya
+sekarang nol pembacaan `$_POST`/`$_GET`/`$_REQUEST`/`$_SESSION`/`$_SERVER`.
+
+Tiga tempat, dan ketiganya berbeda sifat — karena itu ketiganya diserahkan
+secara terpisah, bukan dengan mengoper `$_POST`/`$_GET` masuk (yang cuma
+memindahkan masalahnya satu meter):
+
+| Dulu | Sekarang | Kenapa terpisah |
+|---|---|---|
+| `$pickPdf`: dbFields → POST → GET | `$permintaan['values']` | "ambil yang pertama tidak kosong" — bisa diratakan jadi satu peta |
+| `_show_verify_qr` di POST **atau** GET | `$permintaan['show_verify_qr']` | menanyakan "nilainya tepat `'1'`", bukan "tidak kosong". Diratakan, `=0` di POST akan menutupi `=1` di GET |
+| `$_GET['doc_id'] ?? $_POST['_doc_id']` | `$permintaan['verify_doc_id']` | kunci berbeda per sumber, dan pakai `isset` bukan tidak-kosong |
+
+Perakitannya pindah ke pemanggil HTTP, dan `ezdoc_pdf_request_values()` di
+`lib/pdf_compose.php` yang meratakan yang pertama. Bawaan `verify_doc_id` adalah
+dokumen yang sedang dirender — pemanggil HTTP tetap mengirimkan miliknya sendiri
+supaya perilaku hari ini tidak bergeser sedikit pun.
+
+**Buktinya sejauh ini:** transformasinya setara-per-konstruksi (ekspresi di
+pemanggil salinan persis dari yang dulu tertanam), ditambah
+`tests/Rendering/PdfRequestValuesTest.php` — 16 tes, termasuk perbandingan
+langsung lawan tiruan rantai `if` yang lama. Dua uji mutasi merah lebih dulu:
+perakitan yang memakai `array_merge` biasa, dan perender yang kembali membaca
+`$_GET`.
+
+**Yang BELUM:** perbandingan hasil sepuluh dokumen sungguhan seperti Tahap 1.
+Alatnya masih ada (`page/ezdoc_capture_pdf.php`) dan perlu dijalankan dari
+peramban yang sudah login. Sampai itu dikerjakan, buktinya bukan "10 dari 10
+identik byte per byte" — sebut apa adanya.
 
 ### Tahap 1 — cara mengerjakannya (arsip)
 
@@ -285,13 +313,19 @@ ulang, seluruh rencana ini tidak ada gunanya.
 
 ---
 
-## 6. Yang perlu diputuskan sebelum Tahap 2
+## 6. Keputusan — ✅ semua terjawab 2026-09-05
 
-| | Pertanyaan | Catatan |
+| | Pertanyaan | Keputusan |
 |---|---|---|
-| 1 | Dokumen lama yang sudah ditandatangani tapi belum punya artefak — dibiarkan, atau dibekukan sekali saat pertama dicetak? | Membekukannya sekarang berarti mengabadikan tampilan **hari ini**, bukan tampilan saat ia ditandatangani. Itu tidak jujur. Saran: dibiarkan, dan ditandai "tanpa arsip tampilan" |
-| 2 | Kalau kunci penyegel belum terpasang, tetap bekukan tanpa segel? | Saran: ya. Beku tanpa segel masih menjawab "tampilannya tidak berubah di dalam sistem". Segel menambah kemampuan membuktikannya di luar |
-| 3 | Berapa lama artefak disimpan? | Rekam medis di Indonesia: minimal 5 tahun (Permenkes 24/2022). Ini keputusan pemasangan, bukan library |
+| 1 | Dokumen lama yang sudah ditandatangani tapi belum punya artefak | **Dibiarkan**, ditandai "tanpa arsip tampilan". Membekukannya sekarang berarti mengabadikan tampilan **hari ini**, bukan tampilan saat ia ditandatangani — dan itu tidak jujur |
+| 2 | Kalau kunci penyegel belum terpasang, tetap bekukan tanpa segel? | **Ya.** Beku tanpa segel sudah menjawab masalah utamanya: sunting template tidak lagi mengubah dokumen lama. Segel menambah kemampuan membuktikan ke pihak LUAR, dan itu tidak menghalangi. Menunggu kunci berarti dokumen yang ditandatangani minggu ini kehilangan kesempatan diarsipkan selamanya — waktunya tidak bisa diulang |
+| 3 | Berapa lama artefak disimpan? | **Minimal 5 tahun** (Permenkes 24/2022). Keputusan pemasangan, bukan library |
+
+Akibat dari (1) dan (2) yang perlu dinyatakan: artefak yang dibekukan tanpa segel
+**tidak otomatis bersegel** ketika kuncinya dipasang nanti. Menyegel belakangan
+menghasilkan berkas dengan sidik jari berbeda, dan §5 melarang menukar byte yang
+sudah disimpan. Jadi yang lama tetap "beku tanpa segel" — sama seperti dokumen
+lama pada keputusan (1).
 
 ---
 

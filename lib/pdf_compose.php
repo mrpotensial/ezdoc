@@ -17,10 +17,10 @@
  * Yang pindah ke sini: **kerangka dokumennya** — CSS, `@page`, tiga titik
  * sisipan consumer, blok tanda tangan format lama, dan penutupnya.
  *
- * Yang belum: perenderan ISI (`renderContentForPdf()` beserta rantai fungsinya).
- * Ia membaca `$_POST` dan `$_GET` langsung, jadi memindahkannya apa adanya akan
- * membawa serta ketergantungan pada permintaan yang sedang berjalan — dan itu
- * justru yang harus hilang sebelum pembekuan saat tanda tangan bisa bekerja.
+ * Yang belum: perenderan ISI (`renderContentForPdf()` beserta rantai fungsinya)
+ * masih tinggal di view. Tapi sejak Tahap 1b ia tidak lagi membaca permintaan
+ * yang sedang berjalan — nilainya diserahkan pemanggil, dan
+ * {@see ezdoc_pdf_request_values()} di bawah yang merakitnya.
  * Isinya karena itu diterima sebagai masukan, sudah jadi.
  *
  * ## Aturan pemindahan ini
@@ -281,4 +281,34 @@ function ezdoc_compose_pdf_html(array $in): string
     $pdfHtml .= '</div></body></html>';
 
     return $pdfHtml;
+}
+
+/**
+ * Nilai-nilai dari permintaan HTTP, dirakit jadi satu peta datar.
+ *
+ * Aturannya sama persis dengan yang dulu tertanam di `renderContentForPdf()`:
+ * telusuri sumber sesuai urutan, ambil yang PERTAMA tidak kosong. Yang kosong
+ * dilewati, bukan menang — `?nama=` di URL tidak boleh menghapus nilai yang
+ * sudah ada di `$_POST`.
+ *
+ * Dipakai pemanggil, bukan oleh perendernya. Itu intinya: perender bukti tidak
+ * boleh punya pendapat tentang permintaan mana yang sedang berjalan.
+ *
+ * @param array<array-key,mixed> ...$sumber urutan menentukan; yang lebih dulu menang
+ * @return array<array-key,mixed>
+ */
+function ezdoc_pdf_request_values(array ...$sumber): array
+{
+    $hasil = [];
+
+    foreach ($sumber as $satu) {
+        foreach ($satu as $kunci => $nilai) {
+            if ($nilai === '' || array_key_exists($kunci, $hasil)) {
+                continue;
+            }
+            $hasil[$kunci] = $nilai;
+        }
+    }
+
+    return $hasil;
 }

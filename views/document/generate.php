@@ -1935,16 +1935,33 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         }
     }
 
+    // Nilai dari permintaan dirakit DI SINI, lalu diserahkan.
+    //
+    // Ketiganya salinan persis dari yang dulu tertanam di dalam perendernya,
+    // supaya keluarannya hari ini tidak bergeser sedikit pun. Yang berpindah
+    // cuma siapa yang memutuskan — dan itu yang membuat jalur pembekuan bisa
+    // memanggil perender yang sama tanpa membawa permintaan cetak.
+    $permintaanPdf = [
+        'values'         => ezdoc_pdf_request_values($_POST, $_GET),
+        // Dipisah dari 'values' dengan sengaja: yang ini menanyakan "apakah
+        // NILAINYA tepat '1'", bukan "apa nilai pertama yang tidak kosong".
+        // Digabung, `_show_verify_qr=0` di POST akan menutupi `=1` di GET.
+        'show_verify_qr' => ($_POST['_show_verify_qr'] ?? '') === '1'
+                            || ($_GET['_show_verify_qr'] ?? '') === '1',
+        // Kunci yang berbeda per sumber, dan pakai isset bukan tidak-kosong.
+        'verify_doc_id'  => (int) ($_GET['doc_id'] ?? $_POST['_doc_id'] ?? 0),
+    ];
+
     // Render content for PDF (with filled values, no form elements)
-    $pdfContent = renderContentForPdf($templateHtml, $logos, $logoSizes, $configTtd, $ttdValues, $pdfFields, [], $conn, $param_norm, $param_nopen, $tableDbQueries, (int)$doc_id);
+    $pdfContent = renderContentForPdf($templateHtml, $logos, $logoSizes, $configTtd, $ttdValues, $pdfFields, [], $conn, $param_norm, $param_nopen, $tableDbQueries, (int)$doc_id, $permintaanPdf);
 
     // Kerangka dokumennya dirakit di lib/pdf_compose.php — CSS, @page, tiga titik
     // sisipan consumer, blok tanda tangan format lama, dan penutupnya.
     //
     // Dipindah ke sana supaya pembekuan dokumen bisa merakit HTML yang sama dari
     // tempat yang sama sekali berbeda; lihat docs/260811-beku-pdf-tiap-tanda-tangan.md.
-    // Perenderan ISI belum ikut pindah — ia membaca $_POST dan $_GET langsung,
-    // dan itu justru yang harus hilang lebih dulu.
+    // Perenderan ISI masih tinggal di berkas ini, tapi sejak Tahap 1b ia tidak
+    // lagi membaca permintaan — nilainya diserahkan lewat $permintaanPdf.
     $pdfHtml = ezdoc_compose_pdf_html([
         'template'             => $template,
         'doc_id'               => (int) $doc_id,
@@ -2018,7 +2035,26 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
 }
 
 // Function to render content for PDF (no form elements, just values)
-function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFields, $dynamicTables = [], $conn = null, $param_norm = '', $param_nopen = '', $tableDbQueries = [], $doc_id = 0) {
+/**
+ * @param array{
+ *     values?: array<array-key,mixed>,
+ *     show_verify_qr?: bool,
+ *     verify_doc_id?: int
+ * } $permintaan Nilai yang SUDAH diputuskan pemanggil, bukan permintaan mentah.
+ *     Kosong berarti tidak ada permintaan HTTP di belakangnya — jalur
+ *     pembekuan memanggilnya begitu. Lihat docs/260811-beku-pdf-tiap-tanda-tangan.md.
+ */
+function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFields, $dynamicTables = [], $conn = null, $param_norm = '', $param_nopen = '', $tableDbQueries = [], $doc_id = 0, array $permintaan = []) {
+    // Nilai dari permintaan, kalau memang ada permintaannya. Fungsi ini tidak
+    // lagi menyentuh $_POST/$_GET: dipanggil dari jalur simpan, ia akan
+    // mengambil dari permintaan SIMPAN alih-alih permintaan cetak, dan itu bisa
+    // saja kebetulan benar — persis yang tidak boleh ada di pembuat bukti.
+    $nilaiPermintaan = $permintaan['values'] ?? [];
+
+    // Bawaannya dokumen yang sedang dirender. Pemanggil HTTP tetap mengirimkan
+    // miliknya sendiri supaya perilakunya hari ini tidak bergeser sedikit pun.
+    $verifyDocId = (int) ($permintaan['verify_doc_id'] ?? $doc_id);
+
     // Position offset corrections to match generator/logo (same as HTML rendering)
     // Set to 0 = no adjustment (logo is reference)
     $posOffsetQR = 0;
@@ -2081,10 +2117,9 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
 
         $ttdImg = $ttdValues[$ttdId] ?? '';
         // Resolve with fall-through on empty: dbFields -> POST -> GET
-        $pickPdf = function($key) use ($dbFields) {
+        $pickPdf = function($key) use ($dbFields, $nilaiPermintaan) {
             if (isset($dbFields[$key]) && $dbFields[$key] !== '') return $dbFields[$key];
-            if (isset($_POST[$key]) && $_POST[$key] !== '') return $_POST[$key];
-            if (isset($_GET[$key]) && $_GET[$key] !== '') return $_GET[$key];
+            if (isset($nilaiPermintaan[$key]) && $nilaiPermintaan[$key] !== '') return $nilaiPermintaan[$key];
             return '';
         };
         $namaRawPdf = $pickPdf($namaField);
@@ -2112,8 +2147,7 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
         // template-nya cuma mengizinkan gambar — kalau tidak, satu gambar tetap
         // tercetak dan gunanya hilang.
         $showVerifyQrModePdf = ($dbFields['_show_verify_qr'] ?? '') === '1'
-            || ($_POST['_show_verify_qr'] ?? '') === '1'
-            || ($_GET['_show_verify_qr'] ?? '') === '1';
+            || !empty($permintaan['show_verify_qr']);
         if ($showVerifyQrModePdf) {
             $activeMode = 'qr';
             $hasQr = true;
@@ -2140,11 +2174,11 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
                 $qrData = doc_verify_resolve_qr_value($qrData, $__slugPdfTtd, $ttdId);
             }
             if ($qrData === '' && $qrDataTpl !== '') {
-                $qrData = preg_replace_callback('/\{([^}]+)\}/', function($pm) use ($pickPdf, $conn) {
+                $qrData = preg_replace_callback('/\{([^}]+)\}/', function($pm) use ($pickPdf, $conn, $verifyDocId) {
                     $key = $pm[1];
                     // Magic variable: {verify_url} → URL verifikasi dokumen
                     if ($key === 'verify_url' || $key === 'verify') {
-                        $docId = (int)($_GET['doc_id'] ?? $_POST['_doc_id'] ?? 0);
+                        $docId = $verifyDocId;
                         if ($docId > 0 && function_exists('doc_verify_ensure_slug')) {
                             $slug = doc_verify_ensure_slug($conn, $docId);
                             return $slug ? doc_verify_build_url($slug) : '';

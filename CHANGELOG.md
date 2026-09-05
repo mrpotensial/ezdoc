@@ -196,6 +196,48 @@ menyimpan, penanda tangan kedua kehilangan satu-satunya jalannya.
 Tooltipnya dibedakan: `title.update_off_signed` untuk yang baru sebagian,
 `title.update_off_all_signed` untuk yang lengkap. Dua bahasa.
 
+### Beku PDF tiap tanda tangan — Tahap 1b
+
+**Changed — perender isi PDF tidak lagi membaca permintaan yang berjalan (2026-09-05)**
+
+Penghalang terakhir sebelum pembekuan-saat-tanda-tangan bisa dikerjakan.
+
+Selama `renderContentForPdf()` membaca `$_POST`/`$_GET` sendiri, memanggilnya
+dari jalur simpan berarti ia mengambil dari permintaan **simpan**, bukan
+permintaan **cetak**. Itu bisa saja kebetulan menghasilkan yang benar — dan
+"kebetulan benar" persis yang tidak boleh ada di jalur pembuat bukti.
+
+Tiga tempat, dan ketiganya berbeda sifat. Karena itu ketiganya diserahkan
+terpisah, bukan dengan mengoper `$_POST`/`$_GET` masuk — yang cuma memindahkan
+masalahnya satu meter:
+
+| Dulu | Sekarang | Kenapa terpisah |
+|---|---|---|
+| `$pickPdf`: dbFields → POST → GET | `$permintaan['values']` | "pertama yang tidak kosong" — bisa diratakan jadi satu peta |
+| `_show_verify_qr` di POST **atau** GET | `$permintaan['show_verify_qr']` | menanyakan "nilainya tepat `'1'`". Diratakan, `=0` di POST akan menutupi `=1` di GET |
+| `$_GET['doc_id'] ?? $_POST['_doc_id']` | `$permintaan['verify_doc_id']` | kunci berbeda per sumber, dan pakai `isset` bukan tidak-kosong |
+
+- `ezdoc_pdf_request_values()` di `lib/pdf_compose.php` meratakan yang pertama.
+  Yang kosong DILEWATI, bukan menang: `?nama=` di URL tidak boleh menghapus nilai
+  yang sudah ada di `$_POST`
+- bawaan `verify_doc_id` adalah dokumen yang sedang dirender; pemanggil HTTP tetap
+  mengirimkan miliknya sendiri supaya perilaku hari ini tidak bergeser
+- badan fungsinya diperiksa ulang lewat `token_get_all`: nol pembacaan
+  `$_POST`/`$_GET`/`$_REQUEST`/`$_SESSION`/`$_SERVER`
+
+`tests/Rendering/PdfRequestValuesTest.php` — 16 tes, termasuk perbandingan
+langsung lawan tiruan rantai `if` yang lama, delapan kasus. Dua uji mutasi merah
+lebih dulu: perakitan yang memakai `array_merge` biasa, dan perender yang kembali
+membaca `$_GET`.
+
+**Batas buktinya, disebut apa adanya:** ini setara-per-konstruksi plus tes unit.
+Perbandingan sepuluh dokumen sungguhan seperti Tahap 1 **belum** dijalankan —
+alatnya ada (`page/ezdoc_capture_pdf.php`) dan perlu peramban yang sudah login.
+
+Keputusan §6 rencananya juga sudah terjawab semua: dokumen lama dibiarkan dan
+ditandai "tanpa arsip tampilan"; beku tanpa segel tetap dilakukan kalau kunci
+belum terpasang; artefak disimpan minimal 5 tahun (Permenkes 24/2022).
+
 ### v1.0-prep track — "By: 18"
 
 **Fixed — banner versi tersembunyi menyebut id, bukan nama (2026-09-02)**
