@@ -1,0 +1,24 @@
+# Akhir baris dikunci LF, dan ini bukan selera.
+#
+# Keluaran perakit PDF dibandingkan BYTE PER BYTE lawan berkas contoh di
+# tests/fixtures/. Newline di dalam heredoc kode ikut masuk ke keluaran itu.
+# Dengan core.autocrlf=true, `git checkout` mengubah kode jadi CRLF sementara
+# berkas contohnya tetap LF — dan seluruh bukti "identik byte per byte" runtuh
+# karena alasan yang tidak ada hubungannya dengan kode.
+#
+# Kejadian nyata 2026-09-08: pemulihan working tree membuat empat snapshot
+# merah tanpa satu baris kode pun berubah.
+#
+# Library ini juga dimaksudkan untuk dipasang di Linux. LF adalah bentuk yang
+# tersimpan di git; menyimpannya juga di disk membuat keduanya tidak pernah
+# berselisih.
+* text=auto eol=lf
+
+# Biner: jangan disentuh sama sekali.
+*.png binary
+*.jpg binary
+*.gif binary
+*.pdf binary
+*.ico binary
+*.woff binary
+*.woff2 binary
