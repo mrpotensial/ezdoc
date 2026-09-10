@@ -305,6 +305,33 @@ Yang dijaga tes: `tests/Rendering/PdfContentChainTest.php` memanggil rantainya
 tanpa me-require view sama sekali. Kesetaraan byte dibuktikan di luar suite,
 karena bahannya template sungguhan milik pemasangan ini.
 
+### Tahap 2b langkah 1 — derivasi tata letak keluar dari view — ✅ selesai 2026-09-10
+
+**Hasilnya: 19 dari 19 template identik byte per byte, 10.313.018 byte** — seluruh
+template aktif di basis data pemasangan ini, bukan sampel.
+
+`ezdoc_template_layout(array $template): array` di `lib/pdf_compose.php`
+menurunkan 19 keputusan dari satu baris template: HTML + elemen mengambang,
+konfigurasi ttd (dari placeholder atau format lama), logo, ukuran kertas,
+orientasi, padding, mode tata letak.
+
+114 baris keluar dari view; `generate.php` 146.586 → 143.133 byte. Pemanggilnya
+membongkar hasilnya ke nama variabel yang sama seperti dulu, jadi sisa halaman
+tidak berubah sebaris pun.
+
+Diperiksa lebih dulu, sebelum dipindah: blok itu **hanya** membaca `$template`.
+Yang sempat tampak seperti ketergantungan luar ternyata parameter keluaran
+`preg_match` dan variabel lain yang kebetulan berawalan sama.
+
+Yang dijaga tes: `tests/Rendering/TemplateLayoutTest.php` — 11 tes. Termasuk
+lanskap yang harus MENUKAR sisi kertas (kalau hilang, dokumen lanskap dirender
+di atas potret dan terpotong tanpa galat), ukuran kertas asing yang jatuh ke A4,
+mode tata letak asing yang jatuh ke `continuous`, JSON rusak yang tidak boleh
+melempar, dan penjaga bahwa fungsinya tidak menyentuh permintaan.
+
+**Sisa Tahap 2b:** alihkan jalur cetak ke perakit tunggal (langkah 2), lalu
+`save_document.php` memanggil `FreezeService` (langkah 3).
+
 ### Tahap 2 — bekukan tiap tanda tangan masuk
 
 Setelah bisa dipanggil dari mana saja, `save_document.php` memakainya.

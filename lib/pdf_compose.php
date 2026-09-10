@@ -1141,3 +1141,170 @@ function renderFieldForPdf($name, $type, $val, $label) {
     }
 }
 
+
+/**
+ * Turunkan seluruh keputusan tata letak dari satu baris template.
+ *
+ * HTML beserta elemen mengambangnya, konfigurasi tanda tangan (dari placeholder
+ * kalau ada, dari format lama kalau tidak), logo, ukuran kertas, orientasi,
+ * padding, dan mode tata letak.
+ *
+ * ## Kenapa di sini
+ *
+ * Semua ini murni fungsi dari baris templatenya: tidak menyentuh permintaan yang
+ * sedang berjalan, tidak menyentuh RBAC, tidak menyentuh dokumen. Yang membuatnya
+ * dulu terkunci di dalam view cuma LETAKNYA — tersebar di antara logika halaman.
+ *
+ * Jalur pembekuan dokumen harus merakit PDF yang sama persis dengan yang
+ * dicetak, dari `save_document.php`. Selama derivasi ini tinggal di view,
+ * memanggilnya berarti menjalankan seluruh halaman: query-nya, gerbang aksesnya,
+ * keluarannya. Lihat docs/260811-beku-pdf-tiap-tanda-tangan.md §4.
+ *
+ * Dipindah apa adanya, tanpa satu huruf pun berubah. Kesetaraannya dibuktikan
+ * dengan membandingkan seluruh keluaran untuk setiap template sungguhan yang
+ * ada, sebelum dan sesudah pemindahan.
+ *
+ * @param array<string,mixed> $template Baris template dengan alias kolom seperti
+ *     yang dipakai view: `template_html`, `config_ttd`, `config_header`,
+ *     `floating_elements`, `doc_scope`.
+ * @return array<string,mixed> 19 keputusan tata letak, siap dipakai perakit.
+ */
+function ezdoc_template_layout(array $template): array
+{
+    // v0.9.12 sidecar rehydration — inject floating markers dari JSON column
+    // balik ke templateHtml supaya renderContent pipeline unchanged. Backward-
+    // compat: legacy rows dgn floating markers still in HTML tetap works.
+    $templateHtml = $template['template_html'] ?: '';
+    if (!empty($template['floating_elements'])) {
+        $floating = \Ezdoc\Template\FloatingExtractor::fromJson($template['floating_elements']);
+        if (!empty($floating)) {
+            $templateHtml = \Ezdoc\Template\FloatingInjector::inject($templateHtml, $floating);
+        }
+    }
+    $configTtdRaw = json_decode($template['config_ttd'] ?: '[]', true) ?: [];
+    $configHeader = json_decode($template['config_header'] ?: '{}', true) ?: [];
+    // Scope template: patient (butuh NORM+NOPEN) atau general (tanpa)
+    $templateDocScope = $template['doc_scope'] ?? 'patient';
+    $isGeneralDoc = $templateDocScope === 'general';
+
+    // Check if template uses new TTD placeholder format
+    $hasTtdPlaceholders = strpos($templateHtml, 'ttd-placeholder') !== false;
+
+    // If using placeholders, extract TTD config from placeholders (not from old configTtd)
+    $configTtd = [];
+    if ($hasTtdPlaceholders) {
+        // Extract TTD info from placeholders in content — robust to attribute ordering
+        preg_match_all('/<div([^>]*class="[^"]*ttd-placeholder[^"]*"[^>]*)>/s', $templateHtml, $ttdMatches, PREG_SET_ORDER);
+        foreach ($ttdMatches as $m) {
+            $attrs = $m[1];
+            preg_match('/data-ttd="([^"]+)"/', $attrs, $tm);
+            $ttdId = $tm[1] ?? '';
+            if (!$ttdId) continue;
+
+            preg_match('/data-label="([^"]+)"/', $attrs, $lm);
+            preg_match('/data-nama-field="([^"]+)"/', $attrs, $nm);
+            preg_match('/data-ttd-modes="([^"]+)"/', $attrs, $mm);
+            preg_match('/data-ttd-qr-data="([^"]+)"/', $attrs, $qm);
+            preg_match('/data-require-otp="([^"]+)"/', $attrs, $rom);
+            preg_match('/data-otp-phone-source="([^"]+)"/', $attrs, $opsm);
+            preg_match('/data-otp-ttl="([^"]+)"/', $attrs, $otm);
+
+            $requireOtpVal = $rom[1] ?? '0';
+            $requireOtp = ($requireOtpVal === '1' || $requireOtpVal === 'true');
+
+            $otpPhoneSource = $opsm[1] ?? 'nomor_hp_pasien';
+
+            $configTtd[] = [
+                'id' => $ttdId,
+                'label' => $lm[1] ?? t('fallback.signature', [], 'Signature'),
+                'nama_field' => $nm[1] ?? 'nama_' . $ttdId,
+                'ttd_modes' => $mm[1] ?? 'image',
+                'qr_data' => html_entity_decode($qm[1] ?? ''),
+                'require_otp' => $requireOtp,
+                'otp_phone_source' => $otpPhoneSource,
+                'otp_ttl' => (int)($otm[1] ?? 300)
+            ];
+        }
+    } else {
+        // Use old format configTtd
+        $configTtd = array_map(function($item) {
+            if (isset($item['require_otp'])) {
+                $item['require_otp'] = !empty($item['require_otp']);
+            }
+            return $item;
+        }, $configTtdRaw);
+    }
+
+    // Get logos (support old and new format)
+    $logos = $configHeader['logos'] ?? [];
+    $logoSizes = $configHeader['logoSizes'] ?? [];
+    if (isset($configHeader['logoKiri'])) $logos['logo_kiri'] = $configHeader['logoKiri'];
+    if (isset($configHeader['logoKanan'])) $logos['logo_kanan'] = $configHeader['logoKanan'];
+
+    // Paper size and padding settings
+    $paperSizes = [
+        'A4' => ['width' => 210, 'height' => 297],
+        'A5' => ['width' => 148, 'height' => 210],
+        'Letter' => ['width' => 216, 'height' => 279],
+        'Legal' => ['width' => 216, 'height' => 356],
+        'F4' => ['width' => 215, 'height' => 330]
+    ];
+
+    $paperSize = $configHeader['paperSize'] ?? 'A4';
+    $orientation = $configHeader['orientation'] ?? 'portrait';
+
+    // Handle custom size or predefined
+    if ($paperSize === 'Custom') {
+        $paperDim = [
+            'width' => (int)($configHeader['customWidth'] ?? 210),
+            'height' => (int)($configHeader['customHeight'] ?? 297)
+        ];
+    } else {
+        if (!isset($paperSizes[$paperSize])) $paperSize = 'A4';
+        $paperDim = $paperSizes[$paperSize];
+    }
+
+    // Swap dimensions for landscape
+    if ($orientation === 'landscape') {
+        $paperDim = ['width' => $paperDim['height'], 'height' => $paperDim['width']];
+    }
+
+    $padding = $configHeader['padding'] ?? ['top' => 20, 'right' => 20, 'bottom' => 20, 'left' => 20];
+    $padTop = (int)($padding['top'] ?? 20);
+    $padRight = (int)($padding['right'] ?? 20);
+    $padBottom = (int)($padding['bottom'] ?? 20);
+
+    // Layout mode: 'continuous' (default — satu kontainer scroll, tanpa page
+    // break) atau 'paged' (kartu multi-halaman dengan mask/spacer). Aturan
+    // padding berlaku di kedua mode.
+    //
+    // Default harus sama dengan designer (lihat configHeader.layoutMode di
+    // views/_partials/designer_scripts.php). Kalau berbeda, template yang belum
+    // pernah menyimpan layoutMode akan tampil satu macam di designer dan macam
+    // lain saat digenerate.
+    $layoutMode = $configHeader['layoutMode'] ?? 'continuous';
+    if (!in_array($layoutMode, ['paged', 'continuous'], true)) $layoutMode = 'continuous';
+    $padLeft = (int)($padding['left'] ?? 20);
+
+    return [
+        'templateHtml'         => $templateHtml,
+        'configTtdRaw'         => $configTtdRaw,
+        'configHeader'         => $configHeader,
+        'templateDocScope'     => $templateDocScope,
+        'isGeneralDoc'         => $isGeneralDoc,
+        'hasTtdPlaceholders'   => $hasTtdPlaceholders,
+        'configTtd'            => $configTtd,
+        'logos'                => $logos,
+        'logoSizes'            => $logoSizes,
+        'paperSizes'           => $paperSizes,
+        'paperSize'            => $paperSize,
+        'orientation'          => $orientation,
+        'paperDim'             => $paperDim,
+        'padding'              => $padding,
+        'padTop'               => $padTop,
+        'padRight'             => $padRight,
+        'padBottom'            => $padBottom,
+        'padLeft'              => $padLeft,
+        'layoutMode'           => $layoutMode,
+    ];
+}
