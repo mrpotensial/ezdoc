@@ -50,6 +50,116 @@ global $author_id;
  * @param array<string,mixed> $sebelum baris yang tersimpan
  * @param array<string,mixed> $sesudah nilai yang hendak ditulis
  */
+/**
+ * Bekukan tampilan dokumen sesudah tanda tangan baru tercatat.
+ *
+ * Satu siklus artefak untuk setiap tanda tangan yang masuk — bukan yang pertama
+ * saja, bukan yang terakhir. Tanda tangan ke-N menyatakan sesuatu tentang
+ * dokumen SEPERTI TAMPAK SAAT ITU, dan hanya artefak siklus ke-N yang bisa
+ * menunjukkannya kembali.
+ *
+ * Siklus lama tidak dihapus, cuma ditandai sudah digantikan: orang yang memegang
+ * cetakan lama harus tetap bisa memeriksanya, justru karena ia sudah tidak
+ * berlaku.
+ *
+ * HTML-nya dirakit lewat `ezdoc_document_pdf_html()` — pintu yang sama dengan
+ * jalur cetak. Perakit kedua akan menyimpang, dan yang tersimpan sebagai bukti
+ * berhenti sama dengan yang dicetak orang.
+ *
+ * Nilai field dan tanda tangan dibaca ULANG dari baris yang barusan tersimpan,
+ * bukan dari isi permintaan simpan. Yang dibekukan adalah dokumennya, bukan
+ * permintaan yang kebetulan membawanya.
+ *
+ * ## Batasnya, disebut apa adanya
+ *
+ * Rencananya (§5) menetapkan: pembekuan gagal berarti tanda tangannya ikut
+ * gagal. Yang ini belum sepenuhnya begitu — baris tanda tangannya sudah
+ * tertulis saat fungsi ini berjalan. Kegagalan di sini dikembalikan ke pemanggil
+ * supaya BERISIK, bukan ditelan; tapi memutar balik tanda tangannya butuh
+ * penyimpanan tanda tangan dan pembekuan berada dalam satu transaksi, dan itu
+ * belum dikerjakan.
+ *
+ * @param mixed $db Connection
+ * @throws \Throwable apa pun yang gagal diteruskan ke pemanggil
+ */
+function ezdoc_freeze_after_signature($db, int $docId, int $templateId, string $actorId): \Ezdoc\Document\DocumentArtifact
+{
+    $tpl = $db->fetchOne(
+        'SELECT name AS nama_template, scope AS doc_scope, content AS template_html,
+                floating_elements, signature_config AS config_ttd, layout_config AS config_header
+         FROM ezdoc_templates WHERE id = ? LIMIT 1',
+        [$templateId]
+    );
+    if (!is_array($tpl)) {
+        throw new \RuntimeException('Template tidak ditemukan untuk pembekuan: ' . $templateId);
+    }
+
+    $dok = $db->fetchOne(
+        'SELECT norm, nopen, field_values, signature_values, floating_elements
+         FROM ezdoc_documents WHERE id = ? LIMIT 1',
+        [$docId]
+    );
+    if (!is_array($dok)) {
+        throw new \RuntimeException('Dokumen tidak ditemukan untuk pembekuan: ' . $docId);
+    }
+
+    $fields = json_decode((string) ($dok['field_values'] ?? ''), true);
+    $ttd    = json_decode((string) ($dok['signature_values'] ?? ''), true);
+
+    $html = ezdoc_document_pdf_html([
+        'template'   => $tpl,
+        'dokumen'    => $dok,
+        'doc_id'     => $docId,
+        'norm'       => (string) ($dok['norm'] ?? ''),
+        'nopen'      => (string) ($dok['nopen'] ?? ''),
+        'fields'     => is_array($fields) ? $fields : [],
+        'ttd_values' => is_array($ttd) ? $ttd : [],
+        'conn'       => \Ezdoc\Context::default()->db,
+        // Tidak ada permintaan cetak di belakang ini. Kosong, dan itu memang
+        // yang benar: nilai yang dibekukan datang dari dokumennya.
+        'permintaan' => [],
+    ]);
+
+    $tataLetak = ezdoc_template_layout($tpl);
+    $kertas    = $tataLetak['paperDim'];
+
+    $ctx = \Ezdoc\Context::default();
+    $perender = ($ctx->pdf instanceof \Ezdoc\Rendering\PdfRenderer)
+        ? $ctx->pdf
+        : new \Ezdoc\Rendering\DompdfRenderer();
+
+    $bytes = $perender->render(
+        $html,
+        [(float) $kertas['width'], (float) $kertas['height']],
+        $tataLetak['orientation']
+    );
+
+    // Penyegel hanya dipasang kalau consumer menyediakannya. Tanpa kunci,
+    // dokumennya tetap dibekukan tanpa segel — keputusan §6.2 rencananya:
+    // beku tanpa segel sudah menjawab "tampilannya tidak berubah di dalam
+    // sistem", dan menunggu kunci berarti tanda tangan minggu ini kehilangan
+    // kesempatan diarsipkan selamanya.
+    // Disambungkan consumer lewat global, pola yang sama dengan provider OTP dan
+    // ActorDirectory. Belum ada berarti dibekukan tanpa segel.
+    $penyegel = (isset($GLOBALS['EZDOC_ARTIFACT_SIGNER'])
+        && $GLOBALS['EZDOC_ARTIFACT_SIGNER'] instanceof \Ezdoc\Document\ArtifactSigner)
+        ? $GLOBALS['EZDOC_ARTIFACT_SIGNER']
+        : null;
+
+    $beku = new \Ezdoc\Document\FreezeService($db, null, null, null, $penyegel);
+
+    // Siklus sebelumnya digantikan, bukan dihapus. freeze() menolak kalau masih
+    // ada artefak aktif, dan itu memang penjaganya.
+    if ($beku->isFrozen($docId)) {
+        $beku->unfreeze($docId, 'tanda tangan baru masuk, siklus berikutnya', $actorId);
+    }
+
+    return $beku->freeze($docId, $bytes, $actorId, 'application/pdf', [
+        'reason'   => 'Arsip tampilan saat penandatanganan',
+        'location' => 'ezdoc',
+    ]);
+}
+
 function ezdoc_save_is_unchanged(array $sebelum, array $sesudah): bool
 {
     $samaTeks = static fn ($kiri, $kanan): bool => (string) ($kiri ?? '') === (string) ($kanan ?? '');
@@ -894,6 +1004,30 @@ try {
     ));
 }
 
+// ─── Bekukan tampilannya, sekali untuk tiap tanda tangan yang masuk ───
+//
+// Dikerjakan HANYA kalau memang ada tanda tangan baru. Menyimpan tanpa
+// menandatangani tidak menghasilkan siklus artefak baru: yang dibekukan adalah
+// pernyataan seseorang, bukan setiap kali tombol Simpan tersentuh.
+$freezeNote = null;
+if ($recordedSignatureCount > 0) {
+    try {
+        $artefak = ezdoc_freeze_after_signature($db, (int) $doc_id, (int) $template_id, (string) $authorId);
+        $freezeNote = 'cycle ' . $artefak->getCycle();
+    } catch (\Throwable $e) {
+        // Berisik, bukan ditelan. Lihat catatan batas di
+        // ezdoc_freeze_after_signature(): tanda tangannya sudah tertulis, jadi
+        // yang bisa dilakukan di sini adalah memastikan kegagalannya terlihat.
+        $freezeNote = 'failed: ' . $e->getMessage();
+        @error_log(sprintf(
+            '[ezdoc:freeze] gagal membekukan doc_id=%d sesudah %d tanda tangan: %s',
+            $doc_id,
+            $recordedSignatureCount,
+            $e->getMessage()
+        ));
+    }
+}
+
 // ─── Spend the sign tokens ───
 // Only now. The signature is stored, so the one use each token was good for
 // has been taken. Doing this during validation meant any later refusal — a
@@ -1015,6 +1149,9 @@ ezdoc_respond_success([
     // Angkanya, bukan boolean: nol berarti tidak ada yang berubah dan halaman
     // tidak perlu diganggu.
     'signatures_recorded' => $recordedSignatureCount,
+    // Hasil pembekuan tampilan, kalau memang ada tanda tangan baru.
+    // null berarti tidak ada yang perlu dibekukan.
+    'freeze'              => $freezeNote,
     'debug'        => $__ezdocSaveDebug,
 ], $isiSama
     ? t('response.document_unchanged', [], 'No changes — nothing was saved')

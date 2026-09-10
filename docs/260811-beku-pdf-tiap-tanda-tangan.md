@@ -332,6 +332,55 @@ melempar, dan penjaga bahwa fungsinya tidak menyentuh permintaan.
 **Sisa Tahap 2b:** alihkan jalur cetak ke perakit tunggal (langkah 2), lalu
 `save_document.php` memanggil `FreezeService` (langkah 3).
 
+### Tahap 2b langkah 2 & 3 — ✅ selesai 2026-09-10
+
+**Langkah 2 — satu perakit.** `ezdoc_document_pdf_html()` di
+`lib/pdf_compose.php`: dari baris template + baris dokumen jadi HTML PDF lengkap.
+Jalur cetak memanggilnya, dan jalur pembekuan memanggil yang sama.
+
+Terbukti: **80 perbandingan (40 dokumen sungguhan × 2 varian), 0 beda,
+3.902.476 byte.** Urutan lama disalin verbatim ke harness lalu diadu dengan
+perakit baru.
+
+Ikut pindah ke dalamnya: penimpaan elemen mengambang milik dokumen atas milik
+template, termasuk pencabutan penanda lama lebih dulu — tanpa itu keduanya
+menumpuk dan logonya tercetak dua kali.
+
+**Langkah 3 — pembekuannya jalan.** `ezdoc_freeze_after_signature()` di
+`save_document.php`, dipanggil hanya ketika `$recordedSignatureCount > 0`.
+Menyimpan tanpa menandatangani tidak menghasilkan siklus baru: yang dibekukan
+pernyataan seseorang, bukan setiap kali tombol Simpan tersentuh.
+
+Nilai field dan tanda tangan dibaca **ULANG dari baris yang barusan tersimpan**,
+bukan dari isi permintaan simpan. Yang dibekukan dokumennya, bukan permintaan
+yang kebetulan membawanya.
+
+Siklus sebelumnya di-`unfreeze` lebih dulu — ditandai digantikan, byte-nya tetap.
+`freeze()` menolak kalau masih ada artefak aktif, dan itu memang penjaganya.
+
+Penyegel diambil dari `$GLOBALS['EZDOC_ARTIFACT_SIGNER']` kalau consumer
+menyediakannya. Belum ada berarti dibekukan **tanpa segel**, sesuai keputusan
+§6.2.
+
+`tests/Document/FreezeAfterSignatureTest.php` — 3 tes, SQLite sungguhan,
+perender PDF dipalsukan. Membuktikan rangkaiannya berjalan sampai ke baris
+artefak, bahwa tanda tangan kedua menghasilkan siklus 2 tanpa membuang siklus 1,
+dan bahwa isi yang berbeda menghasilkan byte yang berbeda. Dijalankan di proses
+terpisah: ia menyetel `EZDOC_ARTIFACT_STORAGE_PATH`, dan konstanta berlaku
+se-proses — `ArtifactStorageDefaultTest` justru menguji penolakan saat setelan
+itu tidak ada, dan jadi hijau palsu kalau keduanya berbagi proses.
+
+**Batas yang belum ditutup.** §5 menetapkan pembekuan gagal ikut menggagalkan
+tanda tangannya. Belum sepenuhnya begitu: baris tanda tangannya sudah tertulis
+saat pembekuan berjalan. Kegagalan dikembalikan ke pemanggil lewat
+`freeze: "failed: ..."` di jawaban dan `error_log`, jadi **berisik, bukan
+ditelan** — tapi memutar balik tanda tangannya butuh penyimpanan ttd dan
+pembekuan dalam satu transaksi, dan itu belum dikerjakan.
+
+**Syarat pemasangan:** `EZDOC_ARTIFACT_STORAGE_PATH` harus disetel dan
+foldernya bisa ditulis. Tanpa itu pembekuan menolak dengan pesan yang menyebut
+setelannya.
+
 ### Tahap 2 — bekukan tiap tanda tangan masuk
 
 Setelah bisa dipanggil dari mana saja, `save_document.php` memakainya.
