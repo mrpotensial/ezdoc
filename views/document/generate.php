@@ -1471,30 +1471,20 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         'verify_doc_id'  => (int) ($_GET['doc_id'] ?? $_POST['_doc_id'] ?? 0),
     ];
 
-    // Render content for PDF (with filled values, no form elements)
-    $pdfContent = renderContentForPdf($templateHtml, $logos, $logoSizes, $configTtd, $ttdValues, $pdfFields, [], $conn, $param_norm, $param_nopen, $tableDbQueries, (int)$doc_id, $permintaanPdf);
-
-    // Kerangka dokumennya dirakit di lib/pdf_compose.php — CSS, @page, tiga titik
-    // sisipan consumer, blok tanda tangan format lama, dan penutupnya.
+    // Dirakit lewat SATU pintu, yang sama dengan jalur pembekuan dokumen.
     //
-    // Dipindah ke sana supaya pembekuan dokumen bisa merakit HTML yang sama dari
-    // tempat yang sama sekali berbeda; lihat docs/260811-beku-pdf-tiap-tanda-tangan.md.
-    // Perenderan ISI masih tinggal di berkas ini, tapi sejak Tahap 1b ia tidak
-    // lagi membaca permintaan — nilainya diserahkan lewat $permintaanPdf.
-    $pdfHtml = ezdoc_compose_pdf_html([
-        'template'             => $template,
-        'doc_id'               => (int) $doc_id,
-        'paper'                => $paperDim,
-        'pad_top'              => $padTop,
-        'pad_right'            => $padRight,
-        'pad_bottom'           => $padBottom,
-        'pad_left'             => $padLeft,
-        'content'              => $pdfContent,
-        'config_ttd'           => $configTtd,
-        'ttd_values'           => $ttdValues,
-        'pdf_fields'           => $pdfFields,
-        'has_ttd_placeholders' => $hasTtdPlaceholders,
-        'conn'                 => $conn ?? null,
+    // Dua perakit yang mirip akan menyimpang, dan yang tersimpan sebagai bukti
+    // berhenti sama dengan yang dicetak orang — lihat §3 rencananya.
+    $pdfHtml = ezdoc_document_pdf_html([
+        'template'   => $template,
+        'dokumen'    => $dokumen,
+        'doc_id'     => (int) $doc_id,
+        'norm'       => $param_norm,
+        'nopen'      => $param_nopen,
+        'fields'     => $pdfFields,
+        'ttd_values' => $ttdValues,
+        'conn'       => $conn ?? null,
+        'permintaan' => $permintaanPdf,
     ]);
 
 

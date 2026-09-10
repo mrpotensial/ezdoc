@@ -1308,3 +1308,103 @@ function ezdoc_template_layout(array $template): array
         'layoutMode'           => $layoutMode,
     ];
 }
+
+
+/**
+ * Rakit HTML PDF lengkap untuk satu dokumen.
+ *
+ * Satu-satunya jalan menuju HTML yang dicetak — dan, sejak pembekuan dokumen
+ * ada, satu-satunya jalan menuju HTML yang disimpan sebagai bukti.
+ *
+ * ## Kenapa satu, bukan dua
+ *
+ * Rencananya (docs/260811-beku-pdf-tiap-tanda-tangan.md §3) memperingatkan
+ * tepat satu hal: dua perender yang mirip lalu menyimpang. Perakit kedua yang
+ * dibuat khusus untuk pembekuan akan tampak benar berbulan-bulan, sampai satu
+ * template memakai sesuatu yang cuma diurus salah satunya — dan yang tersimpan
+ * sebagai bukti ternyata tidak sama dengan yang dicetak dan ditandatangani
+ * orang. Itu kegagalan yang paling mahal yang bisa dihasilkan berkas ini.
+ *
+ * Jadi jalur cetak memanggil fungsi ini, dan jalur pembekuan memanggil fungsi
+ * yang sama.
+ *
+ * ## Yang HARUS diserahkan pemanggil
+ *
+ * Tiga hal berasal dari permintaan HTTP dan tidak boleh diterka dari sini:
+ * `fields` (nilai field, di jalur cetak termasuk isian dari query string),
+ * `ttd_values`, dan `permintaan`. Jalur pembekuan menyerahkan nilai yang BARU
+ * SAJA TERSIMPAN, bukan isi permintaan simpannya.
+ *
+ * @param array{
+ *     template: array<string,mixed>,
+ *     dokumen?: array<string,mixed>|null,
+ *     doc_id?: int,
+ *     norm?: string,
+ *     nopen?: string,
+ *     fields?: array<string,mixed>,
+ *     ttd_values?: array<string,mixed>,
+ *     conn?: mixed,
+ *     permintaan?: array<string,mixed>
+ * } $in
+ */
+function ezdoc_document_pdf_html(array $in): string
+{
+    $template = $in['template'];
+    $dokumen  = $in['dokumen'] ?? null;
+    $docId    = (int) ($in['doc_id'] ?? 0);
+
+    $tataLetak   = ezdoc_template_layout($template);
+    $templateHtml = $tataLetak['templateHtml'];
+
+    // Elemen mengambang milik DOKUMEN menimpa milik template.
+    //
+    // Penanda tingkat-template sudah disisipkan ezdoc_template_layout(); kalau
+    // dokumennya punya sendiri, yang lama dicabut dulu lalu yang baru dipasang.
+    // Tanpa pencabutan itu keduanya menumpuk, dan logonya tercetak dua kali.
+    if (!empty($dokumen['floating_elements'])) {
+        $docFloating = \Ezdoc\Template\FloatingExtractor::fromJson($dokumen['floating_elements']);
+        if (!empty($docFloating)) {
+            $dicabut = \Ezdoc\Template\FloatingExtractor::extract($templateHtml);
+            $templateHtml = \Ezdoc\Template\FloatingInjector::inject(
+                $dicabut['html'],
+                $docFloating
+            );
+        }
+    }
+
+    $fields    = $in['fields'] ?? [];
+    $ttdValues = $in['ttd_values'] ?? [];
+    $conn      = $in['conn'] ?? null;
+
+    $isi = renderContentForPdf(
+        $templateHtml,
+        $tataLetak['logos'],
+        $tataLetak['logoSizes'],
+        $tataLetak['configTtd'],
+        $ttdValues,
+        $fields,
+        [],
+        $conn,
+        (string) ($in['norm'] ?? ''),
+        (string) ($in['nopen'] ?? ''),
+        $tataLetak['configHeader']['tableDbQueries'] ?? [],
+        $docId,
+        $in['permintaan'] ?? []
+    );
+
+    return ezdoc_compose_pdf_html([
+        'template'             => $template,
+        'doc_id'               => $docId,
+        'paper'                => $tataLetak['paperDim'],
+        'pad_top'              => $tataLetak['padTop'],
+        'pad_right'            => $tataLetak['padRight'],
+        'pad_bottom'           => $tataLetak['padBottom'],
+        'pad_left'             => $tataLetak['padLeft'],
+        'content'              => $isi,
+        'config_ttd'           => $tataLetak['configTtd'],
+        'ttd_values'           => $ttdValues,
+        'pdf_fields'           => $fields,
+        'has_ttd_placeholders' => $tataLetak['hasTtdPlaceholders'],
+        'conn'                 => $conn,
+    ]);
+}
