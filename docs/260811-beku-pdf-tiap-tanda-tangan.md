@@ -381,6 +381,45 @@ pembekuan dalam satu transaksi, dan itu belum dikerjakan.
 foldernya bisa ditulis. Tanpa itu pembekuan menolak dengan pesan yang menyebut
 setelannya.
 
+### Tahap 2b langkah 4 — cetak menyajikan artefak — ✅ selesai 2026-09-15
+
+Dokumen yang **lengkap** dan punya artefak aktif disajikan dari berkasnya, tidak
+dirender ulang. Tanpa ini artefaknya tersimpan tapi tidak pernah dipakai —
+menyunting template masih mengubah dokumen yang sudah ditandatangani.
+
+**Kenapa hanya saat lengkap.** Manifest artefak mencatat daftar tanda tangan,
+bukan isi dokumen, jadi "diubah sesudah dibekukan" tidak bisa dideteksi dari
+artefaknya. Saat semua slot terisi, setiap field sudah dicakup tanda tangan dan
+dibekukan penjaga simpan — artefak terakhir PASTI sama dengan isi sekarang,
+dijamin aturan yang sudah ada, bukan ditebak dari cap waktu. Selama
+penandatanganan berjalan, penanda tangan berikutnya masih mengisi field
+miliknya, dan render langsung yang benar. Pola DocuSign/Adobe Sign: dokumen
+tersegel disajikan setelah envelope selesai.
+
+- yang disajikan siklus **terakhir** — yang pertama akan mencetak dokumen tanpa
+  tanda tangan kedua
+- inline, sama seperti jalur render (`$forceDownload` memang tidak pernah dipakai
+  di sana)
+- header `X-Ezdoc-Frozen: cycle=N` atau `none`, untuk memeriksa jalan mana yang
+  menyajikan
+- berkas bukti hilang dari penyimpanan → dicatat keras, lalu render seperti biasa.
+  Orang yang mencetak tidak bisa berbuat apa-apa atas penyimpanan yang rusak
+- dilewati untuk `debug=html`, dan `raw=1` dari superadmin — tombol **PDF Raw**
+  sekarang mengirim `raw=1`; tanpa itu ia ikut menyajikan arsip
+
+**Satu perender untuk semua jalur.** `ezdoc_pdf_renderer()`. Jalur beku dari
+langkah 3 membuat `DompdfRenderer` sendiri **tanpa basePath**, sementara jalur
+cetak memberinya akar library. Aset relatif bisa terselesaikan berbeda — dua
+perender yang menyimpang, persis yang diperingatkan §3. Sekarang keduanya
+bertanya ke pembantu yang sama.
+
+**§6.1 dikerjakan.** Dokumen lengkap tanpa artefak (ditandatangani sebelum
+pembekuan ada) diberi penanda "Tanpa arsip tampilan" di toolbar. Penanda itu cuma
+menanyakan baris artefaknya, tidak membaca berkas PDF-nya.
+
+`tests/Document/ServeFrozenPdfTest.php` — 9 tes. Dua uji mutasi merah lebih dulu:
+syarat "lengkap" dibuang, dan jalur beku kembali membuat perendernya sendiri.
+
 ### Tahap 2 — bekukan tiap tanda tangan masuk
 
 Setelah bisa dipanggil dari mana saja, `save_document.php` memakainya.

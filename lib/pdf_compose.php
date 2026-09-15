@@ -1408,3 +1408,81 @@ function ezdoc_document_pdf_html(array $in): string
         'conn'                 => $conn,
     ]);
 }
+
+
+/**
+ * Perender PDF yang dipakai pemasangan ini — satu jawaban untuk semua jalur.
+ *
+ * Dulu jalur cetak dan jalur pembekuan masing-masing memutuskan sendiri, dan
+ * keduanya sudah berbeda: yang cetak memberi DompdfRenderer basePath akar
+ * library untuk menyelesaikan aset relatif, yang beku tidak. Dua perender untuk
+ * dokumen yang sama bisa menghasilkan PDF yang berbeda — dan yang tersimpan
+ * sebagai bukti berhenti sama dengan yang dicetak orang.
+ *
+ * Urutannya: perender yang disuntik host lewat Context, lalu DompdfRenderer
+ * bawaan kalau paketnya terpasang, lalu null.
+ */
+function ezdoc_pdf_renderer(): ?\Ezdoc\Rendering\PdfRenderer
+{
+    try {
+        $ctx = \Ezdoc\Context::default();
+        if ($ctx->pdf instanceof \Ezdoc\Rendering\PdfRenderer) {
+            return $ctx->pdf;
+        }
+    } catch (\Throwable $e) {
+        // Context belum disetel. Jatuh ke bawaan.
+    }
+
+    if (class_exists('\\Dompdf\\Dompdf')) {
+        // Akar library, supaya aset relatif di HTML terselesaikan sama persis
+        // di jalur mana pun perender ini dipanggil.
+        return new \Ezdoc\Rendering\DompdfRenderer([], dirname(__DIR__) . '/');
+    }
+
+    return null;
+}
+
+/**
+ * Byte PDF beku yang berlaku untuk dokumen ini, atau null.
+ *
+ * Null berarti "render seperti biasa": tidak ada artefak aktif, atau artefaknya
+ * tidak terbaca. Yang kedua bukan keadaan normal — berkas bukti hilang dari
+ * penyimpanan — jadi ia dicatat keras. Tapi halamannya tidak dijatuhkan: orang
+ * yang sedang mencetak tidak bisa berbuat apa-apa atas penyimpanan yang rusak,
+ * dan cetakan langsung masih lebih berguna daripada layar kosong.
+ *
+ * @param mixed $db Connection
+ * @return array{bytes: string, cycle: int}|null
+ */
+function ezdoc_frozen_pdf($db, int $documentId): ?array
+{
+    if ($documentId <= 0) {
+        return null;
+    }
+
+    try {
+        $beku = new \Ezdoc\Document\FreezeService($db);
+        $artefak = $beku->active($documentId);
+        if ($artefak === null) {
+            return null;
+        }
+
+        $bytes = $beku->bytes($artefak);
+        if ($bytes === null || $bytes === '') {
+            @error_log(sprintf(
+                '[ezdoc:freeze] artefak aktif doc_id=%d siklus %d ada di basis data tapi berkasnya tidak terbaca (key %s)',
+                $documentId,
+                $artefak->getCycle(),
+                $artefak->getBlobKey()
+            ));
+
+            return null;
+        }
+
+        return ['bytes' => $bytes, 'cycle' => $artefak->getCycle()];
+    } catch (\Throwable $e) {
+        @error_log(sprintf('[ezdoc:freeze] gagal membaca artefak doc_id=%d: %s', $documentId, $e->getMessage()));
+
+        return null;
+    }
+}

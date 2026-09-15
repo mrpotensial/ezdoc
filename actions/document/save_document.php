@@ -123,10 +123,13 @@ function ezdoc_freeze_after_signature($db, int $docId, int $templateId, string $
     $tataLetak = ezdoc_template_layout($tpl);
     $kertas    = $tataLetak['paperDim'];
 
-    $ctx = \Ezdoc\Context::default();
-    $perender = ($ctx->pdf instanceof \Ezdoc\Rendering\PdfRenderer)
-        ? $ctx->pdf
-        : new \Ezdoc\Rendering\DompdfRenderer();
+    // Perender yang SAMA dengan jalur cetak, termasuk basePath-nya. Dulu yang
+    // ini membuat DompdfRenderer sendiri tanpa basePath, dan aset relatif bisa
+    // terselesaikan berbeda dari yang dicetak.
+    $perender = ezdoc_pdf_renderer();
+    if ($perender === null) {
+        throw new \RuntimeException('Tidak ada perender PDF — pasang dompdf/dompdf atau suntik PdfRenderer lewat Context::withPdf().');
+    }
 
     $bytes = $perender->render(
         $html,

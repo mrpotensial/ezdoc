@@ -68,6 +68,7 @@ return [
         'update_off_all_signed' => 'Every signature is in place — create a new version to revise',
         'update_off_signed' => 'Already signed — the remaining signers save as they sign; create a new version to revise',
         'signing_state' => 'Content is frozen for whatever the signatures already cover',
+        'no_display_archive' => 'Signed before display archiving existed. Printing renders it from the current template.',
         'field_frozen_by_signature' => 'Already signed — the content can no longer change. Create a new version to revise.',
         'no_sign_permission_as' => 'Not authorized to sign as {label}{roles}',
         'signature_sealed' => 'Already signed and recorded — create a new version to revise',
@@ -109,6 +110,7 @@ return [
         'draft' => 'Not signed',
         'in_progress' => 'Signed {signed} of {total}',
         'complete' => 'Fully signed',
+        'no_display_archive' => 'No display archive',
     ],
     'placeholder' => [
         'default_dash' => '- (default)',

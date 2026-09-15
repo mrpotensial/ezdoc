@@ -1441,6 +1441,44 @@ elseif ($param_norm && $param_nopen) {
 // PDF VIEW MODE
 // ============================================
 if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
+    // Nama berkas dihitung di sini, sebelum kedua jalan bercabang — dokumen beku
+    // dan dokumen yang dirender harus bernama dengan aturan yang sama.
+    $labelPart = ($param_label !== '-' && $param_label !== '') ? '_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $param_label) : '';
+    $filename = $pdfFilenamePrefix . '_' . ($param_norm ?: 'draft') . $labelPart . '_' . date('Ymd_His') . '.pdf';
+
+    // ─── Dokumen yang lengkap disajikan dari artefaknya ───
+    //
+    // Tidak dirender ulang. Kalau dirender ulang, menyunting template mengubah
+    // dokumen yang sudah ditandatangani — dan seluruh pembekuan tidak ada
+    // gunanya (docs/260811-beku-pdf-tiap-tanda-tangan.md §5).
+    //
+    // HANYA saat semua slot terisi. Saat itu setiap field sudah dicakup tanda
+    // tangan dan dibekukan penjaga simpan, jadi artefak terakhir PASTI sama
+    // dengan isi sekarang — dijamin aturan yang sudah ada, bukan ditebak dari cap
+    // waktu. Selama penandatanganan masih berjalan, penanda tangan berikutnya
+    // masih mengisi field miliknya, dan render langsung yang benar. Pola yang
+    // sama dengan DocuSign dan Adobe Sign: dokumen tersegel disajikan setelah
+    // envelope selesai.
+    //
+    // Dilewati untuk debug=html, dan untuk raw=1 dari superadmin — tombol
+    // "PDF Raw" memang ada untuk melihat render mentah.
+    $__mintaMentah = isset($_GET['raw']) && $_GET['raw'] === '1' && $isSuperadmin;
+    if ($docSigningComplete && (int) $doc_id > 0 && !isset($_GET['debug']) && !$__mintaMentah) {
+        $__beku = ezdoc_frozen_pdf(\Ezdoc\Context::default()->connection(), (int) $doc_id);
+        if ($__beku !== null) {
+            header('Content-Type: application/pdf');
+            // Inline, sama seperti jalur render — $forceDownload tidak pernah
+            // dipakai di sana, dan kedua jalan harus berperilaku sama.
+            header('Content-Disposition: inline; filename="' . $filename . '"');
+            header('Content-Length: ' . strlen($__beku['bytes']));
+            // Penanda untuk pemeriksaan: jalan mana yang menyajikan berkas ini.
+            header('X-Ezdoc-Frozen: cycle=' . $__beku['cycle']);
+            echo $__beku['bytes'];
+            exit;
+        }
+        header('X-Ezdoc-Frozen: none');
+    }
+
     // Generate PDF version
     $forceDownload = isset($_GET['download']) && $_GET['download'] == '1';
 
@@ -1495,10 +1533,8 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         exit;
     }
 
-    // Generate filename — config-driven prefix, safe slug of label
+    // Nama berkas sudah dihitung di kepala cabang ini.
     // spec: ezdoc-spec/generate/pdf_filename.md
-    $labelPart = ($param_label !== '-' && $param_label !== '') ? '_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $param_label) : '';
-    $filename = $pdfFilenamePrefix . '_' . ($param_norm ?: 'draft') . $labelPart . '_' . date('Ymd_His') . '.pdf';
 
     // echo $pdfHtml;
     // exit;
@@ -1518,17 +1554,16 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
     // Fallback ke portrait kalau tidak set (defensive).
     $orientation = $orientation ?? 'portrait';
 
-    $pdfRenderer = null;
-    if (isset($ctx->pdf) && $ctx->pdf instanceof \Ezdoc\Rendering\PdfRenderer) {
+    // Satu jawaban untuk semua jalur — lihat ezdoc_pdf_renderer().
+    $pdfRenderer = ezdoc_pdf_renderer();
+
+    // Backward-compat: host menyambungkan objek yang punya stream() tapi tidak
+    // mengimplementasikan PdfRenderer. Hanya jalur cetak yang menerimanya —
+    // jalur pembekuan butuh render(), dan objek seperti ini tidak menjanjikannya.
+    if (isset($ctx->pdf) && is_object($ctx->pdf)
+        && !($ctx->pdf instanceof \Ezdoc\Rendering\PdfRenderer)
+        && method_exists($ctx->pdf, 'stream')) {
         $pdfRenderer = $ctx->pdf;
-    } elseif (isset($ctx->pdf) && is_object($ctx->pdf) && method_exists($ctx->pdf, 'stream')) {
-        // Backward-compat: consumer wired object dgn stream() method but
-        // tidak implement PdfRenderer interface — duck-typing accept.
-        $pdfRenderer = $ctx->pdf;
-    } elseif (class_exists('\\Dompdf\\Dompdf')) {
-        // Auto-instantiate ezdoc-native DompdfRenderer (default fallback).
-        // basePath = views/document/../.. = ezdoc root, untuk relative asset resolution.
-        $pdfRenderer = new \Ezdoc\Rendering\DompdfRenderer([], __DIR__ . '/../../');
     }
 
     if ($pdfRenderer !== null) {
@@ -1725,6 +1760,28 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                         <div class="mt-0.5">
                             <span class="inline-block rounded px-1.5 py-0.5 text-[9px] leading-none <?= $__stateCls ?>"
                                   title="<?= h(t('title.signing_state', [], 'Content is frozen for whatever the signatures already cover')) ?>"><?= h($__stateText) ?></span>
+                            <?php
+                            // Keputusan §6.1 rencananya: dokumen yang lengkap SEBELUM
+                            // pembekuan ada tidak dibekukan belakangan — itu akan
+                            // mengabadikan tampilan hari ini, bukan tampilan saat ia
+                            // ditandatangani. Ia dibiarkan, dan diberi tahu apa adanya.
+                            //
+                            // Cuma baris artefaknya yang ditanya, bukan berkasnya: memeriksa
+                            // keberadaan tidak perlu membaca PDF ratusan KB tiap halaman dibuka.
+                            // Satu query, cuma untuk dokumen lengkap.
+                            $__adaArsip = false;
+                            if ($docSigningComplete && (int) $doc_id > 0) {
+                                try {
+                                    $__adaArsip = (new \Ezdoc\Document\ArtifactRepository(\Ezdoc\Context::default()->connection()))
+                                        ->activeFor((int) $doc_id) !== null;
+                                } catch (\Throwable $e) {
+                                    $__adaArsip = false;
+                                }
+                            }
+                            if ($docSigningComplete && (int) $doc_id > 0 && !$__adaArsip): ?>
+                            <span class="inline-block rounded px-1.5 py-0.5 text-[9px] leading-none bg-gray-700 text-gray-400"
+                                  title="<?= h(t('title.no_display_archive', [], 'Signed before display archiving existed. Printing renders it from the current template.')) ?>"><?= h(t('signing_state.no_display_archive', [], 'No display archive')) ?></span>
+                            <?php endif; ?>
                         </div>
                         <?php endif; ?>
                     </div>

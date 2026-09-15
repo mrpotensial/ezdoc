@@ -83,6 +83,7 @@ return [
         'update_off_all_signed' => 'Semua tanda tangan sudah lengkap — buat versi baru untuk merevisi',
         'update_off_signed' => 'Sudah ditandatangani — penanda tangan berikutnya menyimpan saat menandatangani; buat versi baru untuk merevisi',
         'signing_state'         => 'Isi yang sudah dicakup tanda tangan tidak bisa diubah lagi',
+        'no_display_archive'    => 'Ditandatangani sebelum arsip tampilan ada. Cetakannya dirender dari template saat ini.',
         'field_frozen_by_signature' => 'Sudah ditandatangani — isinya tidak bisa lagi berubah. Buat versi baru untuk merevisi.',
         'no_sign_permission_as'  => 'Anda tidak berhak sign sebagai {label}{roles}',
         'signature_sealed'       => 'Sudah ditandatangani dan tercatat — buat versi baru untuk merevisi',
@@ -127,6 +128,7 @@ return [
         'draft'       => 'Belum ditandatangani',
         'in_progress' => 'Tertandatangani {signed} dari {total}',
         'complete'    => 'Tanda tangan lengkap',
+        'no_display_archive' => 'Tanpa arsip tampilan',
     ],
     'placeholder' => [
         'default_dash'      => '- (default)',

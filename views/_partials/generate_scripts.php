@@ -988,6 +988,9 @@
                 if (CURRENT_VERSION) params.set('version', CURRENT_VERSION);
             }
             params.set('view', 'pdf');
+            // Render mentah, bukan artefak beku. Tanpa ini tombol "PDF Raw"
+            // menyajikan arsip yang sama dengan cetak biasa pada dokumen lengkap.
+            params.set('raw', '1');
             window.open('?' + params.toString(), '_blank');
         }
 
