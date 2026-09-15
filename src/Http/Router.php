@@ -510,7 +510,7 @@ final class Router
         // isset($config) fallback only sees THIS method's local scope (it's
         // require()'d from here, not from renderView()), so without this it
         // silently builds a fresh empty Config and app.locale reverts to the
-        // Translator default ('id') regardless of what this Router was
+        // Translator default ('en') regardless of what this Router was
         // actually configured with. Same class of scope-isolation bug as
         // $dbFields/$GLOBALS in generate.php (commit 1c4a12a) and the
         // $translator wiring in designer.php/generate.php — see docs/I18N.md.

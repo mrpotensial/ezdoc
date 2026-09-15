@@ -77,7 +77,7 @@ if (!isset($config) || !($config instanceof \Ezdoc\UI\Config)) {
     $config = new \Ezdoc\UI\Config([]);
 }
 if (!isset($translator) || !($translator instanceof \Ezdoc\UI\Translator)) {
-    $translator = \Ezdoc\UI\Translator::forView('actions', (string) $config->get('app.locale', 'id'));
+    $translator = \Ezdoc\UI\Translator::forView('actions', (string) $config->get('app.locale', 'en'));
 }
 $GLOBALS['translator'] = $translator;
 if (!function_exists('t')) {
