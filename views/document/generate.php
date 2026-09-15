@@ -52,7 +52,7 @@ if (!isset($config) || !($config instanceof \Ezdoc\UI\Config)) {
 // helper below reads $GLOBALS directly so it works from inside function-scoped
 // renderers (renderContent(), renderFieldForPdf(), etc.) too. See docs/I18N.md.
 if (!isset($translator) || !($translator instanceof \Ezdoc\UI\Translator)) {
-    $translator = \Ezdoc\UI\Translator::forView('generate', (string) $config->get('app.locale', 'id'));
+    $translator = \Ezdoc\UI\Translator::forView('generate', (string) $config->get('app.locale', 'en'));
 }
 $GLOBALS['translator'] = $translator;
 

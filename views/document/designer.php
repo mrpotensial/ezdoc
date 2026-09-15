@@ -53,7 +53,7 @@ if (!isset($config) || !($config instanceof \Ezdoc\UI\Config)) {
 // which path included this file. Same class of bug fixed for $dbFields in
 // commit 1c4a12a (generate.php) — see docs/I18N.md.
 if (!isset($translator) || !($translator instanceof \Ezdoc\UI\Translator)) {
-    $translator = \Ezdoc\UI\Translator::forView('designer', (string) $config->get('app.locale', 'id'));
+    $translator = \Ezdoc\UI\Translator::forView('designer', (string) $config->get('app.locale', 'en'));
 }
 $GLOBALS['translator'] = $translator;
 

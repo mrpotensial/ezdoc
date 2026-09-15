@@ -35,8 +35,8 @@ return [
     'app.author_id'    => $author_id ?? null,
     'app.author_roles' => $author_role_array ?? [],
 
-    // Bahasa antarmuka: 'id' | 'en'
-    'app.locale' => 'id',
+    // Bahasa antarmuka: 'en' (bawaan) | 'id'
+    'app.locale' => 'en',
 ];
 
 // ── Cara 2: serahkan pemuatan bootstrap ke App ──────────────────────────────
@@ -47,7 +47,7 @@ return [
 //
 // return [
 //     'app.bootstrap' => __DIR__ . '/../../koneksi.php',
-//     'app.locale'    => 'id',
+//     'app.locale'    => 'en',
 // ];
 
 // ── Catatan ────────────────────────────────────────────────────────────────

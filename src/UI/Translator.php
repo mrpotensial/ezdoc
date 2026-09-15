@@ -36,7 +36,7 @@ final class Translator
     /** @var string */
     private $view;
 
-    public function __construct(Config $catalog, string $locale = 'id', string $view = '')
+    public function __construct(Config $catalog, string $locale = 'en', string $view = '')
     {
         $this->catalog = $catalog;
         $this->locale  = $locale;
@@ -53,8 +53,12 @@ final class Translator
      * Missing files are not an error (empty section). A file that exists
      * but doesn't return an array is logged and skipped, not thrown —
      * a broken lang file must never 500 a live page.
+     *
+     * The default locale is `en`, as in Laravel, Symfony and Filament. A host
+     * app that wants Bahasa Indonesia sets `app.locale` to `id` in its own
+     * config; the library does not assume where it is installed.
      */
-    public static function forView(string $view, string $locale = 'id', ?string $langDir = null): self
+    public static function forView(string $view, string $locale = 'en', ?string $langDir = null): self
     {
         $dir = $langDir !== null ? rtrim($langDir, '/\\') : (dirname(__DIR__, 2) . '/lang');
 
