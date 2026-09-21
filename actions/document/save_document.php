@@ -121,7 +121,6 @@ function ezdoc_freeze_after_signature($db, int $docId, int $templateId, string $
     ]);
 
     $tataLetak = ezdoc_template_layout($tpl);
-    $kertas    = $tataLetak['paperDim'];
 
     // Perender yang SAMA dengan jalur cetak, termasuk basePath-nya. Dulu yang
     // ini membuat DompdfRenderer sendiri tanpa basePath, dan aset relatif bisa
@@ -131,11 +130,9 @@ function ezdoc_freeze_after_signature($db, int $docId, int $templateId, string $
         throw new \RuntimeException('Tidak ada perender PDF — pasang dompdf/dompdf atau suntik PdfRenderer lewat Context::withPdf().');
     }
 
-    $bytes = $perender->render(
-        $html,
-        [(float) $kertas['width'], (float) $kertas['height']],
-        $tataLetak['orientation']
-    );
+    // Lewat pembantu yang sama dengan jalur cetak, supaya template continuous
+    // jadi satu halaman di arsipnya juga — bukan cuma di layar dan di cetakan.
+    $bytes = ezdoc_render_pdf_bytes($perender, $html, $tataLetak);
 
     // Penyegel hanya dipasang kalau consumer menyediakannya. Tanpa kunci,
     // dokumennya tetap dibekukan tanpa segel — keputusan §6.2 rencananya:

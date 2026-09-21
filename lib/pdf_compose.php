@@ -84,9 +84,18 @@ function ezdoc_compose_pdf_html(array $in): string
            Fix: @page margin + .page padding=0 + .page shrunk ke printable area.
            Floating elements need translate compensation (see rule below). */
         @page {
-            size: ' . $paperDim['width'] . 'mm ' . $paperDim['height'] . 'mm;
+            ' . (!empty($in['continuous'])
+                // Mode continuous: tanpa `size`. Di dompdf, `@page size` menang atas
+                // setPaper(), dan tinggi halamannya justru ditentukan perender
+                // sesudah ia mengukur isinya.
+                ? ''
+                : 'size: ' . $paperDim['width'] . 'mm ' . $paperDim['height'] . 'mm;') . '
             margin: ' . $padTop . 'mm ' . $padRight . 'mm ' . $padBottom . 'mm ' . $padLeft . 'mm;
-        }
+        }' . (!empty($in['continuous']) ? '
+        /* Mode continuous: satu halaman, jadi tidak ada pemisah halaman sama sekali.
+           Pemisah paksa dari template akan membuat halaman kedua. */
+        * { page-break-before: auto !important; page-break-after: auto !important;
+            break-before: auto !important; break-after: auto !important; }' : '') . '
         /* Global box-sizing only. Selective reset (body, .page margin/padding
            handled below). Blanket "* { margin: 0; padding: 0 }" reset removed —
            previously stripped ol/ul/li/p margins that we want per screen behavior. */
@@ -1406,7 +1415,45 @@ function ezdoc_document_pdf_html(array $in): string
         'pdf_fields'           => $fields,
         'has_ttd_placeholders' => $tataLetak['hasTtdPlaceholders'],
         'conn'                 => $conn,
+        // Satu halaman setinggi isinya. Diputuskan dari template, bukan dari
+        // pemanggil, supaya cetak dan beku tidak pernah berbeda pendapat.
+        'continuous'           => ($tataLetak['layoutMode'] ?? '') === 'continuous',
     ]);
+}
+
+/**
+ * Byte PDF dokumen, sesuai tata letak templatenya.
+ *
+ * Satu jawaban untuk cetak dan untuk pembekuan. Template `continuous` jadi satu
+ * halaman setinggi isinya kalau perendernya mampu; kalau tidak — perender host
+ * tanpa kemampuan itu, atau isi yang lebih panjang dari batas satu halaman —
+ * dirender per halaman seperti biasa, dan kejadiannya dicatat.
+ *
+ * @param array<string,mixed> $tataLetak hasil ezdoc_template_layout()
+ */
+function ezdoc_render_pdf_bytes(\Ezdoc\Rendering\PdfRenderer $perender, string $html, array $tataLetak): string
+{
+    $kertas = $tataLetak['paperDim'];
+
+    if (($tataLetak['layoutMode'] ?? '') === 'continuous'
+        && $perender instanceof \Ezdoc\Rendering\ContinuousPdfRenderer) {
+        $bytes = $perender->renderContinuous(
+            $html,
+            (float) $kertas['width'],
+            (float) ($tataLetak['padBottom'] ?? 20),
+            (float) $kertas['height']
+        );
+        if ($bytes !== null) {
+            return $bytes;
+        }
+        @error_log('[ezdoc:pdf] isi terlalu panjang untuk satu halaman; dirender per halaman');
+    }
+
+    return $perender->render(
+        $html,
+        [(float) $kertas['width'], (float) $kertas['height']],
+        (string) ($tataLetak['orientation'] ?? 'portrait')
+    );
 }
 
 

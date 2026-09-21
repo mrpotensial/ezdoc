@@ -1566,7 +1566,16 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
         $pdfRenderer = $ctx->pdf;
     }
 
-    if ($pdfRenderer !== null) {
+    // Template continuous jadi satu halaman setinggi isinya, lewat pembantu
+    // yang SAMA dengan jalur pembekuan — cetakan dan arsip tidak boleh berbeda.
+    // Yang per halaman tetap lewat stream() milik dompdf seperti sebelumnya.
+    if ($pdfRenderer instanceof \Ezdoc\Rendering\PdfRenderer && $layoutMode === 'continuous') {
+        $__bytes = ezdoc_render_pdf_bytes($pdfRenderer, $pdfHtml, $__tataLetak);
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: inline; filename="' . $filename . '"');
+        header('Content-Length: ' . strlen($__bytes));
+        echo $__bytes;
+    } elseif ($pdfRenderer !== null) {
         $pdfRenderer->stream($pdfHtml, $filename, $paperMm, $orientation);
     } else {
         header('Content-Type: text/html; charset=utf-8');

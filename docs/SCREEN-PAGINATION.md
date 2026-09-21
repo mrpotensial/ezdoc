@@ -120,8 +120,13 @@ Media Level 3). Consistent dgn dompdf PDF Raw approach.
   templates jarang isu.
 - **Table single-row too tall** — Case C accept overflow. Proper fix
   (descend into `<td>` + paragraph-level split) deferred.
-- **Continuous mode print output** — screen setting only; print always
-  paginate karena physical paper needs page boundaries.
+- **Continuous mode print output** — PDF (PDF Raw dan arsip beku) jadi SATU
+  halaman setinggi isinya sejak 2026-09-21: `DompdfRenderer::renderContinuous()`
+  merender dua kali — sekali untuk mengukur batas bawah isi, sekali di atas
+  kertas setinggi itu. Isi yang muat selembar tetap persis selembar. Isi yang
+  lebih panjang dari batas satu halaman PDF (±5 m) jatuh ke per halaman.
+  Cetak lewat peramban (`window.print()`) tetap per lembar — printer fisik memang
+  butuh batas halaman.
 - **Firefox older versions** — mungkin ignore `@page margin`. User harus
   set "Default margins" di print dialog.
 

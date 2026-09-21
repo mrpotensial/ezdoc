@@ -54,7 +54,7 @@ use Dompdf\Options;
  *
  * spec: docs/PDF-RENDERING.md
  */
-final class DompdfRenderer implements PdfRenderer
+final class DompdfRenderer implements PdfRenderer, ContinuousPdfRenderer
 {
     /** @var array<string,mixed> */
     private $options;
@@ -82,6 +82,65 @@ final class DompdfRenderer implements PdfRenderer
         return (string) $this->build($html, $paperMm, $orientation)->output();
     }
 
+    /**
+     * Batas tinggi satu halaman, dalam mm.
+     *
+     * Acrobat berhenti di 200 inci (5.080 mm). Sedikit di bawahnya, supaya margin
+     * bawah masih muat.
+     */
+    private const TINGGI_MAKS_MM = 5000.0;
+
+    /**
+     * Satu halaman setinggi isinya, lewat dua render.
+     *
+     * Tinggi halaman PDF harus diketahui SEBELUM isinya disusun, sementara dompdf
+     * baru tahu tinggi isi setelah selesai menyusun. Jadi: render pertama di atas
+     * kertas yang sangat tinggi, tangkap batas bawah isi selama render berjalan,
+     * lalu render kedua di atas kertas setinggi itu.
+     *
+     * Batasnya ditangkap lewat callback `end_frame`, bukan dibaca sesudah
+     * render — sesudah render selesai posisi frame tidak lagi bisa dipercaya
+     * (percobaan pertama membaca 0).
+     *
+     * Selalu `portrait`. Dengan `landscape`, setPaper() menukar sisi supaya lebar
+     * lebih besar dari tinggi, dan halaman panjang ini akan diputar jadi lebar.
+     * Lebar yang diterima sudah memperhitungkan orientasi templatenya.
+     */
+    public function renderContinuous(string $html, float $widthMm, float $marginBottomMm, float $minHeightMm = 0.0): ?string
+    {
+        $bawahPt = 0.0;
+        $pertama = $this->build($html, [$widthMm, self::TINGGI_MAKS_MM], 'portrait', static function ($frame) use (&$bawahPt) {
+            $pos = $frame->get_position();
+            $tinggi = $frame->get_margin_height();
+            if (is_numeric($pos['y'] ?? null) && is_numeric($tinggi)) {
+                $bawahPt = max($bawahPt, (float) $pos['y'] + (float) $tinggi);
+            }
+        });
+
+        // Tidak muat di satu halaman sekalipun setinggi batasnya.
+        if ($pertama->getCanvas()->get_page_count() > 1 || $bawahPt <= 0.0) {
+            return null;
+        }
+
+        // Isi yang muat selembar: tingginya PERSIS tinggi kertas. Tanpa ini
+        // dokumen A4 satu lembar jadi 298 mm, dan dicetak di A4 ia diperkecil.
+        //
+        // Selebihnya: 1 mm cadangan untuk pembulatan. Tanpa itu baris terakhir
+        // kadang terdorong ke halaman kedua karena selisih sepersekian poin.
+        // Kalau ternyata masih terdorong, percobaan ulang di bawah menangkapnya.
+        $isiMm = ($bawahPt / 2.83465) + $marginBottomMm;
+        $tinggiMm = ($minHeightMm > 0.0 && $isiMm <= $minHeightMm + 0.5)
+            ? $minHeightMm
+            : $isiMm + 1.0;
+        $kedua = $this->build($html, [$widthMm, $tinggiMm], 'portrait');
+
+        if ($kedua->getCanvas()->get_page_count() > 1) {
+            $kedua = $this->build($html, [$widthMm, $tinggiMm + 10.0], 'portrait');
+        }
+
+        return (string) $kedua->output();
+    }
+
     public function stream(string $html, string $filename, array $paperMm, string $orientation): void
     {
         // Sengaja memakai stream() milik dompdf, bukan render() di atas lalu
@@ -103,7 +162,7 @@ final class DompdfRenderer implements PdfRenderer
      *
      * @param array<int,float|int> $paperMm
      */
-    private function build(string $html, array $paperMm, string $orientation): Dompdf
+    private function build(string $html, array $paperMm, string $orientation, ?callable $diAkhirFrame = null): Dompdf
     {
         $options = new Options();
         foreach ($this->options as $key => $value) {
@@ -123,6 +182,10 @@ final class DompdfRenderer implements PdfRenderer
         $widthPt  = (float) ($paperMm[0] ?? 210) * 2.83465;
         $heightPt = (float) ($paperMm[1] ?? 297) * 2.83465;
         $dompdf->setPaper([0.0, 0.0, $widthPt, $heightPt], $orientation);
+
+        if ($diAkhirFrame !== null) {
+            $dompdf->setCallbacks([['event' => 'end_frame', 'f' => $diAkhirFrame]]);
+        }
 
         $dompdf->render();
 
