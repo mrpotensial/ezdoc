@@ -1207,6 +1207,38 @@
          * Indonesia akan tetap berbahasa Indonesia saat dibuka dengan antarmuka
          * bahasa Inggris.
          */
+        /**
+         * Buka PDF beku satu siklus di tab baru.
+         *
+         * Diambil lewat fetch seperti aksi lain — dispatcher hanya menerima aksi
+         * lewat POST — lalu dibuka sebagai blob. Tab-nya dibuka LEBIH DULU, di
+         * dalam klik itu sendiri: yang dibuka sesudah await dianggap popup dan
+         * diblokir peramban.
+         */
+        async function openDisplayArchive(docId, cycle) {
+            const tab = window.open('', '_blank');
+            try {
+                const fd = new FormData();
+                fd.append('_doc_action', 'artifact');
+                fd.append('doc_id', docId);
+                fd.append('cycle', cycle);
+                const resp = await fetch(_ezdocEndpoint('docAction'), { method: 'POST', body: fd });
+                const type = resp.headers.get('Content-Type') || '';
+                if (!resp.ok || type.indexOf('application/pdf') === -1) {
+                    let pesan = t('toast.archive_open_failed', {}, 'Could not open the archive');
+                    try { const j = await resp.json(); if (j && j.message) pesan = j.message; } catch (e) {}
+                    if (tab) tab.close();
+                    showToast(pesan, 'error');
+                    return;
+                }
+                const url = URL.createObjectURL(await resp.blob());
+                if (tab) { tab.location = url; } else { window.location = url; }
+            } catch (e) {
+                if (tab) tab.close();
+                showToast(t('toast.archive_open_failed', {}, 'Could not open the archive'), 'error');
+            }
+        }
+
         function renderHistoryEntry(e) {
             // Setiap kunci ditulis utuh, bukan dirakit dari nama kejadian.
             //
@@ -1245,6 +1277,10 @@
                 // mentah untuk dokumen lama sama saja dengan riwayat yang rusak.
                 'otp.scan_requested': { icon: 'bi-qr-code',      tone: 'text-gray-500',    label: t('history_event.otp_scan_requested', {}, 'QR shown to the signer') },
                 'otp.scan_fulfilled': { icon: 'bi-qr-code-scan', tone: 'text-emerald-600', label: t('history_event.otp_scan_fulfilled', {}, 'Signer scanned and received a code') },
+
+                // Arsip tampilan: satu siklus PDF beku per tanda tangan.
+                'doc.frozen':        { icon: 'bi-file-earmark-lock', tone: 'text-sky-700', label: t('history_event.doc_frozen', {}, 'Display archived') },
+                'doc.freeze_failed': { icon: 'bi-file-earmark-x',    tone: 'text-red-600', label: t('history_event.doc_freeze_failed', {}, 'Display archiving failed') },
             };
 
             // Kejadian yang tidak dikenali tetap ditampilkan, memakai nama mentahnya.
@@ -1262,8 +1298,29 @@
                 }
             }
 
+            if (e.event === 'doc.frozen' && e.detail) {
+                title = t('history_event.doc_frozen_cycle', { cycle: e.detail.cycle }, 'Display archived — cycle {cycle}');
+                if (e.detail.sealed) {
+                    title += ' <span class="text-[10px] text-gray-500">(' + t('history_event.sealed_suffix', {}, 'sealed') + ')</span>';
+                }
+                // Siklus yang sudah digantikan tetap bisa dibuka — justru itu
+                // gunanya: ia menunjukkan dokumen seperti yang dilihat penanda
+                // tangan sebelumnya.
+                title += ' <button type="button" class="!bg-transparent !p-0 !m-0 text-[11px] text-sky-700 underline hover:text-sky-900"'
+                    + ' onclick="openDisplayArchive(' + Number(e.detail.doc_id) + ', ' + Number(e.detail.cycle) + ')">'
+                    + t('history_event.open_archive', {}, 'Open') + '</button>';
+            }
+
             const revoked = e.result === 'revoked'
                 ? ` <span class="text-[10px] text-gray-500">(${t('history_event.revoked_suffix', {}, 'revoked')})</span>`
+                : (e.result === 'superseded'
+                    ? ` <span class="text-[10px] text-gray-500">(${t('history_event.superseded_suffix', {}, 'superseded')})</span>`
+                    : '');
+
+            // Nomor yang menerima kode OTP. Sudah disamarkan server untuk yang
+            // tidak berhak melihat detail audit — di sini cuma ditampilkan.
+            const otpPhone = (e.event === 'signature.recorded' && e.detail && e.detail.otp_phone)
+                ? ' · ' + t('history_event.otp_phone', { phone: escapeHtmlSimple(e.detail.otp_phone) }, 'OTP to {phone}')
                 : '';
             const failed = e.result === 'denied' || e.result === 'error'
                 ? ` <span class="text-[10px] text-red-600">(${t('history_event.failed_suffix', {}, 'failed')})</span>`
@@ -1292,7 +1349,7 @@
                     <div class="min-w-0 flex-1">
                         <div class="text-[12px] text-gray-800 leading-tight">${ver}${title}${revoked}${failed}</div>
                         <div class="text-[10px] text-gray-500 leading-tight mt-0.5">
-                            ${fmtDate(e.at)} · ${who}${e.ip ? ' · ' + escapeHtmlSimple(e.ip) : ''}
+                            ${fmtDate(e.at)} · ${who}${otpPhone}${e.ip ? ' · ' + escapeHtmlSimple(e.ip) : ''}
                         </div>
                     </div>
                 </div>`;

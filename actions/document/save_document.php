@@ -1028,6 +1028,19 @@ if ($recordedSignatureCount > 0) {
             $recordedSignatureCount,
             $e->getMessage()
         ));
+
+        // Juga ke riwayat dokumennya. error_log cuma dibaca orang yang tahu harus
+        // mencari; tanda tangan yang tidak punya arsip tampilan harus terlihat
+        // oleh siapa pun yang membuka dokumennya.
+        ezdoc_audit_log('doc.freeze_failed', [
+            'target_type' => 'document',
+            'target_id'   => (string) $doc_id,
+            'template_id' => (int) $template_id,
+            'doc_id'      => (int) $doc_id,
+            'result'      => 'error',
+            'metadata'    => ['signatures' => $recordedSignatureCount],
+            'message'     => $e->getMessage(),
+        ]);
     }
 }
 

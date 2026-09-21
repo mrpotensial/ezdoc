@@ -121,6 +121,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['_doc_action'])) {
         'request_scan_code'  => 'request_scan_code.php',
         'scan_code_status'   => 'scan_code_status.php',
         'document_history'=> 'document_history.php',
+        // PDF beku satu siklus. Siklus lama sengaja tetap bisa dibuka: ia
+        // jawaban atas "apa yang dilihat penanda tangan pertama".
+        'artifact'        => 'artifact.php',
     ];
     $action = (string)$_POST['_doc_action'];
     if (isset($whitelist[$action])) {

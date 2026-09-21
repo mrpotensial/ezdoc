@@ -120,6 +120,13 @@ return [
         // walau jalurnya sudah pensiun: baris lama masih ada di log audit.
         'otp_scan_requested'       => 'QR ditampilkan ke penanda tangan',
         'otp_scan_fulfilled'       => 'Penanda tangan memindai dan menerima kode',
+        'doc_frozen'               => 'Tampilan diarsipkan',
+        'doc_frozen_cycle'         => 'Tampilan diarsipkan — siklus {cycle}',
+        'doc_freeze_failed'        => 'Gagal mengarsipkan tampilan',
+        'open_archive'             => 'Buka',
+        'sealed_suffix'            => 'bersegel',
+        'superseded_suffix'        => 'digantikan',
+        'otp_phone'                => 'OTP ke {phone}',
         'revoked_suffix'           => 'dicabut',
         'failed_suffix'            => 'gagal',
         'unknown_actor'            => 'tidak diketahui',
@@ -224,6 +231,7 @@ return [
     'toast' => [
         'invalid_fields'           => 'Ada field yang belum valid. Periksa highlight merah.',
         'signature_empty'          => 'Belum ada yang digambar — tanda tangan tidak disimpan.',
+        'archive_open_failed'      => 'Arsip tidak bisa dibuka',
         'save_failed'              => 'Gagal menyimpan: {error}',
         'verify_url_not_ready'     => 'URL Verifikasi belum tersedia. Simpan dokumen dulu.',
         'qr_content_required'      => 'Isi QR tidak boleh kosong',

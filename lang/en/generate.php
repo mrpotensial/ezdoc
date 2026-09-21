@@ -102,6 +102,13 @@ return [
         // though that route is retired: old rows still sit in the audit log.
         'otp_scan_requested' => 'QR shown to the signer',
         'otp_scan_fulfilled' => 'Signer scanned and received a code',
+        'doc_frozen' => 'Display archived',
+        'doc_frozen_cycle' => 'Display archived — cycle {cycle}',
+        'doc_freeze_failed' => 'Display archiving failed',
+        'open_archive' => 'Open',
+        'sealed_suffix' => 'sealed',
+        'superseded_suffix' => 'superseded',
+        'otp_phone' => 'OTP to {phone}',
         'revoked_suffix' => 'revoked',
         'failed_suffix' => 'failed',
         'unknown_actor' => 'unknown',
@@ -201,6 +208,7 @@ return [
     'toast' => [
         'invalid_fields' => 'Some fields are invalid. Check the red highlights.',
         'signature_empty' => 'Nothing was drawn — the signature was not saved.',
+        'archive_open_failed' => 'Could not open the archive',
         'save_failed' => 'Failed to save: {error}',
         'verify_url_not_ready' => 'Verification URL not available yet. Save the document first.',
         'qr_content_required' => 'QR content cannot be empty',

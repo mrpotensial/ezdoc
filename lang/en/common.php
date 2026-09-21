@@ -73,6 +73,8 @@ return [
         'save_failed' => 'Failed: {error}',
         'document_saved' => 'Document saved successfully',
         'document_unchanged' => 'No changes — nothing was saved',
+        'archive_not_found' => 'No display archive for this document',
+        'archive_file_missing' => 'The archive is recorded but its file cannot be read',
         'document_locked' => 'Document locked',
         'document_unlocked' => 'Document unlocked',
         'update_lock_failed' => 'Failed to update lock: {error}',

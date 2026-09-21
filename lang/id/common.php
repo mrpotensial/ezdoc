@@ -111,6 +111,8 @@ return [
         'save_failed'                 => 'Gagal: {error}',
         'document_saved'              => 'Dokumen berhasil disimpan',
         'document_unchanged'          => 'Tidak ada perubahan — tidak ada yang disimpan',
+        'archive_not_found'           => 'Dokumen ini belum punya arsip tampilan',
+        'archive_file_missing'        => 'Arsip tercatat tapi berkasnya tidak bisa dibaca',
 
         // ── document/toggle_lock.php ──
         'document_locked'        => 'Dokumen dilock',

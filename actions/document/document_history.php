@@ -149,9 +149,58 @@ try {
     $sigRows = [];
 }
 
+// ─── Nomor yang menerima OTP, untuk tanda tangan yang memakainya ───
+//
+// Record tanda tangan tidak menyimpannya; tantangan OTP-nya yang menyimpan.
+// Keduanya dikaitkan lewat slot yang sama: tantangan terverifikasi terakhir
+// untuk (dokumen, slot) yang terjadi SEBELUM tanda tangannya tercatat.
+//
+// Nomor HP data pribadi. Mengikuti aturan yang sama dengan IP dan role di panel
+// ini: lengkap hanya untuk yang berhak melihat detail audit, sisanya disamarkan
+// sampai empat angka terakhir — cukup untuk mengenali "nomor yang itu" tanpa
+// membeberkannya. Pola yang sama dipakai sertifikat penyelesaian DocuSign.
+$otpPerSlot = [];
+try {
+    $otpRows = $db->fetchAll(
+        'SELECT `doc_id`, `ttd_id`, `phone`, `verified_at`
+         FROM `ezdoc_ttd_otp_challenges`
+         WHERE `doc_id` IN (' . $in . ') AND `verified_at` IS NOT NULL
+         ORDER BY `verified_at`',
+        $ids
+    );
+    foreach ($otpRows as $o) {
+        $otpPerSlot[(int) $o['doc_id'] . '|' . (string) $o['ttd_id']][] = $o;
+    }
+} catch (\Throwable $e) {
+    // Pemasangan tanpa OTP tidak punya tabelnya. Riwayatnya tetap utuh.
+    $otpPerSlot = [];
+}
+
+$samarkanNomor = static function (string $nomor) use ($showAuditDetail): string {
+    $nomor = trim($nomor);
+    if ($nomor === '' || $showAuditDetail) {
+        return $nomor;
+    }
+    $angka = preg_replace('/\D/', '', $nomor) ?? '';
+    if (strlen($angka) <= 4) {
+        return str_repeat('*', strlen($angka));
+    }
+
+    return str_repeat('*', strlen($angka) - 4) . substr($angka, -4);
+};
+
 foreach ($sigRows as $row) {
     $meta = json_decode((string) ($row['metadata'] ?? ''), true);
     $meta = is_array($meta) ? $meta : [];
+
+    // Tantangan terverifikasi terakhir untuk slot ini, sebelum tanda tangannya.
+    $nomorOtp = null;
+    $kunciSlot = (int) ($row['document_id'] ?? 0) . '|' . (string) ($meta['ttd_id'] ?? '');
+    foreach ($otpPerSlot[$kunciSlot] ?? [] as $o) {
+        if (strcmp((string) $o['verified_at'], (string) ($row['signed_at'] ?? '')) <= 0) {
+            $nomorOtp = (string) ($o['phone'] ?? '');
+        }
+    }
 
     $entries[] = [
         'at'      => (string) ($row['signed_at'] ?? ''),
@@ -168,6 +217,48 @@ foreach ($sigRows as $row) {
                 ? (string) $meta['signer_name']
                 : null,
             'level'       => (int) ($row['level'] ?? 1),
+            'otp_phone'   => ($nomorOtp !== null && $nomorOtp !== '') ? $samarkanNomor($nomorOtp) : null,
+        ],
+    ];
+}
+
+// ─── Sumber 3: arsip tampilan ───
+//
+// Tiap tanda tangan menghasilkan satu siklus PDF beku. Yang sudah digantikan
+// ikut ditampilkan: siklus 1 adalah jawaban atas "apa yang dilihat penanda
+// tangan pertama", dan pertanyaan itu muncul justru saat ia sudah tidak berlaku.
+//
+// Dibaca dari tabel artefaknya langsung, bukan dari log audit — dengan begitu
+// arsip yang dibuat sebelum pencatatan ini ada tetap terlihat, dan sumber
+// kebenarannya satu.
+try {
+    $artRows = $db->fetchAll(
+        'SELECT `document_id`, `cycle`, `frozen_at`, `frozen_by`, `superseded_at`, `manifest`
+         FROM `ezdoc_document_artifacts`
+         WHERE `document_id` IN (' . $in . ')',
+        $ids
+    );
+} catch (\Throwable $e) {
+    // Pemasangan yang belum memigrasikan tabel artefak.
+    $artRows = [];
+}
+
+foreach ($artRows as $row) {
+    $manifest = json_decode((string) ($row['manifest'] ?? ''), true);
+
+    $entries[] = [
+        'at'      => (string) ($row['frozen_at'] ?? ''),
+        'event'   => 'doc.frozen',
+        'version' => $versionOf[(int) ($row['document_id'] ?? 0)] ?? null,
+        'actor'   => (string) ($row['frozen_by'] ?? ''),
+        'roles'   => '',
+        'ip'      => '',
+        'result'  => ($row['superseded_at'] ?? null) !== null ? 'superseded' : 'ok',
+        'message' => '',
+        'detail'  => [
+            'doc_id' => (int) ($row['document_id'] ?? 0),
+            'cycle'  => (int) ($row['cycle'] ?? 0),
+            'sealed' => is_array($manifest) && isset($manifest['seal']),
         ],
     ];
 }
