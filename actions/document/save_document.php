@@ -632,6 +632,39 @@ if ($doc_id > 0) {
     }
 }
 
+// ─── Dokumen BARU yang menabrak slot bertanda tangan ───
+//
+// Tanpa `_doc_id`, simpan ini dimaksudkan membuat dokumen baru — tapi pencarian
+// slot di atas menemukan dokumen yang sudah ada, dan diam-diam mengubahnya jadi
+// edit. Kalau dokumen itu sudah ditandatangani, perbandingan field di bawah
+// menolaknya dengan "Changed: nik, ttl, nama…" — padahal orangnya tidak mengubah
+// apa pun; ia sedang mengisi form baru, dan tidak tahu dokumen itu ada.
+//
+// Yang sebenarnya terjadi adalah bentrok identitas, bukan suntingan terlarang.
+// Jawabannya menyebut dokumen mana yang ditabrak, supaya peramban bisa
+// menawarkan membukanya atau membuat versi barunya. Pola 409 Conflict pada REST:
+// membuat sumber daya dengan kunci yang sudah dipakai.
+if ($signedSlots !== [] && ((int) ($_POST['_doc_id'] ?? 0)) <= 0) {
+    ezdoc_respond_error(
+        t(
+            'response.slot_taken_signed',
+            ['id' => (int) $doc_id, 'norm' => $norm, 'nopen' => $nopen],
+            'A signed document (#{id}) already exists for MR {norm}, Reg {nopen}. Open it, or create a new version of it. Nothing typed here has been saved.'
+        ),
+        409,
+        [
+            'remedy'           => 'slot_taken',
+            'existing_doc_id'  => (int) $doc_id,
+            'existing_version' => (int) ($blocking['version'] ?? 0),
+            'matched_slot'     => [
+                'norm'  => $norm,
+                'nopen' => $nopen,
+                'label' => $label,
+            ],
+        ]
+    );
+}
+
 if ($signedSlots !== []) {
     // Nilai field tersimpan yang berubah atau hilang. Field BARU dibiarkan
     // lewat: itu bisa jadi template yang bertambah kolom, bukan orang mengubah

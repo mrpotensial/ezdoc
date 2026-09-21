@@ -65,6 +65,10 @@
         const message = opts.message || '';
         const confirmText = opts.confirmText || 'OK';
         const cancelText = opts.cancelText || 'Cancel';
+        // Tombol ketiga, opsional. Tanpanya dialog persis seperti dulu —
+        // true/false. Dengannya, pilihan ini menjawab 'secondary'. Pola yang
+        // sama dengan "Save / Don't Save / Cancel" dan showDenyButton SweetAlert2.
+        const secondaryText = opts.secondaryText || '';
         const iconDef = ICONS[variant] || ICONS.info;
         const btnCls = BTN_PRIMARY[variant] || BTN_PRIMARY.info;
         const isPrompt = mode === 'prompt';
@@ -91,6 +95,7 @@
                         </div>
                         <div class="flex flex-row-reverse gap-2 rounded-b-xl bg-gray-50 px-5 py-3 sm:px-6">
                             <button type="button" data-ezdoc-dialog-confirm class="inline-flex justify-center rounded-md px-4 py-2 text-sm font-semibold text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 ${btnCls}">${esc(confirmText)}</button>
+                            ${secondaryText ? `<button type="button" data-ezdoc-dialog-secondary class="inline-flex justify-center rounded-md bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-400 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500">${esc(secondaryText)}</button>` : ''}
                             ${isConfirm ? `<button type="button" data-ezdoc-dialog-cancel class="inline-flex justify-center rounded-md bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400">${esc(cancelText)}</button>` : ''}
                         </div>
                     </div>
@@ -137,6 +142,8 @@
                 close(input ? input.value.trim() : true);
             });
             if (btnCancel) btnCancel.addEventListener('click', function () { close(isPrompt ? null : false); });
+            const btnSecondary = root.querySelector('[data-ezdoc-dialog-secondary]');
+            if (btnSecondary) btnSecondary.addEventListener('click', function () { close('secondary'); });
             backdrop.addEventListener('click', function () { close(isConfirm ? false : true); });
             const FOCUSABLE_SEL = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
             function keyHandler(e) {
@@ -188,7 +195,7 @@
     };
     window.ezdocConfirm = function (message, opts) {
         opts = opts || {};
-        return show({ mode: 'confirm', variant: opts.variant || 'warning', title: opts.title || '', message: message, confirmText: opts.confirmText || 'Yes', cancelText: opts.cancelText || 'Cancel' });
+        return show({ mode: 'confirm', variant: opts.variant || 'warning', title: opts.title || '', message: message, confirmText: opts.confirmText || 'Yes', cancelText: opts.cancelText || 'Cancel', secondaryText: opts.secondaryText || '' });
     };
 })();
 </script>

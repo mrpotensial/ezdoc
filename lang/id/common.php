@@ -39,6 +39,7 @@ return [
         'edit'   => 'Edit',
         'hide'   => 'Sembunyikan',
         'view_document' => 'Lihat dokumen itu',
+        'open_existing_document' => 'Buka dokumen yang ada',
     ],
     'fallback' => [
         // Default TTD (tanda tangan / signature) label shown when no
@@ -106,6 +107,9 @@ return [
         // konsekuensi sudah ditandatangani. Slot yang belum ditandatangani
         // tetap bisa diisi — yang beku isinya.
         'document_signed_fields_frozen' => 'Dokumen ini sudah ditandatangani, jadi isinya tidak bisa lagi berubah. Buat versi baru untuk merevisi. Yang berubah: {fields}',
+        // Form BARU yang No RM/Pendaftarannya jatuh ke slot milik dokumen yang
+        // sudah ditandatangani. Bukan suntingan dokumen itu — bentrok.
+        'slot_taken_signed' => 'Sudah ada dokumen bertanda tangan (#{id}) untuk No RM {norm}, No Pendaftaran {nopen}. Buka dokumen itu, atau buat versi barunya. Isian di form ini belum tersimpan.',
         'signature_replace_needs_new_version' => 'Tanda tangan "{ttd}" sudah tercatat dan tidak bisa diganti lewat penyimpanan. Buat versi baru.',
         'signature_removal_needs_new_version' => 'Tanda tangan "{ttd}" sudah tercatat dan tidak bisa dihapus lewat penyimpanan. Buat versi baru.',
         'save_failed'                 => 'Gagal: {error}',

@@ -202,6 +202,7 @@ return [
         'locked_slot_title'  => 'Slot ini sudah terpakai',
         'locked_slot_detail' => 'Dokumen #{id} (versi {version}) sudah menempati slot ini — No RM {norm}, No Pendaftaran {nopen}, label "{label}".',
         'frozen_title'          => 'Dokumen sudah ditandatangani',
+        'slot_taken_title'      => 'Dokumen sudah ada',
         'frozen_changed_detail' => 'Field beku yang berubah: {fields}',
     ],
     'confirm' => [

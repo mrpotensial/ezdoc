@@ -184,6 +184,7 @@ return [
         'locked_slot_title' => 'Slot already taken',
         'locked_slot_detail' => 'Document #{id} (version {version}) already occupies this slot — MR {norm}, Reg {nopen}, label "{label}".',
         'frozen_title' => 'Document already signed',
+        'slot_taken_title' => 'A document already exists',
         'frozen_changed_detail' => 'Frozen fields that changed: {fields}',
     ],
     'confirm' => [

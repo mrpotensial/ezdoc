@@ -611,6 +611,40 @@
         // yang bisa diklik. Padahal server sudah mengirim slot yang cocok, jadi
         // tautan ke dokumennya bisa dibangun tepat.
         async function handleSaveRejection(data) {
+            // Dokumen BARU menabrak slot yang sudah punya dokumen bertanda tangan.
+            //
+            // Bukan "dokumen ini sudah ditandatangani" — dokumen yang terbuka belum
+            // pernah tersimpan. Yang ditabrak dokumen LAIN, dan orangnya kemungkinan
+            // besar tidak tahu ia ada. Jadi dua jalan ditawarkan: membukanya, atau
+            // membuat versi barunya. Versi baru dibuat untuk slot YANG DITABRAK,
+            // bukan slot halaman ini — di form baru slot halaman ini kosong.
+            if (data.remedy === 'slot_taken' && data.matched_slot) {
+                const slot = data.matched_slot;
+                const pilih = await ezdocConfirm(data.message, {
+                    title: t('alert.slot_taken_title', {}, 'A document already exists'),
+                    variant: 'warning',
+                    confirmText: t('actions.open_existing_document', {}, 'Open existing document'),
+                    secondaryText: t('modal.new_version.title', {}, 'Create New Version'),
+                    cancelText: t('actions.close', {}, 'Close')
+                });
+
+                if (pilih === true) {
+                    const p = _preservedParams();
+                    p.set('template_id', templateId);
+                    if (slot.norm) p.set('norm', slot.norm);
+                    if (slot.nopen) p.set('nopen', slot.nopen);
+                    if (slot.label && slot.label !== '-') p.set('label', slot.label);
+                    // Simpannya baru saja ditolak, jadi tidak ada yang tersimpan
+                    // di form ini — peringatan "perubahan belum disimpan" di sini
+                    // cuma menahan orang dari jalan yang ia pilih sendiri.
+                    if (typeof markClean === 'function') markClean();
+                    window.location.href = '?' + p.toString();
+                } else if (pilih === 'secondary' && typeof showNewVersionModal === 'function') {
+                    await showNewVersionModal(slot);
+                }
+                return;
+            }
+
             // Penolakan §7b: isi dokumen beku karena sudah ada tanda tangan.
             // Remedinya bukan "buka dokumen lain" — dokumennya sudah terbuka —
             // tapi membuat versi baru. Toast tidak bisa menawarkan itu, dan tanpa
@@ -1710,14 +1744,27 @@
         }
 
         // Modal: buat versi baru (prompt copy-from-version / blank)
-        async function showNewVersionModal() {
+        //
+        // Slot tujuan versi baru. Bawaannya slot halaman ini — tapi dokumen BARU
+        // yang menabrak slot yang sudah ada belum punya slot sendiri: CURRENT_*
+        // diisi saat halaman dimuat, dan di form baru isinya kosong. Tanpa slot
+        // eksplisit, daftar "copy from" diminta untuk slot kosong dan pilihan
+        // "Blank" mengirim norm kosong — "Incomplete parameters".
+        let _nvSlot = null;
+
+        async function showNewVersionModal(slot) {
+            _nvSlot = {
+                norm:  (slot && slot.norm)  || CURRENT_NORM,
+                nopen: (slot && slot.nopen) || CURRENT_NOPEN,
+                label: (slot && slot.label) || CURRENT_LABEL,
+            };
             // Load all versions for picker
             const fd = new FormData();
             fd.append('_doc_action', 'list_versions');
             fd.append('template_id', templateId);
-            fd.append('norm', CURRENT_NORM);
-            fd.append('nopen', CURRENT_NOPEN);
-            fd.append('label', CURRENT_LABEL);
+            fd.append('norm', _nvSlot.norm);
+            fd.append('nopen', _nvSlot.nopen);
+            fd.append('label', _nvSlot.label);
             const resp = await fetch(_ezdocEndpoint('docAction'), { method: 'POST', body: fd });
             const data = await resp.json();
             const versions = data.success ? data.versions : [];
@@ -1760,15 +1807,18 @@
         }
 
         async function doCreateNewVersion() {
+            // Dipanggil dari tombol modal, jadi _nvSlot sudah diisi. Bawaan
+            // ini cuma jaring kalau ada yang memanggilnya langsung.
+            if (!_nvSlot) _nvSlot = { norm: CURRENT_NORM, nopen: CURRENT_NOPEN, label: CURRENT_LABEL };
             const source = document.querySelector('input[name="newVerSource"]:checked')?.value || 'blank';
             const sourceVersion = source === 'copy' ? parseInt(document.getElementById('copyVerSelect').value || '0') : 0;
 
             const fd = new FormData();
             fd.append('_doc_action', 'new_version');
             fd.append('template_id', templateId);
-            fd.append('norm', CURRENT_NORM);
-            fd.append('nopen', CURRENT_NOPEN);
-            fd.append('label', CURRENT_LABEL);
+            fd.append('norm', _nvSlot.norm);
+            fd.append('nopen', _nvSlot.nopen);
+            fd.append('label', _nvSlot.label);
             fd.append('source_version', sourceVersion);
 
             const resp = await fetch(_ezdocEndpoint('docAction'), { method: 'POST', body: fd });
@@ -1779,9 +1829,9 @@
                 // App router tidak fallback ke default_page (list).
                 const params = _preservedParams();
                 params.set('template_id', templateId);
-                params.set('norm', CURRENT_NORM);
-                params.set('nopen', CURRENT_NOPEN);
-                if (CURRENT_LABEL !== '-') params.set('label', CURRENT_LABEL);
+                params.set('norm', _nvSlot.norm);
+                params.set('nopen', _nvSlot.nopen);
+                if (_nvSlot.label !== '-') params.set('label', _nvSlot.label);
                 params.set('version', data.version);
                 // Intentional programmatic nav — suppress dirty prompt (Livewire pattern)
             window._ezdocSuppressUnload = true;

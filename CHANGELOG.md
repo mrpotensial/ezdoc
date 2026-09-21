@@ -6,6 +6,35 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Fixed — form baru yang menabrak dokumen bertanda tangan (2026-09-21)**
+
+Dilaporkan dari pemakaian: membuat dokumen dengan No RM dan No Pendaftaran yang
+sudah dipakai memunculkan "Document already signed … Changed: nik, ttl, nama".
+Tidak ada jalan ke dokumen yang ada. Modal versi baru tidak menawarkan versi
+untuk disalin, dan "Blank" gagal dengan "Incomplete parameters".
+
+Tiga sebab, satu rantai:
+
+- **server** — tanpa `_doc_id`, pencarian slot mengubah simpan jadi edit atas
+  dokumen yang ada, lalu membandingkan field form baru dengan dokumen yang tidak
+  pernah dibukanya. Kini form baru di slot bertanda tangan dijawab 409
+  `remedy: slot_taken` dengan `existing_doc_id`, `existing_version` dan
+  `matched_slot` — bentrok kunci, bukan suntingan terlarang (pola 409 Conflict
+  pada REST). Dokumen yang memang dibuka tetap dijaga seperti sebelumnya.
+- **modal versi baru** — slotnya diambil dari `CURRENT_NORM/NOPEN/LABEL`, yang
+  diisi saat halaman dimuat dan kosong di form baru. `showNewVersionModal(slot)`
+  kini menerima slot eksplisit; tanpa argumen tetap memakai slot halaman.
+- **dialog** — `ezdocConfirm` mendapat tombol ketiga opsional (`secondaryText`,
+  menjawab `'secondary'`), pola Save / Don't Save / Cancel dan `showDenyButton`
+  SweetAlert2. Tanpa opsinya dialog persis seperti dulu.
+
+Dialognya kini: **Open existing document** / **Create New Version** / Close.
+
+Belum diubah, sengaja: form baru di slot dokumen yang **belum** ditandatangani
+masih memperbarui dokumen itu diam-diam. Diikat oleh
+`SlotTakenSignedTest::testSlotBelumBertandaTanganTetapDisimpanSepertiSebelumnya`
+supaya perubahannya nanti disengaja.
+
 ### v1.0-prep track — "User biasa tetap tidak melihatnya"
 
 **Changed — menyembunyikan versi ikut hak `edit`, bukan superadmin (2026-09-04)**

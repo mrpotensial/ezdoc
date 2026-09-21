@@ -25,6 +25,7 @@ return [
         'edit' => 'Edit',
         'hide' => 'Hide',
         'view_document' => 'View that document',
+        'open_existing_document' => 'Open existing document',
     ],
     'fallback' => [
         'signature' => 'Signature',
@@ -68,6 +69,9 @@ return [
         // lock, this is a consequence of having been signed. Unsigned slots stay
         // fillable — it is the content that freezes.
         'document_signed_fields_frozen' => 'This document has been signed, so its content can no longer change. Create a new version to revise it. Changed: {fields}',
+        // A NEW form whose MR/registration number lands on a slot already held
+        // by a signed document. Not an edit to that document — a collision.
+        'slot_taken_signed' => 'A signed document (#{id}) already exists for MR {norm}, Reg {nopen}. Open it, or create a new version of it. Nothing typed here has been saved.',
         'signature_replace_needs_new_version' => 'Signature "{ttd}" is already recorded and cannot be replaced by saving. Create a new version instead.',
         'signature_removal_needs_new_version' => 'Signature "{ttd}" is already recorded and cannot be removed by saving. Create a new version instead.',
         'save_failed' => 'Failed: {error}',
