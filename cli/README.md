@@ -8,6 +8,9 @@ Command-line tools untuk maintenance & deployment library ezdoc.
 | --- | --- |
 | `migrate.php` | Run / reset / inspect DB migrations (butuh `$conn` dari koneksi.php) |
 | `publish.php` | Copy views, assets, dan sample config ke consumer app (DB-free) |
+| `migrate-signature-images.php` | Pindahkan gambar tanda tangan inline yang BELUM ditandatangani ke `ezdoc_blobs` |
+| `mirror-blobs-to-disk.php` | Salin isi kolom `ezdoc_blobs.content` ke berkas — tidak menulis ke DB (lihat `docs/260922-ttd-ke-berkas.md`) |
+| `purge-orphan-blobs.php` | Hapus objek yang tidak dirujuk dokumen maupun arsip PDF beku |
 
 ---
 

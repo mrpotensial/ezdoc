@@ -10,6 +10,7 @@ use Ezdoc\Storage\Blob;
 use Ezdoc\Storage\BlobStore;
 use Ezdoc\Storage\DatabaseBlobStore;
 use Ezdoc\Storage\DiskBlobStore;
+use Ezdoc\Storage\MirrorBlobStore;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -68,11 +69,18 @@ final class BlobStoreContractTest extends TestCase
         return [
             'database' => ['database'],
             'disk'     => ['disk'],
+            // Kontrak yang sama, bukan versi longgarnya. Cermin boleh punya
+            // dua salinan, tapi dari luar ia harus menjawab seperti satu store.
+            'mirror'   => ['mirror'],
         ];
     }
 
     private function store(string $backend): BlobStore
     {
+        if ($backend === 'mirror') {
+            return new MirrorBlobStore(new DatabaseBlobStore($this->db), new DiskBlobStore($this->db, $this->diskRoot));
+        }
+
         return $backend === 'disk'
             ? new DiskBlobStore($this->db, $this->diskRoot)
             : new DatabaseBlobStore($this->db);
@@ -91,7 +99,9 @@ final class BlobStoreContractTest extends TestCase
         self::assertSame($bytes, $store->get($blob->key()));
         self::assertSame(2048, $blob->byteSize());
         self::assertSame('image/png', $blob->contentType());
-        self::assertSame($backend, $blob->backend());
+        // Cermin mencatat 'database' di barisnya: byte-nya memang di kolom, dan
+        // pembaca lama bergantung pada arti kolom `backend` itu.
+        self::assertSame($backend === 'mirror' ? 'database' : $backend, $blob->backend());
     }
 
     /** @dataProvider backends */
@@ -186,11 +196,14 @@ final class BlobStoreContractTest extends TestCase
         $store = $this->store($backend);
         $blob = $store->put('tanda tangan asli', 'image/png');
 
-        if ($backend === 'disk') {
+        // Cermin: KEDUA salinan dipalsukan. Satu salinan yang masih utuh memang
+        // harus tetap terbaca — itu gunanya cermin, dan diuji di MirrorBlobStoreTest.
+        if ($backend === 'disk' || $backend === 'mirror') {
             $path = $this->diskRoot . '/' . substr($blob->key(), 0, 2) . '/' . $blob->key();
             self::assertFileExists($path);
             file_put_contents($path, 'tanda tangan palsu');
-        } else {
+        }
+        if ($backend === 'database' || $backend === 'mirror') {
             $stmt = $this->pdo->prepare('UPDATE ezdoc_blobs SET content = ? WHERE "key" = ?');
             $stmt->execute(['tanda tangan palsu', $blob->key()]);
         }

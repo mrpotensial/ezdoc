@@ -89,35 +89,8 @@ final class DiskBlobStore implements BlobStore
             throw new EzdocException('Refusing to store an empty blob.');
         }
 
-        $key = Blob::keyFor($bytes);
+        $key = $this->writeFile($bytes);
         $size = strlen($bytes);
-        $path = $this->pathFor($key);
-
-        if (!is_file($path)) {
-            $dir = dirname($path);
-            if (!is_dir($dir) && !@mkdir($dir, 0770, true) && !is_dir($dir)) {
-                throw new EzdocException('Cannot create blob directory: ' . $dir);
-            }
-
-            // Written to a temporary name then renamed. A partial file under the
-            // final name would be indistinguishable from a complete one, and
-            // because the name is the content hash it would fail its own checksum
-            // forever — a permanently broken object created by a single
-            // interrupted write. rename() within a directory is atomic.
-            $tmp = $path . '.' . bin2hex(random_bytes(6)) . '.part';
-            if (@file_put_contents($tmp, $bytes, LOCK_EX) !== $size) {
-                @unlink($tmp);
-                throw new EzdocException('Failed writing blob to disk: ' . $path);
-            }
-            if (!@rename($tmp, $path)) {
-                @unlink($tmp);
-                // Lost a race with another writer? Identical bytes, so the object
-                // is already correct and there is nothing to repair.
-                if (!is_file($path)) {
-                    throw new EzdocException('Failed finalising blob on disk: ' . $path);
-                }
-            }
-        }
 
         $existing = $this->find($key);
         if ($existing === null) {
@@ -143,10 +116,86 @@ final class DiskBlobStore implements BlobStore
             return null;
         }
 
+        if (!is_file($this->pathFor($key))) {
+            @error_log('[ezdoc:storage] blob ' . $key . ' has a row but no file at ' . $this->pathFor($key)
+                . ' — disk and database are out of sync (restore mismatch?)');
+            return null;
+        }
+
+        return $this->readFile($key);
+    }
+
+    // ─── Berkas saja, tanpa baris ────────────────────────────────────────
+    //
+    // Tiga operasi di bawah hanya menyentuh berkas. Dipakai put()/get() di atas,
+    // dan oleh MirrorBlobStore serta CLI penyalin — yang barisnya milik
+    // DatabaseBlobStore dan tidak boleh ditulis ulang. Tata letak berkasnya
+    // (fan-out, penulisan atomik, pemeriksaan checksum) tetap satu, di sini.
+
+    /**
+     * Tulis byte ke berkasnya. Mengembalikan kuncinya.
+     *
+     * Berkas yang sudah ada dan lolos checksum dibiarkan. Berkas yang ada tapi
+     * rusak ditimpa: namanya adalah hash isinya, jadi byte yang benar untuk nama
+     * itu hanya satu, dan menulisnya ulang adalah perbaikan, bukan penimpaan.
+     *
+     * @throws EzdocException kalau direktori atau berkasnya tidak bisa ditulis
+     */
+    public function writeFile(string $bytes): string
+    {
+        if ($bytes === '') {
+            throw new EzdocException('Refusing to store an empty blob.');
+        }
+
+        $key = Blob::keyFor($bytes);
+        $path = $this->pathFor($key);
+
+        if (is_file($path) && $this->readFile($key) !== null) {
+            return $key;
+        }
+
+        $dir = dirname($path);
+        if (!is_dir($dir) && !@mkdir($dir, 0770, true) && !is_dir($dir)) {
+            throw new EzdocException('Cannot create blob directory: ' . $dir);
+        }
+
+        // Written to a temporary name then renamed. A partial file under the
+        // final name would be indistinguishable from a complete one, and
+        // because the name is the content hash it would fail its own checksum
+        // forever — a permanently broken object created by a single
+        // interrupted write. rename() within a directory is atomic.
+        $tmp = $path . '.' . bin2hex(random_bytes(6)) . '.part';
+        if (@file_put_contents($tmp, $bytes, LOCK_EX) !== strlen($bytes)) {
+            @unlink($tmp);
+            throw new EzdocException('Failed writing blob to disk: ' . $path);
+        }
+        if (!@rename($tmp, $path)) {
+            @unlink($tmp);
+            // Lost a race with another writer? Identical bytes, so the object
+            // is already correct and there is nothing to repair.
+            if ($this->readFile($key) === null) {
+                throw new EzdocException('Failed finalising blob on disk: ' . $path);
+            }
+        }
+
+        return $key;
+    }
+
+    /**
+     * Byte dari berkasnya, sudah diperiksa checksum-nya. Null kalau tidak ada
+     * atau tidak cocok.
+     *
+     * Tidak menanyakan baris. Pemanggil yang perlu "apakah objek ini masih ada"
+     * menanyakannya sendiri — get() melakukannya, dan MirrorBlobStore juga.
+     */
+    public function readFile(string $key): ?string
+    {
+        if (!self::validKey($key)) {
+            return null;
+        }
+
         $path = $this->pathFor($key);
         if (!is_file($path)) {
-            @error_log('[ezdoc:storage] blob ' . $key . ' has a row but no file at ' . $path
-                . ' — disk and database are out of sync (restore mismatch?)');
             return null;
         }
 
@@ -161,6 +210,14 @@ final class DiskBlobStore implements BlobStore
         }
 
         return $bytes;
+    }
+
+    /** Hapus berkasnya saja. Tidak ada yang dihapus kalau memang tidak ada. */
+    public function deleteFile(string $key): void
+    {
+        if (self::validKey($key)) {
+            @unlink($this->pathFor($key));
+        }
     }
 
     public function find(string $key): ?Blob
@@ -201,7 +258,7 @@ final class DiskBlobStore implements BlobStore
         // leftover file is a cleanup problem; the reverse order would leave a row
         // pointing at nothing, which reads as corruption.
         $this->db->execute('DELETE FROM ezdoc_blobs WHERE `key` = ?', [$key]);
-        @unlink($this->pathFor($key));
+        $this->deleteFile($key);
 
         return true;
     }

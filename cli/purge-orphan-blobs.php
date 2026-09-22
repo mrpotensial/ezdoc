@@ -31,6 +31,15 @@ declare(strict_types=1);
  * Deleted documents are counted as referencing their objects, including
  * soft-deleted ones. A soft delete is reversible; purging the images it points at
  * would quietly make it not.
+ *
+ * ## Every table that references objects
+ *
+ * Signature slots are not the only referrer. Frozen display artifacts
+ * (`ezdoc_document_artifacts.blob_key`) are objects too — and they are evidence
+ * with a retention period. An earlier version collected references from
+ * `signature_values` only, so `apply` would have deleted every frozen PDF older
+ * than the grace period. Superseded cycles count as referenced: they answer
+ * "what did the first signer see".
  */
 
 $root = dirname(__DIR__);
@@ -46,20 +55,24 @@ $apply = $mode === 'apply';
 /** Hours an unreferenced object is kept before it can be purged. */
 $graceHours = (int) (getenv('EZDOC_BLOB_GRACE_HOURS') ?: 48);
 
-if (!isset($conn) || !($conn instanceof mysqli)) {
-    $bootstrap = getenv('EZDOC_BOOTSTRAP') ?: '';
-    if ($bootstrap === '' || !is_file($bootstrap)) {
-        fwrite(STDERR, "No database handle. Point EZDOC_BOOTSTRAP at the file that creates \$conn.\n");
+// A caller may hand over a connection (the tests do); otherwise the host's
+// bootstrap supplies one.
+if (!isset($db) || !($db instanceof \Ezdoc\Db\Connection)) {
+    if (!isset($conn) || !($conn instanceof mysqli)) {
+        $bootstrap = getenv('EZDOC_BOOTSTRAP') ?: '';
+        if ($bootstrap === '' || !is_file($bootstrap)) {
+            fwrite(STDERR, "No database handle. Point EZDOC_BOOTSTRAP at the file that creates \$conn.\n");
+            exit(2);
+        }
+        require_once $bootstrap;
+    }
+    if (!isset($conn) || !($conn instanceof mysqli)) {
+        fwrite(STDERR, "The bootstrap file did not produce a mysqli \$conn.\n");
         exit(2);
     }
-    require_once $bootstrap;
-}
-if (!isset($conn) || !($conn instanceof mysqli)) {
-    fwrite(STDERR, "The bootstrap file did not produce a mysqli \$conn.\n");
-    exit(2);
-}
 
-$db = new \Ezdoc\Db\Mysqli\MysqliConnection($conn);
+    $db = new \Ezdoc\Db\Mysqli\MysqliConnection($conn);
+}
 
 if ((new \Ezdoc\Db\Schema\ColumnIntrospector($db))->columns('ezdoc_blobs') === []) {
     fwrite(STDERR, "Table `ezdoc_blobs` does not exist — nothing to purge.\n");
@@ -67,6 +80,8 @@ if ((new \Ezdoc\Db\Schema\ColumnIntrospector($db))->columns('ezdoc_blobs') === [
 }
 
 $store = \Ezdoc\Storage\BlobStoreFactory::make($db);
+$diskRoot = \Ezdoc\Storage\BlobStoreFactory::configuredDiskRoot();
+$files = $diskRoot !== null ? new \Ezdoc\Storage\DiskBlobStore($db, $diskRoot) : null;
 
 printf("Backend  : %s\n", $store->name());
 printf("Grace    : %d hours\n", $graceHours);
@@ -91,7 +106,20 @@ foreach ($db->fetchAll('SELECT signature_values FROM ezdoc_documents WHERE signa
     }
 }
 
-printf("Referenced by documents: %d objects\n", count($referenced));
+$bySignatures = count($referenced);
+
+// Frozen display artifacts — every cycle, superseded ones included.
+if ((new \Ezdoc\Db\Schema\ColumnIntrospector($db))->columns('ezdoc_document_artifacts') !== []) {
+    foreach ($db->fetchAll('SELECT blob_key FROM ezdoc_document_artifacts') as $row) {
+        $key = (string) $row['blob_key'];
+        if (preg_match('/^[0-9a-f]{64}$/', $key) === 1) {
+            $referenced[$key] = true;
+        }
+    }
+}
+
+printf("Referenced by signature slots: %d objects\n", $bySignatures);
+printf("Referenced in total (incl. frozen artifacts): %d objects\n", count($referenced));
 
 $cutoff = (new \DateTimeImmutable('-' . $graceHours . ' hours'))->format('Y-m-d H:i:s');
 $candidates = $db->fetchAll(
@@ -120,6 +148,12 @@ foreach ($candidates as $row) {
     }
 
     if ($store->delete($key)) {
+        // Salinan berkasnya ikut, kalau ada: di mode cermin setiap objek kolom
+        // juga punya berkas. Barisnya yang menentukan objek itu ada, jadi berkas
+        // yang tertinggal tidak terbaca lagi — tapi tetap memakan tempat.
+        if ($files !== null) {
+            $files->deleteFile($key);
+        }
         printf("  %s  deleted\n", substr($key, 0, 16) . '…');
     } else {
         $failed++;

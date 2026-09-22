@@ -16,8 +16,11 @@ use Ezdoc\Exceptions\EzdocException;
  * inventing a second mechanism for the same problem would leave two places to
  * look when a setting appears not to apply.
  *
- *   EZDOC_STORAGE_BACKEND   'database' (default) | 'disk'
- *   EZDOC_STORAGE_PATH      absolute path; required when the backend is 'disk'
+ *   EZDOC_STORAGE_BACKEND   'database' (default) | 'disk' | 'mirror'
+ *   EZDOC_STORAGE_PATH      absolute path; required for 'disk' and 'mirror'
+ *
+ * 'mirror' writes to both and reads the file first — the step for moving to
+ * files while something else still reads the column. See MirrorBlobStore.
  *
  * The default is deliberate, not an accident of ordering. At the size signature
  * PNGs actually are (~3.5 KB after normalisation) the database backend is the one
@@ -28,6 +31,7 @@ final class BlobStoreFactory
 {
     public const BACKEND_DATABASE = DatabaseBlobStore::NAME;
     public const BACKEND_DISK = DiskBlobStore::NAME;
+    public const BACKEND_MIRROR = MirrorBlobStore::NAME;
 
     /** @var array<string,BlobStore> Per-process, keyed by backend+root */
     private static $cache = [];
@@ -39,7 +43,7 @@ final class BlobStoreFactory
     {
         $backend = $backend ?? self::configuredBackend();
 
-        if ($backend === self::BACKEND_DISK) {
+        if ($backend === self::BACKEND_DISK || $backend === self::BACKEND_MIRROR) {
             $root = $diskRoot ?? self::configuredDiskRoot();
             if ($root === null) {
                 // Refused rather than quietly falling back to the database.
@@ -47,22 +51,27 @@ final class BlobStoreFactory
                 // not intend and did not back up, and the mistake would only
                 // surface as a storage-size surprise months later.
                 throw new EzdocException(
-                    'EZDOC_STORAGE_BACKEND is "disk" but EZDOC_STORAGE_PATH is not set. '
+                    'EZDOC_STORAGE_BACKEND is "' . $backend . '" but EZDOC_STORAGE_PATH is not set. '
                     . 'Point it at a writable directory OUTSIDE the document root — signature '
                     . 'images are not public assets, and as static files anyone holding the URL '
                     . 'can read them.'
                 );
             }
 
-            $cacheKey = self::BACKEND_DISK . '|' . $root;
+            $cacheKey = $backend . '|' . $root;
+            if (isset(self::$cache[$cacheKey])) {
+                return self::$cache[$cacheKey];
+            }
 
-            return self::$cache[$cacheKey] ?? (self::$cache[$cacheKey] = new DiskBlobStore($db, $root));
+            return self::$cache[$cacheKey] = $backend === self::BACKEND_MIRROR
+                ? new MirrorBlobStore(new DatabaseBlobStore($db), new DiskBlobStore($db, $root))
+                : new DiskBlobStore($db, $root);
         }
 
         if ($backend !== self::BACKEND_DATABASE) {
             throw new EzdocException(
                 'Unknown storage backend "' . $backend . '". Known backends: '
-                . self::BACKEND_DATABASE . ', ' . self::BACKEND_DISK . '.'
+                . self::BACKEND_DATABASE . ', ' . self::BACKEND_DISK . ', ' . self::BACKEND_MIRROR . '.'
             );
         }
 

@@ -20,6 +20,22 @@
 
 require_once __DIR__ . '/../../koneksi.php';
 
+// Gambar tanda tangan ke berkas JUGA, bukan HANYA — MirrorBlobStore.
+//
+// Ditulis di sini, bukan di berkas consumer bersama, karena pemasangan lama yang
+// memakai basis data yang sama tidak mengenal nilai `mirror` dan masih membaca
+// kolom `ezdoc_blobs.content`. Mode ini tetap menulis kolom itu persis seperti
+// sebelumnya, jadi pemasangan lama tidak melihat perbedaan apa pun.
+//
+// Foldernya sama dengan arsip PDF beku (EZDOC_ARTIFACT_STORAGE_PATH): satu
+// ruang nama objek, satu folder, satu yang dicadangkan.
+if (!defined('EZDOC_STORAGE_BACKEND')) {
+    define('EZDOC_STORAGE_BACKEND', 'mirror');
+}
+if (!defined('EZDOC_STORAGE_PATH')) {
+    define('EZDOC_STORAGE_PATH', dirname(__DIR__, 2) . '/storage');
+}
+
 return [
     'app.db' => $conn ?? null,
 

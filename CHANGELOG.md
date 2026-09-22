@@ -6,6 +6,44 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — gambar tanda tangan ke berkas, tanpa mengubah tabel (2026-09-22)**
+
+Diminta pemakai: "migrasikan ttd ke file juga, tapi tanpa merusak tabel, karena
+v1 masih pakai tabel". Di server 2.847 gambar (21,5 MB) ada di
+`ezdoc_blobs.content`, dan v1 membacanya dari sana. Backend `disk` yang ada
+tidak bisa dinyalakan begitu saja: ia tidak membaca objek yang hanya di kolom,
+dan tulisannya (kolom NULL) tidak terbaca v1.
+
+Expand → migrate → contract (pola migrasi daring Stripe; `MirrorService`
+ActiveStorage):
+
+- `MirrorBlobStore` — `EZDOC_STORAGE_BACKEND=mirror`. Menulis kolom *dan*
+  berkas; barisnya persis seperti backend database, jadi v1 tidak melihat beda.
+  Membaca berkas dulu, lalu kolom, lalu menyalinnya ke berkas (read repair).
+  Gagal menulis berkas tidak menggagalkan simpan — kolomnya sudah memegang byte.
+- `cli/mirror-blobs-to-disk.php` — menyalin isi kolom ke berkas. **Tidak
+  menulis ke basis data**; diuji dengan sidik jari seluruh isi DB sebelum dan
+  sesudah. Dry-run terhadap DB server (sesi READ ONLY): 2.847 objek, 0 rusak.
+- `DiskBlobStore::writeFile()/readFile()/deleteFile()` — operasi berkas saja,
+  satu tata letak untuk ketiga pemakainya. Berkas rusak kini ditimpa saat
+  ditulis ulang (namanya hash isinya, jadi byte yang benar hanya satu).
+- v2 `public/config.php`: `mirror`, folder yang sama dengan PDF beku. Sengaja
+  tidak di berkas consumer bersama — v1 tidak mengenal nilai `mirror`.
+- contract (ganti ke `disk`, kosongkan kolom) belum dibuat, sengaja: menunggu v1
+  berhenti. Panduan: `docs/260922-ttd-ke-berkas.md`.
+
+**Fixed — purge akan menghapus PDF beku**
+
+`cli/purge-orphan-blobs.php` hanya menghitung rujukan dari `signature_values`;
+PDF beku dirujuk `ezdoc_document_artifacts.blob_key`, jadi `apply` akan
+menghapus semuanya setelah 48 jam. Belum pernah terjadi (tidak terjadwal).
+Kini semua siklus artefak dihitung, dan salinan berkas objek yang dipurge ikut
+dihapus. Salinan skrip di v1 belum diperbaiki — jangan dijalankan dari sana.
+
+`mirror` masuk `BlobStoreContractTest` — kontrak yang sama dengan dua backend
+lainnya. 32 uji baru; 12 mutasi tertangkap; juga dijalankan di PHP 7.4 dengan
+MySQL lokal.
+
 **Changed — tanggal dan angka ikut setelan bahasa (2026-09-22)**
 
 Diminta pemakai: "format tanggal/angka pastikan ikut bahasa aturan". `'id'`
