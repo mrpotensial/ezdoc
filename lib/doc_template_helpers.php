@@ -18,7 +18,7 @@ if (!function_exists('resolveDefault')) {
     /**
      * Resolve template default value string ke actual value.
      * Format:
-     *   - "date:FORMAT"  → DateFormatter::localize(date(FORMAT), 'id')
+     *   - "date:FORMAT"  → DateFormatter::localize(date(FORMAT), bahasa isi dokumen)
      *   - "$varname"     → nilai global $varname (harus ada di $whitelistedVars)
      *   - lainnya        → literal string
      *
@@ -37,10 +37,14 @@ if (!function_exists('resolveDefault')) {
             // Prefer library-native DateFormatter (industry-standard OO). Fallback
             // ke legacy ubahTanggalKeIndonesia() untuk backward-compat kalau
             // consumer app override dengan versi custom.
+            //
+            // Bahasanya bahasa ISI dokumen, bukan bahasa layar: nilai ini masuk
+            // ke dokumen dan tersimpan bersamanya.
+            $locale = function_exists('ezdoc_document_locale') ? ezdoc_document_locale() : 'en';
             if (class_exists(\Ezdoc\Format\DateFormatter::class)) {
-                return \Ezdoc\Format\DateFormatter::localize($formatted, 'id');
+                return \Ezdoc\Format\DateFormatter::localize($formatted, $locale);
             }
-            if (function_exists('ubahTanggalKeIndonesia')) {
+            if ($locale === 'id' && function_exists('ubahTanggalKeIndonesia')) {
                 return ubahTanggalKeIndonesia($formatted);
             }
             return $formatted; // last resort: raw English

@@ -31,4 +31,8 @@ return [
     'app.author_roles' => $author_role_array ?? [],
 
     'app.locale' => 'en',
+    // Isi dokumen tetap berbahasa Indonesia walau layar diuji dalam bahasa
+    // Inggris: tanggal "22 Agustus 2026", angka "1.500" — di dokumen, di
+    // cetakan, dan di arsip PDF bekunya.
+    'document.locale' => 'id',
 ];

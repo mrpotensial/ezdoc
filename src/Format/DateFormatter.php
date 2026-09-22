@@ -21,8 +21,12 @@ namespace Ezdoc\Format;
  * - **Fallback-safe**: unknown locales return input unchanged.
  *
  * ## Locales supported (built-in)
- * - `en` — passthrough (identity, no translation)
- * - `id` — Bahasa Indonesia (default dogfood locale)
+ * - `en` — passthrough (identity, no translation). The default, as in
+ *   Laravel, Symfony and Filament.
+ * - `id` — Bahasa Indonesia, full and abbreviated names (CLDR)
+ *
+ * A regional code falls back to its language: `id-ID` and `id_ID` use `id`,
+ * the same fallback chain Symfony's Translator and Laravel use.
  *
  * ## Usage
  *
@@ -75,6 +79,20 @@ final class DateFormatter
             'October'   => 'Oktober',
             'November'  => 'November',
             'December'  => 'Desember',
+            // Singkatan (`D`, `M`), mengikuti CLDR id. Yang sama di kedua
+            // bahasa (Jan, Feb, Mar, …) tidak perlu dicantumkan. strtr()
+            // mencocokkan kunci terpanjang lebih dulu, jadi "August" tidak
+            // pernah terpotong jadi "Agu" + "ust".
+            'Sun' => 'Min',
+            'Mon' => 'Sen',
+            'Tue' => 'Sel',
+            'Wed' => 'Rab',
+            'Thu' => 'Kam',
+            'Fri' => 'Jum',
+            'Sat' => 'Sab',
+            'Aug' => 'Agu',
+            'Oct' => 'Okt',
+            'Dec' => 'Des',
         ],
     ];
 
@@ -83,16 +101,35 @@ final class DateFormatter
      *
      * @param string $formattedDate  Output dari PHP `date()` yg mengandung English names
      *                                (mis. "Wednesday, 15 January 2025")
-     * @param string $locale          Target locale code (mis. "id", "en", "ms")
+     * @param string $locale          Target locale code (mis. "id", "en", "ms").
+     *                                Bawaan `en`, sama dengan bawaan pustaka —
+     *                                pemanggil di dalam pustaka selalu
+     *                                meneruskan locale dari setelan.
      * @return string                 Localized string, atau input unchanged kalau locale unknown
      */
-    public static function localize(string $formattedDate, string $locale = 'id'): string
+    public static function localize(string $formattedDate, string $locale = 'en'): string
     {
-        if (!isset(self::$locales[$locale]) || empty(self::$locales[$locale])) {
+        $locale = self::resolve($locale);
+        if ($locale === null || empty(self::$locales[$locale])) {
             return $formattedDate;
         }
 
         return strtr($formattedDate, self::$locales[$locale]);
+    }
+
+    /**
+     * Locale terdaftar untuk sebuah kode: persis, lalu bahasanya saja.
+     *
+     * `id-ID` → `id`, `EN_us` → `en`. Null kalau keduanya tidak terdaftar.
+     */
+    private static function resolve(string $locale): ?string
+    {
+        if (isset(self::$locales[$locale])) {
+            return $locale;
+        }
+        $bahasa = strtolower((string) preg_replace('/[-_].*$/', '', $locale));
+
+        return isset(self::$locales[$bahasa]) ? $bahasa : null;
     }
 
     /**

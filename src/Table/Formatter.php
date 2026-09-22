@@ -22,9 +22,10 @@ use Ezdoc\Format\DateFormatter;
  *
  * ## Number formatting
  *
- * Delegates to PHP `number_format()` dgn locale-appropriate separators.
- * Default locale 'id' → dot thousands, comma decimals. Locale 'en' →
- * comma thousands, dot decimals.
+ * Delegates to PHP `number_format()` dgn locale-appropriate separators
+ * (CLDR): 'en' → `1,500.5`, 'id' → `1.500,5`. Default 'en', the library
+ * default; every caller inside the library passes the configured locale.
+ * Unknown locale → its language (`id-ID` → `id`), then 'en'.
  *
  * ## Date formatting
  *
@@ -91,6 +92,27 @@ final class Formatter
     ];
 
     /**
+     * Pemisah desimal dan ribuan per bahasa, mengikuti CLDR.
+     *
+     * @var array<string,array{0:string,1:string}> [desimal, ribuan]
+     */
+    private const NUMBER_SEPARATORS = [
+        'en' => ['.', ','],
+        'id' => [',', '.'],
+    ];
+
+    /** @return array{0:string,1:string} */
+    private static function separators(string $locale): array
+    {
+        if (isset(self::NUMBER_SEPARATORS[$locale])) {
+            return self::NUMBER_SEPARATORS[$locale];
+        }
+        $bahasa = strtolower((string) preg_replace('/[-_].*$/', '', $locale));
+
+        return self::NUMBER_SEPARATORS[$bahasa] ?? self::NUMBER_SEPARATORS['en'];
+    }
+
+    /**
      * Format value sebagai currency. Null/non-numeric → empty string.
      *
      * @param mixed  $val         float|int|numeric-string
@@ -115,17 +137,14 @@ final class Formatter
      *
      * @param mixed  $val
      * @param int    $decimals   decimal places (default 0)
-     * @param string $locale     'id' (default) atau 'en'
+     * @param string $locale     'en' (default), 'id', atau kode regional ('id-ID')
      */
-    public static function formatNumber($val, int $decimals = 0, string $locale = 'id'): string
+    public static function formatNumber($val, int $decimals = 0, string $locale = 'en'): string
     {
         if ($val === null || $val === '' || !is_numeric($val)) return '';
-        $d = max(0, $decimals);
-        if ($locale === 'en') {
-            return number_format((float) $val, $d, '.', ',');
-        }
-        // Default 'id' locale
-        return number_format((float) $val, $d, ',', '.');
+        [$desimal, $ribuan] = self::separators($locale);
+
+        return number_format((float) $val, max(0, $decimals), $desimal, $ribuan);
     }
 
     /**
@@ -137,7 +156,7 @@ final class Formatter
      * @param bool   $asRatio    true (default) = 0.5 → "50%"; false = 50 → "50%"
      * @param string $locale
      */
-    public static function formatPercent($val, int $decimals = 2, bool $asRatio = true, string $locale = 'id'): string
+    public static function formatPercent($val, int $decimals = 2, bool $asRatio = true, string $locale = 'en'): string
     {
         if ($val === null || $val === '' || !is_numeric($val)) return '';
         $num = (float) $val;
@@ -150,10 +169,10 @@ final class Formatter
      *
      * @param mixed  $val     unix ts (int) atau strtotime-parseable string
      * @param string $format  PHP date format spec (default 'd/m/Y')
-     * @param string $locale  default 'id'
+     * @param string $locale  default 'en'
      * @return string empty kalau invalid input
      */
-    public static function formatDate($val, string $format = 'd/m/Y', string $locale = 'id'): string
+    public static function formatDate($val, string $format = 'd/m/Y', string $locale = 'en'): string
     {
         if ($val === null || $val === '') return '';
         $ts = null;
@@ -209,19 +228,19 @@ final class Formatter
                 return self::formatNumber(
                     $val,
                     isset($opts['decimals']) ? (int) $opts['decimals'] : 0,
-                    $opts['locale'] ?? 'id'
+                    $opts['locale'] ?? 'en'
                 );
             case 'percent':
                 return self::formatPercent(
                     $val,
                     isset($opts['decimals']) ? (int) $opts['decimals'] : 2,
                     $opts['asRatio'] ?? true,
-                    $opts['locale'] ?? 'id'
+                    $opts['locale'] ?? 'en'
                 );
             case 'date':
-                return self::formatDate($val, $opts['format'] ?? 'd/m/Y', $opts['locale'] ?? 'id');
+                return self::formatDate($val, $opts['format'] ?? 'd/m/Y', $opts['locale'] ?? 'en');
             case 'datetime':
-                return self::formatDate($val, $opts['format'] ?? 'd/m/Y H:i', $opts['locale'] ?? 'id');
+                return self::formatDate($val, $opts['format'] ?? 'd/m/Y H:i', $opts['locale'] ?? 'en');
             case 'text':
             default:
                 return self::escapeHtml($val);

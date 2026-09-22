@@ -55,6 +55,8 @@ if (!isset($translator) || !($translator instanceof \Ezdoc\UI\Translator)) {
     $translator = \Ezdoc\UI\Translator::forView('generate', (string) $config->get('app.locale', 'en'));
 }
 $GLOBALS['translator'] = $translator;
+// Bahasa isi dokumen — lihat ezdoc_document_locale(). Kosong = ikut layar.
+ezdoc_set_document_locale((string) $config->get('document.locale', ''));
 
 // Consumer-app globals → abstracted via Context DI
 $conn              = $ctx->db;
@@ -103,7 +105,11 @@ if (!function_exists('t')) {
     function t(string $key, array $params = [], ?string $default = null): string {
         $translator = $GLOBALS['translator'] ?? null;
         if (!($translator instanceof \Ezdoc\UI\Translator)) {
-            return $default !== null ? $default : $key;
+            // Tanpa katalog, {param} tetap disisipkan — lewat Translator yang
+            // sama dengan katalog kosong, jadi teks bawaan dipakai dan
+            // "{n}h ago" tidak pernah tampil mentah. Laravel __() dan Symfony
+            // Translator juga menyisipkan parameter ke pesan yang tak diterjemahkan.
+            $translator = new \Ezdoc\UI\Translator(new \Ezdoc\UI\Config([]));
         }
         return $translator->t($key, $params, $default);
     }
@@ -1590,7 +1596,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
 
 ?>
 <!DOCTYPE html>
-<html lang="id">
+<html lang="<?= h(ezdoc_locale()) ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1.0">

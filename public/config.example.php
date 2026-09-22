@@ -37,6 +37,10 @@ return [
 
     // Bahasa antarmuka: 'en' (bawaan) | 'id'
     'app.locale' => 'en',
+
+    // Bahasa ISI dokumen — tanggal ("22 Agustus 2026") dan angka ("1.500")
+    // di dokumen, cetakan, dan arsip PDF bekunya. Kosong = ikut app.locale.
+    // 'document.locale' => 'id',
 ];
 
 // ── Cara 2: serahkan pemuatan bootstrap ke App ──────────────────────────────

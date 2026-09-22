@@ -28,7 +28,7 @@ namespace Ezdoc\Format;
 
 final class DateFormatter
 {
- public static function localize(string $formattedDate, string $locale = 'id'): string;
+ public static function localize(string $formattedDate, string $locale = 'en'): string;
  public static function registerLocale(string $locale, array $translations): void;
  public static function locales(): array;
 }
@@ -40,7 +40,7 @@ Translate English weekday/month names in a formatted date string.
 
 **Parameters**:
 - `$formattedDate` — output from PHP `date()` containing English names (e.g. `"Wednesday, 15 January 2025"`)
-- `$locale` — target locale code (`"id"`, `"en"`, custom)
+- `$locale` — target locale code (`"id"`, `"en"`, custom). Default `"en"`. A regional code falls back to its language (`"id-ID"` → `"id"`).
 
 **Returns**: localized string, or input unchanged if locale unknown/empty.
 
@@ -100,21 +100,19 @@ DateFormatter::locales();
 Ezdoc ships two locales out-of-box:
 
 - **`en`** — identity (passthrough, no translation)
-- **`id`** — Bahasa Indonesia (dogfood default: Indonesian hospital app)
+- **`id`** — Bahasa Indonesia: full names and CLDR abbreviations (`Rab`, `Agu`, `Okt`, `Des`, …)
 
 Additional locales register-on-demand via `registerLocale()` in consumer bootstrap.
 
 ## Usage in Templates
 
-Template default value syntax `date:FORMAT` uses `DateFormatter::localize(..., 'id')` in `resolveDefault()`:
+Template default value syntax `date:FORMAT` uses `DateFormatter::localize(..., ezdoc_document_locale())` in `resolveDefault()`:
 
 ```
 {{tanggal_dibuat|date:l, d F Y}}
 ```
 
-Renders at generate/PDF time as `"Rabu, 15 Januari 2025"` (Indonesian).
-
-**Locale override for other apps**: currently hardcoded to `'id'` in `resolveDefault()`. Future enhancement: accept locale from template metadata or `Context::locale`.
+With `document.locale = 'id'` it renders as `"Rabu, 15 Januari 2025"`, whatever the screen language. `document.locale` empty follows `app.locale`. Tabledb `|number`, `|percent`, `|date` and `|datetime` follow the same setting — see `docs/I18N.md`, "Two settings".
 
 ## Extension for Full i18n
 

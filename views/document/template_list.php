@@ -130,7 +130,7 @@
                                 <?= $locked ? h(t('list.badge_locked', [], 'Locked')) : h(t('list.badge_open', [], 'Open')) ?>
                             </span>
                         </td>
-                        <td class="px-4 py-3 text-xs text-gray-500"><?= date('d M Y H:i', strtotime($t['updated_at'])) ?></td>
+                        <td class="px-4 py-3 text-xs text-gray-500"><?= h(\Ezdoc\Format\DateFormatter::localize(date('d M Y H:i', strtotime($t['updated_at'])), ezdoc_locale())) ?></td>
                         <td class="px-4 py-3 text-right">
                             <div class="inline-flex items-center gap-1">
                                 <a href="<?= h(str_replace('{id}', (string)$t['id'], $urlPrint . (strpos($urlPrint,'?') !== false ? '&' : '?') . 'template_id=' . $t['id'])) ?>" class="inline-flex items-center rounded-md border border-gray-300 bg-white p-1.5 text-gray-600 hover:bg-gray-50 hover:text-gray-900" title="<?= h(t('title.print', [], 'Print')) ?>"><i class="bi bi-printer"></i></a>

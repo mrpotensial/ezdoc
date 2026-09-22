@@ -71,7 +71,7 @@ function ezdoc_compose_pdf_html(array $in): string
 
     // Build clean HTML for PDF (no toolbar, no scripts, no form elements)
     $pdfHtml = '<!DOCTYPE html>
-<html lang="id">
+<html lang="' . h(function_exists('ezdoc_document_locale') ? ezdoc_document_locale() : 'en') . '">
 <head>
     <meta charset="UTF-8">
     <title>' . h($template['nama_template']) . '</title>
@@ -708,6 +708,9 @@ function _tabledbComputeAggregate(string $verb, string $target, array $allRows) 
 function _tabledbFormatValue($value, array $format): string {
     $type = $format['type'];
     $args = $format['args'];
+    // Bahasa isi dokumen: "1.500" atau "1,500" adalah isi dokumennya, bukan
+    // bagian layar. Mata uang tetap mengikuti konvensi mata uangnya.
+    $locale = function_exists('ezdoc_document_locale') ? ezdoc_document_locale() : 'en';
     switch ($type) {
         case 'currency':
             $currency = $args[0] ?? 'IDR';
@@ -715,16 +718,16 @@ function _tabledbFormatValue($value, array $format): string {
             return \Ezdoc\Table\Formatter::formatCurrency($value, $currency, $decimals);
         case 'number':
             $decimals = isset($args[0]) && is_numeric($args[0]) ? (int) $args[0] : 0;
-            return \Ezdoc\Table\Formatter::formatNumber($value, $decimals);
+            return \Ezdoc\Table\Formatter::formatNumber($value, $decimals, $locale);
         case 'percent':
             $decimals = isset($args[0]) && is_numeric($args[0]) ? (int) $args[0] : 2;
-            return \Ezdoc\Table\Formatter::formatPercent($value, $decimals);
+            return \Ezdoc\Table\Formatter::formatPercent($value, $decimals, true, $locale);
         case 'date':
             $fmt = $args[0] ?? 'd/m/Y';
-            return \Ezdoc\Table\Formatter::formatDate($value, $fmt);
+            return \Ezdoc\Table\Formatter::formatDate($value, $fmt, $locale);
         case 'datetime':
             $fmt = $args[0] ?? 'd/m/Y H:i';
-            return \Ezdoc\Table\Formatter::formatDate($value, $fmt);
+            return \Ezdoc\Table\Formatter::formatDate($value, $fmt, $locale);
         case 'text':
         default:
             return \Ezdoc\Table\Formatter::escapeHtml((string) $value);

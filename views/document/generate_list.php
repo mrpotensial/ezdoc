@@ -34,7 +34,7 @@
 ?>
     <?php if (!$__ezdoc_isFragment): ?>
     <!DOCTYPE html>
-    <html lang="id">
+    <html lang="<?= h(ezdoc_locale()) ?>">
     <head>
         <meta charset="UTF-8">
         <title><?= h($pickerPageTitle) ?></title>

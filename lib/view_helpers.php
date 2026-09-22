@@ -41,9 +41,63 @@ if (!function_exists('t')) {
     function t(string $key, array $params = [], ?string $default = null): string {
         $translator = $GLOBALS['translator'] ?? null;
         if (!($translator instanceof \Ezdoc\UI\Translator)) {
-            return $default !== null ? $default : $key;
+            // Tanpa katalog, {param} tetap disisipkan — lewat Translator yang
+            // sama dengan katalog kosong, jadi teks bawaan dipakai dan
+            // "{n}h ago" tidak pernah tampil mentah. Laravel __() dan Symfony
+            // Translator juga menyisipkan parameter ke pesan yang tak diterjemahkan.
+            $translator = new \Ezdoc\UI\Translator(new \Ezdoc\UI\Config([]));
         }
         return $translator->t($key, $params, $default);
+    }
+}
+
+// ─── Bahasa: layar dan isi dokumen ───────────────────────────────────────
+//
+// Dua setelan, bukan satu. Layar ikut orang yang memakainya (`app.locale`).
+// Isi dokumen ikut dokumennya (`document.locale`): template yang ditulis dalam
+// bahasa Indonesia tetap berisi "22 Agustus 2026" dan "1.500" walau layarnya
+// berbahasa Inggris — dan arsip PDF bekunya juga. Pola yang sama dengan bahasa
+// dokumen yang terpisah dari bahasa layar penanda tangan di DocuSign, atau
+// bahasa per dokumen di Word.
+//
+// `document.locale` kosong berarti ikut layar, jadi pemasangan satu bahasa
+// cukup mengatur `app.locale`.
+
+if (!function_exists('ezdoc_locale')) {
+    /**
+     * Bahasa LAYAR — locale Translator yang aktif.
+     *
+     * Tanpa Translator (pustaka dimuat tanpa view-nya): bawaan pustaka, `en`,
+     * sama dengan Translator::forView().
+     */
+    function ezdoc_locale(): string
+    {
+        $translator = $GLOBALS['translator'] ?? null;
+
+        return $translator instanceof \Ezdoc\UI\Translator ? $translator->getLocale() : 'en';
+    }
+}
+
+if (!function_exists('ezdoc_set_document_locale')) {
+    /**
+     * Pasang bahasa ISI dokumen, dari setelan `document.locale`.
+     *
+     * Dipanggil di tempat yang sama dengan pemasangan Translator — view dan
+     * dispatcher action — supaya cetak dan pembekuan membaca setelan yang sama.
+     */
+    function ezdoc_set_document_locale(?string $locale): void
+    {
+        $GLOBALS['ezdoc_document_locale'] = trim((string) $locale);
+    }
+}
+
+if (!function_exists('ezdoc_document_locale')) {
+    /** Bahasa ISI dokumen: `document.locale`, atau bahasa layar kalau kosong. */
+    function ezdoc_document_locale(): string
+    {
+        $locale = $GLOBALS['ezdoc_document_locale'] ?? '';
+
+        return is_string($locale) && $locale !== '' ? $locale : ezdoc_locale();
     }
 }
 

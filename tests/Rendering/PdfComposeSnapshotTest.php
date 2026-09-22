@@ -55,6 +55,9 @@ final class PdfComposeSnapshotTest extends TestCase
     /** @var mixed */
     private $penerjemahAsli;
 
+    /** @var mixed */
+    private $bahasaIsiAsli;
+
     protected function setUp(): void
     {
         require_once dirname(__DIR__, 2) . '/lib/pdf_compose.php';
@@ -69,10 +72,19 @@ final class PdfComposeSnapshotTest extends TestCase
         // apa pun — ia cuma bergiliran salah.
         $this->penerjemahAsli = $GLOBALS['translator'] ?? null;
         unset($GLOBALS['translator']);
+
+        // Snapshot ini merekam pemasangan yang isi dokumennya berbahasa
+        // Indonesia (`document.locale = 'id'`) — dan itu yang tertulis di
+        // `<html lang>` kerangkanya. Dipasang di sini, bukan diwarisi, dengan
+        // alasan yang sama dengan penerjemah di atas.
+        $this->bahasaIsiAsli = $GLOBALS['ezdoc_document_locale'] ?? null;
+        $GLOBALS['ezdoc_document_locale'] = 'id';
     }
 
     protected function tearDown(): void
     {
+        $GLOBALS['ezdoc_document_locale'] = $this->bahasaIsiAsli;
+
         if ($this->penerjemahAsli === null) {
             unset($GLOBALS['translator']);
 

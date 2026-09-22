@@ -76,7 +76,11 @@ if (!function_exists('t')) {
     function t(string $key, array $params = [], ?string $default = null): string {
         $translator = $GLOBALS['translator'] ?? null;
         if (!($translator instanceof \Ezdoc\UI\Translator)) {
-            return $default !== null ? $default : $key;
+            // Tanpa katalog, {param} tetap disisipkan — lewat Translator yang
+            // sama dengan katalog kosong, jadi teks bawaan dipakai dan
+            // "{n}h ago" tidak pernah tampil mentah. Laravel __() dan Symfony
+            // Translator juga menyisipkan parameter ke pesan yang tak diterjemahkan.
+            $translator = new \Ezdoc\UI\Translator(new \Ezdoc\UI\Config([]));
         }
         return $translator->t($key, $params, $default);
     }
@@ -227,7 +231,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
 ?>
 <?php if (!$__ezdoc_isFragment): ?>
 <!DOCTYPE html>
-<html lang="id">
+<html lang="<?= h(ezdoc_locale()) ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

@@ -6,6 +6,50 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Changed — tanggal dan angka ikut setelan bahasa (2026-09-22)**
+
+Diminta pemakai: "format tanggal/angka pastikan ikut bahasa aturan". `'id'`
+tertanam di lima tempat, jadi `app.locale` mengganti teks tombol tapi tidak nama
+bulannya — dan pustaka yang bawaannya `en` tetap menulis "1.500".
+
+Dua setelan, dipilih pemakai:
+
+- **layar** ikut `app.locale` — daftar template (nama bulan), waktu relatif,
+  `<html lang>` halaman generate/designer/daftar
+- **isi dokumen** ikut `document.locale` (baru; kosong = ikut layar) — nilai
+  bawaan `date:`, format tabledb `number/percent/date/datetime`, `<html lang>`
+  kerangka PDF, jadi juga arsip PDF bekunya. Isinya tersimpan bersama dokumen:
+  layar berbahasa Inggris tidak boleh mengubah "1.500" jadi "1,500" di dokumen
+  berbahasa Indonesia. Pola DocuSign (bahasa dokumen ≠ bahasa layar penanda
+  tangan) dan Word (bahasa per dokumen).
+
+Rinciannya:
+
+- `DateFormatter::localize()` dan `Table\Formatter` bawaannya `en`; setiap
+  pemanggil di pustaka meneruskan locale dari setelan
+- `id` kini punya singkatan CLDR (`Rab`, `Agu`, `Okt`, `Des`, …); kode regional
+  jatuh ke bahasanya (`id-ID` → `id`)
+- `ezdoc_locale()`, `ezdoc_document_locale()`, `ezdoc_set_document_locale()`
+  di `lib/view_helpers.php`; dipasang di generate dan dispatcher action, tempat
+  yang sama dengan Translator — cetak dan pembekuan membaca setelan yang sama
+- `ezdoc_relative_time()` lewat katalog `relative_time.*` ("5d" = lima detik di
+  singkatan lama, lima HARI di singkatan Inggris)
+- `public/config.php` (v2): `document.locale = 'id'` — layar diuji dalam bahasa
+  Inggris, dokumen tetap Indonesia
+- format yang cuma angka (`d/m/Y`) sengaja tidak diubah: tidak ada kata untuk
+  diterjemahkan, dan menukar urutan hari/bulan membuat "03/04" ambigu
+
+**Fixed — `t()` tanpa Translator tidak menyisipkan `{param}`**
+
+Tertangkap saat menjalankan kode ini di PHP 7.4 tanpa view: `ezdoc_relative_time()`
+menghasilkan `{n}h ago`. Keempat salinan `t()` cadangan mengembalikan teks
+bawaan apa adanya — pesan server seperti `Not authorized to sign as "{label}"`
+kena juga. Kini cadangannya Translator dengan katalog kosong: satu implementasi
+penyisipan, seperti Laravel `__()` dan Symfony Translator.
+
+`PdfComposeSnapshotTest` memasang `document.locale = 'id'` — snapshot-nya
+merekam pemasangan berbahasa Indonesia, dan tidak diubah.
+
 **Fixed — form baru yang menabrak dokumen bertanda tangan (2026-09-21)**
 
 Dilaporkan dari pemakaian: membuat dokumen dengan No RM dan No Pendaftaran yang

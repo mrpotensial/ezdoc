@@ -48,6 +48,14 @@ return [
         // migration.
         'signature' => 'Tanda Tangan',
     ],
+    // ezdoc_relative_time() — singkatan yang sudah dipakai sebelumnya:
+    // d = detik, m = menit, j = jam, h = hari.
+    'relative_time' => [
+        'seconds' => '{n}d lalu',
+        'minutes' => '{n}m lalu',
+        'hours'   => '{n}j lalu',
+        'days'    => '{n}h lalu',
+    ],
     'response' => [
         'hide_signed_needs_reason' => 'Versi ini memuat {count} tanda tangan. Beri alasan minimal {min} karakter sebelum menyembunyikannya.',
         'version_not_hidden'       => 'Versi ini tidak tersembunyi — tidak ada yang perlu dikembalikan.',

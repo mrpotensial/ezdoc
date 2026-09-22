@@ -30,6 +30,13 @@ return [
     'fallback' => [
         'signature' => 'Signature',
     ],
+    // ezdoc_relative_time() — short relative timestamps in lists.
+    'relative_time' => [
+        'seconds' => '{n}s ago',
+        'minutes' => '{n}m ago',
+        'hours'   => '{n}h ago',
+        'days'    => '{n}d ago',
+    ],
     'response' => [
         'hide_signed_needs_reason' => 'This version carries {count} signature(s). Give a reason of at least {min} characters before hiding it.',
         'version_not_hidden' => 'This version is not hidden — there is nothing to restore.',
