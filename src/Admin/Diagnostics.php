@@ -310,6 +310,134 @@ final class Diagnostics
         return $hasil;
     }
 
+    /**
+     * Setelan yang sedang berlaku, ditulis untuk dibaca — bukan untuk disalin.
+     *
+     * Halaman pengaturan sudah bisa MEMBUAT berkas config; yang belum bisa
+     * dijawabnya adalah pertanyaan yang lebih sering ditanyakan: "sekarang
+     * setelannya apa?". Menjawabnya dengan menempelkan isi berkas PHP
+     * memindahkan pekerjaan membaca kode ke orang yang justru tidak membaca
+     * kode. Jadi tiap baris di sini menyebutkan tiga hal:
+     *
+     *   - namanya dalam bahasa biasa ("Bahasa isi dokumen");
+     *   - nilainya dalam bahasa biasa ("Bahasa Indonesia"), bukan `id`;
+     *   - dari mana nilai itu datang — berkas config, konstanta pemasangan,
+     *     atau bawaan pustaka. Yang terakhir ini yang paling sering keliru
+     *     dikira sudah diatur padahal belum.
+     *
+     * @return list<array{label:string,nilai:string,arti:string,asal:string}>
+     */
+    public function settings(\Ezdoc\UI\Config $config): array
+    {
+        $bahasa = static function (string $kode): string {
+            $peta = ['en' => 'English', 'id' => 'Bahasa Indonesia'];
+
+            return $peta[strtolower($kode)] ?? $kode;
+        };
+
+        $layar = (string) $config->get('app.locale', 'en');
+        $isiDokumen = trim((string) $config->get('document.locale', ''));
+
+        $baris = [];
+        $baris[] = [
+            'label' => 'Interface language',
+            'nilai' => $bahasa($layar),
+            'arti'  => 'The language of buttons, menus and messages on screen.',
+            'asal'  => $config->has('app.locale') ? 'Config file' : 'Library default',
+        ];
+        $baris[] = [
+            'label' => 'Document language',
+            'nilai' => $isiDokumen === '' ? $bahasa($layar) . ' (follows the interface)' : $bahasa($isiDokumen),
+            'arti'  => 'The language of dates and numbers INSIDE documents, printouts and their frozen PDFs.',
+            'asal'  => $isiDokumen === '' ? 'Not set — follows the interface language' : 'Config file',
+        ];
+
+        $backend = \Ezdoc\Storage\BlobStoreFactory::configuredBackend();
+        $artiBackend = [
+            'database' => 'Signature images are kept in the database only.',
+            'disk'     => 'Signature images are kept as files only.',
+            'mirror'   => 'Signature images are kept in the database AND as files.',
+        ];
+        $baris[] = [
+            'label' => 'Where images are kept',
+            'nilai' => $backend === 'mirror' ? 'Database and files' : ($backend === 'disk' ? 'Files only' : 'Database only'),
+            'arti'  => $artiBackend[$backend] ?? 'Storage backend: ' . $backend,
+            'asal'  => self::asalKonstanta('EZDOC_STORAGE_BACKEND'),
+        ];
+
+        $folder = \Ezdoc\Storage\BlobStoreFactory::configuredDiskRoot();
+        $baris[] = [
+            'label' => 'Image folder',
+            'nilai' => $folder ?? 'Not set',
+            'arti'  => $folder === null
+                ? 'There is nowhere to put files. Any mode that needs files will not work.'
+                : 'Where signature image files are kept. It has to be backed up along with the database.',
+            'asal'  => self::asalKonstanta('EZDOC_STORAGE_PATH'),
+        ];
+
+        $arsip = defined('EZDOC_ARTIFACT_STORAGE_PATH') ? (string) constant('EZDOC_ARTIFACT_STORAGE_PATH') : null;
+        $baris[] = [
+            'label' => 'Frozen archive folder',
+            'nilai' => $arsip ?? ($folder ?? 'Not set'),
+            'arti'  => 'Where the PDF copy of each signed document is kept. This is evidence; do not delete it.',
+            'asal'  => self::asalKonstanta('EZDOC_ARTIFACT_STORAGE_PATH'),
+        ];
+
+        $adaKunci = false;
+        try {
+            $adaKunci = \Ezdoc\Signature\SigningKey::isConfigured();
+        } catch (\Throwable $e) {
+            $adaKunci = false;
+        }
+        $baris[] = [
+            'label' => 'Signing key',
+            'nilai' => $adaKunci ? 'Configured' : 'Missing',
+            'arti'  => $adaKunci
+                ? 'Used to record signatures so that a later change to the content can be detected.'
+                : 'Without it signatures are not recorded, and a change to the content cannot be proven.',
+            'asal'  => $adaKunci ? 'Install constant' : 'Not set',
+        ];
+
+        $peranDetail = function_exists('ezdoc_audit_detail_roles') ? ezdoc_audit_detail_roles() : [];
+        $baris[] = [
+            'label' => 'May see history details',
+            'nilai' => $peranDetail === [] ? 'Nobody' : implode(', ', $peranDetail),
+            'arti'  => 'Who may see IP addresses and full phone numbers in a document history.',
+            'asal'  => self::asalKonstanta('EZDOC_AUDIT_DETAIL_ROLES'),
+        ];
+
+        $otomatis = defined('EZDOC_AUTO_MIGRATE') && constant('EZDOC_AUTO_MIGRATE');
+        $baris[] = [
+            'label' => 'Update database structure automatically',
+            'nilai' => $otomatis ? 'Yes' : 'No',
+            'arti'  => $otomatis
+                ? 'New tables are created on their own when a page is opened.'
+                : 'Structure changes are run by hand from the Migrations tab.',
+            'asal'  => self::asalKonstanta('EZDOC_AUTO_MIGRATE'),
+        ];
+
+        return $baris;
+    }
+
+    /**
+     * Dari mana sebuah setelan datang.
+     *
+     * Dibedakan karena akibatnya berbeda: yang dari konstanta ikut berpindah
+     * bersama berkas pemasangan, yang dari lingkungan hilang saat servernya
+     * dipasang ulang, dan yang bawaan tidak pernah dipilih siapa pun.
+     */
+    private static function asalKonstanta(string $nama): string
+    {
+        if (defined($nama)) {
+            return 'Install constant';
+        }
+        $lingkungan = getenv($nama);
+        if (is_string($lingkungan) && $lingkungan !== '') {
+            return 'Environment variable';
+        }
+
+        return 'Library default';
+    }
     private function batasJendela(): string
     {
         return $this->db->grammar()->name() === 'sqlite'

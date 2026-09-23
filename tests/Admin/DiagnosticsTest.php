@@ -212,6 +212,73 @@ final class DiagnosticsTest extends TestCase
         self::assertSame(['doc.created', 'otp.verified'], $this->diag()->eventTypes());
     }
 
+    // ── Setelan yang berlaku ─────────────────────────────────────────────
+
+    /**
+     * @param array<string,mixed> $config
+     * @return array<string,array{label:string,nilai:string,arti:string,asal:string}>
+     */
+    private function setelan(array $config): array
+    {
+        $per = [];
+        foreach ($this->diag()->settings(new \Ezdoc\UI\Config($config)) as $baris) {
+            $per[$baris['label']] = $baris;
+        }
+
+        return $per;
+    }
+
+    /**
+     * Nilainya ditulis untuk dibaca orang, bukan disalin ke berkas.
+     *
+     * Diminta pemakai: "preview dalam bentuk yang mudah dipahami user awam".
+     * Karena itu "Bahasa Indonesia", bukan `id`.
+     */
+    public function testNilaiDitulisDalamBahasaBiasa(): void
+    {
+        $setelan = $this->setelan(['app.locale' => 'id']);
+
+        self::assertSame('Bahasa Indonesia', $setelan['Interface language']['nilai']);
+        self::assertStringNotContainsString('app.locale', $setelan['Interface language']['nilai']);
+        self::assertNotSame('', $setelan['Interface language']['arti'], 'tiap baris menjelaskan dirinya');
+    }
+
+    /**
+     * Setelan yang belum pernah diatur disebut apa adanya.
+     *
+     * Ini keadaan yang paling sering dikira sudah diatur — dan satu-satunya yang
+     * membedakannya dari yang sengaja dipilih adalah keterangan asalnya.
+     */
+    public function testYangBelumDiaturDitandaiSebagaiBawaan(): void
+    {
+        $setelan = $this->setelan([]);
+
+        self::assertSame('Library default', $setelan['Interface language']['asal']);
+        self::assertSame('English', $setelan['Interface language']['nilai']);
+        self::assertSame('Config file', $this->setelan(['app.locale' => 'en'])['Interface language']['asal']);
+    }
+
+    /** Bahasa dokumen yang kosong berarti ikut tampilan — dan itu dikatakan. */
+    public function testBahasaDokumenKosongMenyebutIkutTampilan(): void
+    {
+        $setelan = $this->setelan(['app.locale' => 'id']);
+
+        self::assertStringContainsString('follows the interface', $setelan['Document language']['nilai']);
+        self::assertStringContainsString('follows the interface language', $setelan['Document language']['asal']);
+
+        $lain = $this->setelan(['app.locale' => 'en', 'document.locale' => 'id']);
+        self::assertSame('Bahasa Indonesia', $lain['Document language']['nilai']);
+        self::assertSame('Config file', $lain['Document language']['asal']);
+    }
+
+    /** Tempat penyimpanan dijelaskan akibatnya, bukan nama modenya. */
+    public function testPenyimpananDijelaskanAkibatnya(): void
+    {
+        $baris = $this->setelan([])['Where images are kept'];
+
+        self::assertContains($baris['nilai'], ['Database only', 'Database and files', 'Files only']);
+        self::assertStringContainsString('Signature images', $baris['arti']);
+    }
     // ── Hak akses template ───────────────────────────────────────────────
 
     /**

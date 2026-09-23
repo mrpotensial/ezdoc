@@ -484,6 +484,8 @@ $tambah(
     'roles of the user viewing this page'
 );
 
+$setelanAktif = (new \Ezdoc\Admin\Diagnostics($dbq))->settings($config);
+
 // Bahasa
 $tambah('Interface language', 'ok', function_exists('ezdoc_locale') ? ezdoc_locale() : 'en', 'app.locale');
 $tambah(
@@ -797,6 +799,34 @@ if ($rs) {
 
     <!-- ─── Config ───────────────────────────────────────────────────── -->
     <div data-ez-panel="config" class="hidden pt-6">
+        <!-- Yang berlaku SEKARANG, ditulis untuk dibaca. Pertanyaan "setelannya
+             apa?" jauh lebih sering muncul daripada "buatkan berkasnya", jadi
+             jawabannya ada di atas, bukan di bawah formulir. -->
+        <div class="mb-4 rounded-lg border border-gray-200 bg-white">
+            <div class="border-b border-gray-100 px-5 py-4">
+                <h2 class="text-sm font-semibold text-gray-900">What is in effect now</h2>
+                <p class="mt-0.5 text-sm text-gray-500">
+                    What this installation is actually using, and where each value comes from.
+                    &ldquo;Library default&rdquo; means nobody ever set it.
+                </p>
+            </div>
+            <ul class="divide-y divide-gray-100">
+                <?php foreach ($setelanAktif as $baris): ?>
+                    <?php $bawaan = strpos($baris['asal'], 'Library default') === 0 || strpos($baris['asal'], 'Not set') === 0; ?>
+                    <li class="px-5 py-3 sm:flex sm:items-baseline sm:gap-4">
+                        <span class="block w-56 shrink-0 text-sm text-gray-500"><?= htmlspecialchars($baris['label'], ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="block min-w-0 flex-1">
+                            <span class="block break-words text-sm font-medium text-gray-900"><?= htmlspecialchars($baris['nilai'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <span class="mt-0.5 block text-xs text-gray-500"><?= htmlspecialchars($baris['arti'], ENT_QUOTES, 'UTF-8') ?></span>
+                        </span>
+                        <span class="mt-1 block shrink-0 text-xs sm:mt-0 <?= $bawaan ? 'text-amber-700' : 'text-gray-400' ?>">
+                            <?= htmlspecialchars($baris['asal'], ENT_QUOTES, 'UTF-8') ?>
+                        </span>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+
         <div class="rounded-lg border border-gray-200 bg-white">
             <div class="border-b border-gray-100 px-5 py-4">
                 <h2 class="text-sm font-semibold text-gray-900">Config file</h2>
@@ -806,29 +836,35 @@ if ($rs) {
                 </p>
             </div>
 
+            <!-- Formulir dimulai dari yang berlaku sekarang: berkas config yang
+                 dibuat dari halaman ini nyaris selalu berupa perubahan kecil atas
+                 yang sudah ada, bukan tulisan dari nol. -->
             <div class="grid gap-4 px-5 py-4 sm:grid-cols-2">
                 <label class="block text-sm">
                     <span class="text-gray-700">Interface language <span class="text-gray-400">(app.locale)</span></span>
+                    <?php $locAktif = (string) $config->get('app.locale', 'en'); ?>
                     <select id="ezCfgLocale" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm">
-                        <option value="en">en</option>
-                        <option value="id">id</option>
+                        <option value="en" <?= $locAktif === 'en' ? 'selected' : '' ?>>en</option>
+                        <option value="id" <?= $locAktif === 'id' ? 'selected' : '' ?>>id</option>
                     </select>
                 </label>
                 <label class="block text-sm">
                     <span class="text-gray-700">Document language <span class="text-gray-400">(document.locale)</span></span>
+                    <?php $docAktif = trim((string) $config->get('document.locale', '')); ?>
                     <select id="ezCfgDocLocale" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm">
-                        <option value="">same as interface</option>
-                        <option value="id">id</option>
-                        <option value="en">en</option>
+                        <option value="" <?= $docAktif === '' ? 'selected' : '' ?>>same as interface</option>
+                        <option value="id" <?= $docAktif === 'id' ? 'selected' : '' ?>>id</option>
+                        <option value="en" <?= $docAktif === 'en' ? 'selected' : '' ?>>en</option>
                     </select>
                     <span class="mt-1 block text-xs text-gray-500">Dates and numbers inside documents, printouts and frozen PDFs.</span>
                 </label>
                 <label class="block text-sm">
                     <span class="text-gray-700">Object storage <span class="text-gray-400">(EZDOC_STORAGE_BACKEND)</span></span>
+                    <?php $backendAktif = \Ezdoc\Storage\BlobStoreFactory::configuredBackend(); ?>
                     <select id="ezCfgBackend" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm">
-                        <option value="database">database — bytes in the column</option>
-                        <option value="mirror">mirror — column and files</option>
-                        <option value="disk">disk — files only</option>
+                        <option value="database" <?= $backendAktif === 'database' ? 'selected' : '' ?>>database — bytes in the column</option>
+                        <option value="mirror" <?= $backendAktif === 'mirror' ? 'selected' : '' ?>>mirror — column and files</option>
+                        <option value="disk" <?= $backendAktif === 'disk' ? 'selected' : '' ?>>disk — files only</option>
                     </select>
                 </label>
                 <label class="block text-sm">

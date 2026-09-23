@@ -6,6 +6,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — setelan yang berlaku sekarang, ditulis untuk dibaca (2026-09-23)**
+
+Diminta pemakai: "perlu ada preview config tersimpan sekarang… tapi jangan
+preview dalam bentuk kode, preview dalam bentuk yang mudah dipahami user awam".
+
+Tab Config kini dibuka oleh daftar **What is in effect now**. Tiap baris
+menyebut tiga hal: namanya dalam bahasa biasa, nilainya dalam bahasa biasa
+("Bahasa Indonesia", bukan `id`; "Database and files", bukan `mirror`), dan
+**dari mana nilai itu datang** — berkas config, konstanta pemasangan, variabel
+lingkungan, atau bawaan pustaka. Yang terakhir ditandai kuning: keadaan yang
+paling sering dikira sudah diatur padahal belum.
+
+Yang ditampilkan: bahasa tampilan, bahasa isi dokumen, tempat menyimpan gambar,
+folder gambar, folder arsip beku, kunci tanda tangan, siapa boleh melihat detail
+riwayat, dan pembaruan struktur otomatis. Masing-masing dengan satu kalimat
+tentang akibatnya — bukan nama setelannya.
+
+Formulir pembuat config di bawahnya kini dimulai dari nilai yang sedang berlaku.
+Berkas config yang dibuat dari halaman ini hampir selalu perubahan kecil atas
+yang sudah ada; formulir kosong memaksa mengisi ulang yang sudah benar, dan di
+situlah setelan hilang tanpa ada yang sadar.
+
+`Diagnostics::settings()` menampung datanya. 5 uji baru; 4 mutasi tertangkap.
+Tab Config dipotret ulang.
+
 **Added — uji adapter, pemindahan gambar inline, dan penghapusan objek di halaman pengaturan (2026-09-23)**
 
 Lanjutan dari "apalagi ya ditambahkan ke setting agar ux lebih nyaman". Dua

@@ -268,6 +268,31 @@ final class AdminStorageTest extends TestCase
     }
 
     /**
+     * Formulir pembuat config dimulai dari yang sedang berlaku.
+     *
+     * Berkas config yang dibuat dari halaman ini hampir selalu perubahan kecil
+     * atas yang sudah ada; formulir kosong memaksa orang mengisi ulang hal yang
+     * sudah benar, dan di situlah setelan hilang tanpa ada yang sadar.
+     */
+    public function testFormulirConfigMengikutiNilaiAktif(): void
+    {
+        $sumber = (string) file_get_contents(dirname(__DIR__, 2) . '/views/admin/migrate.php');
+
+        $petik = static function (string $k): string { return "'" . $k . "'"; };
+        foreach ([
+            ['locAktif', 'id'],
+            ['docAktif', 'id'],
+            ['backendAktif', 'mirror'],
+        ] as [$nilai, $opsi]) {
+            $potongan = sprintf(
+                'value="%s" <?= $%s === %s ? %s : %s ?>',
+                $opsi, $nilai, $petik($opsi), $petik('selected'), "''"
+            );
+            self::assertStringContainsString($potongan, $sumber, 'pilihan tidak mengikuti nilai aktif');
+        }
+    }
+
+    /**
      * Penghapusan dipisah dari tugas lain, dan dijaga dua lapis.
      *
      * Awalnya penghapusan sengaja hanya ada di CLI. Ternyata CLI tidak bisa
