@@ -212,6 +212,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['storage_action'])) {
                 ]);
                 break;
 
+            case 'kesehatan':
+                echo json_encode([
+                    'ok' => true,
+                    'kesehatan' => (new \Ezdoc\Admin\Diagnostics($dbx))->health(),
+                    'penyimpanan' => $rawat->summary($filesx),
+                ]);
+                break;
+
+            case 'audit':
+                $diag = new \Ezdoc\Admin\Diagnostics($dbx);
+                // Alamat IP mengikuti aturan yang sama dengan panel riwayat
+                // dokumen: ia data pribadi, dan halaman ini bukan pengecualian
+                // hanya karena yang membukanya superadmin.
+                $bolehDetail = function_exists('ezdoc_can_view_audit_detail') && ezdoc_can_view_audit_detail();
+                $baris = $diag->recentEvents(
+                    [
+                        'event_type' => (string) ($_POST['event_type'] ?? ''),
+                        'result'     => (string) ($_POST['result'] ?? ''),
+                        'actor'      => (string) ($_POST['actor'] ?? ''),
+                        'doc_id'     => (int) ($_POST['doc_id'] ?? 0),
+                    ],
+                    50,
+                    (int) ($_POST['offset'] ?? 0)
+                );
+                foreach ($baris as $i => $b) {
+                    if (!$bolehDetail) {
+                        unset($baris[$i]['ip_address'], $baris[$i]['actor_roles']);
+                    }
+                }
+                echo json_encode([
+                    'ok'      => true,
+                    'baris'   => array_values($baris),
+                    'jenis'   => $diag->eventTypes(),
+                    'detail'  => $bolehDetail,
+                ]);
+                break;
+
+            case 'akses':
+                echo json_encode([
+                    'ok'     => true,
+                    'daftar' => (new \Ezdoc\Admin\Diagnostics($dbx))->templateAccess(),
+                ]);
+                break;
+
             default:
                 echo json_encode(['ok' => false, 'pesan' => 'Unknown storage action.']);
         }
@@ -443,8 +487,11 @@ if ($rs) {
     <div class="mt-6 border-b border-gray-200">
         <nav id="ezTabs" class="-mb-px flex gap-1 overflow-x-auto" aria-label="Sections">
             <?php foreach ([
+                'overview'   => 'Overview',
                 'storage'    => 'Storage',
                 'adapters'   => 'Adapters',
+                'access'     => 'Access',
+                'audit'      => 'Audit log',
                 'config'     => 'Config',
                 'migrations' => 'Migrations',
             ] as $kunci => $judul): ?>
@@ -457,6 +504,13 @@ if ($rs) {
                 </button>
             <?php endforeach; ?>
         </nav>
+    </div>
+
+    <!-- ─── Overview ─────────────────────────────────────────────────── -->
+    <div data-ez-panel="overview" class="hidden pt-6">
+        <div id="ezSehat" class="space-y-4">
+            <div class="rounded-lg border border-gray-200 bg-white px-5 py-4 text-sm text-gray-400">Loading…</div>
+        </div>
     </div>
 
     <!-- ─── Storage ──────────────────────────────────────────────────── -->
@@ -534,6 +588,78 @@ if ($rs) {
                     </li>
                 <?php endforeach; ?>
             </ul>
+        </div>
+    </div>
+
+    <!-- ─── Access ───────────────────────────────────────────────────── -->
+    <div data-ez-panel="access" class="hidden pt-6">
+        <div class="rounded-lg border border-gray-200 bg-white">
+            <div class="border-b border-gray-100 px-5 py-4">
+                <h2 class="text-sm font-semibold text-gray-900">Who can do what</h2>
+                <p class="mt-0.5 text-sm text-gray-500">
+                    Per template, from its access config. A template with no rules of its own falls back to
+                    the library defaults — the state most often mistaken for "already restricted".
+                </p>
+            </div>
+            <div id="ezAkses" class="px-5 py-4 text-sm text-gray-400">Loading…</div>
+        </div>
+    </div>
+
+    <!-- ─── Audit log ────────────────────────────────────────────────── -->
+    <div data-ez-panel="audit" class="hidden pt-6">
+        <div class="rounded-lg border border-gray-200 bg-white">
+            <div class="border-b border-gray-100 px-5 py-4">
+                <h2 class="text-sm font-semibold text-gray-900">Recent events</h2>
+                <p class="mt-0.5 text-sm text-gray-500">
+                    Everything the library records, newest first. Until now this was only visible one
+                    document at a time, so a failure like <code class="rounded bg-gray-100 px-1 py-0.5">doc.freeze_failed</code>
+                    stayed invisible unless someone opened that document.
+                </p>
+            </div>
+
+            <div class="flex flex-wrap items-end gap-2 border-b border-gray-100 px-5 py-3">
+                <label class="text-xs text-gray-600">
+                    Event
+                    <select id="ezAuditJenis" class="mt-1 block rounded-md border-gray-300 text-sm shadow-sm">
+                        <option value="">all</option>
+                    </select>
+                </label>
+                <label class="text-xs text-gray-600">
+                    Result
+                    <select id="ezAuditHasil" class="mt-1 block rounded-md border-gray-300 text-sm shadow-sm">
+                        <option value="">all</option>
+                        <option value="success">success</option>
+                        <option value="denied">denied</option>
+                        <option value="error">error</option>
+                    </select>
+                </label>
+                <label class="text-xs text-gray-600">
+                    Actor
+                    <input id="ezAuditPelaku" type="text" class="mt-1 block w-28 rounded-md border-gray-300 text-sm shadow-sm" placeholder="id">
+                </label>
+                <label class="text-xs text-gray-600">
+                    Document
+                    <input id="ezAuditDok" type="text" inputmode="numeric" class="mt-1 block w-24 rounded-md border-gray-300 text-sm shadow-sm" placeholder="id">
+                </label>
+                <button type="button" id="ezAuditMuat"
+                        class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50">
+                    Apply
+                </button>
+                <span id="ezAuditKabar" class="ml-auto text-xs text-gray-500"></span>
+            </div>
+
+            <div id="ezAuditIsi" class="max-h-[32rem] overflow-auto px-5 py-4 text-sm text-gray-400">Loading…</div>
+
+            <div class="flex items-center justify-between border-t border-gray-100 px-5 py-3">
+                <button type="button" id="ezAuditSebelum"
+                        class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50">
+                    Newer
+                </button>
+                <button type="button" id="ezAuditSesudah"
+                        class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50">
+                    Older
+                </button>
+            </div>
         </div>
     </div>
 
@@ -698,6 +824,18 @@ if ($rs) {
     // Pilihan terakhir diingat, dan `?tab=` menang atasnya: tautan ke satu tab
     // harus membuka tab itu, bukan tab yang terakhir dibuka orangnya.
     const tombolTab = Array.from(document.querySelectorAll('[data-ez-tab]'));
+
+    // Isi tab diambil saat tab itu dibuka, sekali saja: halaman yang
+    // menanyakan semuanya di muka membuat orang menunggu tujuh kueri untuk
+    // satu panel yang dilihatnya.
+    const pemuat = {};
+    const sudahDimuat = {};
+    let tabAktif = '';
+    const muatTab = (kunci) => {
+        if (sudahDimuat[kunci] || !pemuat[kunci]) return;
+        sudahDimuat[kunci] = true;
+        pemuat[kunci]();
+    };
     const panel = (k) => document.querySelector('[data-ez-panel="' + k + '"]');
     const aktifkan = (kunci) => {
         if (!panel(kunci)) kunci = tombolTab[0].dataset.ezTab;
@@ -710,7 +848,9 @@ if ($rs) {
             b.setAttribute('aria-selected', aktif ? 'true' : 'false');
             panel(b.dataset.ezTab).classList.toggle('hidden', !aktif);
         });
+        tabAktif = kunci;
         try { localStorage.setItem('ezdoc_admin_tab', kunci); } catch (e) {}
+        muatTab(kunci);
     };
     tombolTab.forEach((b) => b.addEventListener('click', () => aktifkan(b.dataset.ezTab)));
     let awal = new URLSearchParams(window.location.search).get('tab');
@@ -735,6 +875,7 @@ if ($rs) {
         b.classList.toggle('cursor-not-allowed', nyala);
     });
     const angka = (n) => (typeof n === 'number' ? n.toLocaleString() : n);
+    const esc = (t) => { const d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; };
 
     async function minta(data) {
         const fd = new FormData();
@@ -916,5 +1057,164 @@ if ($rs) {
             cfgKabar.textContent = 'Clipboard unavailable — the text is selected, press Ctrl+C.';
         }
     });
+    // ── Overview ──
+    const kartu = (judul, nilai, catatan, nada) =>
+        '<div class="px-5 py-4">'
+        + '<dt class="text-[11px] font-medium uppercase tracking-wide text-gray-500">' + judul + '</dt>'
+        + '<dd class="mt-1 text-2xl font-semibold tabular-nums ' + (nada || 'text-gray-900') + '">' + angka(nilai) + '</dd>'
+        + '<dd class="mt-0.5 text-[11px] text-gray-400">' + catatan + '</dd>'
+        + '</div>';
+
+    const blok = (judul, keterangan, dalam) =>
+        '<div class="rounded-lg border border-gray-200 bg-white">'
+        + '<div class="border-b border-gray-100 px-5 py-4">'
+        + '<h2 class="text-sm font-semibold text-gray-900">' + judul + '</h2>'
+        + '<p class="mt-0.5 text-sm text-gray-500">' + keterangan + '</p></div>'
+        + dalam + '</div>';
+
+    const kisi = (isi) => '<dl class="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-4 sm:divide-y-0">' + isi + '</dl>';
+
+    pemuat.overview = async () => {
+        const wadah = document.getElementById('ezSehat');
+        try {
+            const j = await minta({ storage_action: 'kesehatan' });
+            if (!j.ok) throw new Error(j.pesan || 'failed');
+            const k = j.kesehatan, p = j.penyimpanan, hari = k.jendela_hari;
+            const ttd = k.tanda_tangan, otp = k.otp, dok = k.dokumen, audit = k.audit;
+            const persen = otp.total > 0 ? Math.round(otp.terverifikasi * 100 / otp.total) : 0;
+            const masalah = Object.keys(audit.per_jenis || {});
+
+            wadah.innerHTML =
+                blok('Signatures', 'Every recorded signature, by verification status.',
+                    kisi(kartu('Recorded', ttd.total, 'signatures on file')
+                        + kartu('Valid', (ttd.per_status || {}).valid || 0, 'content still matches')
+                        + kartu('Needs attention', ttd.bermasalah, 'anything other than valid',
+                            ttd.bermasalah > 0 ? 'text-red-700' : 'text-gray-900')))
+                + blok('Signing by OTP', 'Last ' + hari + ' days.',
+                    kisi(kartu('Requested', otp.total, 'codes sent')
+                        + kartu('Verified', otp.terverifikasi, persen + '% of requests')
+                        + kartu('Expired', otp.kedaluwarsa, 'never used')
+                        + kartu('Wrong code', otp.gagal, 'failed attempts')))
+                + blok('Documents', 'A frozen archive exists only for documents signed after archiving was switched on.',
+                    kisi(kartu('Total', dok.total, 'all versions')
+                        + kartu('Signed', dok.bertanda_tangan, 'at least one signature')
+                        + kartu('Without archive', dok.tanpa_arsip, 'no frozen copy of what was signed')
+                        + kartu('Locked', dok.terkunci, 'cannot be edited')))
+                + blok('Stored objects', 'Signature images and frozen PDFs.',
+                    kisi(kartu('Objects', p.objek, 'rows in ezdoc_blobs')
+                        + kartu('File copies', p.berkas < 0 ? '—' : p.berkas, 'on disk')
+                        + kartu('Inline', p.inline, 'still inside documents')
+                        + kartu('Referenced', p.dirujuk, 'by documents or archives')))
+                + blok('Events that did not succeed', 'Last ' + hari + ' days. Anything other than success.',
+                    masalah.length === 0
+                        ? '<p class="px-5 py-4 text-sm text-gray-500">Nothing — every recorded event succeeded.</p>'
+                        : '<ul class="divide-y divide-gray-100">' + masalah.map((m) =>
+                            '<li class="flex items-baseline justify-between px-5 py-2 text-sm">'
+                            + '<span class="font-mono text-xs text-gray-700">' + esc(m) + '</span>'
+                            + '<span class="tabular-nums text-gray-900">' + angka(audit.per_jenis[m]) + '</span></li>').join('')
+                          + '</ul>');
+        } catch (e) {
+            wadah.innerHTML = '<div class="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">Failed to load: ' + esc(e.message) + '</div>';
+        }
+    };
+
+    // ── Access ──
+    pemuat.access = async () => {
+        const wadah = document.getElementById('ezAkses');
+        try {
+            const j = await minta({ storage_action: 'akses' });
+            if (!j.ok) throw new Error(j.pesan || 'failed');
+            if (!j.daftar.length) { wadah.innerHTML = '<p class="text-sm text-gray-500">No templates yet.</p>'; return; }
+
+            wadah.innerHTML = '<table class="min-w-full text-sm"><thead class="text-left text-[11px] uppercase tracking-wide text-gray-500">'
+                + '<tr><th class="py-2 pr-4 font-medium">Template</th><th class="py-2 pr-4 font-medium">Mode</th><th class="py-2 font-medium">Rules</th></tr>'
+                + '</thead><tbody class="divide-y divide-gray-100">'
+                + j.daftar.map((t) => {
+                    const aturan = Object.keys(t.akses || {});
+                    return '<tr>'
+                        + '<td class="py-2 pr-4 align-top"><span class="font-medium text-gray-900">' + esc(t.nama) + '</span>'
+                        + '<span class="ml-1 text-xs text-gray-400">#' + t.id + ' v' + t.versi + '</span></td>'
+                        + '<td class="py-2 pr-4 align-top text-xs text-gray-600">' + (esc(t.mode) || '—') + '</td>'
+                        + '<td class="py-2 align-top">'
+                        + (t.bawaan
+                            ? '<span class="inline-flex items-center gap-1.5 text-xs text-gray-600">'
+                              + '<span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>library defaults — nothing set on this template</span>'
+                            : '<ul class="space-y-0.5">' + aturan.map((a) =>
+                                '<li class="text-xs text-gray-700"><span class="font-medium">' + esc(a) + '</span>: ' + esc(t.akses[a]) + '</li>').join('') + '</ul>')
+                        + '</td></tr>';
+                }).join('')
+                + '</tbody></table>';
+        } catch (e) {
+            wadah.innerHTML = '<p class="text-sm text-red-700">Failed to load: ' + esc(e.message) + '</p>';
+        }
+    };
+
+    // ── Audit log ──
+    let auditOffset = 0;
+    const auditIsi = document.getElementById('ezAuditIsi');
+    const auditKabar = document.getElementById('ezAuditKabar');
+    const warnaHasil = (h) => (h === 'success' ? 'bg-green-500' : (h === 'denied' ? 'bg-amber-500' : 'bg-red-500'));
+
+    const saringAudit = () => ({
+        storage_action: 'audit',
+        event_type: document.getElementById('ezAuditJenis').value,
+        result: document.getElementById('ezAuditHasil').value,
+        actor: document.getElementById('ezAuditPelaku').value.trim(),
+        doc_id: document.getElementById('ezAuditDok').value.trim(),
+        offset: auditOffset,
+    });
+
+    pemuat.audit = async () => {
+        try {
+            const j = await minta(saringAudit());
+            if (!j.ok) throw new Error(j.pesan || 'failed');
+
+            const pilih = document.getElementById('ezAuditJenis');
+            if (pilih.options.length <= 1) {
+                j.jenis.forEach((t) => {
+                    const o = document.createElement('option');
+                    o.value = t;
+                    o.textContent = t;
+                    pilih.appendChild(o);
+                });
+            }
+
+            auditKabar.textContent = j.baris.length
+                ? 'Showing ' + (auditOffset + 1) + '–' + (auditOffset + j.baris.length)
+                : 'Nothing matches';
+
+            auditIsi.innerHTML = j.baris.length === 0
+                ? '<p class="text-sm text-gray-500">No events for this filter.</p>'
+                : '<table class="min-w-full text-sm"><thead class="text-left text-[11px] uppercase tracking-wide text-gray-500">'
+                  + '<tr><th class="py-2 pr-4 font-medium">When</th><th class="py-2 pr-4 font-medium">Event</th>'
+                  + '<th class="py-2 pr-4 font-medium">Actor</th><th class="py-2 pr-4 font-medium">Document</th>'
+                  + '<th class="py-2 font-medium">Message</th></tr></thead><tbody class="divide-y divide-gray-100">'
+                  + j.baris.map((b) =>
+                      '<tr>'
+                      + '<td class="whitespace-nowrap py-2 pr-4 align-top text-xs tabular-nums text-gray-500">' + esc(b.occurred_at) + '</td>'
+                      + '<td class="py-2 pr-4 align-top"><span class="inline-flex items-center gap-1.5 font-mono text-xs text-gray-700">'
+                      + '<span class="h-1.5 w-1.5 shrink-0 rounded-full ' + warnaHasil(b.result) + '"></span>' + esc(b.event_type) + '</span></td>'
+                      + '<td class="py-2 pr-4 align-top text-xs text-gray-600">' + (esc(b.actor_id) || '—')
+                      + (b.ip_address ? '<span class="block text-[11px] text-gray-400">' + esc(b.ip_address) + '</span>' : '') + '</td>'
+                      + '<td class="py-2 pr-4 align-top text-xs tabular-nums text-gray-600">' + (b.doc_id ? '#' + b.doc_id : '—') + '</td>'
+                      + '<td class="py-2 align-top text-xs text-gray-500">' + esc(b.message) + '</td>'
+                      + '</tr>').join('')
+                  + '</tbody></table>';
+        } catch (e) {
+            auditIsi.innerHTML = '<p class="text-sm text-red-700">Failed to load: ' + esc(e.message) + '</p>';
+        }
+    };
+
+    const muatAudit = () => { sudahDimuat.audit = true; pemuat.audit(); };
+    document.getElementById('ezAuditMuat').addEventListener('click', () => { auditOffset = 0; muatAudit(); });
+    document.getElementById('ezAuditSesudah').addEventListener('click', () => { auditOffset += 50; muatAudit(); });
+    document.getElementById('ezAuditSebelum').addEventListener('click', () => {
+        auditOffset = Math.max(0, auditOffset - 50);
+        muatAudit();
+    });
+
+    // Tab yang sudah terbuka saat halaman dimuat ikut diisi. Perendernya baru
+    // terdaftar di bawah sini, jadi pemanggilan pertama ada di sini juga.
+    muatTab(tabAktif);
 })();
 </script>

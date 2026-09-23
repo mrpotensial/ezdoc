@@ -32,6 +32,8 @@ if ($baru) {
         '2026_01_01_000001_create_ezdoc_templates.sql',
         '2026_01_01_000002_create_ezdoc_documents.sql',
         '2026_07_30_000001_create_ezdoc_blobs.sql',
+        '2026_01_01_000004_create_ezdoc_audit_log.sql',
+        '2026_01_01_000005_create_ezdoc_signatures.sql',
         '2026_08_08_000001_create_ezdoc_document_artifacts.sql',
     ] as $f) {
         $pdo->exec((string) file_get_contents($root . '/migrations/sqlite/' . $f));
@@ -75,6 +77,28 @@ if ($baru) {
          VALUES ('art-1', 1, 1, ?, ?)",
         [$kunci['D'], $lama]
     );
+
+    // Template kedua punya aturan aksesnya sendiri; yang pertama tidak.
+    $db->execute(
+        "INSERT INTO ezdoc_templates (id, uuid, slug, version, is_current, name, category, scope, content, is_active, access_config)
+         VALUES (2, 'tpl-2', 'uji2', 1, 1, 'Dengan aturan', 'umum', 'patient', '<p>x</p>', 1, ?)",
+        [json_encode(['mode' => 'strict', 'edit' => ['roles' => ['perawat'], 'users' => []]])]
+    );
+
+    // Satu tanda tangan, dan dua kejadian audit: satu berhasil, satu ditolak.
+    $db->execute(
+        "INSERT INTO ezdoc_signatures (uuid, document_id, signature_id_within_doc, signer_id, provider, level,
+                                       envelope_format, envelope, content_hash, signed_at, verify_status, metadata)
+         VALUES ('sig-1', 1, 1, '7', 'hmac', 1, 'hmac', 'e', 'h', ?, 'valid', '{}')",
+        [$lama]
+    );
+    foreach ([['doc.created', 'success', '7'], ['authz.denied', 'denied', '9']] as $i => [$jenis, $hasil, $pelaku]) {
+        $db->execute(
+            "INSERT INTO ezdoc_audit_log (event_type, event_uuid, actor_id, result, doc_id, ip_address, occurred_at)
+             VALUES (?, ?, ?, ?, 1, '10.0.0.7', datetime('now', '-1 hour'))",
+            [$jenis, 'ev-' . $i, $pelaku, $hasil]
+        );
+    }
 }
 
 $isSuper = $peran === 'superadmin';

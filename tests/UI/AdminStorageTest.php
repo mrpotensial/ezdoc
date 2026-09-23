@@ -162,6 +162,55 @@ final class AdminStorageTest extends TestCase
         self::assertTrue($r['hasil']['db_sama'], 'tidak boleh ada yang terhapus');
     }
 
+    // ── Overview, audit, akses ───────────────────────────────────────────
+
+    public function testRingkasanKesehatanMenjawabTigaPertanyaan(): void
+    {
+        $j = $this->aksi('kesehatan')['json'];
+
+        self::assertSame(1, $j['kesehatan']['tanda_tangan']['total']);
+        self::assertSame(0, $j['kesehatan']['tanda_tangan']['bermasalah']);
+        self::assertSame(1, $j['kesehatan']['dokumen']['bertanda_tangan']);
+        self::assertSame(1, $j['kesehatan']['audit']['gagal'], 'authz.denied bukan keberhasilan');
+        self::assertSame(4, $j['penyimpanan']['objek'], 'ringkasan penyimpanan ikut, satu permintaan saja');
+    }
+
+    public function testRiwayatKejadianTerbaruLebihDulu(): void
+    {
+        $j = $this->aksi('audit')['json'];
+
+        self::assertSame('authz.denied', $j['baris'][0]['event_type']);
+        self::assertSame(['authz.denied', 'doc.created'], $j['jenis'], 'saringan diisi dari data');
+    }
+
+    /**
+     * Alamat IP tidak ikut terkirim tanpa hak melihat detail audit.
+     *
+     * Aturannya sama dengan panel riwayat dokumen: IP adalah data pribadi, dan
+     * halaman ini bukan pengecualian hanya karena yang membukanya superadmin.
+     */
+    public function testAlamatIpDisembunyikanTanpaHakDetail(): void
+    {
+        $r = $this->aksi('audit');
+
+        self::assertFalse($r['json']['detail']);
+        self::assertArrayNotHasKey('ip_address', $r['json']['baris'][0]);
+        self::assertStringNotContainsString('10.0.0.7', $r['keluaran']);
+    }
+
+    public function testDaftarAksesMenandaiTemplateTanpaAturan(): void
+    {
+        $daftar = $this->aksi('akses')['json']['daftar'];
+        $per = [];
+        foreach ($daftar as $t) {
+            $per[$t['nama']] = $t;
+        }
+
+        self::assertTrue($per['Uji']['bawaan']);
+        self::assertFalse($per['Dengan aturan']['bawaan']);
+        self::assertSame('perawat', $per['Dengan aturan']['akses']['edit']);
+    }
+
     /** Tidak ada tombol hapus di halamannya — penghapusan byte lewat CLI. */
     public function testHalamanTidakPunyaTombolHapusObjek(): void
     {
