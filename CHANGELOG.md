@@ -6,6 +6,46 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — pemeliharaan penyimpanan & pemeriksaan adapter di halaman admin (2026-09-23)**
+
+Diminta pemakai: "apa tidak bisa ada ui untuk run itu? atau run konfigurasi
+ezdoc lainnya, sekaligus helper pembuat config juga", plus "fitur cek adapter
+apakah bisa sekaligus apakah izin adapter aman".
+
+Halaman admin yang sudah ada (`?ezdoc_page=admin_migrate`, superadmin) bertambah
+tiga seksi:
+
+- **Object storage** — ringkasan isi penyimpanan, lalu empat tugas: lihat dulu,
+  salin tanda tangan ke berkas, periksa kesehatan, dan objek tak dirujuk.
+  Dijalankan per batch 200 objek dengan `after_id`, karena satu permintaan web
+  punya batas waktu. Menghapus objek sengaja TIDAK ada di sini — yang hilang
+  adalah byte, dan itu tetap lewat CLI.
+- **Adapters & permissions** — apa yang terpasang dari aplikasi pemakai
+  (koneksi, perender PDF, perender QR, penyimpan objek, kunci tanda tangan,
+  penyedia role, bahasa) dan izin yang perlu diperhatikan: folder objek tidak
+  bisa ditulis, folder objek di dalam document root, atau pengguna basis data
+  yang memegang DROP/FILE/SUPER.
+- **Config helper** — menghasilkan isi `public/config.php` untuk disalin.
+  Halaman web tidak menulis berkas PHP yang akan dieksekusi.
+
+`Ezdoc\Storage\BlobMaintenance` menampung pekerjaannya — menyalin, memeriksa,
+mencari objek tak dirujuk — dan kedua CLI kini memakainya. Sebelumnya tiap
+pemakai menuliskannya sendiri, dan yang satu melewatkan arsip PDF beku.
+
+**Changed — `DiskBlobStore::writeFile()` menjamin hasilnya terbaca kembali**
+
+Berkas dibaca ulang sebelum metodenya menyatakan tersimpan; namanya hash
+isinya, jadi pembacaan itu sekaligus pemeriksaan checksum. Pemanggilnya tidak
+lagi memeriksa sendiri. Penulisan yang "berhasil" tapi menghasilkan berkas yang
+tidak cocok dengan namanya adalah kegagalan yang paling mahal di sini — ia
+terlihat selesai.
+
+Pemeriksaan kesehatan tidak lagi menuduh objek yang memang hanya ada di disk
+(arsip PDF beku) sebagai hilang ketika backend yang aktif membaca kolom.
+
+19 uji baru; 8 mutasi tertangkap. Halaman dirender sungguhan dengan MySQL lokal
+dan dipotret, termasuk saat tugasnya dijalankan dari tombolnya.
+
 **Added — gambar tanda tangan ke berkas, tanpa mengubah tabel (2026-09-22)**
 
 Diminta pemakai: "migrasikan ttd ke file juga, tapi tanpa merusak tabel, karena

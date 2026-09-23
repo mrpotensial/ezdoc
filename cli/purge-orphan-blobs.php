@@ -87,37 +87,11 @@ printf("Backend  : %s\n", $store->name());
 printf("Grace    : %d hours\n", $graceHours);
 printf("Mode     : %s\n\n", $apply ? 'APPLY — objects will be deleted' : 'dry run — nothing is deleted');
 
-// Every key any document mentions. Soft-deleted documents included on purpose:
-// a soft delete is reversible, and purging what it points at would make it not.
-$referenced = [];
-foreach ($db->fetchAll('SELECT signature_values FROM ezdoc_documents WHERE signature_values IS NOT NULL') as $row) {
-    $values = json_decode((string) $row['signature_values'], true);
-    if (!is_array($values)) {
-        continue;
-    }
-    foreach ($values as $value) {
-        if (!is_string($value)) {
-            continue;
-        }
-        $key = \Ezdoc\Storage\Blob::keyFromReference($value);
-        if ($key !== null) {
-            $referenced[$key] = true;
-        }
-    }
-}
-
-$bySignatures = count($referenced);
-
-// Frozen display artifacts — every cycle, superseded ones included.
-if ((new \Ezdoc\Db\Schema\ColumnIntrospector($db))->columns('ezdoc_document_artifacts') !== []) {
-    foreach ($db->fetchAll('SELECT blob_key FROM ezdoc_document_artifacts') as $row) {
-        $key = (string) $row['blob_key'];
-        if (preg_match('/^[0-9a-f]{64}$/', $key) === 1) {
-            $referenced[$key] = true;
-        }
-    }
-}
-
+// Setiap perujuk, satu tempat: slot tanda tangan DAN arsip tampilan beku.
+// Lihat BlobMaintenance::referencedKeys() — versi sebelumnya di berkas ini
+// melewatkan arsipnya, dan `apply` akan menghapus buktinya.
+$pemeliharaan = new \Ezdoc\Storage\BlobMaintenance($db);
+$referenced = $pemeliharaan->referencedKeys();
 printf("Referenced by signature slots: %d objects\n", $bySignatures);
 printf("Referenced in total (incl. frozen artifacts): %d objects\n", count($referenced));
 

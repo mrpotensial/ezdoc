@@ -70,73 +70,36 @@ $files = new \Ezdoc\Storage\DiskBlobStore($db, $diskRoot);
 printf("Target   : %s\n", $files->root());
 printf("Mode     : %s\n\n", $apply ? 'APPLY — files will be written (the database is not touched)' : 'dry run — nothing is written');
 
+$pemeliharaan = new \Ezdoc\Storage\BlobMaintenance($db);
 $counts = ['copied' => 0, 'already' => 0, 'corrupt' => 0, 'failed' => 0];
 $bytesCopied = 0;
-$lastId = 0;
+$afterId = 0;
 
-// Keyset pagination: one batch of bytes in memory at a time, and a stable walk
-// even if rows are added while it runs.
+// Satu batch pada satu waktu — 21 MB objek tidak perlu masuk memori bersamaan,
+// dan batas yang sama dipakai halaman admin.
 while (true) {
-    $rows = $db->fetchAll(
-        'SELECT id, `key`, content FROM ezdoc_blobs'
-        . ' WHERE id > ? AND deleted_at IS NULL AND content IS NOT NULL ORDER BY id LIMIT 200',
-        [$lastId]
-    );
-    if ($rows === []) {
+    $batch = $pemeliharaan->copyToFilesBatch($files, $afterId, 200, $apply);
+    $counts['copied'] += $batch['disalin'];
+    $counts['already'] += $batch['sudah'];
+    $counts['corrupt'] += $batch['rusak'];
+    $counts['failed'] += $batch['gagal'];
+    $bytesCopied += $batch['byte'];
+    foreach ($batch['masalah'] as $masalah) {
+        $kalimat = [
+            'checksum_kolom'  => 'CORRUPT — the column does not match its key; left alone',
+            'tulis_gagal'     => 'FAILED — ' . $masalah['detail'],
+        ];
+        printf("  %s  %s\n", substr($masalah['key'], 0, 16) . '…', $kalimat[$masalah['sebab']] ?? $masalah['sebab']);
+    }
+    if ($batch['selesai']) {
         break;
     }
-
-    foreach ($rows as $row) {
-        $lastId = (int) $row['id'];
-        $key = (string) $row['key'];
-        $bytes = (string) $row['content'];
-
-        if (!\Ezdoc\Storage\Blob::verify($key, $bytes)) {
-            $counts['corrupt']++;
-            printf("  %s  CORRUPT — the column does not match its key; left alone\n", substr($key, 0, 16) . '…');
-            continue;
-        }
-
-        if ($files->readFile($key) !== null) {
-            $counts['already']++;
-            continue;
-        }
-
-        if (!$apply) {
-            $counts['copied']++;
-            $bytesCopied += strlen($bytes);
-            continue;
-        }
-
-        try {
-            $files->writeFile($bytes);
-        } catch (\Throwable $e) {
-            $counts['failed']++;
-            printf("  %s  FAILED — %s\n", substr($key, 0, 16) . '…', $e->getMessage());
-            continue;
-        }
-
-        if ($files->readFile($key) !== $bytes) {
-            $counts['failed']++;
-            printf("  %s  FAILED — the file did not read back identically\n", substr($key, 0, 16) . '…');
-            continue;
-        }
-
-        $counts['copied']++;
-        $bytesCopied += strlen($bytes);
-    }
+    $afterId = $batch['after_id'];
 }
 
 // Images still inline in documents are not objects — there is no row to copy
 // them from. Reported so the total adds up; see migrate-signature-images.php.
-$inline = 0;
-foreach ($db->fetchAll("SELECT signature_values FROM ezdoc_documents WHERE signature_values LIKE '%data:image%'") as $row) {
-    foreach ((array) json_decode((string) $row['signature_values'], true) as $value) {
-        if (is_string($value) && \Ezdoc\Storage\SignatureImageStore::isDataUri($value)) {
-            $inline++;
-        }
-    }
-}
+$inline = $pemeliharaan->summary()['inline'];
 
 printf("%s : %d objects, %.1f KB\n", $apply ? 'Copied  ' : 'To copy ', $counts['copied'], $bytesCopied / 1024);
 printf("On disk  : %d objects already there, skipped\n", $counts['already']);

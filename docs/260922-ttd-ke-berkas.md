@@ -66,6 +66,31 @@ sudo -u apache env EZDOC_BOOTSTRAP=$P/koneksi.php EZDOC_STORAGE_PATH=$P/storage 
 Yang benar di akhir: `The database was not modified.` Aman diulang — yang sudah
 ada di disk dilewati. Kode keluar 1 berarti ada yang rusak atau gagal.
 
+## Lewat halaman admin
+
+`?ezdoc_page=admin_migrate` (superadmin) punya seksi **Object storage**:
+
+- ringkasan: objek, di kolom, di disk, berkas, gambar inline, yang dirujuk
+- **Lihat dulu** dan **Salin tanda tangan ke berkas** — per batch 200 objek,
+  peramban memanggil berulang sambil membawa `after_id`, karena satu permintaan
+  web punya batas waktu
+- **Periksa kesehatan** — byte tiap objek masih cocok kuncinya, dan salinan
+  berkasnya ada
+- **Objek tak dirujuk** — melihat saja; menghapusnya tetap lewat CLI, karena
+  yang hilang adalah byte
+
+Yang dijalankan halaman itu kelas yang sama dengan CLI (`BlobMaintenance`),
+jadi tidak ada versi kedua yang bisa berbeda diam-diam.
+
+Seksi **Adapters & permissions** di halaman yang sama menyebut apa yang
+terpasang dari aplikasi pemakai (koneksi, perender PDF, perender QR, penyimpan
+objek, kunci tanda tangan, penyedia role) dan menandai izin yang perlu
+diperhatikan: folder objek yang tidak bisa ditulis, folder objek yang ada di
+dalam document root, atau pengguna basis data yang memegang DROP/FILE/SUPER.
+
+Seksi **Config helper** menghasilkan isi `public/config.php` untuk disalin.
+Halaman ini tidak pernah menulis berkas PHP.
+
 ## Cadangan
 
 Byte-nya kini di dua tempat. Folder `storage/` harus ikut dicadangkan bersama

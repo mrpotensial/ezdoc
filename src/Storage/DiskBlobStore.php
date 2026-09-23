@@ -139,7 +139,13 @@ final class DiskBlobStore implements BlobStore
      * rusak ditimpa: namanya adalah hash isinya, jadi byte yang benar untuk nama
      * itu hanya satu, dan menulisnya ulang adalah perbaikan, bukan penimpaan.
      *
-     * @throws EzdocException kalau direktori atau berkasnya tidak bisa ditulis
+     * Kembali normal berarti berkasnya ADA dan isinya cocok dengan namanya —
+     * dibaca ulang sebelum metode ini selesai. Pemanggilnya tidak perlu
+     * memeriksanya lagi; nama berkas adalah hash isinya, jadi pembacaan itu
+     * sekaligus pemeriksaan checksum-nya.
+     *
+     * @throws EzdocException kalau direktori atau berkasnya tidak bisa ditulis,
+     *                        atau kalau yang tertulis tidak terbaca kembali
      */
     public function writeFile(string $bytes): string
     {
@@ -176,6 +182,15 @@ final class DiskBlobStore implements BlobStore
             if ($this->readFile($key) === null) {
                 throw new EzdocException('Failed finalising blob on disk: ' . $path);
             }
+
+            return $key;
+        }
+
+        // Dibaca ulang sebelum dinyatakan tersimpan. Penulisan yang "berhasil"
+        // tapi menghasilkan berkas yang tidak cocok dengan namanya adalah
+        // kegagalan yang paling mahal di sini: ia terlihat selesai.
+        if ($this->readFile($key) === null) {
+            throw new EzdocException('Blob written but did not read back: ' . $path);
         }
 
         return $key;
