@@ -81,94 +81,36 @@ $images = new \Ezdoc\Storage\SignatureImageStore($store);
 printf("Backend  : %s\n", $store->name());
 printf("Mode     : %s\n\n", $apply ? 'APPLY — documents will be written' : 'dry run — nothing is written');
 
-// Slots that must not be touched.
-$signedSlots = [];
-foreach ($db->fetchAll('SELECT document_id, metadata FROM ezdoc_signatures WHERE deleted_at IS NULL') as $row) {
-    $meta = json_decode((string) ($row['metadata'] ?? ''), true);
-    if (is_array($meta) && !empty($meta['ttd_id'])) {
-        $signedSlots[$row['document_id'] . '|' . $meta['ttd_id']] = true;
-    }
-}
-
-$docs = $db->fetchAll(
-    'SELECT id, signature_values FROM ezdoc_documents'
-    . ' WHERE signature_values IS NOT NULL AND deleted_at IS NULL ORDER BY id'
-);
+// Logikanya milik BlobMaintenance, dipakai bersama halaman admin: satu tempat
+// yang memutuskan slot mana yang boleh dipindahkan, bukan dua yang mirip.
+$pemeliharaan = new \Ezdoc\Storage\BlobMaintenance($db);
 
 $moved = 0;
 $movedBytes = 0;
 $frozen = 0;
-$frozenBytes = 0;
 $failed = 0;
 $docsChanged = 0;
+$afterId = 0;
 
-foreach ($docs as $doc) {
-    $docId = (int) $doc['id'];
-    $values = json_decode((string) $doc['signature_values'], true);
-    if (!is_array($values)) {
-        continue;
+while (true) {
+    $batch = $pemeliharaan->migrateInlineBatch($images, $afterId, 50, $apply);
+    $moved += $batch['dipindah'];
+    $movedBytes += $batch['byte'];
+    $frozen += $batch['dilewati'];
+    $failed += $batch['gagal'];
+    $docsChanged += $batch['dokumen'];
+    foreach ($batch['masalah'] as $masalah) {
+        printf("  %-28s FAILED — %s (%s)\n", $masalah['key'], $masalah['sebab'], $masalah['detail']);
     }
-
-    $changed = false;
-    foreach ($values as $ttdId => $value) {
-        if (!is_string($value) || !\Ezdoc\Storage\SignatureImageStore::isDataUri($value)) {
-            continue;
-        }
-
-        if (isset($signedSlots[$docId . '|' . $ttdId])) {
-            $frozen++;
-            $frozenBytes += strlen($value);
-            printf("  doc %-5d %-28s KEPT   %6.1f KB — already signed\n",
-                $docId, $ttdId, strlen($value) / 1024);
-            continue;
-        }
-
-        if (!$apply) {
-            $moved++;
-            $movedBytes += strlen($value);
-            printf("  doc %-5d %-28s would move %6.1f KB\n", $docId, $ttdId, strlen($value) / 1024);
-            continue;
-        }
-
-        $ref = $images->store($value);
-        if ($ref === null) {
-            $failed++;
-            printf("  doc %-5d %-28s FAILED — image could not be stored\n", $docId, $ttdId);
-            continue;
-        }
-
-        // Read it straight back before trusting the reference. A backfill that
-        // rewrites the document first and discovers the problem afterwards has
-        // already lost the only copy.
-        $readBack = $images->resolveToBytes($ref);
-        $original = $images->resolveToBytes($value);
-        if ($readBack === null || $original === null || $readBack['bytes'] !== $original['bytes']) {
-            $failed++;
-            printf("  doc %-5d %-28s FAILED — stored object did not read back identically\n", $docId, $ttdId);
-            continue;
-        }
-
-        $values[$ttdId] = $ref;
-        $changed = true;
-        $moved++;
-        $movedBytes += strlen($value);
-        printf("  doc %-5d %-28s moved  %6.1f KB → %s\n",
-            $docId, $ttdId, strlen($value) / 1024, substr($ref, 0, 24) . '…');
+    if ($batch['selesai']) {
+        break;
     }
-
-    if ($changed && $apply) {
-        $db->execute(
-            'UPDATE ezdoc_documents SET signature_values = ? WHERE id = ?',
-            [(string) json_encode($values, JSON_UNESCAPED_UNICODE), $docId]
-        );
-        $docsChanged++;
-    }
+    $afterId = $batch['after_id'];
 }
 
 echo "\n";
 printf("Moved    : %d images, %.1f KB%s\n", $moved, $movedBytes / 1024, $apply ? '' : ' (would move)');
-printf("Kept     : %d images, %.1f KB — signed slots, see the note at the top of this file\n",
-    $frozen, $frozenBytes / 1024);
+printf("Kept     : %d images — signed slots, see the note at the top of this file\n", $frozen);
 if ($failed > 0) {
     printf("Failed   : %d — nothing was changed for these\n", $failed);
 }

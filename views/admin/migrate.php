@@ -212,6 +212,100 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['storage_action'])) {
                 ]);
                 break;
 
+            case 'uji_adapter':
+                // "Kelasnya ada" bukan "ia bekerja". Perender yang termuat tapi
+                // kehilangan fontnya, atau pustaka QR yang gagal menulis berkas
+                // sementara, baru ketahuan saat dokumen sungguhan dicetak — pada
+                // orang yang sedang buru-buru. Uji ini memindahkan penemuan itu
+                // ke halaman pengaturan. Tidak ada yang ditulis ke mana pun.
+                $mana = (string) ($_POST['adapter'] ?? '');
+                $mulai = microtime(true);
+                try {
+                    if ($mana === 'qr') {
+                        $gambar = function_exists('ezdoc_qr_data_uri')
+                            ? ezdoc_qr_data_uri('ezdoc-selftest', 120, 2)
+                            : '';
+                        if ($gambar === '') {
+                            throw new \RuntimeException('No QR renderer produced an image.');
+                        }
+                        echo json_encode([
+                            'ok'     => true,
+                            'ms'     => (int) round((microtime(true) - $mulai) * 1000),
+                            'gambar' => $gambar,
+                            'pesan'  => 'QR drawn, ' . strlen($gambar) . ' bytes',
+                        ]);
+                        break;
+                    }
+
+                    $perender = function_exists('ezdoc_pdf_renderer') ? ezdoc_pdf_renderer() : null;
+                    if ($perender === null) {
+                        throw new \RuntimeException('No PDF renderer is available.');
+                    }
+                    $bytes = $perender->render(
+                        '<!DOCTYPE html><html><body style="font-family:sans-serif">'
+                        . '<h1>ezdoc self-test</h1><p>Rendered at ' . date('Y-m-d H:i:s') . '.</p></body></html>',
+                        [210.0, 297.0],
+                        'portrait'
+                    );
+                    if (strncmp($bytes, '%PDF', 4) !== 0) {
+                        throw new \RuntimeException('The renderer returned something that is not a PDF.');
+                    }
+                    echo json_encode([
+                        'ok'    => true,
+                        'ms'    => (int) round((microtime(true) - $mulai) * 1000),
+                        'pesan' => 'PDF rendered, ' . round(strlen($bytes) / 1024, 1) . ' KB, by ' . get_class($perender),
+                    ]);
+                } catch (\Throwable $e) {
+                    echo json_encode(['ok' => false, 'pesan' => $e->getMessage()]);
+                }
+                break;
+
+            case 'inline':
+                // Satu-satunya tugas di halaman ini yang menulis ke dokumen.
+                // Slot yang sudah ditandatangani dilewati — nilainya termasuk
+                // yang ditandatangani, dan menukarnya membatalkan tanda tangannya.
+                echo json_encode([
+                    'ok' => true,
+                    'batch' => $rawat->migrateInlineBatch(
+                        new \Ezdoc\Storage\SignatureImageStore(\Ezdoc\Storage\BlobStoreFactory::make($dbx)),
+                        $after,
+                        50,
+                        ($_POST['apply'] ?? '') === '1'
+                    ),
+                ]);
+                break;
+
+            case 'hapus_yatim':
+                // Menghapus byte tidak bisa dibatalkan, jadi yang membuka halaman
+                // harus MENGETIK persetujuannya — bukan sekadar menekan tombol
+                // kedua. Pola "type to confirm" GitHub dan Stripe.
+                if (($_POST['konfirmasi'] ?? '') !== 'DELETE') {
+                    echo json_encode(['ok' => false, 'pesan' => 'Type DELETE to confirm.']);
+                    break;
+                }
+                $store = \Ezdoc\Storage\BlobStoreFactory::make($dbx);
+                $terhapus = 0;
+                $byte = 0;
+                foreach ($rawat->orphans(48)['objek'] as $objek) {
+                    if ($store->delete($objek['key'])) {
+                        $terhapus++;
+                        $byte += $objek['byte'];
+                        if ($filesx !== null) {
+                            $filesx->deleteFile($objek['key']);
+                        }
+                    }
+                }
+                if (function_exists('ezdoc_audit_log') && $terhapus > 0) {
+                    // Dicatat: ini satu-satunya jalan di aplikasi yang menghapus
+                    // byte, dan "siapa menghapus apa" harus bisa ditelusuri.
+                    @ezdoc_audit_log('blob.purged', [
+                        'result'  => 'success',
+                        'message' => $terhapus . ' unreferenced objects deleted (' . $byte . ' bytes)',
+                    ]);
+                }
+                echo json_encode(['ok' => true, 'terhapus' => $terhapus, 'byte' => $byte]);
+                break;
+
             case 'kesehatan':
                 echo json_encode([
                     'ok' => true,
@@ -546,6 +640,10 @@ if ($rs) {
                         class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50">
                     Unreferenced objects
                 </button>
+                <button type="button" data-ez-tugas="inline" data-ez-apply="1"
+                        class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50">
+                    Move inline images out
+                </button>
             </div>
 
             <div id="ezStorageBar" class="hidden px-5">
@@ -556,9 +654,30 @@ if ($rs) {
             <pre id="ezStorageLog" class="mx-5 mt-3 hidden max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-gray-50 p-3 text-xs leading-relaxed text-gray-700 ring-1 ring-inset ring-gray-200"></pre>
 
             <p class="border-t border-gray-100 px-5 py-3 text-xs text-gray-500">
-                Deleting unreferenced objects is deliberately not offered here — what disappears is
-                bytes. Read the list first, then run <code class="rounded bg-gray-100 px-1 py-0.5">cli/purge-orphan-blobs.php</code>.
+                Moving inline images out skips slots that are already signed: a signature covers the
+                value of its slot, so swapping it would invalidate the signature.
             </p>
+        </div>
+
+        <!-- Menghapus byte: dipisah dari tugas lain, dan harus diketik. -->
+        <div class="mt-4 rounded-lg border border-red-200 bg-white">
+            <div class="border-b border-red-100 px-5 py-4">
+                <h2 class="text-sm font-semibold text-red-800">Delete unreferenced objects</h2>
+                <p class="mt-0.5 text-sm text-gray-600">
+                    Removes objects that no document and no archive points at, older than 48 hours.
+                    The bytes are gone afterwards — read the list above first. Objects newer than that
+                    are kept: a save that stored an image can still be rejected and retried.
+                </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 px-5 py-4">
+                <input id="ezHapusKonfirmasi" type="text" spellcheck="false" placeholder="Type DELETE"
+                       class="w-40 rounded-md border-gray-300 text-sm shadow-sm">
+                <button type="button" data-ez-tugas="hapus_yatim"
+                        class="inline-flex items-center rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800 shadow-sm transition hover:bg-red-100">
+                    Delete them
+                </button>
+                <span class="text-xs text-gray-500">Recorded in the audit log.</span>
+            </div>
         </div>
     </div>
 
@@ -571,6 +690,19 @@ if ($rs) {
                     What the host application has wired in, and whether the permissions around it are safe.
                 </p>
             </div>
+            <div class="flex flex-wrap items-center gap-2 border-b border-gray-100 px-5 py-3">
+                <button type="button" data-ez-uji="pdf"
+                        class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50">
+                    Render a test PDF
+                </button>
+                <button type="button" data-ez-uji="qr"
+                        class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50">
+                    Draw a test QR
+                </button>
+                <span id="ezUjiKabar" class="text-xs text-gray-500"></span>
+                <img id="ezUjiGambar" alt="" class="ml-auto hidden h-14 w-14 rounded border border-gray-200">
+            </div>
+
             <ul class="divide-y divide-gray-100">
                 <?php foreach ($adapters as $a): ?>
                     <?php
@@ -923,7 +1055,9 @@ if ($rs) {
             const j = await minta({ storage_action: tugas, after_id: after, apply: apply ? '1' : '0' });
             if (!j.ok) throw new Error(j.pesan || 'failed');
             const b = j.batch;
-            ['disalin', 'sudah', 'rusak', 'gagal', 'utuh'].forEach((k) => { if (b[k]) jumlah[k] += b[k]; });
+            ['disalin', 'sudah', 'rusak', 'gagal', 'utuh', 'dipindah', 'dilewati', 'dokumen'].forEach((k) => {
+                if (b[k]) jumlah[k] = (jumlah[k] || 0) + b[k];
+            });
             (b.masalah || []).forEach((m) => {
                 jumlah.masalah++;
                 tulis('  ' + m.key.slice(0, 16) + '… ' + m.sebab + (m.detail ? ' — ' + m.detail : ''));
@@ -944,6 +1078,26 @@ if ($rs) {
         try {
             const r = await minta({ storage_action: 'ringkas' });
             const total = r.ok ? r.ringkas.objek : 0;
+
+            if (tugas === 'hapus_yatim') {
+                const j = await minta({
+                    storage_action: 'hapus_yatim',
+                    konfirmasi: document.getElementById('ezHapusKonfirmasi').value.trim(),
+                });
+                if (!j.ok) throw new Error(j.pesan || 'failed');
+                tulis('Deleted ' + angka(j.terhapus) + ' objects, ' + Math.round(j.byte / 1024) + ' KB.');
+                document.getElementById('ezHapusKonfirmasi').value = '';
+                muatRingkasan();
+                return;
+            }
+
+            if (tugas === 'inline') {
+                const h = await batch('inline', apply, 0);
+                tulis('Done. Moved: ' + angka(h.dipindah) + ', left signed: ' + angka(h.dilewati)
+                    + ', failed: ' + h.gagal + ', documents rewritten: ' + angka(h.dokumen) + '.');
+                muatRingkasan();
+                return;
+            }
 
             if (tugas === 'yatim') {
                 const j = await minta({ storage_action: 'yatim' });
@@ -1057,6 +1211,30 @@ if ($rs) {
             cfgKabar.textContent = 'Clipboard unavailable — the text is selected, press Ctrl+C.';
         }
     });
+    // ── Uji adapter ──
+    const ujiKabar = document.getElementById('ezUjiKabar');
+    const ujiGambar = document.getElementById('ezUjiGambar');
+    Array.from(document.querySelectorAll('[data-ez-uji]')).forEach((b) => {
+        b.addEventListener('click', async () => {
+            const mana = b.dataset.ezUji;
+            ujiKabar.textContent = 'Testing…';
+            ujiKabar.className = 'text-xs text-gray-500';
+            ujiGambar.classList.add('hidden');
+            try {
+                const j = await minta({ storage_action: 'uji_adapter', adapter: mana });
+                ujiKabar.textContent = (j.ok ? '' : 'Failed: ') + j.pesan + (j.ok ? ' · ' + j.ms + ' ms' : '');
+                ujiKabar.className = 'text-xs ' + (j.ok ? 'text-green-700' : 'text-red-700');
+                if (j.ok && j.gambar) {
+                    ujiGambar.src = j.gambar;
+                    ujiGambar.classList.remove('hidden');
+                }
+            } catch (e) {
+                ujiKabar.textContent = 'Failed: ' + e.message;
+                ujiKabar.className = 'text-xs text-red-700';
+            }
+        });
+    });
+
     // ── Overview ──
     const kartu = (judul, nilai, catatan, nada) =>
         '<div class="px-5 py-4">'

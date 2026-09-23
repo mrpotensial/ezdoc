@@ -36,6 +36,7 @@ final class BlobMaintenanceTest extends TestCase
             '2026_01_01_000001_create_ezdoc_templates.sql',
             '2026_01_01_000002_create_ezdoc_documents.sql',
             '2026_07_30_000001_create_ezdoc_blobs.sql',
+            '2026_01_01_000005_create_ezdoc_signatures.sql',
             '2026_08_08_000001_create_ezdoc_document_artifacts.sql',
         ] as $f) {
             $this->pdo->exec((string) file_get_contents(dirname(__DIR__, 2) . '/migrations/sqlite/' . $f));
@@ -255,6 +256,172 @@ final class BlobMaintenanceTest extends TestCase
     }
 
     // ── Ringkasan ────────────────────────────────────────────────────────
+
+    // ── Memindahkan gambar yang masih di dalam dokumen ───────────────────
+
+    /** @return array{0:string,1:string} [data URI, byte] */
+    private function gambar(string $isi): array
+    {
+        return ['data:image/png;base64,' . base64_encode($isi), $isi];
+    }
+
+    private function dokumenInline(int $id, array $nilai): void
+    {
+        $this->db->execute(
+            "INSERT INTO ezdoc_templates (id, uuid, slug, version, is_current, name, category, scope, content, is_active)
+             VALUES (?, ?, ?, 1, 1, 'Uji', 'umum', 'patient', '<p>x</p>', 1)",
+            [$id, 'tpl-' . $id, 'uji-' . $id]
+        );
+        $this->db->execute(
+            "INSERT INTO ezdoc_documents (id, uuid, template_id, template_uuid, template_version, title,
+                                          norm, nopen, subject_id, context_id, label, version, signature_values)
+             VALUES (?, ?, ?, ?, 1, 'Uji', ?, '11', ?, '11', '-', 1, ?)",
+            [$id, 'dok-' . $id, $id, 'tpl-' . $id, (string) $id, (string) $id, json_encode($nilai)]
+        );
+    }
+
+    private function nilaiSlot(int $docId): array
+    {
+        $row = $this->db->fetchOne('SELECT signature_values FROM ezdoc_documents WHERE id = ?', [$docId]);
+
+        return (array) json_decode((string) ($row['signature_values'] ?? ''), true);
+    }
+
+    public function testGambarInlineJadiObjekDanDokumenMenunjukKeSana(): void
+    {
+        [$uri, $byte] = $this->gambar('gambar-ttd');
+        $this->dokumenInline(1, ['a' => $uri]);
+        $images = new \Ezdoc\Storage\SignatureImageStore(new DatabaseBlobStore($this->db));
+
+        $hasil = $this->rawat()->migrateInlineBatch($images, 0, 10);
+
+        self::assertSame(1, $hasil['dipindah']);
+        self::assertSame(1, $hasil['dokumen']);
+        self::assertSame('blob:sha256-' . hash('sha256', $byte), $this->nilaiSlot(1)['a']);
+        self::assertSame($byte, (new DatabaseBlobStore($this->db))->get(hash('sha256', $byte)));
+    }
+
+    /**
+     * Slot yang sudah ditandatangani tidak disentuh.
+     *
+     * `content_hash` tanda tangan mencakup nilai slotnya. Menukar gambar inline
+     * dengan referensi mengubah nilai itu, dan verifikasi akan melaporkannya
+     * `tampered` — aplikasi membatalkan buktinya sendiri demi beberapa kilobita.
+     */
+    public function testSlotBertandaTanganDibiarkanApaAdanya(): void
+    {
+        [$uri] = $this->gambar('sudah-ttd');
+        $this->dokumenInline(1, ['a' => $uri]);
+        $this->db->execute(
+            "INSERT INTO ezdoc_signatures (uuid, document_id, signature_id_within_doc, signer_id, provider, level,
+                                           envelope_format, envelope, content_hash, signed_at, verify_status, metadata)
+             VALUES ('sig-1', 1, 1, '7', 'hmac', 1, 'hmac', 'e', 'h', '2026-09-01 10:00:00', 'valid', ?)",
+            [json_encode(['ttd_id' => 'a'])]
+        );
+
+        $hasil = $this->rawat()->migrateInlineBatch(
+            new \Ezdoc\Storage\SignatureImageStore(new DatabaseBlobStore($this->db)),
+            0,
+            10
+        );
+
+        self::assertSame(0, $hasil['dipindah']);
+        self::assertSame(1, $hasil['dilewati']);
+        self::assertSame($uri, $this->nilaiSlot(1)['a'], 'nilainya harus tetap sama persis');
+    }
+
+    public function testMelihatDuluTidakMengubahDokumen(): void
+    {
+        [$uri] = $this->gambar('gambar-ttd');
+        $this->dokumenInline(1, ['a' => $uri]);
+        $sebelum = $this->pdo->query('SELECT * FROM ezdoc_documents')->fetchAll(\PDO::FETCH_ASSOC);
+
+        $hasil = $this->rawat()->migrateInlineBatch(
+            new \Ezdoc\Storage\SignatureImageStore(new DatabaseBlobStore($this->db)),
+            0,
+            10,
+            false
+        );
+
+        self::assertSame(1, $hasil['dipindah'], 'dihitung sebagai akan dipindah');
+        self::assertSame(0, $hasil['dokumen']);
+        self::assertSame($sebelum, $this->pdo->query('SELECT * FROM ezdoc_documents')->fetchAll(\PDO::FETCH_ASSOC));
+    }
+
+    /**
+     * Objek yang tidak terbaca kembali sama persis: dokumennya tidak diubah.
+     *
+     * Menulis ulang dokumen lebih dulu lalu menemukan masalahnya berarti sudah
+     * kehilangan satu-satunya salinan gambar itu.
+     */
+    public function testGagalBacaUlangMembatalkanPemindahan(): void
+    {
+        [$uri] = $this->gambar('gambar-ttd');
+        $this->dokumenInline(1, ['a' => $uri]);
+
+        // Penyimpan yang menerima byte lalu mengembalikan yang lain.
+        $bohong = new class($this->db) implements \Ezdoc\Storage\BlobStore {
+            /** @var DatabaseBlobStore */
+            private $asli;
+
+            public function __construct($db)
+            {
+                $this->asli = new DatabaseBlobStore($db);
+            }
+
+            public function put(string $bytes, string $contentType): \Ezdoc\Storage\Blob
+            {
+                return $this->asli->put($bytes, $contentType);
+            }
+
+            public function get(string $key): ?string
+            {
+                return 'byte lain';
+            }
+
+            public function find(string $key): ?\Ezdoc\Storage\Blob
+            {
+                return $this->asli->find($key);
+            }
+
+            public function exists(string $key): bool
+            {
+                return $this->asli->exists($key);
+            }
+
+            public function delete(string $key): bool
+            {
+                return $this->asli->delete($key);
+            }
+
+            public function name(): string
+            {
+                return 'bohong';
+            }
+        };
+
+        $hasil = $this->rawat()->migrateInlineBatch(new \Ezdoc\Storage\SignatureImageStore($bohong), 0, 10);
+
+        self::assertSame(1, $hasil['gagal']);
+        self::assertSame(0, $hasil['dokumen'], 'dokumen tidak boleh ditulis ulang');
+        self::assertSame($uri, $this->nilaiSlot(1)['a']);
+    }
+
+    public function testDokumenTanpaGambarInlineTidakDisentuh(): void
+    {
+        $this->dokumenInline(1, ['a' => 'blob:sha256-' . str_repeat('b', 64), 'b' => 'qr:v1']);
+        $sebelum = $this->pdo->query('SELECT * FROM ezdoc_documents')->fetchAll(\PDO::FETCH_ASSOC);
+
+        $hasil = $this->rawat()->migrateInlineBatch(
+            new \Ezdoc\Storage\SignatureImageStore(new DatabaseBlobStore($this->db)),
+            0,
+            10
+        );
+
+        self::assertTrue($hasil['selesai']);
+        self::assertSame(0, $hasil['dipindah']);
+        self::assertSame($sebelum, $this->pdo->query('SELECT * FROM ezdoc_documents')->fetchAll(\PDO::FETCH_ASSOC));
+    }
 
     public function testRingkasanMenghitungKolomDiskInlineDanRujukan(): void
     {

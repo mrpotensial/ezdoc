@@ -45,18 +45,19 @@ final class AdminStorageTest extends TestCase
     }
 
     /** @return array{keluaran:string,json:array<string,mixed>,hasil:array<string,mixed>} */
-    private function aksi(string $aksi, string $apply = '0', string $peran = 'superadmin'): array
+    private function aksi(string $aksi, string $apply = '0', string $peran = 'superadmin', string $konfirmasi = ''): array
     {
         $baris = [];
         exec(sprintf(
-            '%s %s %s %s %s %s %s 2>&1',
+            '%s %s %s %s %s %s %s %s 2>&1',
             escapeshellarg(PHP_BINARY),
             escapeshellarg(dirname(__DIR__) . '/fixtures/jalankan_admin_penyimpanan.php'),
             escapeshellarg($peran),
             escapeshellarg($aksi),
             escapeshellarg($apply),
             escapeshellarg($this->dir . '/db.sqlite'),
-            escapeshellarg($this->dir . '/simpan')
+            escapeshellarg($this->dir . '/simpan'),
+            escapeshellarg($konfirmasi)
         ), $baris);
 
         $keluaran = implode("\n", $baris);
@@ -211,14 +212,78 @@ final class AdminStorageTest extends TestCase
         self::assertSame('perawat', $per['Dengan aturan']['akses']['edit']);
     }
 
-    /** Tidak ada tombol hapus di halamannya — penghapusan byte lewat CLI. */
-    public function testHalamanTidakPunyaTombolHapusObjek(): void
+    // ── Tugas yang menulis ───────────────────────────────────────────────
+
+    public function testGambarInlineDipindahkanKeObjek(): void
+    {
+        $r = $this->aksi('inline', '1');
+
+        self::assertSame(1, $r['json']['batch']['dipindah']);
+        self::assertSame(1, $r['json']['batch']['dokumen']);
+        self::assertFalse($r['hasil']['db_sama'], 'dokumennya memang ditulis ulang');
+    }
+
+    public function testMelihatDuluPemindahanInlineTidakMengubahApaPun(): void
+    {
+        $r = $this->aksi('inline', '0');
+
+        self::assertSame(1, $r['json']['batch']['dipindah'], 'dihitung saja');
+        self::assertTrue($r['hasil']['db_sama']);
+    }
+
+    /** Menghapus byte butuh persetujuan yang DIKETIK, bukan sekadar tombol. */
+    public function testPenghapusanDitolakTanpaKataKonfirmasi(): void
+    {
+        $r = $this->aksi('hapus_yatim', '0', 'superadmin', 'ya');
+
+        self::assertFalse($r['json']['ok']);
+        self::assertStringContainsString('DELETE', (string) $r['json']['pesan']);
+        self::assertTrue($r['hasil']['db_sama'], 'tidak ada yang terhapus');
+    }
+
+    public function testPenghapusanHanyaMengenaiYangTakDirujuk(): void
+    {
+        $this->aksi('salin', '1');
+        $r = $this->aksi('hapus_yatim', '0', 'superadmin', 'DELETE');
+
+        self::assertSame(1, $r['json']['terhapus']);
+        self::assertNotContains('yatim', $r['hasil']['berkas'], 'salinan berkasnya ikut hilang');
+        self::assertContains('ttd-a', $r['hasil']['berkas']);
+        self::assertContains('%PDF-1.7 beku', $r['hasil']['berkas'], 'arsip beku tidak boleh tersentuh');
+    }
+
+    /**
+     * Uji adapter menjawab dengan kalimat, bukan diam.
+     *
+     * "Kelasnya ada" bukan "ia bekerja": perender yang kehilangan fontnya baru
+     * ketahuan saat dokumen sungguhan dicetak. Di lingkungan uji ini memang
+     * tidak ada perender, dan yang dijaga adalah jawabannya menyebut sebabnya.
+     */
+    public function testUjiAdapterMenyebutkanSebabKegagalan(): void
+    {
+        $j = $this->aksi('uji_adapter', '0', 'superadmin', 'pdf')['json'];
+
+        self::assertFalse($j['ok']);
+        self::assertStringContainsString('PDF renderer', (string) $j['pesan']);
+    }
+
+    /**
+     * Penghapusan dipisah dari tugas lain, dan dijaga dua lapis.
+     *
+     * Awalnya penghapusan sengaja hanya ada di CLI. Ternyata CLI tidak bisa
+     * dijalankan di server pemakai — berkas bootstrap aplikasinya ditulis untuk
+     * permintaan web — jadi pilihannya tinggal: lewat halaman ini, atau tidak
+     * sama sekali. Yang dijaga: gerbangnya ada di server, bukan cuma di tampilan.
+     */
+    public function testPenghapusanDijagaDiSisiServer(): void
     {
         $sumber = (string) file_get_contents(dirname(__DIR__, 2) . '/views/admin/migrate.php');
 
-        self::assertStringContainsString("data-ez-tugas=\"yatim\"", $sumber);
-        self::assertStringNotContainsString("storage_action' => 'hapus", $sumber);
-        self::assertStringNotContainsString("case 'hapus'", $sumber);
-        self::assertStringContainsString('purge-orphan-blobs.php', $sumber, 'halaman menyebut jalur yang benar untuk menghapus');
+        self::assertStringContainsString("if ((\$_POST['konfirmasi'] ?? '') !== 'DELETE') {", $sumber,
+            'penjaganya harus di server, bukan hanya di formulirnya');
+        self::assertStringContainsString('id="ezHapusKonfirmasi"', $sumber);
+        self::assertStringContainsString("ezdoc_audit_log('blob.purged'", $sumber,
+            'menghapus byte harus tercatat');
     }
+
 }

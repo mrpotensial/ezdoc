@@ -6,6 +6,41 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — uji adapter, pemindahan gambar inline, dan penghapusan objek di halaman pengaturan (2026-09-23)**
+
+Lanjutan dari "apalagi ya ditambahkan ke setting agar ux lebih nyaman". Dua
+tugas terakhir dipindahkan ke UI karena CLI **tidak bisa dijalankan di server
+pemakai**: `koneksi.php` memanggil `apache_request_headers()`, yang hanya ada
+saat PHP jalan lewat web. Pilihannya jadi: lewat halaman ini, atau tidak sama
+sekali.
+
+- **Uji adapter** (tab Adapters) — merender PDF contoh dan menggambar QR contoh,
+  lalu melaporkan ukuran dan waktunya. "Kelasnya ada" bukan "ia bekerja":
+  perender yang kehilangan fontnya baru ketahuan saat dokumen sungguhan dicetak,
+  pada orang yang sedang buru-buru.
+- **Move inline images out** — memindahkan gambar yang masih tersimpan di dalam
+  dokumen ke objek, per batch. Slot yang sudah ditandatangani dilewati: tanda
+  tangan mencakup nilai slotnya, dan menukarnya akan membuat verifikasi
+  melaporkan `tampered`. Objeknya ditulis dan dibaca kembali sebelum dokumennya
+  diubah.
+- **Delete unreferenced objects** — dipisah di bloknya sendiri, perlu kata
+  `DELETE` diketik (pola "type to confirm" GitHub/Stripe), dan tercatat di audit
+  sebagai `blob.purged`. Sebelumnya sengaja hanya CLI.
+
+`BlobMaintenance::migrateInlineBatch()` menampung pemindahannya, dan
+`cli/migrate-signature-images.php` kini memakainya — satu tempat yang memutuskan
+slot mana yang boleh dipindahkan.
+
+**Added — `pengeluaran/ezdoc_cli.php` (berkas consumer, di luar pustaka)**
+
+Menambal `HTTP_HOST` dan `apache_request_headers()` lalu memuat `koneksi.php`,
+sehingga perintah CLI bisa dipakai lagi:
+`EZDOC_BOOTSTRAP=/path/pengeluaran/ezdoc_cli.php`. Menolak dijalankan lewat web,
+dan tidak dimuat siapa pun kecuali diminta — halaman mana pun tidak berubah.
+
+6 uji baru; 7 mutasi tertangkap. Tab Storage dan Adapters dipotret ulang; uji
+PDF sungguhan menghasilkan 1,3 KB dalam 85 ms lewat DompdfRenderer.
+
 **Changed — halaman pengaturan punya pintu di menu, dan tampilannya dirapikan (2026-09-23)**
 
 Dilaporkan dari pemakaian: "kok gak ada di menu ya?", tentang halaman yang sudah

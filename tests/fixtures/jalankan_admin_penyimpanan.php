@@ -14,7 +14,7 @@
  * Dipakai tests/UI/AdminStorageTest.php.
  */
 
-[$peran, $aksi, $apply, $berkasDb, $folder] = array_slice($argv, 1, 5) + ['superadmin', 'ringkas', '0', '', ''];
+[$peran, $aksi, $apply, $berkasDb, $folder, $konfirmasi] = array_slice($argv, 1, 6) + ['superadmin', 'ringkas', '0', '', '', ''];
 $root = dirname(__DIR__, 2);
 
 require $root . '/autoload.php';
@@ -69,7 +69,7 @@ if ($baru) {
         [json_encode([
             'a' => 'blob:sha256-' . $kunci['A'],
             'b' => 'blob:sha256-' . $kunci['B'],
-            'c' => 'data:image/png;base64,iVBORw0KGgo=',
+            'c' => 'data:image/png;base64,' . base64_encode('gambar-inline'),
         ])]
     );
     $db->execute(
@@ -138,7 +138,14 @@ register_shutdown_function(static function () use ($sidik, $sebelum, $folder): v
 define('EZDOC_STORAGE_PATH', $folder);
 
 $_SERVER['REQUEST_METHOD'] = 'POST';
-$_POST = ['storage_action' => $aksi, 'apply' => $apply, 'after_id' => '0'];
+$_POST = [
+    'storage_action' => $aksi,
+    'apply'          => $apply,
+    'after_id'       => '0',
+    'konfirmasi'     => $konfirmasi,
+    // Untuk aksi uji_adapter: yang diuji disebut di argumen konfirmasi.
+    'adapter'        => $konfirmasi,
+];
 $config = new \Ezdoc\UI\Config([]);
 
 require $root . '/views/admin/migrate.php';

@@ -238,6 +238,131 @@ final class BlobMaintenance
     }
 
     /**
+     * Pindahkan gambar yang masih tersimpan di dalam dokumen ke objek — satu batch.
+     *
+     * Slot yang SUDAH ditandatangani tidak disentuh, dan itu bukan keterbatasan:
+     * `content_hash` tanda tangan mencakup nilai slotnya, jadi menukar gambar
+     * inline dengan referensi mengubah nilai yang ditandatangani, dan verifikasi
+     * akan melaporkannya `tampered`. Aplikasi membatalkan buktinya sendiri demi
+     * beberapa kilobita.
+     *
+     * Objek ditulis dan dibaca kembali SEBELUM dokumennya diubah: menulis ulang
+     * dokumen lalu menemukan masalahnya sudah kehilangan satu-satunya salinan.
+     *
+     * Ini satu-satunya metode di kelas ini yang menulis ke basis data.
+     *
+     * @return array{after_id:int,selesai:bool,dipindah:int,dilewati:int,gagal:int,dokumen:int,byte:int,masalah:list<array{key:string,sebab:string,detail:string}>}
+     */
+    public function migrateInlineBatch(
+        SignatureImageStore $images,
+        int $afterId = 0,
+        int $limit = 50,
+        bool $apply = true
+    ): array {
+        $rows = $this->db->fetchAll(
+            "SELECT id, signature_values FROM ezdoc_documents"
+            . " WHERE id > ? AND deleted_at IS NULL AND signature_values LIKE '%data:image%'"
+            . ' ORDER BY id LIMIT ' . max(1, $limit),
+            [$afterId]
+        );
+
+        $hasil = [
+            'after_id' => $afterId, 'selesai' => $rows === [], 'dipindah' => 0,
+            'dilewati' => 0, 'gagal' => 0, 'dokumen' => 0, 'byte' => 0, 'masalah' => [],
+        ];
+        if ($rows === []) {
+            return $hasil;
+        }
+
+        $bertandaTangan = $this->slotBertandaTangan(array_map(static function (array $r): int {
+            return (int) $r['id'];
+        }, $rows));
+
+        foreach ($rows as $row) {
+            $docId = (int) $row['id'];
+            $hasil['after_id'] = $docId;
+            $nilai = json_decode((string) $row['signature_values'], true);
+            if (!is_array($nilai)) {
+                continue;
+            }
+
+            $berubah = false;
+            foreach ($nilai as $slot => $isi) {
+                if (!is_string($isi) || !SignatureImageStore::isDataUri($isi)) {
+                    continue;
+                }
+                if (isset($bertandaTangan[$docId . '|' . $slot])) {
+                    $hasil['dilewati']++;
+                    continue;
+                }
+                if (!$apply) {
+                    $hasil['dipindah']++;
+                    $hasil['byte'] += strlen($isi);
+                    continue;
+                }
+
+                $ref = $images->store($isi);
+                if ($ref === null) {
+                    $hasil['gagal']++;
+                    $hasil['masalah'][] = ['key' => (string) $slot, 'sebab' => 'simpan_gagal', 'detail' => 'dokumen #' . $docId];
+                    continue;
+                }
+
+                $kembali = $images->resolveToBytes($ref);
+                $asli = $images->resolveToBytes($isi);
+                if ($kembali === null || $asli === null || $kembali['bytes'] !== $asli['bytes']) {
+                    $hasil['gagal']++;
+                    $hasil['masalah'][] = ['key' => (string) $slot, 'sebab' => 'baca_ulang_beda', 'detail' => 'dokumen #' . $docId];
+                    continue;
+                }
+
+                $nilai[$slot] = $ref;
+                $berubah = true;
+                $hasil['dipindah']++;
+                $hasil['byte'] += strlen($isi);
+            }
+
+            if ($berubah && $apply) {
+                $this->db->execute(
+                    'UPDATE ezdoc_documents SET signature_values = ? WHERE id = ?',
+                    [(string) json_encode($nilai, JSON_UNESCAPED_UNICODE), $docId]
+                );
+                $hasil['dokumen']++;
+            }
+        }
+
+        return $hasil;
+    }
+
+    /**
+     * Slot yang sudah punya tanda tangan tercatat, untuk dokumen-dokumen ini.
+     *
+     * @param list<int> $docIds
+     * @return array<string,true> kunci "docId|slot"
+     */
+    private function slotBertandaTangan(array $docIds): array
+    {
+        if ($docIds === [] || !$this->punyaTabel('ezdoc_signatures')) {
+            return [];
+        }
+
+        $tanya = implode(', ', array_fill(0, count($docIds), '?'));
+        $beku = [];
+        foreach ($this->db->fetchAll(
+            'SELECT document_id, `metadata` FROM ezdoc_signatures'
+            . ' WHERE deleted_at IS NULL AND document_id IN (' . $tanya . ')',
+            $docIds
+        ) as $row) {
+            $meta = json_decode((string) ($row['metadata'] ?? ''), true);
+            if (is_array($meta) && !empty($meta['ttd_id'])) {
+                $beku[$row['document_id'] . '|' . $meta['ttd_id']] = true;
+            }
+        }
+
+        return $beku;
+    }
+
+    /**
      * Ringkasan keadaan penyimpanan, untuk ditampilkan sebelum menjalankan apa pun.
      *
      * @return array{objek:int,byte:int,di_kolom:int,di_disk:int,berkas:int,inline:int,dirujuk:int}
