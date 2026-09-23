@@ -6,6 +6,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Changed — halaman pengaturan punya pintu di menu, dan tampilannya dirapikan (2026-09-23)**
+
+Dilaporkan dari pemakaian: "kok gak ada di menu ya?", tentang halaman yang sudah
+berjalan di server, dan "apa bisa tampilan lebih bagus dan ux lebih bagus juga
+untuk pengaturannya".
+
+- **Menu** — `layout.php` menambahkan satu entri **Settings** ke navigasi, hanya
+  untuk yang memegang `superadmin`, dan hanya kalau aplikasi pemakai belum
+  menyebutnya sendiri (tidak menggandakan menu yang sudah disusun). Halaman tanpa
+  tautan sama saja dengan tidak ada. Pola tautan admin yang hanya tampil untuk
+  staf di Django.
+- **Tab** — empat urusan yang jarang dikerjakan bersamaan dipisah: Storage,
+  Adapters, Config, Migrations. Yang paling sering dipakai ada di depan, migrasi
+  di belakang. Pilihan terakhir diingat, dan `?tab=` menang atasnya.
+- **Tampilan** — satu warna aksen (dari tema), sisanya abu-abu; angka memakai
+  `tabular-nums`; status memakai titik kecil, bukan lencana berwarna-warni;
+  tabel migrasi jadi ringkas dengan kepala menempel. Teks halaman seluruhnya
+  Inggris, mengikuti bahasa antarmuka pemasangan ini.
+
+Catatan yang masih berlaku: navigasi pustaka ini memang `hidden md:flex`, jadi
+di lebar ponsel tidak ada menu sama sekali — termasuk entri baru ini.
+
+5 uji baru, termasuk tab yang dijalankan di atas DOM tiruan; 4 mutasi tertangkap.
+Halaman dipotret ulang di 1280px dan 500px.
+
 **Added — pemeliharaan penyimpanan & pemeriksaan adapter di halaman admin (2026-09-23)**
 
 Diminta pemakai: "apa tidak bisa ada ui untuk run itu? atau run konfigurasi

@@ -176,7 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['storage_action'])) {
 
             case 'salin':
                 if ($filesx === null) {
-                    throw new \RuntimeException('EZDOC_STORAGE_PATH belum disetel — tidak ada tempat menaruh berkasnya.');
+                    throw new \RuntimeException('EZDOC_STORAGE_PATH is not set — there is nowhere to put the files.');
                 }
                 echo json_encode([
                     'ok' => true,
@@ -245,7 +245,7 @@ try {
     }
     $tambah('Database', 'ok', $grammar . ($versi !== '' ? ' ' . $versi : ''), get_class($dbq));
 } catch (\Throwable $e) {
-    $tambah('Database', 'bad', 'tidak terjawab', $e->getMessage());
+    $tambah('Database', 'bad', 'no answer', $e->getMessage());
 }
 
 // Hak akses pengguna basis data — hanya MySQL/MariaDB yang bisa ditanya begini.
@@ -263,24 +263,24 @@ try {
             }
         }
         $tambah(
-            'Hak pengguna DB',
+            'Database privileges',
             $berisiko === [] ? 'ok' : 'warn',
-            $berisiko === [] ? 'terbatas' : implode(', ', $berisiko),
-            $berisiko === [] ? '' : 'Aplikasi hanya butuh SELECT/INSERT/UPDATE/DELETE, dan CREATE/ALTER saat migrasi.'
+            $berisiko === [] ? 'limited' : implode(', ', $berisiko),
+            $berisiko === [] ? '' : 'The application needs SELECT/INSERT/UPDATE/DELETE, plus CREATE/ALTER while migrating.'
         );
     }
 } catch (\Throwable $e) {
     // Hak akses tidak bisa dibaca bukan kesalahan — sebagian pemasangan memang menutupnya.
-    $tambah('Hak pengguna DB', 'warn', 'tidak terbaca', $e->getMessage());
+    $tambah('Database privileges', 'warn', 'not readable', $e->getMessage());
 }
 
 // Penyimpan objek
 $backend = \Ezdoc\Storage\BlobStoreFactory::configuredBackend();
 $rootAda = \Ezdoc\Storage\BlobStoreFactory::configuredDiskRoot();
-$tambah('Penyimpan objek', 'ok', $backend, $backend === 'mirror' ? 'kolom + berkas, keduanya ditulis' : '');
+$tambah('Object storage', 'ok', $backend, $backend === 'mirror' ? 'column and files, both written' : '');
 if ($rootAda !== null) {
     $bisaTulis = is_dir($rootAda) && is_writable($rootAda);
-    $tambah('Folder objek', $bisaTulis ? 'ok' : 'bad', $rootAda, $bisaTulis ? '' : 'tidak ada atau tidak bisa ditulis PHP');
+    $tambah('Object folder', $bisaTulis ? 'ok' : 'bad', $rootAda, $bisaTulis ? '' : 'missing, or PHP cannot write to it');
 
     // Di dalam folder yang dilayani web? Itu bukan kesalahan kalau ditutup,
     // tapi penutupnya harus ada dan harus terbukti.
@@ -290,66 +290,66 @@ if ($rootAda !== null) {
     if ($diDalamWeb) {
         $punyaHtaccess = is_file($rootAda . '/.htaccess');
         $tambah(
-            'Objek terjangkau web?',
+            'Reachable over the web?',
             $punyaHtaccess ? 'warn' : 'bad',
-            'di dalam document root',
+            'inside the document root',
             $punyaHtaccess
-                ? 'Ada .htaccess. Itu TIDAK berlaku di nginx atau AllowOverride None — buka URL foldernya, yang benar 403.'
-                : 'Tidak ada .htaccess. Siapa pun yang memegang URL-nya bisa mengambil gambar tanda tangan.'
+                ? 'An .htaccess is present. It does NOT apply on nginx or with AllowOverride None — open the folder URL, 403 is the right answer.'
+                : 'No .htaccess. Anyone holding the URL can fetch a signature image.'
         );
     } else {
-        $tambah('Objek terjangkau web?', 'ok', 'di luar document root');
+        $tambah('Reachable over the web?', 'ok', 'outside the document root');
     }
 } elseif ($backend !== 'database') {
-    $tambah('Folder objek', 'bad', 'belum disetel', 'EZDOC_STORAGE_PATH kosong padahal backend butuh berkas.');
+    $tambah('Object folder', 'bad', 'not set', 'EZDOC_STORAGE_PATH is empty while the backend needs files.');
 }
 
 // Perender PDF dan QR — kontrak opsional, jalur usang tetap dihitung.
 $pdfAdapter = function_exists('ezdoc_pdf_renderer') ? ezdoc_pdf_renderer() : ($ctxq->pdf ?? null);
 if ($pdfAdapter !== null) {
     $tambah(
-        'Perender PDF',
+        'PDF renderer',
         'ok',
         get_class($pdfAdapter),
-        ($ctxq->pdf ?? null) !== null ? 'dipasang aplikasi pemakai' : 'bawaan pustaka, memakai dompdf milik aplikasi pemakai'
+        ($ctxq->pdf ?? null) !== null ? 'wired in by the host application' : "library default, using the host's dompdf"
     );
 } else {
-    $tambah('Perender PDF', 'bad', 'tidak ada', 'Cetak PDF dan pembekuan dokumen akan gagal.');
+    $tambah('PDF renderer', 'bad', 'none', 'Printing PDFs and freezing documents will fail.');
 }
 
 $qrAdapter = $ctxq->qr ?? null;
 if ($qrAdapter !== null) {
-    $tambah('Perender QR', 'ok', get_class($qrAdapter));
+    $tambah('QR renderer', 'ok', get_class($qrAdapter));
 } elseif (function_exists('generateQrForDompdf')) {
-    $tambah('Perender QR', 'warn', 'fungsi lama', 'Jalur usang. Pasang kontrak QrRenderer lewat Context::withQr().');
+    $tambah('QR renderer', 'warn', 'legacy function', 'Deprecated path. Wire the QrRenderer contract through Context::withQr().');
 } else {
-    $tambah('Perender QR', 'warn', 'tidak ada', 'QR pada dokumen tidak akan tergambar.');
+    $tambah('QR renderer', 'warn', 'none', 'QR codes in documents will not be drawn.');
 }
 
 // Kunci tanda tangan — keberadaannya saja, bukan isinya.
 try {
     $adaKunci = \Ezdoc\Signature\SigningKey::isConfigured();
-    $tambah('Kunci tanda tangan', $adaKunci ? 'ok' : 'bad', $adaKunci ? 'terpasang' : 'tidak ada',
-        $adaKunci ? '' : 'Tanda tangan tidak akan tercatat ke ezdoc_signatures.');
+    $tambah('Signing key', $adaKunci ? 'ok' : 'bad', $adaKunci ? 'configured' : 'missing',
+        $adaKunci ? '' : 'Signatures will not be recorded into ezdoc_signatures.');
 } catch (\Throwable $e) {
-    $tambah('Kunci tanda tangan', 'warn', 'tidak terbaca', $e->getMessage());
+    $tambah('Signing key', 'warn', 'not readable', $e->getMessage());
 }
 
 // Penyedia role
 $tambah(
-    'Penyedia role',
+    'Role provider',
     function_exists('ezdoc_has_role') ? 'ok' : 'bad',
-    function_exists('ezdoc_has_role') ? implode(', ', array_slice(ezdoc_current_user_roles(), 0, 6)) ?: 'tanpa role' : 'tidak ada',
-    'role pengguna yang sedang membuka halaman ini'
+    function_exists('ezdoc_has_role') ? implode(', ', array_slice(ezdoc_current_user_roles(), 0, 6)) ?: 'no roles' : 'none',
+    'roles of the user viewing this page'
 );
 
 // Bahasa
-$tambah('Bahasa layar', 'ok', function_exists('ezdoc_locale') ? ezdoc_locale() : 'en', 'app.locale');
+$tambah('Interface language', 'ok', function_exists('ezdoc_locale') ? ezdoc_locale() : 'en', 'app.locale');
 $tambah(
-    'Bahasa isi dokumen',
+    'Document language',
     'ok',
     function_exists('ezdoc_document_locale') ? ezdoc_document_locale() : 'en',
-    'document.locale — kosong berarti ikut bahasa layar'
+    'document.locale — empty follows the interface language'
 );
 
 // Query migration status. Registry table `ezdoc_migrations` schema per
@@ -416,301 +416,305 @@ if ($rs) {
     $floatingStats = mysqli_fetch_assoc($rs);
 }
 ?>
-<section class="max-w-5xl mx-auto p-6">
-    <div class="mb-6">
-        <h1 class="text-2xl font-semibold tracking-tight text-gray-900">Migration Dashboard</h1>
+<section class="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+    <header>
+        <h1 class="text-xl font-semibold tracking-tight text-gray-900">Settings</h1>
         <p class="mt-1 text-sm text-gray-500">
-            Auto-migration sudah aktif di bootstrap. Dashboard ini untuk explicit control + status visibility.
+            Storage, adapters and database migrations for this installation.
         </p>
-    </div>
+    </header>
 
     <?php if ($actionMsg): ?>
-    <div class="mb-4 p-4 rounded-md <?= $actionType === 'error' ? 'bg-red-50 border-l-4 border-red-400 text-red-800' : ($actionType === 'success' ? 'bg-green-50 border-l-4 border-green-400 text-green-800' : 'bg-blue-50 border-l-4 border-blue-400 text-blue-800') ?>">
-        <?= htmlspecialchars($actionMsg, ENT_QUOTES, 'UTF-8') ?>
-    </div>
+        <?php
+        $kabarCls = $actionType === 'error'
+            ? 'border-red-200 bg-red-50 text-red-800'
+            : ($actionType === 'success' ? 'border-green-200 bg-green-50 text-green-800' : 'border-gray-200 bg-gray-50 text-gray-700');
+        ?>
+        <div class="mt-4 rounded-md border px-4 py-3 text-sm <?= $kabarCls ?>">
+            <?= htmlspecialchars($actionMsg, ENT_QUOTES, 'UTF-8') ?>
+        </div>
     <?php endif; ?>
 
-    <!-- Summary cards -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <div class="text-xs uppercase tracking-wide text-gray-500 font-medium">Applied</div>
-            <div class="mt-1 text-2xl font-semibold text-green-700"><?= $appliedCount ?></div>
-            <div class="mt-0.5 text-[10px] text-gray-400">has file + in registry</div>
-        </div>
-        <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <div class="text-xs uppercase tracking-wide text-gray-500 font-medium">Pending</div>
-            <div class="mt-1 text-2xl font-semibold <?= $pendingCount > 0 ? 'text-amber-700' : 'text-gray-400' ?>"><?= $pendingCount ?></div>
-            <div class="mt-0.5 text-[10px] text-gray-400">has file, not yet run</div>
-        </div>
-        <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <div class="text-xs uppercase tracking-wide text-gray-500 font-medium">Orphan</div>
-            <div class="mt-1 text-2xl font-semibold <?= $orphanCount > 0 ? 'text-purple-700' : 'text-gray-400' ?>"><?= $orphanCount ?></div>
-            <div class="mt-0.5 text-[10px] text-gray-400">registry entry, no file</div>
-        </div>
-        <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <div class="text-xs uppercase tracking-wide text-gray-500 font-medium">Total Shown</div>
-            <div class="mt-1 text-2xl font-semibold text-gray-900"><?= count($allMigrations) ?></div>
-            <div class="mt-0.5 text-[10px] text-gray-400">files + orphans combined</div>
-        </div>
+    <!-- Tab, bukan satu halaman panjang: empat urusan berbeda yang jarang
+         dikerjakan bersamaan, dan yang paling sering dipakai ada di depan. -->
+    <div class="mt-6 border-b border-gray-200">
+        <nav id="ezTabs" class="-mb-px flex gap-1 overflow-x-auto" aria-label="Sections">
+            <?php foreach ([
+                'storage'    => 'Storage',
+                'adapters'   => 'Adapters',
+                'config'     => 'Config',
+                'migrations' => 'Migrations',
+            ] as $kunci => $judul): ?>
+                <button type="button" data-ez-tab="<?= $kunci ?>"
+                        class="whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400">
+                    <?= $judul ?>
+                    <?php if ($kunci === 'migrations' && ($pendingCount + $orphanCount) > 0): ?>
+                        <span class="ml-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-gray-600"><?= $pendingCount + $orphanCount ?></span>
+                    <?php endif; ?>
+                </button>
+            <?php endforeach; ?>
+        </nav>
     </div>
 
-    <!-- Actions -->
-    <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm mb-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-3">Actions</h2>
-        <div class="flex flex-wrap gap-3">
-            <form method="POST" onsubmit="return confirm('Run <?= $pendingCount ?> pending migration(s)?');">
-                <input type="hidden" name="action" value="run_pending">
-                <button type="submit"
-                        class="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-white shadow-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 <?= $pendingCount > 0 ? '' : 'opacity-50 cursor-not-allowed' ?>"
-                        style="background-color: <?= $pendingCount > 0 ? '#2563eb' : '#9ca3af' ?>;"
-                        <?= $pendingCount > 0 ? '' : 'disabled' ?>>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                    </svg>
-                    Run <?= $pendingCount ?> Pending Migration<?= $pendingCount !== 1 ? 's' : '' ?>
-                </button>
-            </form>
-
-            <?php if ($floatingStats && (int)$floatingStats['has_embedded_markers'] > 0): ?>
-            <form method="POST" onsubmit="return confirm('Bulk migrate <?= (int)$floatingStats['has_embedded_markers'] ?> template(s) dgn embedded floating markers ke sidecar JSON? Backup DB dulu!');">
-                <input type="hidden" name="action" value="migrate_floating">
-                <button type="submit"
-                        class="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 shadow-sm hover:bg-amber-100">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M7 3a1 1 0 011-1h4a1 1 0 011 1v1h3a1 1 0 110 2h-1v10a2 2 0 01-2 2H6a2 2 0 01-2-2V6H3a1 1 0 010-2h3V3z"/>
-                    </svg>
-                    Migrate Floating Elements (<?= (int)$floatingStats['has_embedded_markers'] ?> pending)
-                </button>
-            </form>
-            <?php endif; ?>
-
-            <?php if ($orphanCount > 0): ?>
-            <form method="POST" onsubmit="return confirm('Prune <?= $orphanCount ?> orphan registry entries (rows without corresponding migration file)?');">
-                <input type="hidden" name="action" value="prune_orphan_registry">
-                <button type="submit"
-                        class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-100">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                    </svg>
-                    Prune <?= $orphanCount ?> Orphan Registry Entries
-                </button>
-            </form>
-            <?php endif; ?>
-        </div>
-        <p class="mt-3 text-xs text-gray-500">
-            <strong>Note:</strong> Auto-migrate sudah aktif at bootstrap. Button ini untuk manual trigger — biasanya tidak perlu.
-            Untuk destructive ops (reset, drop), pakai CLI: <code class="text-xs bg-gray-100 px-1 py-0.5 rounded">php cli/migrate.php reset</code>
-        </p>
-    </div>
-
-    <!-- Floating elements migration stats -->
-    <?php if ($floatingStats): ?>
-    <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm mb-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-3">Sidecar Migration Status (v0.9.12)</h2>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-            <div>
-                <div class="text-xs uppercase tracking-wide text-gray-500 font-medium">Total Templates</div>
-                <div class="mt-1 text-xl font-semibold text-gray-900"><?= (int)$floatingStats['total'] ?></div>
+    <!-- ─── Storage ──────────────────────────────────────────────────── -->
+    <div data-ez-panel="storage" class="hidden pt-6">
+        <div class="rounded-lg border border-gray-200 bg-white">
+            <div class="border-b border-gray-100 px-5 py-4">
+                <h2 class="text-sm font-semibold text-gray-900">Stored objects</h2>
+                <p class="mt-0.5 text-sm text-gray-500">
+                    Signature images and frozen PDFs. Copying them to files does not change the
+                    database — an older installation reading the column sees exactly what it saw before.
+                </p>
             </div>
-            <div>
-                <div class="text-xs uppercase tracking-wide text-gray-500 font-medium">Sidecar Populated</div>
-                <div class="mt-1 text-xl font-semibold text-green-700"><?= (int)$floatingStats['migrated'] ?></div>
+
+            <dl id="ezStorageRingkas" class="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0">
+                <div class="px-5 py-4 text-sm text-gray-400">Loading…</div>
+            </dl>
+
+            <div class="flex flex-wrap items-center gap-2 border-t border-gray-100 px-5 py-4">
+                <button type="button" data-ez-tugas="salin" data-ez-apply="1"
+                        class="inline-flex items-center rounded-md px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-1"
+                        style="background-color: var(--ezdoc-primary, #111827);">
+                    Copy signatures to files
+                </button>
+                <button type="button" data-ez-tugas="salin" data-ez-apply="0"
+                        class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50">
+                    Preview only
+                </button>
+                <button type="button" data-ez-tugas="periksa"
+                        class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50">
+                    Verify integrity
+                </button>
+                <button type="button" data-ez-tugas="yatim"
+                        class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50">
+                    Unreferenced objects
+                </button>
             </div>
-            <div>
-                <div class="text-xs uppercase tracking-wide text-gray-500 font-medium">Legacy (HTML Markers)</div>
-                <div class="mt-1 text-xl font-semibold <?= (int)$floatingStats['has_embedded_markers'] > 0 ? 'text-amber-700' : 'text-gray-400' ?>">
-                    <?= (int)$floatingStats['has_embedded_markers'] ?>
+
+            <div id="ezStorageBar" class="hidden px-5">
+                <div class="h-1 w-full overflow-hidden rounded-full bg-gray-100">
+                    <div id="ezStorageBarIsi" class="h-full transition-all" style="width:0; background-color: var(--ezdoc-primary, #111827);"></div>
                 </div>
             </div>
-        </div>
-        <p class="mt-3 text-xs text-gray-500">
-            Legacy templates dgn floating markers embedded in HTML tetap render correctly (backward-compat).
-            Bulk migrate optional — akan auto-migrate on next save.
-        </p>
-    </div>
-    <?php endif; ?>
+            <pre id="ezStorageLog" class="mx-5 mt-3 hidden max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-gray-50 p-3 text-xs leading-relaxed text-gray-700 ring-1 ring-inset ring-gray-200"></pre>
 
-    <!-- Migration list -->
-    <div class="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div class="p-4 border-b border-gray-200">
-            <h2 class="text-lg font-semibold text-gray-900">All Migrations</h2>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Name</th>
-                        <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Status</th>
-                        <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Executed At</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100">
-                    <?php foreach ($allMigrations as $m): ?>
-                    <tr class="hover:bg-gray-50 <?= $m['status'] === 'orphan' ? 'bg-purple-50/30' : '' ?>">
-                        <td class="px-4 py-2 font-mono text-xs <?= $m['status'] === 'orphan' ? 'text-purple-800 line-through' : 'text-gray-700' ?>"><?= htmlspecialchars($m['name'], ENT_QUOTES, 'UTF-8') ?></td>
-                        <td class="px-4 py-2">
-                            <?php if ($m['status'] === 'applied'): ?>
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 ring-1 ring-inset ring-green-200">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                </svg>
-                                Applied
-                            </span>
-                            <?php elseif ($m['status'] === 'pending'): ?>
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 ring-1 ring-inset ring-amber-200">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                                </svg>
-                                Pending
-                            </span>
-                            <?php else: /* orphan */ ?>
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 ring-1 ring-inset ring-purple-200" title="Registry entry exists tapi file sudah dihapus (mis. v0.9.12 legacy cleanup). Prune button di atas untuk cleanup.">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                                </svg>
-                                Orphan (no file)
-                            </span>
-                            <?php endif; ?>
-                        </td>
-                        <td class="px-4 py-2 text-xs text-gray-500">
-                            <?= $m['executed_at'] ? htmlspecialchars($m['executed_at'], ENT_QUOTES, 'UTF-8') : '<span class="text-gray-400">—</span>' ?>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+            <p class="border-t border-gray-100 px-5 py-3 text-xs text-gray-500">
+                Deleting unreferenced objects is deliberately not offered here — what disappears is
+                bytes. Read the list first, then run <code class="rounded bg-gray-100 px-1 py-0.5">cli/purge-orphan-blobs.php</code>.
+            </p>
         </div>
     </div>
 
-    <!-- ─── Penyimpanan objek ─────────────────────────────────────────── -->
-    <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm mb-6">
-        <h2 class="text-lg font-semibold text-gray-900">Object storage</h2>
-        <p class="mt-1 text-sm text-gray-500">
-            Gambar tanda tangan dan PDF beku. Menyalin ke berkas TIDAK mengubah tabel —
-            pemasangan lama yang membaca kolom tetap melihat isi yang sama.
-        </p>
-
-        <div id="ezStorageRingkas" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 my-4 text-sm text-gray-500">
-            Memuat ringkasan…
+    <!-- ─── Adapters ─────────────────────────────────────────────────── -->
+    <div data-ez-panel="adapters" class="hidden pt-6">
+        <div class="rounded-lg border border-gray-200 bg-white">
+            <div class="border-b border-gray-100 px-5 py-4">
+                <h2 class="text-sm font-semibold text-gray-900">Adapters &amp; permissions</h2>
+                <p class="mt-0.5 text-sm text-gray-500">
+                    What the host application has wired in, and whether the permissions around it are safe.
+                </p>
+            </div>
+            <ul class="divide-y divide-gray-100">
+                <?php foreach ($adapters as $a): ?>
+                    <?php
+                    $titik = $a['status'] === 'ok' ? 'bg-green-500' : ($a['status'] === 'warn' ? 'bg-amber-500' : 'bg-red-500');
+                    ?>
+                    <li class="flex flex-col gap-1 px-5 py-3 sm:flex-row sm:items-baseline sm:gap-4">
+                        <span class="flex w-44 shrink-0 items-center gap-2 text-sm font-medium text-gray-700">
+                            <span class="h-1.5 w-1.5 shrink-0 rounded-full <?= $titik ?>" aria-hidden="true"></span>
+                            <?= htmlspecialchars($a['nama'], ENT_QUOTES, 'UTF-8') ?>
+                        </span>
+                        <span class="min-w-0 flex-1 break-all font-mono text-xs text-gray-900"><?= htmlspecialchars($a['nilai'], ENT_QUOTES, 'UTF-8') ?></span>
+                        <?php if ($a['catatan'] !== ''): ?>
+                            <span class="flex-1 text-xs <?= $a['status'] === 'ok' ? 'text-gray-500' : 'text-gray-700' ?>"><?= htmlspecialchars($a['catatan'], ENT_QUOTES, 'UTF-8') ?></span>
+                        <?php endif; ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
         </div>
+    </div>
 
-        <div class="flex flex-wrap gap-2">
-            <button type="button" data-ez-tugas="salin" data-ez-apply="0"
-                    class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
-                Lihat dulu (tanpa menulis)
-            </button>
-            <button type="button" data-ez-tugas="salin" data-ez-apply="1"
-                    class="inline-flex items-center rounded-md px-3 py-2 text-sm font-medium text-white shadow-sm hover:opacity-90"
-                    style="background-color:#2563eb;">
-                Salin tanda tangan ke berkas
-            </button>
-            <button type="button" data-ez-tugas="periksa"
-                    class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
-                Periksa kesehatan
-            </button>
-            <button type="button" data-ez-tugas="yatim"
-                    class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
-                Objek tak dirujuk
-            </button>
+    <!-- ─── Config ───────────────────────────────────────────────────── -->
+    <div data-ez-panel="config" class="hidden pt-6">
+        <div class="rounded-lg border border-gray-200 bg-white">
+            <div class="border-b border-gray-100 px-5 py-4">
+                <h2 class="text-sm font-semibold text-gray-900">Config file</h2>
+                <p class="mt-0.5 text-sm text-gray-500">
+                    Builds the contents of <code class="rounded bg-gray-100 px-1 py-0.5">public/config.php</code> to copy.
+                    This page never writes a PHP file — a page on the web does not write code that the server executes.
+                </p>
+            </div>
+
+            <div class="grid gap-4 px-5 py-4 sm:grid-cols-2">
+                <label class="block text-sm">
+                    <span class="text-gray-700">Interface language <span class="text-gray-400">(app.locale)</span></span>
+                    <select id="ezCfgLocale" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm">
+                        <option value="en">en</option>
+                        <option value="id">id</option>
+                    </select>
+                </label>
+                <label class="block text-sm">
+                    <span class="text-gray-700">Document language <span class="text-gray-400">(document.locale)</span></span>
+                    <select id="ezCfgDocLocale" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm">
+                        <option value="">same as interface</option>
+                        <option value="id">id</option>
+                        <option value="en">en</option>
+                    </select>
+                    <span class="mt-1 block text-xs text-gray-500">Dates and numbers inside documents, printouts and frozen PDFs.</span>
+                </label>
+                <label class="block text-sm">
+                    <span class="text-gray-700">Object storage <span class="text-gray-400">(EZDOC_STORAGE_BACKEND)</span></span>
+                    <select id="ezCfgBackend" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm">
+                        <option value="database">database — bytes in the column</option>
+                        <option value="mirror">mirror — column and files</option>
+                        <option value="disk">disk — files only</option>
+                    </select>
+                </label>
+                <label class="block text-sm">
+                    <span class="text-gray-700">Object folder <span class="text-gray-400">(EZDOC_STORAGE_PATH)</span></span>
+                    <input id="ezCfgPath" type="text" spellcheck="false"
+                           class="mt-1 w-full rounded-md border-gray-300 font-mono text-xs shadow-sm"
+                           value="<?= htmlspecialchars((string) (\Ezdoc\Storage\BlobStoreFactory::configuredDiskRoot() ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                </label>
+                <label class="block text-sm sm:col-span-2">
+                    <span class="text-gray-700">Host bootstrap file <span class="text-gray-400">(the file that creates <code>$conn</code>, relative to public/)</span></span>
+                    <input id="ezCfgBootstrap" type="text" spellcheck="false"
+                           class="mt-1 w-full rounded-md border-gray-300 font-mono text-xs shadow-sm" value="../../koneksi.php">
+                </label>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 border-t border-gray-100 px-5 py-4">
+                <button type="button" id="ezCfgBuat"
+                        class="inline-flex items-center rounded-md px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90"
+                        style="background-color: var(--ezdoc-primary, #111827);">Generate</button>
+                <button type="button" id="ezCfgSalin"
+                        class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50">Copy</button>
+                <span id="ezCfgKabar" class="text-xs text-gray-500"></span>
+            </div>
+            <pre id="ezCfgHasil" class="mx-5 mb-5 hidden max-h-80 overflow-auto rounded-md bg-gray-50 p-3 text-xs leading-relaxed text-gray-800 ring-1 ring-inset ring-gray-200"></pre>
         </div>
+    </div>
 
-        <div id="ezStorageBar" class="mt-4 hidden">
-            <div class="h-1.5 w-full overflow-hidden rounded bg-gray-100">
-                <div id="ezStorageBarIsi" class="h-full bg-blue-500 transition-all" style="width:0"></div>
+    <!-- ─── Migrations ───────────────────────────────────────────────── -->
+    <div data-ez-panel="migrations" class="hidden pt-6">
+        <div class="rounded-lg border border-gray-200 bg-white">
+            <div class="border-b border-gray-100 px-5 py-4">
+                <h2 class="text-sm font-semibold text-gray-900">Database migrations</h2>
+                <p class="mt-0.5 text-sm text-gray-500">
+                    Migrations already run at bootstrap. This is for explicit control and for seeing what happened.
+                </p>
+            </div>
+
+            <dl class="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-4 sm:divide-y-0">
+                <?php foreach ([
+                    ['Applied', $appliedCount, 'has file, in registry'],
+                    ['Pending', $pendingCount, 'has file, not run'],
+                    ['Orphan', $orphanCount, 'registry entry, no file'],
+                    ['Templates', (int) ($floatingStats['total'] ?? 0), 'with content'],
+                ] as [$judul, $nilai, $catatan]): ?>
+                    <div class="px-5 py-4">
+                        <dt class="text-[11px] font-medium uppercase tracking-wide text-gray-500"><?= $judul ?></dt>
+                        <dd class="mt-1 text-2xl font-semibold tabular-nums text-gray-900"><?= (int) $nilai ?></dd>
+                        <dd class="mt-0.5 text-[11px] text-gray-400"><?= $catatan ?></dd>
+                    </div>
+                <?php endforeach; ?>
+            </dl>
+
+            <div class="flex flex-wrap items-center gap-2 border-t border-gray-100 px-5 py-4">
+                <form method="POST" onsubmit="return confirm('Run <?= $pendingCount ?> pending migration(s)?');">
+                    <input type="hidden" name="action" value="run_pending">
+                    <button type="submit" <?= $pendingCount > 0 ? '' : 'disabled' ?>
+                            class="inline-flex items-center rounded-md px-3 py-2 text-sm font-medium shadow-sm transition <?= $pendingCount > 0 ? 'text-white hover:opacity-90' : 'cursor-not-allowed border border-gray-200 bg-gray-50 text-gray-400' ?>"
+                            <?= $pendingCount > 0 ? 'style="background-color: var(--ezdoc-primary, #111827);"' : '' ?>>
+                        Run <?= $pendingCount ?> pending
+                    </button>
+                </form>
+
+                <?php if ($orphanCount > 0): ?>
+                <form method="POST" onsubmit="return confirm('Remove <?= $orphanCount ?> registry entries that have no migration file? Nothing is dropped from the database.');">
+                    <input type="hidden" name="action" value="prune_orphan_registry">
+                    <button type="submit"
+                            class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50">
+                        Prune <?= $orphanCount ?> orphan entries
+                    </button>
+                </form>
+                <?php endif; ?>
+
+                <?php if ($floatingStats && (int) $floatingStats['has_embedded_markers'] > 0): ?>
+                <form method="POST" onsubmit="return confirm('Migrate <?= (int) $floatingStats['has_embedded_markers'] ?> template(s) with embedded floating markers to sidecar JSON? Back up the database first.');">
+                    <input type="hidden" name="action" value="migrate_floating">
+                    <button type="submit"
+                            class="inline-flex items-center rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 shadow-sm transition hover:bg-amber-100">
+                        Migrate floating elements (<?= (int) $floatingStats['has_embedded_markers'] ?>)
+                    </button>
+                </form>
+                <?php endif; ?>
+
+                <span class="text-xs text-gray-500">
+                    Destructive operations (reset, drop) stay in the CLI: <code class="rounded bg-gray-100 px-1 py-0.5">php cli/migrate.php reset</code>
+                </span>
+            </div>
+
+            <div class="max-h-96 overflow-auto border-t border-gray-100">
+                <table class="min-w-full text-sm">
+                    <thead class="sticky top-0 bg-gray-50 text-left text-[11px] uppercase tracking-wide text-gray-500">
+                        <tr>
+                            <th class="px-5 py-2 font-medium">Migration</th>
+                            <th class="px-5 py-2 font-medium">Status</th>
+                            <th class="px-5 py-2 font-medium">Executed</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        <?php foreach ($allMigrations as $m): ?>
+                            <?php
+                            $titik = $m['status'] === 'applied' ? 'bg-green-500' : ($m['status'] === 'pending' ? 'bg-amber-500' : 'bg-gray-400');
+                            ?>
+                            <tr>
+                                <td class="px-5 py-2 font-mono text-xs text-gray-700"><?= htmlspecialchars($m['name'], ENT_QUOTES, 'UTF-8') ?></td>
+                                <td class="px-5 py-2">
+                                    <span class="inline-flex items-center gap-1.5 text-xs text-gray-600">
+                                        <span class="h-1.5 w-1.5 rounded-full <?= $titik ?>" aria-hidden="true"></span>
+                                        <?= $m['status'] === 'orphan' ? 'Orphan (no file)' : ucfirst($m['status']) ?>
+                                    </span>
+                                </td>
+                                <td class="px-5 py-2 text-xs tabular-nums text-gray-500">
+                                    <?= $m['executed_at'] ? htmlspecialchars($m['executed_at'], ENT_QUOTES, 'UTF-8') : '—' ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
             </div>
         </div>
-        <pre id="ezStorageLog" class="mt-3 hidden max-h-64 overflow-auto rounded-md bg-gray-50 p-3 text-xs text-gray-700 ring-1 ring-inset ring-gray-200"></pre>
-        <p class="mt-3 text-xs text-gray-400">
-            Menghapus objek yang tak dirujuk sengaja tidak ada di sini — yang hilang adalah byte,
-            dan itu lewat <code>cli/purge-orphan-blobs.php</code> setelah daftarnya dibaca.
-        </p>
     </div>
-
-    <!-- ─── Adapter & izin ────────────────────────────────────────────── -->
-    <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm mb-6">
-        <h2 class="text-lg font-semibold text-gray-900">Adapters &amp; permissions</h2>
-        <p class="mt-1 text-sm text-gray-500">
-            Apa yang terpasang dari aplikasi pemakai, dan apakah izinnya aman.
-        </p>
-        <div class="mt-4 overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
-                <tbody class="divide-y divide-gray-100">
-                <?php foreach ($adapters as $a): ?>
-                    <tr>
-                        <td class="py-2 pr-4 font-medium text-gray-700 whitespace-nowrap"><?= htmlspecialchars($a['nama'], ENT_QUOTES, 'UTF-8') ?></td>
-                        <td class="py-2 pr-4">
-                            <?php $warna = $a['status'] === 'ok' ? 'bg-green-100 text-green-700 ring-green-200'
-                                : ($a['status'] === 'warn' ? 'bg-amber-100 text-amber-700 ring-amber-200' : 'bg-red-100 text-red-700 ring-red-200'); ?>
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset <?= $warna ?>">
-                                <?= $a['status'] === 'ok' ? 'OK' : ($a['status'] === 'warn' ? 'Perhatikan' : 'Bermasalah') ?>
-                            </span>
-                        </td>
-                        <td class="py-2 pr-4 font-mono text-xs text-gray-900 break-all"><?= htmlspecialchars($a['nilai'], ENT_QUOTES, 'UTF-8') ?></td>
-                        <td class="py-2 text-xs text-gray-500"><?= htmlspecialchars($a['catatan'], ENT_QUOTES, 'UTF-8') ?></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- ─── Pembuat config ────────────────────────────────────────────── -->
-    <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm mb-6">
-        <h2 class="text-lg font-semibold text-gray-900">Config helper</h2>
-        <p class="mt-1 text-sm text-gray-500">
-            Menghasilkan isi <code>public/config.php</code> untuk disalin. Halaman ini tidak
-            menulis berkas PHP apa pun — berkas yang dieksekusi tidak ditulis dari web.
-        </p>
-
-        <div class="mt-4 grid gap-3 sm:grid-cols-2">
-            <label class="text-sm">
-                <span class="block text-gray-700">Bahasa layar (app.locale)</span>
-                <select id="ezCfgLocale" class="mt-1 w-full rounded-md border-gray-300 text-sm">
-                    <option value="en">en</option>
-                    <option value="id">id</option>
-                </select>
-            </label>
-            <label class="text-sm">
-                <span class="block text-gray-700">Bahasa isi dokumen (document.locale)</span>
-                <select id="ezCfgDocLocale" class="mt-1 w-full rounded-md border-gray-300 text-sm">
-                    <option value="">(ikut bahasa layar)</option>
-                    <option value="id">id</option>
-                    <option value="en">en</option>
-                </select>
-            </label>
-            <label class="text-sm">
-                <span class="block text-gray-700">Penyimpan objek (EZDOC_STORAGE_BACKEND)</span>
-                <select id="ezCfgBackend" class="mt-1 w-full rounded-md border-gray-300 text-sm">
-                    <option value="database">database — byte di kolom</option>
-                    <option value="mirror">mirror — kolom + berkas</option>
-                    <option value="disk">disk — berkas saja</option>
-                </select>
-            </label>
-            <label class="text-sm">
-                <span class="block text-gray-700">Folder objek (EZDOC_STORAGE_PATH)</span>
-                <input id="ezCfgPath" type="text" class="mt-1 w-full rounded-md border-gray-300 font-mono text-xs"
-                       value="<?= htmlspecialchars((string) (\Ezdoc\Storage\BlobStoreFactory::configuredDiskRoot() ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-            </label>
-            <label class="text-sm sm:col-span-2">
-                <span class="block text-gray-700">Berkas bootstrap aplikasi pemakai (yang membuat $conn)</span>
-                <input id="ezCfgBootstrap" type="text" class="mt-1 w-full rounded-md border-gray-300 font-mono text-xs"
-                       value="../../koneksi.php">
-            </label>
-        </div>
-
-        <div class="mt-3 flex items-center gap-2">
-            <button type="button" id="ezCfgBuat"
-                    class="inline-flex items-center rounded-md px-3 py-2 text-sm font-medium text-white shadow-sm hover:opacity-90"
-                    style="background-color:#2563eb;">Buat</button>
-            <button type="button" id="ezCfgSalin"
-                    class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">Salin</button>
-            <span id="ezCfgKabar" class="text-xs text-gray-500"></span>
-        </div>
-        <pre id="ezCfgHasil" class="mt-3 hidden max-h-80 overflow-auto rounded-md bg-gray-50 p-3 text-xs text-gray-800 ring-1 ring-inset ring-gray-200"></pre>
-    </div>
+</section>
 
 <script>
 (function () {
+    // ── Tab ──
+    // Pilihan terakhir diingat, dan `?tab=` menang atasnya: tautan ke satu tab
+    // harus membuka tab itu, bukan tab yang terakhir dibuka orangnya.
+    const tombolTab = Array.from(document.querySelectorAll('[data-ez-tab]'));
+    const panel = (k) => document.querySelector('[data-ez-panel="' + k + '"]');
+    const aktifkan = (kunci) => {
+        if (!panel(kunci)) kunci = tombolTab[0].dataset.ezTab;
+        tombolTab.forEach((b) => {
+            const aktif = b.dataset.ezTab === kunci;
+            b.classList.toggle('text-gray-900', aktif);
+            b.classList.toggle('text-gray-500', !aktif);
+            b.classList.toggle('border-transparent', !aktif);
+            b.style.borderColor = aktif ? 'var(--ezdoc-primary, #111827)' : '';
+            b.setAttribute('aria-selected', aktif ? 'true' : 'false');
+            panel(b.dataset.ezTab).classList.toggle('hidden', !aktif);
+        });
+        try { localStorage.setItem('ezdoc_admin_tab', kunci); } catch (e) {}
+    };
+    tombolTab.forEach((b) => b.addEventListener('click', () => aktifkan(b.dataset.ezTab)));
+    let awal = new URLSearchParams(window.location.search).get('tab');
+    if (!awal) { try { awal = localStorage.getItem('ezdoc_admin_tab'); } catch (e) {} }
+    aktifkan(awal || 'storage');
+
+    // ── Penyimpanan objek ──
     const log = document.getElementById('ezStorageLog');
     const bar = document.getElementById('ezStorageBar');
     const barIsi = document.getElementById('ezStorageBarIsi');
@@ -722,37 +726,46 @@ if ($rs) {
         log.textContent += baris + '\n';
         log.scrollTop = log.scrollHeight;
     };
-    const kunci = (nyala) => tombol.forEach(b => { b.disabled = nyala; b.classList.toggle('opacity-50', nyala); });
+    const kunci = (nyala) => tombol.forEach((b) => {
+        b.disabled = nyala;
+        b.classList.toggle('opacity-40', nyala);
+        b.classList.toggle('cursor-not-allowed', nyala);
+    });
+    const angka = (n) => (typeof n === 'number' ? n.toLocaleString() : n);
 
     async function minta(data) {
         const fd = new FormData();
-        Object.keys(data).forEach(k => fd.append(k, data[k]));
+        Object.keys(data).forEach((k) => fd.append(k, data[k]));
         const resp = await fetch(window.location.href, { method: 'POST', body: fd, credentials: 'same-origin' });
         const teks = await resp.text();
         try {
             return JSON.parse(teks);
         } catch (e) {
-            throw new Error('Jawaban bukan JSON: ' + teks.slice(0, 200));
+            throw new Error('Reply was not JSON: ' + teks.slice(0, 200));
         }
     }
 
     async function muatRingkasan() {
         try {
             const j = await minta({ storage_action: 'ringkas' });
-            if (!j.ok) throw new Error(j.pesan || 'gagal');
+            if (!j.ok) throw new Error(j.pesan || 'failed');
             const r = j.ringkas;
             const kartu = [
-                ['Objek', r.objek], ['Di kolom', r.di_kolom], ['Di disk', r.di_disk],
-                ['Berkas', r.berkas < 0 ? '—' : r.berkas],
-                ['Inline di dokumen', r.inline], ['Dirujuk', r.dirujuk],
+                ['Objects', r.objek, 'rows in ezdoc_blobs'],
+                ['In column', r.di_kolom, 'bytes in the database'],
+                ['On disk', r.di_disk, 'bytes in files only'],
+                ['File copies', r.berkas < 0 ? '—' : r.berkas, 'files on disk'],
+                ['Inline', r.inline, 'images inside documents'],
+                ['Referenced', r.dirujuk, 'by documents or archives'],
             ];
-            ringkasEl.innerHTML = kartu.map(([judul, nilai]) =>
-                `<div class="rounded-lg border border-gray-200 bg-white p-3">
-                    <div class="text-[10px] uppercase tracking-wide text-gray-500">${judul}</div>
-                    <div class="mt-0.5 text-xl font-semibold text-gray-900 tabular-nums">${nilai}</div>
-                 </div>`).join('');
+            ringkasEl.innerHTML = kartu.map(([judul, nilai, catatan]) =>
+                '<div class="px-5 py-4">'
+                + '<dt class="text-[11px] font-medium uppercase tracking-wide text-gray-500">' + judul + '</dt>'
+                + '<dd class="mt-1 text-2xl font-semibold tabular-nums text-gray-900">' + angka(nilai) + '</dd>'
+                + '<dd class="mt-0.5 text-[11px] text-gray-400">' + catatan + '</dd>'
+                + '</div>').join('');
         } catch (e) {
-            ringkasEl.textContent = 'Ringkasan gagal dimuat: ' + e.message;
+            ringkasEl.innerHTML = '<div class="px-5 py-4 text-sm text-red-700">Summary failed to load: ' + e.message + '</div>';
         }
     }
 
@@ -764,10 +777,10 @@ if ($rs) {
         bar.classList.remove('hidden');
         for (;;) {
             const j = await minta({ storage_action: tugas, after_id: after, apply: apply ? '1' : '0' });
-            if (!j.ok) throw new Error(j.pesan || 'gagal');
+            if (!j.ok) throw new Error(j.pesan || 'failed');
             const b = j.batch;
-            ['disalin', 'sudah', 'rusak', 'gagal', 'utuh'].forEach(k => { if (b[k]) jumlah[k] += b[k]; });
-            (b.masalah || []).forEach(m => {
+            ['disalin', 'sudah', 'rusak', 'gagal', 'utuh'].forEach((k) => { if (b[k]) jumlah[k] += b[k]; });
+            (b.masalah || []).forEach((m) => {
                 jumlah.masalah++;
                 tulis('  ' + m.key.slice(0, 16) + '… ' + m.sebab + (m.detail ? ' — ' + m.detail : ''));
             });
@@ -782,40 +795,42 @@ if ($rs) {
 
     async function jalankan(tugas, apply) {
         kunci(true);
-        log.classList.remove('hidden');
         log.textContent = '';
+        log.classList.remove('hidden');
         try {
             const r = await minta({ storage_action: 'ringkas' });
             const total = r.ok ? r.ringkas.objek : 0;
 
             if (tugas === 'yatim') {
                 const j = await minta({ storage_action: 'yatim' });
-                if (!j.ok) throw new Error(j.pesan || 'gagal');
-                tulis('Objek tak dirujuk melewati 48 jam: ' + j.jumlah + ' (' + Math.round(j.byte / 1024) + ' KB)');
-                j.objek.forEach(o => tulis('  ' + o.key.slice(0, 16) + '…  ' + o.byte + ' byte  ' + o.created_at));
-                if (j.jumlah > j.objek.length) tulis('  … dan ' + (j.jumlah - j.objek.length) + ' lagi');
-                tulis('Tidak ada yang dihapus.');
+                if (!j.ok) throw new Error(j.pesan || 'failed');
+                tulis('Unreferenced for more than 48 hours: ' + angka(j.jumlah) + ' objects, ' + Math.round(j.byte / 1024) + ' KB');
+                j.objek.forEach((o) => tulis('  ' + o.key.slice(0, 16) + '…  ' + o.byte + ' bytes  ' + o.created_at));
+                if (j.jumlah > j.objek.length) tulis('  … and ' + (j.jumlah - j.objek.length) + ' more');
+                tulis('Nothing was deleted.');
                 return;
             }
 
-            tulis(tugas === 'periksa' ? 'Memeriksa objek…' : (apply ? 'Menyalin ke berkas…' : 'Melihat dulu, tanpa menulis…'));
+            tulis(tugas === 'periksa'
+                ? 'Verifying objects…'
+                : (apply ? 'Copying to files…' : 'Preview only, nothing is written…'));
             const h = await batch(tugas, apply, total);
             if (tugas === 'periksa') {
-                tulis('Selesai. Utuh: ' + h.utuh + ', bermasalah: ' + h.masalah + '.');
+                tulis('Done. Intact: ' + angka(h.utuh) + ', problems: ' + angka(h.masalah) + '.');
             } else {
-                tulis('Selesai. ' + (apply ? 'Disalin' : 'Akan disalin') + ': ' + h.disalin
-                    + ', sudah ada: ' + h.sudah + ', rusak: ' + h.rusak + ', gagal: ' + h.gagal + '.');
-                tulis('Basis data tidak diubah.');
+                tulis('Done. ' + (apply ? 'Copied' : 'Would copy') + ': ' + angka(h.disalin)
+                    + ', already there: ' + angka(h.sudah) + ', corrupt: ' + h.rusak + ', failed: ' + h.gagal + '.');
+                tulis('The database was not modified.');
                 if (apply) muatRingkasan();
             }
         } catch (e) {
-            tulis('GAGAL: ' + e.message);
+            tulis('FAILED: ' + e.message);
         } finally {
             kunci(false);
         }
     }
 
-    tombol.forEach(b => b.addEventListener('click', () => jalankan(b.dataset.ezTugas, b.dataset.ezApply === '1')));
+    tombol.forEach((b) => b.addEventListener('click', () => jalankan(b.dataset.ezTugas, b.dataset.ezApply === '1')));
     muatRingkasan();
 
     // ── Pembuat config ──
@@ -833,9 +848,9 @@ if ($rs) {
             '<' + '?php',
             '',
             '/**',
-            ' * Mount config untuk public/index.php.',
+            ' * Mount config for public/index.php.',
             ' *',
-            ' * Berkas bootstrap aplikasi pemakai menyediakan $conn, identitas, dan role.',
+            ' * The host bootstrap supplies $conn, the user id and the roles.',
             ' */',
             '',
             "require_once __DIR__ . '/" + bootstrap.replace(/^\.\//, '') + "';",
@@ -843,8 +858,8 @@ if ($rs) {
         ];
         if (backend !== 'database') {
             baris.push(
-                '// Penyimpan objek. `mirror` menulis kolom DAN berkas — dipakai selama',
-                '// pemasangan lain masih membaca kolom `ezdoc_blobs.content`.',
+                '// Object storage. `mirror` writes the column AND files — used while',
+                '// another installation still reads ezdoc_blobs.content.',
                 "if (!defined('EZDOC_STORAGE_BACKEND')) {",
                 "    define('EZDOC_STORAGE_BACKEND', '" + backend + "');",
                 '}',
@@ -862,18 +877,18 @@ if ($rs) {
             'return [',
             "    'app.db' => $conn ?? null,",
             '',
-            '    // Identitas dan role berjalan berpasangan.',
+            '    // Identity and roles travel together.',
             "    'app.author_id'    => $author_id ?? null,",
             "    'app.author_roles' => $author_role_array ?? [],",
             '',
-            "    // Bahasa antarmuka.",
+            '    // Interface language.',
             "    'app.locale' => '" + locale + "',",
         );
         if (docLocale) {
             baris.push(
                 '',
-                '    // Bahasa ISI dokumen — tanggal dan angka di dokumen, cetakan, dan',
-                '    // arsip PDF bekunya. Kosong = ikut app.locale.',
+                '    // Language of the DOCUMENT CONTENT — dates and numbers inside',
+                '    // documents, printouts and frozen PDFs. Empty follows app.locale.',
                 "    'document.locale' => '" + docLocale + "',",
             );
         }
@@ -881,23 +896,22 @@ if ($rs) {
 
         cfgHasil.textContent = baris.join('\n');
         cfgHasil.classList.remove('hidden');
-        cfgKabar.textContent = 'Salin isinya ke public/config.php.';
+        cfgKabar.textContent = 'Copy this into public/config.php.';
     });
 
     document.getElementById('ezCfgSalin').addEventListener('click', async function () {
-        if (cfgHasil.classList.contains('hidden')) { cfgKabar.textContent = 'Tekan Buat dulu.'; return; }
+        if (cfgHasil.classList.contains('hidden')) { cfgKabar.textContent = 'Press Generate first.'; return; }
         try {
             await navigator.clipboard.writeText(cfgHasil.textContent);
-            cfgKabar.textContent = 'Tersalin.';
+            cfgKabar.textContent = 'Copied.';
         } catch (e) {
-            // Halaman yang dibuka lewat HTTP bukan secure context: clipboard API mati.
+            // Halaman lewat HTTP bukan secure context: clipboard API mati.
             const r = document.createRange();
             r.selectNodeContents(cfgHasil);
             window.getSelection().removeAllRanges();
             window.getSelection().addRange(r);
-            cfgKabar.textContent = 'Clipboard tidak tersedia — teksnya sudah diblok, tekan Ctrl+C.';
+            cfgKabar.textContent = 'Clipboard unavailable — the text is selected, press Ctrl+C.';
         }
     });
 })();
 </script>
-</section>

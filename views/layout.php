@@ -155,6 +155,26 @@ $pageTitle = isset($title) && $title !== ''
                         ['label' => 'Create',    'page' => 'generate'],
                     ];
                 }
+
+                // Halaman pengaturan hanya untuk yang boleh membukanya, dan hanya
+                // kalau belum disebut sendiri oleh aplikasi pemakai.
+                //
+                // Ditambahkan di sini, bukan diserahkan ke consumer, karena halaman
+                // yang tidak punya pintu sama saja dengan tidak ada: pemakai
+                // melaporkan "kok tidak ada di menu ya?" tentang halaman yang sudah
+                // berjalan. Pola yang sama dengan tautan admin yang hanya tampil
+                // untuk staf di Django, dan panel admin Filament.
+                $halamanAdmin = 'admin_migrate';
+                $sudahAda = false;
+                foreach ($navItems as $item) {
+                    if (($item['page'] ?? '') === $halamanAdmin) {
+                        $sudahAda = true;
+                        break;
+                    }
+                }
+                if (!$sudahAda && function_exists('ezdoc_has_role') && ezdoc_has_role('superadmin')) {
+                    $navItems[] = ['label' => 'Settings', 'page' => $halamanAdmin];
+                }
                 $currentPage = '';
                 if (isset($_GET[$qk]) && is_string($_GET[$qk])) {
                     $currentPage = $_GET[$qk];

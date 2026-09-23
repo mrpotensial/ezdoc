@@ -33,7 +33,7 @@ if (!defined('EZDOC_STORAGE_BACKEND')) {
     define('EZDOC_STORAGE_BACKEND', 'mirror');
 }
 if (!defined('EZDOC_STORAGE_PATH')) {
-    define('EZDOC_STORAGE_PATH', dirname(__DIR__, 2) . '/storage');
+    define('EZDOC_STORAGE_PATH', dirname(__DIR__, 2) . '/storage/ezdoc');
 }
 
 return [
