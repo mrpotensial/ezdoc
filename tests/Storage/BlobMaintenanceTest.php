@@ -220,6 +220,40 @@ final class BlobMaintenanceTest extends TestCase
         self::assertSame([], $hasil['masalah']);
     }
 
+    /**
+     * Dokumen beku boleh tinggal di folder lain, dan itu bukan masalah.
+     *
+     * Pemasangan nyata memisahkannya: gambar tanda tangan di satu folder,
+     * dokumen beku di folder arsip. Objek yang hanya ada di folder kedua tidak
+     * terbaca store utama — melaporkannya "hilang" tiap kali diperiksa akan
+     * mengajari orang mengabaikan peringatan yang benar.
+     */
+    public function testObjekDiFolderLainTidakDilaporkanHilang(): void
+    {
+        $folderArsip = $this->root . '-arsip';
+        $arsip = new DiskBlobStore($this->db, $folderArsip);
+        $arsip->put('%PDF beku', 'application/pdf');
+
+        try {
+            $utama = new MirrorBlobStore(new DatabaseBlobStore($this->db), $this->files());
+
+            $tanpa = $this->rawat()->checkBatch($utama, $this->files(), 0, 100);
+            self::assertSame([['key' => hash('sha256', '%PDF beku'), 'sebab' => 'tak_terbaca']], $tanpa['masalah']);
+
+            $dengan = $this->rawat()->checkBatch($utama, $this->files(), 0, 100, $arsip);
+            self::assertSame([], $dengan['masalah']);
+            self::assertSame(1, $dengan['utuh']);
+        } finally {
+            foreach ((array) glob($folderArsip . '/*/*') as $f) {
+                @unlink($f);
+            }
+            foreach ((array) glob($folderArsip . '/*') as $d) {
+                @rmdir($d);
+            }
+            @rmdir($folderArsip);
+        }
+    }
+
     // ── Ringkasan ────────────────────────────────────────────────────────
 
     public function testRingkasanMenghitungKolomDiskInlineDanRujukan(): void

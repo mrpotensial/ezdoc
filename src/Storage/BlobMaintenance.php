@@ -179,9 +179,21 @@ final class BlobMaintenance
      * kolomnya masih utuh — justru itu yang perlu diketahui saat memindahkan
      * byte ke berkas.
      *
+     * `$lain` untuk penyimpan KEDUA yang sah: pemasangan boleh menaruh dokumen
+     * beku di folder lain daripada gambar tanda tangan, dan objek yang tinggal
+     * di sana tidak terbaca store utama. Tanpa ini, tiap pemeriksaan akan
+     * melaporkan arsip yang sehat sebagai hilang — peringatan yang salah, dan
+     * peringatan yang salah mengajari orang mengabaikan semuanya.
+     *
      * @return array{after_id:int,selesai:bool,diperiksa:int,utuh:int,masalah:list<array{key:string,sebab:string}>}
      */
-    public function checkBatch(BlobStore $store, ?DiskBlobStore $files = null, int $afterId = 0, int $limit = 200): array
+    public function checkBatch(
+        BlobStore $store,
+        ?DiskBlobStore $files = null,
+        int $afterId = 0,
+        int $limit = 200,
+        ?BlobStore $lain = null
+    ): array
     {
         $rows = $this->db->fetchAll(
             'SELECT id, `key`, backend, content IS NULL AS tanpa_kolom FROM ezdoc_blobs'
@@ -203,6 +215,9 @@ final class BlobMaintenance
             // dijalankan dari pemasangan yang backend-nya berbeda.
             $dariStore = $store->get($key) !== null;
             $dariBerkas = $files !== null && $files->readFile($key) !== null;
+            if (!$dariStore && !$dariBerkas && $lain !== null) {
+                $dariStore = $lain->get($key) !== null;
+            }
 
             if (!$dariStore && !$dariBerkas) {
                 $hasil['masalah'][] = ['key' => $key, 'sebab' => 'tak_terbaca'];

@@ -187,11 +187,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['storage_action'])) {
             case 'periksa':
                 echo json_encode([
                     'ok' => true,
+                    // Penyimpan artefak ikut ditanya: pemasangan ini menaruh
+                    // dokumen beku di folder lain daripada gambar tanda tangan.
                     'batch' => $rawat->checkBatch(
                         \Ezdoc\Storage\BlobStoreFactory::make($dbx),
                         $filesx,
                         $after,
-                        200
+                        200,
+                        \Ezdoc\Storage\BlobStoreFactory::forArtifacts($dbx)
                     ),
                 ]);
                 break;
