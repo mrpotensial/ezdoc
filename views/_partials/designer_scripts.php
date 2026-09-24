@@ -2178,6 +2178,23 @@
                 .logo-placeholder.floating.front {
                     z-index: 100;
                 }
+                /* Sedang dipilih.
+                   Sebelumnya tidak ada gaya untuk ini sama sekali: yang terlihat
+                   ungu saat menggeser sebenarnya efek :hover, jadi elemen yang
+                   sudah dipilih tampak sama saja dengan yang tidak — panel kanan
+                   menampilkan propertinya, dokumennya tidak menunjukkan yang mana.
+                   Dilaporkan dari pemakaian.
+                   Garisnya UTUH, bukan putus-putus, supaya beda dari penanda
+                   bawaan elemen mengambang yang memang putus-putus. */
+                .logo-placeholder.floating.ez-float-selected,
+                .ttd-placeholder.floating.ez-float-selected,
+                .qr-placeholder.floating.ez-float-selected,
+                .materai-placeholder.floating.ez-float-selected {
+                    outline: 2px solid #7c3aed;
+                    outline-offset: 1px;
+                    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.25);
+                    z-index: 101;
+                }
                 .logo-placeholder.floating:hover {
                     box-shadow: 0 2px 8px rgba(0,0,0,0.2);
                     border-color: #7c3aed;
@@ -2861,11 +2878,15 @@
                     }
                     if (type && id) {
                         window.ezdocFocusSidebarCard(type, id);
-                    } else if (window.ezdocPanelMode) {
+                    } else if (!((window.ezdocFloatingDragSelesai || 0) > Date.now() - 300)) {
                         // Klik di tempat kosong berarti tidak ada yang dipilih.
                         // Menahan pilihan lama akan membuat panel menunjukkan
                         // properti elemen yang sudah tidak disentuh siapa pun.
-                        window.ezdocPanelMode.kosongkan();
+                        //
+                        // Kecuali klik susulan sebuah geseran: yang baru saja
+                        // dikerjakan orangnya justru elemen yang digeser.
+                        if (window.ezdocPanelMode) window.ezdocPanelMode.kosongkan();
+                        if (window.ezdocClearFloatingSelection) window.ezdocClearFloatingSelection();
                     }
                 });
                 editor.on('init', function() {
@@ -3120,13 +3141,37 @@
                         return [null, null];
                     };
 
+                    // Penanda "sedang dipilih" — satu elemen saja pada satu waktu.
+                    const _tandaiFloating = (target) => {
+                        const body = editor.getBody();
+                        if (!body) return;
+                        body.querySelectorAll('.ez-float-selected').forEach((el) => {
+                            el.classList.remove('ez-float-selected');
+                        });
+                        if (target) target.classList.add('ez-float-selected');
+                    };
+                    window.ezdocClearFloatingSelection = () => _tandaiFloating(null);
+
                     // Select + focus helper (called dari both mousedown + click)
                     const _selectFloating = (target) => {
                         const wrapper = target.closest('p.floating-only') || target;
                         try {
+                            // Caret, BUKAN blok teks terseleksi.
+                            //
+                            // Sebelumnya wrapper-nya diseleksi utuh. Akibatnya ada
+                            // seleksi hidup di dokumen: toolbar melayang muncul, dan
+                            // gerakan mouse berikutnya memanjangkan seleksi itu ke
+                            // paragraf di bawah kursor — terlihat sebagai "teks ikut
+                            // tersorot saat menggeser gambar". Dilaporkan dari
+                            // pemakaian.
+                            //
+                            // Yang dibutuhkan di sini cuma "editor tahu kita di
+                            // mana", dan itu cukup dengan caret yang mengkerut.
                             editor.selection.select(wrapper);
+                            editor.selection.collapse(true);
                             editor.focus();
                         } catch (err) { /* non-fatal */ }
+                        _tandaiFloating(target);
                         if (window.ezdocFocusSidebarCard) {
                             const [type, id] = _floatingTypeId(target);
                             if (type && id) window.ezdocFocusSidebarCard(type, id);
@@ -3149,6 +3194,12 @@
                         dragState.startLeft = parseInt(target.style.left) || 0;
                         dragState.startTop = parseInt(target.style.top) || 0;
                         target.style.opacity = '0.8';
+                        // Selama menggeser, dokumen tidak boleh menyeleksi teks.
+                        // Tanpa ini gerakan mouse menyapu paragraf di bawah kursor
+                        // dan menyorotnya — pola yang sama dipakai setiap antarmuka
+                        // seret-lepas.
+                        iframeDoc.body.style.userSelect = 'none';
+                        iframeDoc.body.style.webkitUserSelect = 'none';
                     });
 
                     // ALSO listen click event — TinyMCE post-processes click,
@@ -3291,6 +3342,8 @@
 
                         const el = dragState.element;
                         el.style.opacity = '1';
+                        iframeDoc.body.style.userSelect = '';
+                        iframeDoc.body.style.webkitUserSelect = '';
 
                         // Update data attributes — NaN guard supaya tidak overwrite jadi 0 kalau style kosong
                         const leftVal = parseInt(el.style.left);
@@ -3329,6 +3382,14 @@
                         editor.setDirty(true);
                         dragState.active = false;
                         dragState.element = null;
+                        // Melepas tombol mouse di atas teks menghasilkan satu
+                        // event klik susulan yang mendarat di teks itu — bukan di
+                        // gambar yang baru saja digeser. Waktunya dicatat supaya
+                        // klik susulan itu bisa dikenali dan diabaikan; kalau
+                        // tidak, pilihan terlepas tepat setelah dibuat.
+                        // Pola yang sama dipakai peta dan kanvas: sebuah geseran
+                        // berakhir dengan klik yang bukan klik.
+                        window.ezdocFloatingDragSelesai = Date.now();
                     });
 
                     console.log('Drag delegation setup complete');
@@ -4204,6 +4265,20 @@
                 sidebar.querySelectorAll('[data-ez-section]').forEach((el) => el.classList.remove('ez-seksi-aktif'));
                 sidebar.querySelectorAll('[data-focus-target]').forEach((el) => el.classList.remove('ez-kartu-aktif'));
 
+                // Kartu yang sedang dikerjakan ditandai aktif di KEDUA mode.
+                // "Sedang dikerjakan" milik panelnya, bukan milik modenya — dan
+                // kartu pengganti hasil render ulang lahir tanpa tanda apa pun.
+                // Dilaporkan dari pemakaian pada elemen mengambang: tandanya cuma
+                // muncul selama digeser, karena tiap gerakan memilih ulang, lalu
+                // hilang begitu daftarnya dibangun ulang.
+                const kartu = dipilih && dipilih.target
+                    ? sidebar.querySelector('[data-focus-target="' + dipilih.target + '"]')
+                    : null;
+                if (kartu) {
+                    kartu.classList.add('ez-kartu-aktif');
+                    if (window.ezdocSetActivePanelCard) window.ezdocSetActivePanelCard(kartu);
+                }
+
                 const kosong = document.getElementById('ezPanelEmpty');
                 if (mode !== 'simple') {
                     if (kosong) kosong.classList.add('hidden');
@@ -4224,10 +4299,7 @@
                     // diminta orangnya.
                     bukaSeksi(seksi);
                 }
-                if (dipilih.target) {
-                    const kartu = sidebar.querySelector('[data-focus-target="' + dipilih.target + '"]');
-                    if (kartu) kartu.classList.add('ez-kartu-aktif');
-                }
+
             }
 
             function bukaSeksi(seksi) {

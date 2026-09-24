@@ -6,6 +6,35 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Fixed — elemen mengambang: tanda terpilih, seleksi teks, dan klik susulan (2026-09-24)**
+
+Dilaporkan dari pemakaian, tiga hal yang saling menumpuk:
+
+1. **Kartunya tidak pernah bertanda aktif** kecuali selama digeser. Daftar panel
+   dibangun ulang tiap kali posisi elemen tersimpan, dan kartu penggantinya lahir
+   tanpa `is-active`. Penandaan kartu kini dipasang ulang oleh modul mode panel,
+   di KEDUA mode — "sedang dikerjakan" milik panelnya, bukan milik modenya.
+2. **Klik yang mengakhiri geseran melepas pilihan.** Melepas tombol mouse di atas
+   teks menghasilkan satu klik susulan yang mendarat di teks itu, bukan di gambar
+   yang baru digeser. Klik itu kini dikenali dan diabaikan (pola yang sama dipakai
+   peta dan kanvas: sebuah geseran berakhir dengan klik yang bukan klik).
+3. **Menggeser menyorot paragraf di bawah kursor.** Wrapper elemen diseleksi utuh
+   saat dipilih, jadi ada seleksi hidup yang diperpanjang gerakan mouse — itu juga
+   yang memunculkan toolbar melayang. Seleksinya kini dikerutkan jadi caret, dan
+   selama menggeser dokumen tidak menyeleksi teks sama sekali.
+
+Ditambahkan juga gaya **sedang dipilih** untuk elemen mengambang di dokumen
+(garis ungu utuh): sebelumnya tidak ada sama sekali — yang terlihat saat menggeser
+itu efek `:hover`.
+
+Catatan yang tidak berubah: menggeser elemen mengambang MEMANG memindahkan
+paragraf penambatnya ke posisi yang cocok secara visual. Itu disengaja dan
+mengikuti cara Word dan Google Docs menambatkan gambar, supaya menghapus paragraf
+di dekatnya ikut menghapus gambarnya.
+
+4 uji baru; 9 mutasi tertangkap. Klik dan geser diuji di peramban sungguhan lewat
+kejadian mouse asli: elemen tertandai, kartu aktif, tanpa seleksi teks tertinggal.
+
 **Fixed — elemen mengambang tidak bertahan terpilih di mode Selected (2026-09-24)**
 
 Dilaporkan dari pemakaian: "klik gambar floating kok tidak terselect dan hanya

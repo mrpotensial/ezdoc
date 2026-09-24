@@ -62,8 +62,17 @@ const sidebar = buatEl({
 let pengamatCb = null;
 let antrianFrame = [];
 
+// Tiruan dari ezdocSetActivePanelCard milik halaman: satu kartu aktif saja.
+const setAktif = (kartu) => {
+    Object.keys(kartuEl).forEach((k) => {
+        if (kartuEl[k] !== kartu) kartuEl[k].classList.remove('is-active');
+    });
+    if (kartu) kartu.classList.add('is-active');
+};
+
 const ctx = {
     console, Set, Object, JSON,
+    ezdocSetActivePanelCard: setAktif,
     MutationObserver: class {
         constructor(cb) { pengamatCb = cb; }
         observe() { this._aktif = true; }
@@ -100,6 +109,7 @@ panel.pilih('field', 'nama');
 if (!seksiEl.field.classList.contains('ez-seksi-aktif')) gagal('seksi field tidak aktif');
 if (SEKSI.filter((k) => seksiEl[k].classList.contains('ez-seksi-aktif')).length !== 1) gagal('lebih dari satu seksi aktif');
 if (!kartuEl['field:nama'].classList.contains('ez-kartu-aktif')) gagal('kartu field yang dipilih tidak aktif');
+if (!kartuEl['field:nama'].classList.contains('is-active')) gagal('kartu tidak bertanda aktif');
 if (kartuEl['field:alamat'].classList.contains('ez-kartu-aktif')) gagal('kartu lain ikut aktif');
 if (!kosongEl.classList.contains('hidden')) gagal('keadaan kosong masih tampil');
 
@@ -109,11 +119,18 @@ if (seksiEl.field.classList.contains('ez-seksi-aktif')) gagal('seksi sebelumnya 
 if (!seksiEl.ttd.classList.contains('ez-seksi-aktif')) gagal('seksi ttd tidak aktif');
 if (kartuEl['field:nama'].classList.contains('ez-kartu-aktif')) gagal('kartu sebelumnya masih aktif');
 
-// Kembali ke panel penuh: semua tanda dilepas, tidak ada sisa.
+// Kembali ke panel penuh: tidak ada seksi yang ditandai, jadi semuanya
+// terlihat lagi. Tanda kartu boleh tetap ada — di panel penuh ia tidak
+// menyembunyikan apa pun, dan justru menunjukkan yang sedang dikerjakan.
 panel.setMode('all');
 if (sidebar.getAttribute('data-mode') !== 'all') gagal('mode tidak kembali ke all');
 if (SEKSI.some((k) => seksiEl[k].classList.contains('ez-seksi-aktif'))) gagal('tanda seksi tertinggal');
-if (KARTU.some((k) => kartuEl[k].classList.contains('ez-kartu-aktif'))) gagal('tanda kartu tertinggal');
+
+// Tanda aktif tidak bergantung mode: di panel penuh pun kartu yang sedang
+// dikerjakan harus terlihat.
+panel.setMode('all');
+panel.pilih('ttd', 'ttd1');
+if (!kartuEl['ttd:ttd1'].classList.contains('is-active')) gagal('mode penuh: kartu tidak bertanda aktif');
 
 // Pilihan mode diingat.
 if (ctx.localStorage.getItem('ezdoc_designer_panel_mode') !== 'all') gagal('mode tidak tersimpan');
@@ -132,6 +149,7 @@ if (!pengamatCb) gagal('perubahan isi panel tidak diamati');
 pengamatCb([{ type: 'childList' }]);
 antrianFrame.splice(0).forEach((fn) => fn());
 if (!kartuEl['field:nama'].classList.contains('ez-kartu-aktif')) gagal('penanda tidak dipasang ulang setelah render ulang');
+if (!kartuEl['field:nama'].classList.contains('is-active')) gagal('tanda aktif tidak dipasang ulang setelah render ulang');
 if (!seksiEl.field.classList.contains('ez-seksi-aktif')) gagal('seksi tidak aktif lagi setelah render ulang');
 
 // Jenis yang tidak punya seksi diabaikan, bukan mengosongkan panel.

@@ -116,11 +116,14 @@ final class DesignerPanelModeTest extends TestCase
     {
         $skrip = self::sumber(self::SKRIP);
 
-        self::assertMatchesRegularExpression(
-            '/if \(type && id\) \{[\s\S]{0,60}ezdocFocusSidebarCard\(type, id\);[\s\S]{0,400}?ezdocPanelMode\.kosongkan\(\)/',
-            $skrip,
-            'klik di luar elemen tidak melepas pilihan'
-        );
+        // Cabang "tidak ada elemen yang cocok" pada penangan klik editor.
+        $awal = strpos($skrip, 'if (type && id) {');
+        self::assertNotFalse($awal, 'penangan klik editor tidak ketemu');
+        $cabang = substr($skrip, $awal, 900);
+
+        self::assertStringContainsString('ezdocFocusSidebarCard(type, id);', $cabang);
+        self::assertStringContainsString('ezdocPanelMode.kosongkan();', $cabang, 'klik di luar elemen tidak melepas pilihan');
+        self::assertStringContainsString('ezdocClearFloatingSelection();', $cabang, 'penanda elemen mengambang ikut dilepas');
     }
 
     /** Penanda tabledb juga sebuah elemen dokumen — ia ikut memilih seksinya. */
@@ -130,6 +133,78 @@ final class DesignerPanelModeTest extends TestCase
 
         self::assertStringContainsString("ezdocPanelMode.pilih('marker', null)", $skrip);
         self::assertStringContainsString('ezdocPanelMode.kosongkan()', $skrip);
+    }
+
+    // ── Elemen mengambang ────────────────────────────────────────────────
+
+    /**
+     * Elemen mengambang yang dipilih terlihat dipilih.
+     *
+     * Dilaporkan dari pemakaian: "harusnya dia warna ungu dan aktif jika
+     * terseleksi gambar float nya, ini cuma aktif saat gambar float di drag
+     * aja". Memang belum ada gayanya sama sekali — yang terlihat saat menggeser
+     * itu efek `:hover`, jadi elemen terpilih tampak sama dengan yang tidak.
+     */
+    public function testElemenMengambangTerpilihPunyaGayaSendiri(): void
+    {
+        $skrip = self::sumber(self::SKRIP);
+
+        self::assertStringContainsString('.logo-placeholder.floating.ez-float-selected', $skrip);
+        self::assertStringContainsString("target.classList.add('ez-float-selected')", $skrip);
+        self::assertMatchesRegularExpression(
+            "/_tandaiFloating = \(target\) => \{[\s\S]{0,400}?querySelectorAll\('\.ez-float-selected'\)/",
+            $skrip,
+            'penanda lama harus dilepas — hanya satu elemen terpilih pada satu waktu'
+        );
+    }
+
+    /**
+     * Memilih elemen mengambang tidak menyeleksi teks.
+     *
+     * Dilaporkan: menggeser gambar mengambang menyorot paragraf di bawah
+     * kursor. Sebabnya wrapper-nya diseleksi utuh, jadi ada seleksi hidup yang
+     * diperpanjang gerakan mouse berikutnya — dan toolbar melayang TinyMCE
+     * muncul karenanya.
+     */
+    public function testMemilihElemenMengambangTidakMenyeleksiTeks(): void
+    {
+        $skrip = self::sumber(self::SKRIP);
+
+        self::assertMatchesRegularExpression(
+            '/editor\.selection\.select\(wrapper\);\s*
+\s*editor\.selection\.collapse\(true\);/',
+            $skrip,
+            'seleksi harus dikerutkan jadi caret'
+        );
+    }
+
+    /** Selama menggeser, dokumen tidak menyeleksi teks — dan dipulihkan sesudahnya. */
+    public function testMenggeserMematikanSeleksiTeksLaluMemulihkannya(): void
+    {
+        $skrip = self::sumber(self::SKRIP);
+
+        self::assertStringContainsString("iframeDoc.body.style.userSelect = 'none';", $skrip);
+        self::assertStringContainsString("iframeDoc.body.style.userSelect = '';", $skrip);
+    }
+
+    /**
+     * Klik yang mengakhiri sebuah geseran tidak melepas pilihan.
+     *
+     * Melepas tombol mouse di atas teks menghasilkan satu klik susulan yang
+     * mendarat di teks itu, bukan di gambar yang baru saja digeser. Tanpa
+     * penjagaan ini, pilihan terlepas tepat setelah dibuat — dan kartunya
+     * kehilangan tanda aktif, persis seperti yang dilaporkan.
+     */
+    public function testKlikSusulanGeseranDiabaikan(): void
+    {
+        $skrip = self::sumber(self::SKRIP);
+
+        self::assertStringContainsString('window.ezdocFloatingDragSelesai = Date.now();', $skrip);
+        self::assertStringContainsString(
+            "} else if (!((window.ezdocFloatingDragSelesai || 0) > Date.now() - 300)) {",
+            $skrip,
+            'pelepas pilihan harus mengabaikan klik susulan geseran'
+        );
     }
 
     /**
