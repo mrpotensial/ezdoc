@@ -59,8 +59,16 @@ const sidebar = buatEl({
     },
 });
 
+let pengamatCb = null;
+let antrianFrame = [];
+
 const ctx = {
     console, Set, Object, JSON,
+    MutationObserver: class {
+        constructor(cb) { pengamatCb = cb; }
+        observe() { this._aktif = true; }
+    },
+    requestAnimationFrame: (fn) => { antrianFrame.push(fn); },
     localStorage: { _v: {}, getItem(k) { return this._v[k] || null; }, setItem(k, v) { this._v[k] = v; } },
     document: {
         getElementById: (id) => (id === 'ezSidebar' ? sidebar : (id === 'ezPanelEmpty' ? kosongEl : null)),
@@ -113,6 +121,18 @@ if (ctx.localStorage.getItem('ezdoc_designer_panel_mode') !== 'all') gagal('mode
 // Tombol tab memindahkan mode.
 tombolMode.simple._klik();
 if (sidebar.getAttribute('data-mode') !== 'simple') gagal('tombol tab tidak memindahkan mode');
+
+// Daftar panel dirender ulang sesudah memilih — persis yang terjadi pada
+// elemen mengambang, karena posisinya tersimpan lalu daftarnya dibangun ulang.
+// Penandanya harus terpasang lagi; kalau tidak, panel tampak kosong.
+panel.setMode('simple');
+panel.pilih('field', 'nama');
+kartuEl['field:nama'] = buatEl();          // kartu lama terbuang, diganti yang baru
+if (!pengamatCb) gagal('perubahan isi panel tidak diamati');
+pengamatCb([{ type: 'childList' }]);
+antrianFrame.splice(0).forEach((fn) => fn());
+if (!kartuEl['field:nama'].classList.contains('ez-kartu-aktif')) gagal('penanda tidak dipasang ulang setelah render ulang');
+if (!seksiEl.field.classList.contains('ez-seksi-aktif')) gagal('seksi tidak aktif lagi setelah render ulang');
 
 // Jenis yang tidak punya seksi diabaikan, bukan mengosongkan panel.
 panel.pilih('field', 'nama');

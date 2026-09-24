@@ -4238,6 +4238,36 @@
                 } catch (e) { /* Alpine belum siap */ }
             }
 
+            // Daftar di panel dibangun ulang dari isi editor oleh scanLogos(),
+            // scanTtdPlaceholders(), dan saudaranya — dan itu terjadi tepat
+            // sesudah sebuah elemen mengambang disentuh, karena posisinya baru
+            // saja tersimpan. Kartu lama ikut terbuang bersama penandanya, dan
+            // panel yang baru saja menampilkan sesuatu berubah kosong dalam
+            // sepersekian detik. Dilaporkan dari pemakaian, persis begitu.
+            //
+            // Jadi penandanya dipasang ulang setiap kali isi panel berubah.
+            // Mengamati, bukan menambal tiap pemanggil: yang merender ulang ada
+            // di banyak tempat, dan yang berikutnya tidak akan tahu harus
+            // memberi tahu siapa-siapa.
+            function amatiPanel() {
+                if (!sidebar || typeof MutationObserver === 'undefined') return;
+                let menunggu = false;
+                const jadwalkan = window.requestAnimationFrame
+                    ? window.requestAnimationFrame.bind(window)
+                    : (fn) => setTimeout(fn, 16);
+                const pengamat = new MutationObserver(function () {
+                    if (menunggu) return;
+                    menunggu = true;
+                    jadwalkan(function () {
+                        menunggu = false;
+                        terapkan();
+                    });
+                });
+                // Hanya perubahan ISI yang diamati. terapkan() cuma menyentuh
+                // kelas, jadi ia tidak memanggil dirinya sendiri.
+                pengamat.observe(sidebar, { childList: true, subtree: true });
+            }
+
             function setMode(baru) {
                 mode = baru === 'simple' ? 'simple' : 'all';
                 try { localStorage.setItem(KUNCI, mode); } catch (e) {}
@@ -4270,6 +4300,7 @@
                     document.querySelectorAll('[data-ez-mode]').forEach((b) => {
                         b.addEventListener('click', () => setMode(b.dataset.ezMode));
                     });
+                    amatiPanel();
                     terapkan();
                 },
             };

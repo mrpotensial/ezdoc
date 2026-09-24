@@ -6,6 +6,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Fixed — elemen mengambang tidak bertahan terpilih di mode Selected (2026-09-24)**
+
+Dilaporkan dari pemakaian: "klik gambar floating kok tidak terselect dan hanya
+tampil beberapa ms aja ya? jika klik gambar biasa yang inline tampil panelnya".
+
+Sebabnya bukan pemilihannya, tapi apa yang terjadi sesudahnya. Daftar di panel
+dibangun ulang dari isi editor oleh `scanLogos()` dan saudaranya — dan itu
+berjalan tepat setelah elemen mengambang disentuh, karena posisinya baru saja
+tersimpan. Kartu lama terbuang bersama penanda "sedang dipilih", jadi panel yang
+baru saja menampilkan sesuatu berubah menyisakan judul seksinya saja.
+
+Penandanya kini dipasang ulang setiap kali isi panel berubah, lewat
+`MutationObserver` pada sidebar. Mengamati, bukan menambal tiap pemanggil: yang
+merender ulang ada di banyak tempat, dan yang ditambahkan berikutnya tidak akan
+tahu harus memberi tahu siapa-siapa.
+
+1 uji baru yang meniru urutan aslinya — pilih, daftar dirender ulang, penanda
+harus kembali — dan gagal tanpa perbaikan ini. Diperiksa juga di halaman
+sungguhan dengan logo mengambang.
+
 **Added — panel designer punya dua mode (2026-09-24)**
 
 Diminta pemakai: "ada mode simple ada mode panel seperti sekarang… di mode
