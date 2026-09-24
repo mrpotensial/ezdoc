@@ -6,6 +6,33 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — panel designer punya dua mode (2026-09-24)**
+
+Diminta pemakai: "ada mode simple ada mode panel seperti sekarang… di mode
+simple yang diklik yang muncul opsi/properties kanannya, misal klik label muncul
+properties label itu aja". Sebelas seksi terbuka sekaligus membuat orang
+mencari-cari padahal yang sedang dikerjakan cuma satu elemen.
+
+- **Selected** — klik elemen di dokumen, panel menampilkan pengaturan elemen itu
+  saja: satu seksi, satu kartu. Kotak pencarian, tombol tambah, dan pesan daftar
+  ikut disembunyikan karena semuanya milik DAFTAR, bukan milik elemen yang
+  dipilih. Klik di tempat kosong melepas pilihan. Pola inspector Figma/Webflow.
+- **All sections** — panel penuh seperti sebelumnya, dan tetap jadi bawaan:
+  menambah elemen baru justru dimulai dari daftarnya. Pilihan mode diingat.
+
+Yang berubah hanya apa yang TERLIHAT. Seluruh seksi tetap ada di DOM, tetap
+terisi, dan tetap tersimpan seperti biasa — tidak ada satu pun jalur penyimpanan
+yang perlu tahu mode panel sedang apa. Pilihannya memakai jalur yang sudah ada
+(`ezdocFocusSidebarCard`), jadi tidak ada sumber kebenaran kedua tentang "apa
+yang sedang dikerjakan".
+
+Sekalian diperbaiki: seksi Verify Config tidak pernah tersembunyi karena
+penandanya menempel di pembungkus yang salah (bentuk markup-nya berbeda dari
+seksi lain).
+
+6 uji baru, termasuk modulnya dijalankan di atas DOM tiruan; 9 mutasi
+tertangkap. Mode Selected, keadaan kosong, dan mode penuh dipotret.
+
 **Added — setelan yang berlaku sekarang, ditulis untuk dibaca (2026-09-23)**
 
 Diminta pemakai: "perlu ada preview config tersimpan sekarang… tapi jangan

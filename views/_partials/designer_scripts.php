@@ -556,6 +556,9 @@
 
             // Populate form fields dari data-* attrs
             const ns = el.getAttribute('data-ns') || '';
+            // Mode "Selected" ikut: penanda tabledb adalah elemen dokumen
+            // seperti yang lain, cuma pengaturannya ada di seksi Marker.
+            if (window.ezdocPanelMode) window.ezdocPanelMode.pilih('marker', null);
             const selector = el.getAttribute('data-selector') || '';
             const format = el.getAttribute('data-format') || '';
             const parsed = parseTabledbSelector(selector);
@@ -660,6 +663,9 @@
             }
             _tabledbPanelMode = 'empty';
             _tabledbLastInsertCell = null;
+            if (window.ezdocPanelMode && window.ezdocPanelMode.mode === 'simple') {
+                window.ezdocPanelMode.kosongkan();
+            }
             document.getElementById('tabledbEditorEmpty').style.display = '';
             document.getElementById('tabledbEditorForm').style.display = 'none';
             const status = document.getElementById('tabledbEditorStatus');
@@ -2853,7 +2859,14 @@
                         el = el.parentElement;
                         depth++;
                     }
-                    if (type && id) window.ezdocFocusSidebarCard(type, id);
+                    if (type && id) {
+                        window.ezdocFocusSidebarCard(type, id);
+                    } else if (window.ezdocPanelMode) {
+                        // Klik di tempat kosong berarti tidak ada yang dipilih.
+                        // Menahan pilihan lama akan membuat panel menunjukkan
+                        // properti elemen yang sudah tidak disentuh siapa pun.
+                        window.ezdocPanelMode.kosongkan();
+                    }
                 });
                 editor.on('init', function() {
                     // v0.9.14b: post-init sweep — transform raw markers yg belum
@@ -4164,6 +4177,108 @@
             sidebar.addEventListener('focusin', setFromEvent);
         })();
 
+        // ===== DUA MODE PANEL =====
+        // "Selected" menampilkan pengaturan milik elemen yang sedang diklik saja;
+        // "All sections" adalah panel penuh seperti sebelumnya. Yang berubah cuma
+        // apa yang TERLIHAT — tidak ada bagian panel yang dibongkar, jadi tidak
+        // ada jalur penyimpanan yang perlu tahu mode sedang apa.
+        //
+        // Pola inspector Figma/Webflow: pilih sesuatu, lihat propertinya. Mode
+        // penuh tetap ada karena MENAMBAH elemen justru dimulai dari daftarnya.
+        window.ezdocPanelMode = (function () {
+            const KUNCI = 'ezdoc_designer_panel_mode';
+            const sidebar = document.getElementById('ezSidebar');
+            let mode = 'all';
+            let dipilih = null; // { seksi, target }
+
+            // Jenis elemen di editor → seksi panel yang memuat pengaturannya.
+            const SEKSI = {
+                field: 'field', ttd: 'ttd', materai: 'materai',
+                logo: 'logo', qr: 'qr', cond: 'cond', marker: 'marker',
+            };
+
+            function terapkan() {
+                if (!sidebar) return;
+                sidebar.setAttribute('data-mode', mode);
+
+                sidebar.querySelectorAll('[data-ez-section]').forEach((el) => el.classList.remove('ez-seksi-aktif'));
+                sidebar.querySelectorAll('[data-focus-target]').forEach((el) => el.classList.remove('ez-kartu-aktif'));
+
+                const kosong = document.getElementById('ezPanelEmpty');
+                if (mode !== 'simple') {
+                    if (kosong) kosong.classList.add('hidden');
+                    return;
+                }
+
+                if (!dipilih) {
+                    if (kosong) kosong.classList.remove('hidden');
+                    return;
+                }
+                if (kosong) kosong.classList.add('hidden');
+
+                const seksi = sidebar.querySelector('[data-ez-section="' + dipilih.seksi + '"]');
+                if (seksi) {
+                    seksi.classList.add('ez-seksi-aktif');
+                    // Seksi yang terpilih selalu dibuka: menampilkan judul yang
+                    // terlipat berarti menyembunyikan satu-satunya hal yang
+                    // diminta orangnya.
+                    bukaSeksi(seksi);
+                }
+                if (dipilih.target) {
+                    const kartu = sidebar.querySelector('[data-focus-target="' + dipilih.target + '"]');
+                    if (kartu) kartu.classList.add('ez-kartu-aktif');
+                }
+            }
+
+            function bukaSeksi(seksi) {
+                if (!window.Alpine) return;
+                try {
+                    const data = window.Alpine.$data(seksi);
+                    if (data && 'open' in data) data.open = true;
+                } catch (e) { /* Alpine belum siap */ }
+            }
+
+            function setMode(baru) {
+                mode = baru === 'simple' ? 'simple' : 'all';
+                try { localStorage.setItem(KUNCI, mode); } catch (e) {}
+                terapkan();
+            }
+
+            return {
+                setMode: setMode,
+                get mode() { return mode; },
+
+                /** Dipanggil saat sebuah elemen di editor dipilih. */
+                pilih: function (jenis, id) {
+                    const seksi = SEKSI[jenis];
+                    if (!seksi) return;
+                    dipilih = { seksi: seksi, target: id ? jenis + ':' + id : null };
+                    terapkan();
+                },
+
+                /** Tidak ada yang terpilih lagi. */
+                kosongkan: function () {
+                    dipilih = null;
+                    terapkan();
+                },
+
+                mulai: function () {
+                    try {
+                        const simpanan = localStorage.getItem(KUNCI);
+                        if (simpanan === 'simple' || simpanan === 'all') mode = simpanan;
+                    } catch (e) {}
+                    document.querySelectorAll('[data-ez-mode]').forEach((b) => {
+                        b.addEventListener('click', () => setMode(b.dataset.ezMode));
+                    });
+                    terapkan();
+                },
+            };
+        })();
+
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.ezdocPanelMode) window.ezdocPanelMode.mulai();
+        });
+
         // ===== CLICK-TO-FOCUS SIDEBAR =====
         // Editor click → auto-scroll ke sub-card di panel kanan. VS Code Outline /
         // Figma Layers / Filament Forms pattern. Called by editor.on('click') listener.
@@ -4171,6 +4286,10 @@
         // type: 'field' | 'ttd' | 'materai' | 'logo' | 'qr' | 'cond'
         // id:   identifier unique per type (mis. field name, ttd id, cond-id)
         window.ezdocFocusSidebarCard = function(type, id) {
+            // Mode "Selected" ikut pilihan yang sama — satu sumber kebenaran
+            // tentang "apa yang sedang dikerjakan", bukan dua yang bisa beda.
+            if (window.ezdocPanelMode) window.ezdocPanelMode.pilih(type, id);
+
             const PANEL_MAP = {
                 field:   'fieldList',
                 ttd:     'ttdList',

@@ -272,6 +272,22 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         .tox-tinymce-aux { position: fixed !important; z-index: 99999 !important; }
 
         /* PRESERVE: Alpine state-based selectors — Alpine :class binding toggles .is-collapsed */
+        /* ── Mode "Selected" ──
+           Yang disembunyikan hanya tampilannya: seluruh seksi tetap ada di DOM,
+           tetap terisi, dan tetap tersimpan seperti biasa. Menyembunyikan lewat
+           CSS, bukan membongkar DOM, supaya tidak ada satu pun jalur penyimpanan
+           yang perlu tahu mode panel sedang apa. */
+        #ezSidebar[data-mode="simple"] [data-ez-section]:not(.ez-seksi-aktif) { display: none; }
+        #ezSidebar[data-mode="simple"] [data-focus-target]:not(.ez-kartu-aktif) { display: none; }
+        /* Kotak pencarian, tombol tambah, dan pesan "belum ada" milik DAFTAR —
+           bukan milik elemen yang sedang dipilih. */
+        #ezSidebar[data-mode="simple"] [data-ez-bulk] { display: none !important; }
+        #ezSidebar[data-mode="simple"] div:has(> input[type="search"]) { display: none; }
+        #ezSidebar[data-mode="simple"] [data-ez-mode="simple"],
+        #ezSidebar[data-mode="all"] [data-ez-mode="all"] {
+            background-color: #f3f4f6;
+            color: #111827;
+        }
         .panel-header .collapse-icon { transition: transform 0.2s; }
         .panel-header.is-collapsed .collapse-icon { transform: rotate(-90deg); }
 
@@ -445,12 +461,40 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             </div>
 
             <!-- Sidebar -->
-            <div class="w-full md:w-1/3 lg:w-1/4 bg-white h-screen overflow-y-auto border-l border-gray-200 sidebar-scroll">
+            <div id="ezSidebar" class="w-full md:w-1/3 lg:w-1/4 bg-white h-screen overflow-y-auto border-l border-gray-200 sidebar-scroll" data-mode="all">
                 <div class="px-3">
                     <?= \Ezdoc\UI\Slot::render('designer:sidebar-header', ['template' => $template]) ?>
                 </div>
+
+                <!-- Dua cara melihat panel yang sama.
+                     "Selected" menampilkan pengaturan milik elemen yang sedang
+                     diklik saja — sebelas seksi terbuka sekaligus membuat orang
+                     mencari-cari padahal yang sedang dikerjakan cuma satu. Pola
+                     inspector Figma/Webflow. "All sections" tetap ada karena
+                     menambah elemen baru justru mulai dari daftarnya. -->
+                <div class="sticky top-0 z-20 flex gap-1 border-b border-gray-200 bg-white px-3 py-2">
+                    <button type="button" data-ez-mode="simple"
+                            class="flex-1 rounded px-2 py-1 text-xs font-medium text-gray-500 hover:text-gray-900">
+                        <i class="bi bi-cursor"></i> <?= h(t('panel.mode_selected', [], 'Selected')) ?>
+                    </button>
+                    <button type="button" data-ez-mode="all"
+                            class="flex-1 rounded px-2 py-1 text-xs font-medium text-gray-500 hover:text-gray-900">
+                        <i class="bi bi-list-ul"></i> <?= h(t('panel.mode_all', [], 'All sections')) ?>
+                    </button>
+                </div>
+
+                <div id="ezPanelEmpty" class="hidden px-3 py-6 text-center">
+                    <i class="bi bi-cursor-fill text-lg text-gray-300"></i>
+                    <p class="mt-2 text-xs text-gray-500">
+                        <?= h(t('panel.mode_selected_hint', [], 'Click an element in the document to edit it here.')) ?>
+                    </p>
+                    <button type="button" data-ez-mode="all"
+                            class="mt-3 rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50">
+                        <?= h(t('panel.mode_all', [], 'All sections')) ?>
+                    </button>
+                </div>
                 <!-- Halaman Panel — Kertas + Orientasi + Margin combined (collapsed default after first setup) -->
-                <div class="border-b border-gray-200" x-data="{ open: false }">
+                <div class="border-b border-gray-200" data-ez-section="page" x-data="{ open: false }">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
                         <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-file-earmark"></i><?= h(t('page.panel_title', [], 'Page')) ?></h6>
                         <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
@@ -522,7 +566,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- Field Panel (Collapsible) -->
-                <div class="border-b border-gray-200" x-data="{ open: true }">
+                <div class="border-b border-gray-200" data-ez-section="field" x-data="{ open: true }">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
                         <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-input-cursor-text"></i>Fields <span id="fieldCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
                         <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
@@ -534,13 +578,13 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                                 <button type="button" class="absolute top-1/2 right-1.5 -translate-y-1/2 border-0 bg-transparent text-gray-400 hover:text-red-500 text-base leading-none cursor-pointer px-1" onclick="clearPanelSearch('fieldSearch','fieldList')" title="<?= h(t('field.clear_search_title', [], 'Clear')) ?>">×</button>
                             </div>
                             <div id="fieldList"></div>
-                            <div id="fieldEmpty" class="text-center text-gray-500 text-xs py-2">
+                            <div data-ez-bulk id="fieldEmpty" class="text-center text-gray-500 text-xs py-2">
                                 <?= h(t('field.empty_hint', [], 'Click "+ Field" in the editor')) ?>
                             </div>
-                            <div id="fieldNoMatch" class="text-center text-gray-500 text-xs py-2" style="display:none;">
+                            <div data-ez-bulk id="fieldNoMatch" class="text-center text-gray-500 text-xs py-2" style="display:none;">
                                 <em><?= h(t('field.no_match', [], 'No field matches the search.')) ?></em>
                             </div>
-                            <button type="button" class="w-full mt-1 inline-flex items-center justify-center px-2 py-1 rounded text-xs border border-gray-500 text-gray-700 hover:bg-gray-50" onclick="openVarManager()">
+                            <button type="button" data-ez-bulk class="w-full mt-1 inline-flex items-center justify-center px-2 py-1 rounded text-xs border border-gray-500 text-gray-700 hover:bg-gray-50" onclick="openVarManager()">
                                 <i class="bi bi-gear mr-1"></i><?= h(t('field.manage_vars_button', [], 'Manage Default Variables')) ?>
                             </button>
                         </div>
@@ -548,7 +592,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- Logo Panel (Collapsible) -->
-                <div class="border-b border-gray-200" x-data="{ open: false }">
+                <div class="border-b border-gray-200" data-ez-section="logo" x-data="{ open: false }">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
                         <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-image"></i>Logo <span id="logoCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
                         <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
@@ -556,7 +600,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     <div x-show="open" x-collapse>
                         <div class="p-2 pt-0">
                             <div id="logoList"></div>
-                            <div id="logoEmpty" class="text-center text-gray-500 text-xs py-2">
+                            <div data-ez-bulk id="logoEmpty" class="text-center text-gray-500 text-xs py-2">
                                 <?= h(t('logo.empty_hint', [], 'Click "+ Logo" in the editor')) ?>
                             </div>
                         </div>
@@ -564,7 +608,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- TTD Panel (Collapsible) -->
-                <div class="border-b border-gray-200" x-data="{ open: false }">
+                <div class="border-b border-gray-200" data-ez-section="ttd" x-data="{ open: false }">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
                         <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-pen"></i><?= h(t('fallback.signature', [], 'Signature')) ?> <span id="ttdCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
                         <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
@@ -576,10 +620,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                                 <button type="button" class="absolute top-1/2 right-1.5 -translate-y-1/2 border-0 bg-transparent text-gray-400 hover:text-red-500 text-base leading-none cursor-pointer px-1" onclick="clearPanelSearch('ttdSearch','ttdList')" title="<?= h(t('field.clear_search_title', [], 'Clear')) ?>">×</button>
                             </div>
                             <div id="ttdList"></div>
-                            <div id="ttdEmpty" class="text-center text-gray-500 text-xs py-2">
+                            <div data-ez-bulk id="ttdEmpty" class="text-center text-gray-500 text-xs py-2">
                                 <?= h(t('ttd.empty_hint', [], 'Click "+ Signature" in the editor')) ?>
                             </div>
-                            <div id="ttdNoMatch" class="text-center text-gray-500 text-xs py-2" style="display:none;">
+                            <div data-ez-bulk id="ttdNoMatch" class="text-center text-gray-500 text-xs py-2" style="display:none;">
                                 <em><?= h(t('ttd.no_match', [], 'No signature matches.')) ?></em>
                             </div>
                         </div>
@@ -587,7 +631,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- Materai Panel (Collapsible) -->
-                <div class="border-b border-gray-200" x-data="{ open: false }">
+                <div class="border-b border-gray-200" data-ez-section="materai" x-data="{ open: false }">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
                         <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-stamp"></i><?= h(t('materai.panel_title', [], 'Stamp Duty')) ?> <span id="materaiCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
                         <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
@@ -599,10 +643,10 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                                 <button type="button" class="absolute top-1/2 right-1.5 -translate-y-1/2 border-0 bg-transparent text-gray-400 hover:text-red-500 text-base leading-none cursor-pointer px-1" onclick="clearPanelSearch('materaiSearch','materaiList')" title="<?= h(t('field.clear_search_title', [], 'Clear')) ?>">×</button>
                             </div>
                             <div id="materaiList"></div>
-                            <div id="materaiEmpty" class="text-center text-gray-500 text-xs py-2">
+                            <div data-ez-bulk id="materaiEmpty" class="text-center text-gray-500 text-xs py-2">
                                 <?= h(t('materai.empty_hint', [], 'Click "+ Stamp Duty" in the editor')) ?>
                             </div>
-                            <div id="materaiNoMatch" class="text-center text-gray-500 text-xs py-2" style="display:none;">
+                            <div data-ez-bulk id="materaiNoMatch" class="text-center text-gray-500 text-xs py-2" style="display:none;">
                                 <em><?= h(t('materai.no_match', [], 'No stamp duty matches.')) ?></em>
                             </div>
                         </div>
@@ -610,7 +654,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- Query DB Panel (Collapsible) -->
-                <div class="border-b border-gray-200" x-data="{ open: false }">
+                <div class="border-b border-gray-200" data-ez-section="tabledb" x-data="{ open: false }">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
                         <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-database"></i>Query DB <span id="tabledbCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
                         <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
@@ -619,7 +663,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         <div class="p-2 pt-0">
                             <button type="button" class="w-full mb-2 inline-flex items-center justify-center px-2 py-1 rounded text-xs border border-cyan-500 text-cyan-600 hover:bg-cyan-50" onclick="openTabledbModal()"><i class="bi bi-plus-lg mr-1"></i><?= h(t('tabledb.add_button', [], 'Add Query')) ?></button>
                             <div id="tabledbList"></div>
-                            <div id="tabledbEmpty" class="text-center text-gray-500 text-xs py-2">
+                            <div data-ez-bulk id="tabledbEmpty" class="text-center text-gray-500 text-xs py-2">
                                 <?= h(t('tabledb.empty_hint', [], 'No query yet.')) ?><br>
                                 <span class="text-xs"><?= h(t('tabledb.empty_detail', [], 'Add a query → the {{tabledb.x.column}} variable can be used in a regular TinyMCE table for repeating rows.')) ?></span>
                             </div>
@@ -628,7 +672,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- Marker Terpilih Panel (v0.9.14b — click chip in editor to edit) -->
-                <div class="border-b border-gray-200" x-data="{ open: true }" id="tabledbMarkerEditorPanel">
+                <div class="border-b border-gray-200" x-data="{ open: true }" id="tabledbMarkerEditorPanel" data-ez-section="marker">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
                         <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5">
                             <i class="bi bi-braces-asterisk"></i>Marker Terpilih
@@ -742,7 +786,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- QR Panel (Collapsible) -->
-                <div class="border-b border-gray-200" x-data="{ open: false }">
+                <div class="border-b border-gray-200" data-ez-section="qr" x-data="{ open: false }">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
                         <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-qr-code"></i>QR Code <span id="qrCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
                         <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
@@ -750,7 +794,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     <div x-show="open" x-collapse>
                         <div class="p-2 pt-0">
                             <div id="qrList"></div>
-                            <div id="qrEmpty" class="text-center text-gray-500 text-xs py-2">
+                            <div data-ez-bulk id="qrEmpty" class="text-center text-gray-500 text-xs py-2">
                                 <?= h(t('qr.empty_hint', [], 'Click "+ QR" in the editor')) ?>
                             </div>
                         </div>
@@ -758,7 +802,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- Kondisi Panel (Collapsible) — conditional sections -->
-                <div class="border-b border-gray-200" x-data="{ open: false }">
+                <div class="border-b border-gray-200" data-ez-section="cond" x-data="{ open: false }">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
                         <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-diamond-half"></i><?= h(t('cond.panel_title', [], 'Condition')) ?> <span id="condCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
                         <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
@@ -766,7 +810,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     <div x-show="open" x-collapse>
                         <div class="p-2 pt-0">
                             <div id="condList"></div>
-                            <div id="condEmpty" class="text-center text-gray-500 text-xs py-2">
+                            <div data-ez-bulk id="condEmpty" class="text-center text-gray-500 text-xs py-2">
                                 <?= h(t('cond.empty_hint', [], 'Click "Condition" in the editor toolbar')) ?>
                             </div>
                             <div class="mt-1 text-[10px] text-gray-500 leading-tight">
@@ -777,7 +821,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- Konfigurasi Verifikasi Publik (Collapsible) -->
-                <div class="bg-slate-50 border border-slate-200 rounded-lg p-0 mb-2.5" x-data="{ open: false }" x-init="$watch('open', v => { if(v) window.dispatchEvent(new CustomEvent('verify-panel-shown')) })">
+                <div class="bg-slate-50 border border-slate-200 rounded-lg p-0 mb-2.5" data-ez-section="verify" x-data="{ open: false }" x-init="$watch('open', v => { if(v) window.dispatchEvent(new CustomEvent('verify-panel-shown')) })">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
                         <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-shield-check"></i><?= h(t('verify.panel_title', [], 'Verify Config')) ?> <span id="verifyFieldCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
                         <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
@@ -821,7 +865,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- Konfigurasi Akses Template (Collapsible) - RBAC per template -->
-                <div class="border-b border-gray-200" x-data="{ open: false }">
+                <div class="border-b border-gray-200" data-ez-section="access" x-data="{ open: false }">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
                         <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-lock-fill"></i><?= h(t('access.panel_title', [], 'Access Config')) ?> <span id="accessConfigCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
                         <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
@@ -985,8 +1029,9 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     }
                 </style>
 
-                <!-- Help -->
-                <div class="border border-slate-200 rounded-lg p-3 mb-2.5 bg-gray-100">
+                <!-- Help — milik panel penuh: di mode "Selected" yang
+                     ditanyakan orang bukan daftar pintasan, tapi satu elemen. -->
+                <div data-ez-bulk class="border border-slate-200 rounded-lg p-3 mb-2.5 bg-gray-100">
                     <small class="text-gray-500 text-xs">
                         <strong><?= h(t('help.shortcut_label', [], 'Shortcut:')) ?></strong> <?= h(t('help.shortcut_save', [], 'Ctrl+S to save')) ?><br>
                         <strong><?= h(t('help.field_label', [], '+ Field:')) ?></strong> Text, Number, Date, Checkbox, Radio, Select<br>
