@@ -6,6 +6,43 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Changed — ubah ukuran gambar seperti mengubah ukuran jendela (2026-09-24)**
+
+Dilaporkan dari pemakaian: "untuk live resize kok hilang ya? harusnya bisa live
+resize seperti resize window gitu".
+
+Diperiksa dulu di peramban sungguhan, dengan kejadian mouse asli, pada tiga versi
+kode (sebelum sesi ini, sebelum perbaikan elemen mengambang, dan sesudahnya):
+pegangannya tidak pernah hilang — menariknya tetap mengubah lebar, dan berkas yang
+terpasang di server sama persis dengan yang diuji. Yang membuatnya terasa hilang:
+pegangannya cuma SATU titik 12px di pojok kanan bawah, dan hanya muncul selama
+mouse menyentuh elemennya. Elemen yang sudah dipilih — sekarang bergaris ungu —
+tidak menunjukkan apa-apa.
+
+Sekarang:
+
+- Pegangan di **sisi kanan**, **sudut kanan-bawah**, dan — untuk elemen
+  mengambang — **sudut kiri-bawah**. Menarik sudut kiri menahan sisi kanannya di
+  tempat, persis seperti menarik tepi kiri sebuah jendela.
+- Pegangan muncul juga **selama elemennya terpilih**, bukan cuma saat disentuh
+  mouse.
+- **Ukuran berjalan ditampilkan** selama ditarik (pola Figma/Google Docs).
+- **Esc membatalkan** di tengah jalan: ukuran dan posisi kembali seperti semula,
+  dan tidak ada yang tersimpan.
+- **Materai ikut bisa diubah**, termasuk tingginya lewat sisi bawah — ukurannya
+  memang punya tempat simpan (`data-width`/`data-height` + daftar materai).
+
+TTD sengaja TIDAK ikut: ukurannya dikunci supaya sama persis dengan hasil cetak.
+QR juga belum, karena di editor ia masih berupa teks, bukan kotak berukuran.
+Gambar biasa tetap memakai pegangan bawaan TinyMCE.
+
+Pegangan dan label ukuran bertanda `data-mce-bogus`, jadi tidak ikut tersimpan ke
+template.
+
+5 uji baru; penangannya dijalankan di atas DOM tiruan, bukan dibaca. Diuji juga di
+Chrome sungguhan: tarik kiri/kanan/bawah, label ukuran, Esc, dan isi dokumen tetap
+bersih.
+
 **Fixed — elemen mengambang: tanda terpilih, seleksi teks, dan klik susulan (2026-09-24)**
 
 Dilaporkan dari pemakaian, tiga hal yang saling menumpuk:

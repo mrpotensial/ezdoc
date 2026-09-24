@@ -3211,120 +3211,268 @@
                         setTimeout(() => _selectFloating(target), 0);
                     });
 
-                    // ═══ LOGO LIVE RESIZE ═══
-                    // Show resize handle on hover atas logo image. Drag handle →
-                    // width changes proportionally (aspect ratio preserved).
-                    // Save width ke configHeader.logoSizes on release.
+                    // ═══ UBAH UKURAN LANGSUNG ═══
+                    // Tarik sudut atau sisinya, ukurannya ikut mouse saat itu juga —
+                    // seperti mengubah ukuran jendela. Angkanya baru disimpan saat
+                    // tombol dilepas, dan Esc membatalkan.
                     //
-                    // Precedent: TinyMCE object_resizing (native for editable
-                    // images), Google Docs image resize handles, Figma/Sketch
-                    // scale handles pattern.
-                    const resizeState = { active: false, img: null, logoEl: null, startX: 0, startWidth: 0, aspect: 1 };
+                    // Sebelumnya cuma ada SATU titik kecil di pojok kanan bawah, dan
+                    // hanya muncul kalau mouse sedang menyentuh elemennya. Elemen
+                    // yang sudah dipilih tidak menunjukkan apa-apa, jadi pegangannya
+                    // sulit ditemukan — dilaporkan sebagai "resize-nya hilang".
+                    // Sekarang pegangan juga muncul selama elemennya terpilih.
+                    //
+                    // Precedent: Google Docs dan Figma (pegangan di sudut dan sisi,
+                    // muncul saat terpilih, ukuran ditampilkan selama ditarik),
+                    // TinyMCE object_resizing untuk gambar biasa, dan Esc-membatalkan
+                    // seperti di pengatur jendela.
+                    //
+                    // Yang bisa diubah hanya yang punya tempat simpan ukuran:
+                    //   logo    → configHeader.logoSizes + data-width (lebar saja,
+                    //             tingginya ikut proporsi gambar)
+                    //   materai → data-width/data-height + configMateraiList
+                    // TTD tidak ikut: ukurannya sengaja dikunci supaya sama persis
+                    // dengan hasil cetak. QR juga tidak: di editor ia masih berupa
+                    // teks, belum kotak yang punya ukuran.
+                    const _resizeJenis = (el) => {
+                        if (!el || !el.classList) return null;
+                        if (el.classList.contains('logo-placeholder')) return 'logo';
+                        if (el.classList.contains('materai-placeholder')) return 'materai';
+                        return null;
+                    };
+
+                    // Yang benar-benar berubah ukurannya: gambar logonya, atau kotak
+                    // di dalam materai. Bukan pembungkusnya — pembungkus logo ikut
+                    // ukuran gambar, dan kotak materai yang menyimpan px-nya.
+                    const _resizeIsi = (el) => {
+                        const jenis = _resizeJenis(el);
+                        if (jenis === 'logo') return el.querySelector('img');
+                        if (jenis === 'materai') return el.querySelector('div');
+                        return null;
+                    };
+
+                    const resizeState = {
+                        active: false, arah: 'se', el: null, isi: null, jenis: null,
+                        startX: 0, startY: 0, startWidth: 0, startHeight: 0, startLeft: 0,
+                        aspect: 1, badge: null, gayaAwal: null,
+                    };
 
                     // Inject resize-handle CSS ke iframe head (one-time)
                     if (!iframeDoc._ezdocResizeCss) {
                         const style = iframeDoc.createElement('style');
                         style.textContent = `
-                            .logo-placeholder { position: relative; }
+                            .logo-placeholder, .materai-placeholder { position: relative; }
                             .logo-placeholder img { display: block; }
                             .logo-placeholder:hover .ezdoc-resize-handle,
-                            .logo-placeholder.ezdoc-resizing .ezdoc-resize-handle {
+                            .materai-placeholder:hover .ezdoc-resize-handle,
+                            .ez-float-selected .ezdoc-resize-handle,
+                            [data-mce-selected] .ezdoc-resize-handle,
+                            .ezdoc-resizing .ezdoc-resize-handle {
                                 opacity: 1;
                             }
                             .ezdoc-resize-handle {
                                 position: absolute;
-                                right: -6px;
-                                bottom: -6px;
                                 width: 12px;
                                 height: 12px;
                                 background: #6366f1;
                                 border: 2px solid white;
                                 border-radius: 2px;
                                 box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-                                cursor: nwse-resize;
                                 opacity: 0;
                                 transition: opacity 120ms;
-                                z-index: 100;
+                                z-index: 102;
                                 pointer-events: auto;
+                            }
+                            .ezdoc-resize-handle[data-arah="se"] { right: -6px; bottom: -6px; cursor: nwse-resize; }
+                            .ezdoc-resize-handle[data-arah="sw"] { left: -6px; bottom: -6px; cursor: nesw-resize; }
+                            .ezdoc-resize-handle[data-arah="e"] { right: -6px; top: 50%; margin-top: -6px; cursor: ew-resize; }
+                            .ezdoc-resize-handle[data-arah="s"] { bottom: -6px; left: 50%; margin-left: -6px; cursor: ns-resize; }
+                            /* Ukuran yang sedang berjalan, supaya angkanya tidak
+                               perlu ditebak sambil menarik (pola Figma/Google Docs). */
+                            .ezdoc-resize-badge {
+                                position: absolute;
+                                right: 0;
+                                top: -21px;
+                                font: 11px/15px ui-monospace, SFMono-Regular, Menlo, monospace;
+                                background: #1e293b;
+                                color: #fff;
+                                padding: 1px 6px;
+                                border-radius: 3px;
+                                white-space: nowrap;
+                                pointer-events: none;
+                                z-index: 103;
                             }
                         `;
                         iframeDoc.head.appendChild(style);
                         iframeDoc._ezdocResizeCss = true;
                     }
 
-                    // Attach resize handle ke logo containers on-demand
+                    // Attach resize handle ke containers on-demand
                     // data-mce-bogus="1" → TinyMCE strips this element saat
                     // getContent() called (industri standar TinyMCE bogus pattern
                     // untuk UI overlays yg tidak boleh masuk saved content).
-                    const attachResizeHandle = (logoEl) => {
-                        if (!logoEl || logoEl.querySelector('.ezdoc-resize-handle')) return;
-                        const img = logoEl.querySelector('img');
-                        if (!img) return; // no image uploaded yet — nothing to resize
-                        const handle = iframeDoc.createElement('span');
-                        handle.className = 'ezdoc-resize-handle';
-                        handle.contentEditable = 'false';
-                        handle.setAttribute('data-mce-bogus', '1');
-                        handle.setAttribute('data-ezdoc-resize', '1');
-                        logoEl.appendChild(handle);
+                    const attachResizeHandle = (el) => {
+                        const jenis = _resizeJenis(el);
+                        if (!jenis) return;
+                        if (!_resizeIsi(el)) return; // logo tanpa gambar: tidak ada yang diubah
+                        // Sisi bawah hanya untuk yang tingginya memang disimpan.
+                        // Tinggi gambar selalu ikut proporsi, jadi menariknya ke bawah
+                        // akan membohongi: berubah di layar, tidak ikut tersimpan.
+                        const arah = (jenis === 'materai') ? ['e', 's', 'se'] : ['e', 'se'];
+                        // Pegangan kiri hanya pada elemen mengambang: yang mengambang
+                        // punya koordinat, jadi sisi kanannya bisa ditahan di tempat.
+                        if (el.classList.contains('floating')) arah.push('sw');
+                        arah.forEach((a) => {
+                            if (el.querySelector('.ezdoc-resize-handle[data-arah="' + a + '"]')) return;
+                            const handle = iframeDoc.createElement('span');
+                            handle.className = 'ezdoc-resize-handle';
+                            handle.contentEditable = 'false';
+                            handle.setAttribute('data-arah', a);
+                            handle.setAttribute('data-mce-bogus', '1');
+                            handle.setAttribute('data-ezdoc-resize', '1');
+                            el.appendChild(handle);
+                        });
                     };
 
-                    // Scan + attach existing logos (called after setContent + on init)
+                    // Scan + attach existing elements (called after setContent + on init)
                     iframeDoc._attachAllResizeHandles = () => {
-                        iframeDoc.querySelectorAll('.logo-placeholder').forEach(attachResizeHandle);
+                        iframeDoc.querySelectorAll('.logo-placeholder, .materai-placeholder').forEach(attachResizeHandle);
                     };
                     iframeDoc._attachAllResizeHandles();
 
+                    const _resizeTulisUkuran = () => {
+                        if (!resizeState.badge || !resizeState.isi) return;
+                        resizeState.badge.textContent = Math.round(resizeState.isi.offsetWidth)
+                            + ' × ' + Math.round(resizeState.isi.offsetHeight);
+                    };
+
+                    // Satu pintu keluar untuk dua akhir yang berbeda: selesai (simpan)
+                    // dan batal (kembalikan). Tanpa ini, yang batal gampang menyisakan
+                    // kelas, label ukuran, atau keadaan setengah jalan.
+                    const _resizeSelesai = (batal) => {
+                        if (!resizeState.active) return;
+                        const el = resizeState.el;
+                        const isi = resizeState.isi;
+                        const jenis = resizeState.jenis;
+                        const gaya = resizeState.gayaAwal || { width: '', height: '', left: '' };
+
+                        if (batal) {
+                            isi.style.width = gaya.width;
+                            isi.style.height = gaya.height;
+                            if (el.classList.contains('floating')) el.style.left = gaya.left;
+                        }
+                        if (resizeState.badge && resizeState.badge.parentNode) {
+                            resizeState.badge.parentNode.removeChild(resizeState.badge);
+                        }
+                        el.classList.remove('ezdoc-resizing');
+                        resizeState.active = false;
+                        resizeState.el = null;
+                        resizeState.isi = null;
+                        resizeState.badge = null;
+                        if (batal) return;
+
+                        const lebar = Math.round(isi.offsetWidth);
+                        const tinggi = Math.round(isi.offsetHeight);
+                        if (jenis === 'logo') {
+                            const name = el.getAttribute('data-logo');
+                            if (name) {
+                                configHeader.logoSizes[name] = lebar + 'px';
+                                el.setAttribute('data-width', lebar + 'px');
+                            }
+                            // Refresh sidebar Width input
+                            setTimeout(scanLogos, 50);
+                        } else if (jenis === 'materai') {
+                            // Materai menyimpan angka polos (tanpa px), sama seperti
+                            // yang ditulis kolom ukuran di panel.
+                            el.setAttribute('data-width', String(lebar));
+                            el.setAttribute('data-height', String(tinggi));
+                            if (typeof scanMateraiPlaceholders === 'function') {
+                                setTimeout(scanMateraiPlaceholders, 50);
+                            }
+                        }
+                        editor.setDirty(true);
+                        if (typeof markDirty === 'function') markDirty();
+                    };
+                    window.ezdocResizeSelesai = _resizeSelesai;
+
                     iframeDoc.addEventListener('mousedown', function(e) {
-                        if (!e.target.classList || !e.target.classList.contains('ezdoc-resize-handle')) return;
-                        const logoEl = e.target.closest('.logo-placeholder');
-                        const img = logoEl && logoEl.querySelector('img');
-                        if (!logoEl || !img) return;
+                        const handle = (e.target && e.target.closest) ? e.target.closest('.ezdoc-resize-handle') : null;
+                        if (!handle) return;
+                        const el = handle.parentNode;
+                        const isi = _resizeIsi(el);
+                        const jenis = _resizeJenis(el);
+                        if (!el || !isi || !jenis) return;
 
                         e.preventDefault();
                         e.stopPropagation();
 
                         resizeState.active = true;
-                        resizeState.img = img;
-                        resizeState.logoEl = logoEl;
+                        resizeState.arah = handle.getAttribute('data-arah') || 'se';
+                        resizeState.el = el;
+                        resizeState.isi = isi;
+                        resizeState.jenis = jenis;
                         resizeState.startX = e.clientX;
-                        resizeState.startWidth = img.offsetWidth;
+                        resizeState.startY = e.clientY;
+                        resizeState.startWidth = isi.offsetWidth;
+                        resizeState.startHeight = isi.offsetHeight;
+                        resizeState.startLeft = parseInt(el.style.left) || 0;
+                        resizeState.gayaAwal = { width: isi.style.width, height: isi.style.height, left: el.style.left };
                         // Aspect ratio (preserved during resize)
-                        resizeState.aspect = img.naturalHeight > 0
-                            ? (img.naturalWidth / img.naturalHeight)
-                            : (img.offsetWidth / Math.max(1, img.offsetHeight));
-                        logoEl.classList.add('ezdoc-resizing');
+                        resizeState.aspect = (isi.naturalHeight > 0)
+                            ? (isi.naturalWidth / isi.naturalHeight)
+                            : (isi.offsetWidth / Math.max(1, isi.offsetHeight));
+                        el.classList.add('ezdoc-resizing');
+
+                        const badge = iframeDoc.createElement('span');
+                        badge.className = 'ezdoc-resize-badge';
+                        badge.contentEditable = 'false';
+                        badge.setAttribute('data-mce-bogus', '1');
+                        el.appendChild(badge);
+                        resizeState.badge = badge;
+                        _resizeTulisUkuran();
                     }, true); // capture phase supaya fires sebelum drag mousedown
 
                     iframeDoc.addEventListener('mousemove', function(e) {
                         if (!resizeState.active) return;
                         e.preventDefault();
+                        const arah = resizeState.arah;
+                        const isi = resizeState.isi;
                         const dx = e.clientX - resizeState.startX;
-                        const newWidth = Math.max(20, resizeState.startWidth + dx);
-                        resizeState.img.style.width = newWidth + 'px';
-                        resizeState.img.style.height = 'auto';
+                        const dy = e.clientY - resizeState.startY;
+
+                        if (arah === 'e' || arah === 'se' || arah === 'sw') {
+                            const lebar = Math.max(20, resizeState.startWidth + (arah === 'sw' ? -dx : dx));
+                            isi.style.width = lebar + 'px';
+                            if (resizeState.jenis === 'logo') {
+                                isi.style.height = 'auto';
+                            } else if (arah === 'se') {
+                                isi.style.height = Math.max(20, Math.round(lebar / (resizeState.aspect || 1))) + 'px';
+                            }
+                            // Menarik sudut kiri berarti sisi kanannya tetap di tempat,
+                            // persis seperti menarik tepi kiri sebuah jendela.
+                            if (arah === 'sw' && resizeState.el.classList.contains('floating')) {
+                                resizeState.el.style.left = (resizeState.startLeft + (resizeState.startWidth - lebar)) + 'px';
+                            }
+                        }
+                        if (arah === 's') {
+                            isi.style.height = Math.max(20, resizeState.startHeight + dy) + 'px';
+                        }
+                        _resizeTulisUkuran();
                     }, true);
 
                     iframeDoc.addEventListener('mouseup', function() {
-                        if (!resizeState.active) return;
-                        const img = resizeState.img;
-                        const logoEl = resizeState.logoEl;
-                        const finalWidth = Math.round(img.offsetWidth);
-                        const name = logoEl.getAttribute('data-logo');
-                        // Save ke configHeader.logoSizes + data-width attribute
-                        if (name) {
-                            configHeader.logoSizes[name] = finalWidth + 'px';
-                            logoEl.setAttribute('data-width', finalWidth + 'px');
-                        }
-                        logoEl.classList.remove('ezdoc-resizing');
-                        resizeState.active = false;
-                        resizeState.img = null;
-                        resizeState.logoEl = null;
-                        editor.setDirty(true);
-                        if (typeof markDirty === 'function') markDirty();
-                        // Refresh sidebar Width input
-                        setTimeout(scanLogos, 50);
+                        _resizeSelesai(false);
                     }, true);
-                    // ═══ END LOGO LIVE RESIZE ═══
+
+                    iframeDoc.addEventListener('keydown', function(e) {
+                        if (!resizeState.active) return;
+                        if (e.key === 'Escape' || e.keyCode === 27) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            _resizeSelesai(true);
+                        }
+                    }, true);
+                    // ═══ END UBAH UKURAN LANGSUNG ═══
 
                     iframeDoc.addEventListener('mousemove', function(e) {
                         if (!dragState.active || !dragState.element) return;
