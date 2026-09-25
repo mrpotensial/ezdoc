@@ -175,6 +175,19 @@ $pageTitle = isset($title) && $title !== ''
                 if (!$sudahAda && function_exists('ezdoc_has_role') && ezdoc_has_role('superadmin')) {
                     $navItems[] = ['label' => 'Settings', 'page' => $halamanAdmin];
                 }
+
+                // Halaman contoh: alasan yang sama dengan di atas. Ia untuk yang
+                // membuat template, jadi pintunya ikut hak itu — bukan hak admin.
+                $sudahAdaContoh = false;
+                foreach ($navItems as $item) {
+                    if (($item['page'] ?? '') === 'contoh') {
+                        $sudahAdaContoh = true;
+                        break;
+                    }
+                }
+                if (!$sudahAdaContoh && function_exists('ezdoc_can_manage_templates') && ezdoc_can_manage_templates()) {
+                    $navItems[] = ['label' => 'Example', 'page' => 'contoh'];
+                }
                 $currentPage = '';
                 if (isset($_GET[$qk]) && is_string($_GET[$qk])) {
                     $currentPage = $_GET[$qk];

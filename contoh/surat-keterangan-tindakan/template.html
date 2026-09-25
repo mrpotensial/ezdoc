@@ -1,0 +1,90 @@
+<p class="floating-only" contenteditable="false"><span class="logo-placeholder floating behind" data-logo="stempel" data-width="190px" data-pos-mode="behind" data-pos-x="470" data-pos-y="780" style="top: 780px; left: 470px;" contenteditable="false">[Logo: stempel]</span></p>
+<table style="width:100%;border-collapse:collapse;border:none;">
+<tbody>
+<tr>
+<td style="width:84px;border:none;vertical-align:middle;"><span class="logo-placeholder" data-logo="kop" data-width="68px" contenteditable="false">[Logo: kop]</span></td>
+<td style="border:none;vertical-align:middle;">
+<p style="margin:0;font-size:16pt;font-weight:bold;letter-spacing:0.5px;">RUMAH SAKIT CONTOH SEJAHTERA</p>
+<p style="margin:0;font-size:9pt;">Jl. Melati No. 12, Kota Contoh 40123 &middot; Telp (021) 555-0100 &middot; rs-contoh.example</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p style="border-bottom:3px double #000;margin:2px 0 18px;">&nbsp;</p>
+<p style="text-align:center;font-size:14pt;font-weight:bold;letter-spacing:1px;text-decoration:underline;margin:0;">SURAT KETERANGAN TINDAKAN</p>
+<p style="text-align:center;margin:2px 0 18px;">Nomor: <span class="field-placeholder" data-type="text" data-label="Nomor surat">{{nomor_surat}}</span></p>
+<p>Yang bertanda tangan di bawah ini menerangkan bahwa:</p>
+<table style="border-collapse:collapse;border:none;margin-left:18px;">
+<tbody>
+<tr><td style="border:none;width:170px;">Nama pasien</td><td style="border:none;width:14px;">:</td><td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Nama pasien">{{nama_pasien}}</span></td></tr>
+<tr><td style="border:none;">Nomor rekam medis</td><td style="border:none;">:</td><td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Nomor rekam medis">{{no_rekam_medis}}</span></td></tr>
+<tr><td style="border:none;">Tanggal lahir</td><td style="border:none;">:</td><td style="border:none;"><span class="field-placeholder" data-type="date" data-label="Tanggal lahir">{{tanggal_lahir}}</span></td></tr>
+<tr><td style="border:none;">Umur</td><td style="border:none;">:</td><td style="border:none;"><span class="field-placeholder" data-type="number" data-label="Umur">{{umur}}</span> tahun</td></tr>
+<tr><td style="border:none;">Alamat</td><td style="border:none;">:</td><td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Alamat">{{alamat}}</span></td></tr>
+</tbody>
+</table>
+<p>telah menjalani tindakan berikut pada tanggal <span class="field-placeholder" data-type="date" data-label="Tanggal tindakan" data-default="date:d F Y">{{tanggal_tindakan}}</span>:</p>
+<table style="width:100%;border-collapse:collapse;">
+<tbody>
+<tr>
+<th style="border:1px solid #000;padding:5px 8px;width:36px;">No</th>
+<th style="border:1px solid #000;padding:5px 8px;">Tindakan</th>
+<th style="border:1px solid #000;padding:5px 8px;width:62px;">Jumlah</th>
+<th style="border:1px solid #000;padding:5px 8px;width:105px;">Tarif</th>
+<th style="border:1px solid #000;padding:5px 8px;width:115px;">Subtotal</th>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:5px 8px;text-align:center;">{{tabledb.tindakan.nomor}}</td>
+<td style="border:1px solid #000;padding:5px 8px;">{{tabledb.tindakan.nama_tindakan}}</td>
+<td style="border:1px solid #000;padding:5px 8px;text-align:center;">{{tabledb.tindakan.jumlah}}</td>
+<td style="border:1px solid #000;padding:5px 8px;text-align:right;">{{tabledb.tindakan.tarif|number:0}}</td>
+<td style="border:1px solid #000;padding:5px 8px;text-align:right;">{{tabledb.tindakan.=jumlah*tarif|number:0}}</td>
+</tr>
+<tr>
+<td colspan="4" style="border:1px solid #000;padding:5px 8px;text-align:right;font-weight:bold;">Total biaya</td>
+<td style="border:1px solid #000;padding:5px 8px;text-align:right;font-weight:bold;">{{tabledb.tindakan.sum:=jumlah*tarif|number:0}}</td>
+</tr>
+</tbody>
+</table>
+<p style="margin-top:14px;">Keadaan pasien saat meninggalkan rumah sakit:</p>
+<p style="margin:0 0 0 18px;"><span class="field-placeholder" data-type="checkbox" data-label="Pulang dalam keadaan membaik">{{pulang_membaik}}</span></p>
+<p style="margin:4px 0 0 18px;"><span class="field-placeholder" data-type="checkbox" data-label="Dirujuk ke fasilitas kesehatan lain">{{dirujuk}}</span></p>
+<div class="conditional-section" data-cond="umur&lt;17" style="margin-top:12px;">
+<p style="margin:0;">Karena pasien belum berusia 17 tahun, persetujuan diberikan oleh wali:</p>
+<p style="margin:4px 0 0;">Nama wali: <span class="field-placeholder" data-type="text" data-label="Nama wali">{{nama_wali}}</span></p>
+</div>
+<p style="text-align:right;margin-top:22px;">Kota Contoh, <span class="field-placeholder" data-type="date" data-label="Tanggal surat" data-default="date:d F Y">{{tanggal_surat}}</span></p>
+<table style="width:100%;border-collapse:collapse;border:none;">
+<tbody>
+<tr>
+<td style="border:none;width:50%;text-align:center;vertical-align:top;">
+<div style="width:92px;margin:0 auto;">
+<div class="materai-placeholder" data-materai="materai_pasien" data-label="Materai 10000" data-mode="upload" data-width="92" data-height="56" contenteditable="false">
+<div style="border:1px dashed #c2410c; width:92px; height:56px; background:#fff7ed; color:#c2410c; text-align:center; font-size:9px; line-height:1.3; padding-top:10px; margin:0 auto;"><strong>MATERAI</strong><br>10000<br>(upload)</div>
+</div>
+</div>
+<div class="ttd-placeholder" data-ttd="pasien" data-label="Pasien / Wali," data-nama-field="nama_pasien" data-ttd-modes="image,qr" data-require-otp="1" data-otp-phone-source="nomor_hp_pasien" data-otp-ttl="300" contenteditable="false">
+<div style="font-size:12pt;margin-bottom:5px;">Pasien / Wali,</div>
+<div style="width:100px;height:50px;border:1px dashed #10b981;background:#ecfdf5;margin:0 auto;"></div>
+<div style="font-size:11pt;margin-top:3px;">(..................)</div>
+</div>
+</td>
+<td style="border:none;width:50%;text-align:center;vertical-align:top;">
+<div class="ttd-placeholder" data-ttd="petugas" data-label="Petugas yang menerangkan," data-nama-field="nama_petugas" data-ttd-modes="image" data-default-nama="dr. Andi Pratama" contenteditable="false">
+<div style="font-size:12pt;margin-bottom:5px;">Petugas yang menerangkan,</div>
+<div style="width:100px;height:50px;border:1px dashed #10b981;background:#ecfdf5;margin:0 auto;"></div>
+<div style="font-size:11pt;margin-top:3px;">(..................)</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<p style="border-top:1px dashed #999;margin-top:26px;">&nbsp;</p>
+<table style="border-collapse:collapse;border:none;">
+<tbody>
+<tr>
+<td style="border:none;width:100px;vertical-align:middle;"><span class="qr-placeholder" data-qr="link_verifikasi" data-width="86px" contenteditable="false">[QR: link_verifikasi]</span></td>
+<td style="border:none;vertical-align:middle;font-size:9pt;">Pindai kode di samping untuk memeriksa keaslian surat ini.<br>Surat ini sah tanpa tanda tangan basah selama kode masih dapat diperiksa.</td>
+</tr>
+</tbody>
+</table>

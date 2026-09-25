@@ -51,7 +51,7 @@ final class Router
      */
     private static $PAGE_WHITELIST = [
         // Core routes
-        'list', 'view', 'download', 'action', 'admin_migrate',
+        'list', 'view', 'download', 'action', 'admin_migrate', 'contoh',
         // Legacy sub-view dispatch (backward-compat, forward via alias ke direct names)
         'designer', 'generate', 'new_document',
         // Direct sub-view routes (v1.0-prep)
@@ -233,6 +233,7 @@ final class Router
         $this->handlers['asset']         = [$this, 'handleAsset'];
         $this->handlers['action']        = [$this, 'handleAction'];
         $this->handlers['admin_migrate'] = [$this, 'handleAdminMigrate'];
+        $this->handlers['contoh']        = [$this, 'handleContoh'];
 
         // Direct sub-view routes (v1.0-prep) — canonical names matching
         // extracted view files (v0.9.11 view separation).
@@ -318,6 +319,25 @@ final class Router
     public function handleAdminMigrate(RequestContext $req, ResponseWriter $res): ?string
     {
         return $this->renderView(__DIR__ . '/../../views/admin/migrate.php', [
+            '__ezdoc_fragment' => true,
+        ], $res);
+    }
+
+    /**
+     * Contoh konversi — satu dokumen kertas dibedah jadi template.
+     *
+     * Halaman baca saja: isinya berkas di `contoh/`, bukan baris database, dan
+     * contohnya tidak terdaftar sebagai template. Ia ada supaya "bagian ini
+     * jadi fitur apa" punya satu jawaban yang bisa ditunjuk — untuk orang yang
+     * baru memakai designer, dan untuk model bahasa yang diminta mengerjakan
+     * konversi yang sama.
+     *
+     * Precedent: halaman contoh yang dirender dari berkas contoh itu sendiri —
+     * Storybook, Tailwind UI, dan contoh di dokumentasi Stripe.
+     */
+    public function handleContoh(RequestContext $req, ResponseWriter $res): ?string
+    {
+        return $this->renderView(__DIR__ . '/../../views/contoh.php', [
             '__ezdoc_fragment' => true,
         ], $res);
     }

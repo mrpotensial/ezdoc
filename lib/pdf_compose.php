@@ -340,6 +340,17 @@ function ezdoc_pdf_request_values(array ...$sumber): array
  * Parameters like {nopen}, {norm}, {field_name} are replaced with prepared statement placeholders.
  */
 function executeDynQuery($query, $param_norm, $param_nopen, $dbFields, $conn) {
+    // Tanpa sambungan database tidak ada baris yang bisa diambil.
+    //
+    // Dulu ini bersandar pada `@mysqli_prepare()` yang mengembalikan false
+    // untuk sambungan kosong. Sejak PHP 8 argumen bertipe salah melempar
+    // TypeError, dan `@` tidak menahan lemparan — pemanggil yang tidak punya
+    // sambungan (pratinjau, perakitan di luar permintaan HTTP) mati total
+    // alih-alih menghasilkan tabel kosong.
+    if (!($conn instanceof \mysqli)) {
+        return [];
+    }
+
     // Validate SELECT only
     $normalized = preg_replace('/\s+/', ' ', strtoupper(ltrim($query)));
     if (strpos($normalized, 'SELECT') !== 0 && strpos($normalized, 'WITH') !== 0) {

@@ -6,6 +6,44 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — halaman contoh konversi dokumen (2026-09-25)**
+
+Diminta pemakai: contoh mengubah dokumen (gambar) jadi template ezdoc, memakai
+berbagai fitur, tanpa menyentuh database, sebagai halaman baru yang juga mudah
+dipahami model bahasa lain.
+
+Halaman baru `?ezdoc_page=contoh` (menu "Example", untuk yang boleh mengelola
+template). Isinya satu surat kertas karangan yang dibedah sampai selesai:
+
+- **Dua sisi berdampingan.** Kiri: dokumen kertasnya, dengan 13 titik bernomor
+  di atas gambarnya. Kanan: hasilnya, dirender **perender yang mencetak dokumen
+  sungguhan** — bukan gambar tangkapan layar. Contoh yang rusak akan terlihat di
+  halaman itu sendiri, bukan sebulan kemudian di tangan yang menyalinnya.
+- **Peta bagian → fitur**: tiap titik menjelaskan markup-nya, tempat simpannya,
+  dan jebakannya. Fitur yang dipakai: logo sebaris, logo mengambang di belakang
+  teks, field teks/tanggal/angka/centang, nilai bawaan tanggal, tabel dari kueri
+  (kolom, rumus per baris, penjumlahan), blok bersyarat, dua tanda tangan (satu
+  dengan OTP), materai, dan QR verifikasi.
+- **Aturan yang sering bikin gagal**, dua belas butir — bentuk TTD tiga div,
+  ukuran materai tanpa satuan, entitas `&lt;` di dalam atribut, dan seterusnya.
+- **Ringkasan untuk AI**: satu blok teks berisi langkah, peta, aturan, template,
+  dan config — siap disalin ke percakapan dengan model lain.
+
+Berkasnya di `contoh/surat-keterangan-tindakan/` (`asal.jpg`, `template.html`,
+`contoh.json`). Halaman ini hanya membacanya: tidak ada baris database yang
+dibaca maupun ditulis, dan contohnya tidak terdaftar sebagai template.
+
+**Fixed — tabel kueri tanpa sambungan database mematikan halaman di PHP 8**
+
+Ditemukan saat merender halaman contoh. `executeDynQuery()` bersandar pada
+`@mysqli_prepare()` yang mengembalikan false untuk sambungan kosong; sejak PHP 8
+argumen bertipe salah melempar TypeError dan `@` tidak menahannya. Setiap
+pemanggil tanpa sambungan — pratinjau, perakitan di luar permintaan HTTP — mati
+di tengah perakitan dokumen. Sekarang: tanpa sambungan berarti tidak ada baris.
+
+15 uji baru (12 untuk halaman contoh, 3 untuk penjaga sambungan). Tampilan
+diperiksa di 1280 dan 820 px.
+
 **Changed — ubah ukuran gambar seperti mengubah ukuran jendela (2026-09-24)**
 
 Dilaporkan dari pemakaian: "untuk live resize kok hilang ya? harusnya bisa live
