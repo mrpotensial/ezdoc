@@ -246,8 +246,8 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
                                 srcdoc="<?= h($pratinjau) ?>"></iframe>
                     </div>
                     <ul class="mt-2 space-y-1 text-[11px] text-gray-500">
-                        <li>Baris tabel kosong karena halaman ini tidak menyentuh database — kueri tidak dijalankan.</li>
-                        <li>Kotak tanda tangan kosong karena diisi saat dokumen dibuat dan ditandatangani.</li>
+                        <li>Baris tabelnya dari berkas contoh — kueri di config tidak dijalankan, database tidak disentuh.</li>
+                        <li>Tanda tangan masih kosong: ia diisi saat dokumen dibuat, dan yang tampil di sini hasil cetaknya.</li>
                     </ul>
                 <?php else: ?>
                     <div class="rounded border-l-4 border-red-400 bg-red-50 p-3 text-xs text-red-900">

@@ -6,6 +6,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Fixed — cap di halaman contoh masih meleset, dan keterangannya basi (2026-09-26)**
+
+Dilaporkan pemakai: "kok hasil ezdoc jelek ya di contoh? tapi di generate sudah
+benar".
+
+Capnya diukur pada dokumen yang tabelnya masih KOSONG. Begitu tiga baris contoh
+masuk, dokumennya bertambah tinggi ±83 piksel dan blok tanda tangan turun —
+sementara cap, yang mengambang, tetap di tempatnya. Diukur ulang pada dokumen
+yang tabelnya terisi (kertas 658×1155 px setelah tepi): capnya kini menimpa
+kolom tanda tangan dokter di halaman contoh, di halaman pembuatan dokumen, dan
+di PDF.
+
+Keterangan di bawah pratinjau juga diperbaiki: sejak barisnya datang dari
+berkas, kalimat "baris tabel kosong karena halaman ini tidak menyentuh
+database" sudah tidak benar — sekarang ia menyebut dari mana barisnya datang.
+
 **Fixed — cap tidak terlihat di designer, dan letaknya di contoh meleset (2026-09-26)**
 
 Dua laporan pemakai, satu sebab dan satu salah angka.
