@@ -309,6 +309,9 @@ if ($contohSlug !== '') {
     if ($param_nopen === '') { $param_nopen = '2026-000042'; }
     // Perender isi adalah fungsi, jadi ia tidak melihat variabel di sini.
     $GLOBALS['ezdocModeContoh'] = true;
+    // Baris tabelnya dari berkas. Kueri di config tetap ada supaya bisa dibaca
+    // dan disalin, tapi tidak dijalankan — lihat processTabledbRows().
+    $GLOBALS['ezdocBarisTabelSiap'] = is_array($template['baris_tabel'] ?? null) ? $template['baris_tabel'] : [];
     if (is_array($template)) {
         // OTP menuntut dokumen sungguhan: kodenya dicatat di database lalu
         // dikirim ke nomor orang. Di contoh, slotnya ditandatangani langsung;
@@ -917,14 +920,18 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             $hasQr = true;
         }
 
-        // Mode toggle buttons (only if both modes available)
+        // Cara menandatangani TIDAK lagi dipilih dari dalam dokumen.
+        //
+        // Dulu dua tab kecil menempel di atas kotak tanda tangan. Dua hal salah
+        // dari situ: ia mengubah tampilan dokumen padahal bukan bagian dokumen,
+        // dan orang menekannya sebelum tahu untuk apa. Sekarang pilihannya jadi
+        // langkah pertama sesudah slotnya diklik — pola yang sama dipakai
+        // DocuSign dan Adobe Sign: pilih caranya dulu, baru menandatangani.
+        // Diminta pemakai.
+        //
+        // Peralihan modenya sendiri tetap lewat switchTtdMode(), jadi yang
+        // berubah hanya SIAPA yang memanggilnya.
         $modeToggle = '';
-        if ($hasBoth) {
-            $modeToggle = '<div class="ttd-mode-toggle">
-                <button type="button" class="ttd-mode-btn ' . ($activeMode === 'image' ? 'active' : '') . '" onclick="switchTtdMode(\'' . h($ttdId) . '\', \'image\')">' . h(t('ttd.mode_image', [], 'Image')) . '</button>
-                <button type="button" class="ttd-mode-btn ' . ($activeMode === 'qr' ? 'active' : '') . '" onclick="switchTtdMode(\'' . h($ttdId) . '\', \'qr\')">' . h(t('ttd.mode_qr', [], 'QR')) . '</button>
-            </div>';
-        }
 
         // Nilai slot bisa berupa gambar inline, referensi ke objek tersimpan, atau
         // penanda tindakan mode QR. Cuma yang pertama boleh langsung masuk ke
@@ -2286,6 +2293,30 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                 </span>
             </div>
 
+            <?php // ── Langkah pertama: pilih caranya ──
+            // Hanya muncul untuk slot yang memang menerima dua cara, dan hanya
+            // selama slotnya belum ditandatangani. ?>
+            <div id="signModePilih" class="hidden px-5 py-5">
+                <h6 class="text-sm font-semibold text-slate-800"><?= h(t('modal.sign_mode.title', [], 'Choose how to sign')) ?></h6>
+                <p class="mt-1 text-xs text-slate-500"><?= h(t('modal.sign_mode.desc', [], 'This slot accepts two ways. Pick one first; signing follows.')) ?></p>
+                <div class="mt-4 grid gap-2.5 sm:grid-cols-2">
+                    <button type="button" onclick="pilihCaraTtd('image')"
+                            class="rounded-lg border border-slate-300 bg-white p-3 text-left transition hover:border-emerald-500 hover:bg-emerald-50">
+                        <span class="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                            <i class="bi bi-pencil"></i> <?= h(t('modal.sign_mode.image_title', [], 'Draw a signature')) ?>
+                        </span>
+                        <span class="mt-1 block text-[11.5px] leading-relaxed text-slate-500"><?= h(t('modal.sign_mode.image_desc', [], 'Drawn on screen, printed as an image.')) ?></span>
+                    </button>
+                    <button type="button" onclick="pilihCaraTtd('qr')"
+                            class="rounded-lg border border-slate-300 bg-white p-3 text-left transition hover:border-emerald-500 hover:bg-emerald-50">
+                        <span class="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                            <i class="bi bi-qr-code"></i> <?= h(t('modal.sign_mode.qr_title', [], 'QR code')) ?>
+                        </span>
+                        <span class="mt-1 block text-[11.5px] leading-relaxed text-slate-500"><?= h(t('modal.sign_mode.qr_desc', [], 'A code pointing at the signature record is printed instead.')) ?></span>
+                    </button>
+                </div>
+            </div>
+
             <!-- OTP Container: jalur voucher (utama) + Step 1 & 2 (cadangan) -->
             <div id="signOtpContainer" class="hidden p-4 bg-slate-50 border-b border-slate-200">
 
@@ -2467,6 +2498,7 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                 </div>
             </div>
             <div class="modal-footer">
+                <button class="bg-slate-200 text-slate-700 hidden" type="button" id="btnGantiCaraTtd" onclick="gantiCaraTtd()"><?= h(t('modal.sign_mode.change', [], 'Change method')) ?></button>
                 <button class="bg-red-500 text-white" type="button" id="btnClearSign" onclick="clearSign()"><?= h(t('actions.delete', [], 'Delete')) ?></button>
                 <button class="bg-green-500 text-white" type="button" id="btnSaveSign" onclick="saveSign()"><?= h(t('actions.save', [], 'Save')) ?></button>
                 <button class="bg-gray-500 text-white" type="button" onclick="closeSign()"><?= h(t('actions.close', [], 'Close')) ?></button>

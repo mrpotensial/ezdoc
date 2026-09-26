@@ -82,6 +82,11 @@ final class ContohKonversiTest extends TestCase
         // Nilai contohnya benar-benar masuk ke dokumen.
         self::assertStringContainsString('Siti Rahmawati', $pratinjau);
         self::assertStringContainsString('042/SKT/IX/2026', $pratinjau);
+
+        // Termasuk tabel kuerinya, yang barisnya datang dari berkas — bukan
+        // dari kueri, yang memang tidak dijalankan di halaman ini.
+        self::assertStringContainsString('Konsultasi dokter umum', $pratinjau, 'tabel contoh kosong');
+        self::assertStringContainsString('595.000', $pratinjau, 'penjumlahan tabel tidak terhitung');
     }
 
     /**

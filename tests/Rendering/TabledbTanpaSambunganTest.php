@@ -37,6 +37,36 @@ final class TabledbTanpaSambunganTest extends TestCase
     }
 
     /**
+     * Baris siap-pakai dari pemanggil menggantikan kueri.
+     *
+     * Dipakai halaman contoh: tabelnya harus TERISI, sementara tidak satu pun
+     * kueri boleh berjalan. Tanpa jalur ini, satu-satunya cara memperlihatkan
+     * tabel terisi adalah menjalankan kueri ke database sungguhan.
+     */
+    public function testBarisSiapPakaiMenggantikanKueri(): void
+    {
+        $GLOBALS['ezdocBarisTabelSiap'] = ['x' => [
+            ['kolom' => 'Baris satu', 'nilai' => '10'],
+            ['kolom' => 'Baris dua', 'nilai' => '15'],
+        ]];
+
+        try {
+            $html = '<table><tbody>'
+                . '<tr><td>{{tabledb.x.kolom}}</td><td>{{tabledb.x.nilai}}</td></tr>'
+                . '<tr><td>Total</td><td>{{tabledb.x.sum:nilai}}</td></tr>'
+                . '</tbody></table>';
+            $keluar = processTabledbRows($html, ['x' => ['sql' => 'SELECT kolom, nilai FROM t', 'columns' => ['kolom', 'nilai']]], '', '', [], null);
+        } finally {
+            unset($GLOBALS['ezdocBarisTabelSiap']);
+        }
+
+        self::assertStringContainsString('Baris satu', $keluar);
+        self::assertStringContainsString('Baris dua', $keluar);
+        self::assertStringContainsString('25', $keluar, 'penjumlahannya ikut dihitung dari baris yang diberikan');
+        self::assertStringNotContainsString('{{tabledb', $keluar);
+    }
+
+    /**
      * Baris bertanda tabledb tetap terproses — hasilnya kosong, bukan penanda
      * mentah yang ikut tercetak ke dokumen.
      */

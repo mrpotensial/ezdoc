@@ -67,6 +67,9 @@ if (function_exists('ezdoc_document_pdf_html')) {
         if (function_exists('ezdoc_set_document_locale')) {
             ezdoc_set_document_locale('id');
         }
+        // Baris tabelnya dari berkas, bukan dari kueri: contoh yang tabelnya
+        // kosong tidak menunjukkan apa pun tentang fitur tabel.
+        $GLOBALS['ezdocBarisTabelSiap'] = $contoh['baris_tabel'];
         $pratinjau = ezdoc_document_pdf_html([
             'template' => $contoh,
             'doc_id' => 0,

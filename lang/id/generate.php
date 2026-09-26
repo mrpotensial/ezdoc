@@ -310,6 +310,15 @@ return [
             'not_saved_placeholder'=> '(dokumen belum di-save)',
             'confirm_button'       => 'OK, Isi QR',
         ],
+        'sign_mode' => [
+            'title'       => 'Pilih cara menandatangani',
+            'desc'        => 'Slot ini menerima dua cara. Pilih dulu, tanda tangannya menyusul.',
+            'image_title' => 'Gambar tanda tangan',
+            'image_desc'  => 'Digambar di layar dengan mouse atau jari, lalu dicetak sebagai gambar.',
+            'qr_title'    => 'Kode QR',
+            'qr_desc'     => 'Yang tercetak kode yang menunjuk catatan tanda tangan di server — gambarnya tidak ikut, jadi tidak bisa disalin ke dokumen lain.',
+            'change'      => 'Ganti cara',
+        ],
         'sign' => [
             'hint'              => 'Gambar tanda tangan di area di atas menggunakan mouse atau sentuhan layar',
             'name_label'        => 'Nama yang tercetak di bawah tanda tangan',

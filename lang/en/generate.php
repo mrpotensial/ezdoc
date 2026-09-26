@@ -287,6 +287,15 @@ return [
             'not_saved_placeholder' => '(document not saved yet)',
             'confirm_button' => 'OK, Fill QR',
         ],
+        'sign_mode' => [
+            'title'       => 'Choose how to sign',
+            'desc'        => 'This slot accepts two ways. Pick one first; signing follows.',
+            'image_title' => 'Draw a signature',
+            'image_desc'  => 'Drawn on screen with a mouse or finger, then printed as an image.',
+            'qr_title'    => 'QR code',
+            'qr_desc'     => 'A code pointing at the signature record on the server is printed instead — the image never travels, so it cannot be copied into another document.',
+            'change'      => 'Change method',
+        ],
         'sign' => [
             'hint' => 'Draw your signature in the area above using your mouse or touchscreen',
             'name_label' => 'Name printed under the signature',

@@ -1901,6 +1901,40 @@
             modal.classList.add('show');
             clearSign();
 
+            // ── Cara menandatangani dipilih DI SINI ──
+            //
+            // Slot yang menerima gambar DAN QR tidak lagi memasang dua tab di
+            // dalam dokumen; caranya ditanyakan sekali, sesudah slotnya diklik.
+            // Yang sudah ditandatangani tidak ditanya: caranya sudah terjadi.
+            const _cfgCara = (configTtdMap.find(item => item.id === id) || {});
+            const _modes = String(_cfgCara.ttd_modes || 'image');
+            const _duaCara = _modes.indexOf('image') !== -1 && _modes.indexOf('qr') !== -1;
+            const _sudahTtd = !!(document.getElementById('ttd_' + id)?.value || '').trim();
+            const _pilihEl = document.getElementById('signModePilih');
+            const _gantiEl = document.getElementById('btnGantiCaraTtd');
+            const _areaTtd = document.getElementById('signCanvasArea');
+            const _otpEl = document.getElementById('signOtpContainer');
+            const _barisNama = document.getElementById('signNameRow');
+            const _tombolSimpan = document.getElementById('btnSaveSign');
+
+            if (_duaCara && !_sudahTtd && _caraTtdDipilih !== id) {
+                if (_pilihEl) _pilihEl.classList.remove('hidden');
+                if (_areaTtd) _areaTtd.classList.add('hidden');
+                if (_otpEl) _otpEl.classList.add('hidden');
+                if (_barisNama) _barisNama.classList.add('hidden');
+                if (_tombolSimpan) _tombolSimpan.classList.add('hidden');
+                const _bersihkan = document.getElementById('btnClearSign');
+                if (_bersihkan) _bersihkan.classList.add('hidden');
+                if (_gantiEl) _gantiEl.classList.add('hidden');
+                return;
+            }
+
+            if (_pilihEl) _pilihEl.classList.add('hidden');
+            if (_areaTtd) _areaTtd.classList.remove('hidden');
+            if (_tombolSimpan) _tombolSimpan.classList.remove('hidden');
+            // Yang sudah memilih boleh berubah pikiran selama belum menandatangani.
+            if (_gantiEl) _gantiEl.classList.toggle('hidden', !(_duaCara && !_sudahTtd));
+
             // Mode QR memakai modal yang sama dengan isi tengah yang ditukar.
             // Alasannya bukan hemat markup: OTP, RBAC, cek dokumen terkunci, dan
             // pengelolaan sign token semuanya hidup di sini. Alur kedua akan
@@ -2518,6 +2552,10 @@
 
         function closeSign() {
             modal.classList.remove('show');
+            // Pilihan caranya ikut ditutup: membuka slot yang sama lain kali
+            // adalah tindakan menandatangani yang baru, dan ia berhak ditanya
+            // lagi mau dengan cara apa.
+            _caraTtdDipilih = null;
             // Modal tertutup, tidak ada yang membaca statusnya. Membiarkannya
             // berjalan berarti satu permintaan tiap beberapa detik selamanya.
             stopScanPoll();
@@ -2880,6 +2918,28 @@
         }
 
         // Switch TTD mode between image and QR
+        // Slot yang caranya sudah dipilih pada pembukaan modal ini. Disimpan per
+        // slot, bukan per dokumen: memilih untuk satu slot bukan berarti memilih
+        // untuk slot lain.
+        let _caraTtdDipilih = null;
+
+        /** Dipanggil dua tombol di langkah pilih cara. */
+        function pilihCaraTtd(mode) {
+            if (!currentTtdId) return;
+            _caraTtdDipilih = currentTtdId;
+            switchTtdMode(currentTtdId, mode);
+            // Dibuka ulang, bukan disusun ulang di sini: satu jalur penyiapan
+            // modal saja — OTP, nama, RBAC, dan tombolnya ikut apa adanya.
+            openSign(currentTtdId, document.getElementById('signTitle').textContent);
+        }
+
+        /** Kembali ke langkah pilih cara. */
+        function gantiCaraTtd() {
+            if (!currentTtdId) return;
+            _caraTtdDipilih = null;
+            openSign(currentTtdId, document.getElementById('signTitle').textContent);
+        }
+
         function switchTtdMode(ttdId, mode) {
             const modeInput = document.getElementById('ttd_mode_' + ttdId);
             if (modeInput) modeInput.value = mode;

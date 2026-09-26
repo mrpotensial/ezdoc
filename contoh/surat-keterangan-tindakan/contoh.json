@@ -121,7 +121,7 @@
             "fitur": "Tabel dari kueri (tabledb)",
             "markup": "{{tabledb.tindakan.nama_tindakan}} · {{tabledb.tindakan.tarif|number:0}} · {{tabledb.tindakan.=jumlah*tarif|number:0}}",
             "simpan": "config_header.tableDbQueries.tindakan",
-            "catatan": "Cukup TULIS SATU baris `<tr>`; barisnya digandakan sebanyak hasil kueri. `=jumlah*tarif` adalah rumus per baris. Kueri hanya boleh SELECT, dan parameternya {norm} / {nopen} / {nama_field}."
+            "catatan": "Cukup TULIS SATU baris `<tr>`; barisnya digandakan sebanyak hasil kueri. `=jumlah*tarif` adalah rumus per baris. Kueri hanya boleh SELECT, dan parameternya {norm} / {nopen} / {nama_field}. Di halaman contoh, barisnya diisi dari `baris_tabel_contoh` di contoh.json — kueri tidak dijalankan sama sekali."
         },
         {
             "no": 6,
@@ -219,5 +219,27 @@
             "simpan": "Ikut HTML template",
             "catatan": "`data-qr` menunjuk NAMA FIELD yang berisi isinya, bukan isinya langsung. Kalau field itu kosong, QR tidak dicetak sama sekali."
         }
-    ]
+    ],
+    "baris_tabel_contoh": {
+        "tindakan": [
+            {
+                "nomor": "1",
+                "nama_tindakan": "Konsultasi dokter umum",
+                "jumlah": "1",
+                "tarif": "150000"
+            },
+            {
+                "nomor": "2",
+                "nama_tindakan": "Pemeriksaan laboratorium",
+                "jumlah": "2",
+                "tarif": "85000"
+            },
+            {
+                "nomor": "3",
+                "nama_tindakan": "Tindakan jahit luka",
+                "jumlah": "1",
+                "tarif": "275000"
+            }
+        ]
+    }
 }

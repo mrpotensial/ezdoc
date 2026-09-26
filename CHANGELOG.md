@@ -6,6 +6,41 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Changed — cara menandatangani dipilih sesudah slotnya diklik (2026-09-26)**
+
+Diminta pemakai: "jika mode ttd qr/image aktif, tab ganti mode nya jangan di
+dokumen, tapi jadi pilihan setelah klik ttd nya, baru muncul modal ttdnya".
+
+Dua tab kecil itu memang salah tempat: ia mengubah tampilan DOKUMEN padahal
+bukan bagian dokumen, dan orang menekannya sebelum tahu untuk apa. Sekarang
+tabnya dicabut, dan pilihannya jadi langkah pertama di dalam modal tanda
+tangan — dua kartu, "Gambar tanda tangan" dan "Kode QR", masing-masing dengan
+satu kalimat penjelas. Sesudah memilih, modalnya berjalan seperti biasa; ada
+tombol *Ganti cara* selama slotnya belum ditandatangani, dan menutup modal
+membuat pertanyaannya diulang saat dibuka lagi.
+
+Slot yang cuma menerima satu cara tidak ditanya sama sekali, dan slot yang
+sudah ditandatangani juga tidak — caranya sudah terjadi.
+
+Perpindahan modenya tetap lewat `switchTtdMode()` yang sudah ada, jadi keadaan
+di dokumen dan nilai yang tersimpan tidak pernah berbeda pendapat. Precedent:
+DocuSign dan Adobe Sign menanyakan cara tanda tangan sesudah slot diklik, bukan
+menaruh pilihannya di atas kertas.
+
+**Fixed — tabel kueri di contoh tampil kosong**
+
+Dilaporkan pemakai: "kok tabelnya kosong ya?". Kuerinya menunjuk tabel yang
+memang tidak ada di database pemakai — dan contoh ini sengaja tidak menyentuh
+database sama sekali. Sekarang `processTabledbRows()` menerima baris siap-pakai
+dari pemanggil (`$GLOBALS['ezdocBarisTabelSiap']`), dan contohnya memberikan
+tiga baris dari `contoh.json`. Hasilnya tabel yang terisi lengkap dengan
+penjumlahannya, tanpa satu pun kueri berjalan. Kueri di config tetap ada supaya
+bisa dibaca dan disalin.
+
+9 uji baru. Alur pilih cara dicoba di Chrome sungguhan: ditanya, memilih gambar,
+ganti cara, memilih QR, ditutup lalu dibuka lagi, dan slot QR-saja yang tidak
+ditanya.
+
 **Changed — mode contoh boleh dicoba, simpannya ke peramban (2026-09-26)**
 
 Dilaporkan pemakai: "warningnya kok tidak rapi? dan tombol nya kok read only

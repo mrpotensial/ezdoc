@@ -116,9 +116,9 @@ final class Contoh
                 ? (string) json_encode($data['verify_config'])
                 : null,
             'access_config' => null,
-            // Contoh tidak pernah bisa ditulis: halaman yang memakainya membaca
-            // ini dan mengunci dirinya lewat jalur yang sama dengan dokumen
-            // terkunci, bukan lewat cabang khusus yang bisa terlewat.
+            // Ditandai terkunci sebagai template: contoh ini untuk disalin,
+            // bukan disunting di tempat. Halaman pembuatan dokumen TIDAK ikut
+            // terkunci — di sana ia memang untuk dicoba.
             'is_locked' => 1,
 
             // ── Tambahan khusus contoh ──
@@ -126,6 +126,12 @@ final class Contoh
             'dir' => $dir,
             'gambar' => $gambar,
             'nilai' => isset($data['nilai_contoh']) && is_array($data['nilai_contoh']) ? $data['nilai_contoh'] : [],
+            // Baris siap-pakai untuk tabel kueri. Contohnya harus terlihat
+            // TERISI, sementara tidak satu pun kueri boleh berjalan — kueri
+            // yang di config tetap ada supaya bisa dibaca dan disalin.
+            'baris_tabel' => isset($data['baris_tabel_contoh']) && is_array($data['baris_tabel_contoh'])
+                ? $data['baris_tabel_contoh']
+                : [],
             'peta' => isset($data['peta']) && is_array($data['peta']) ? $data['peta'] : [],
         ];
     }

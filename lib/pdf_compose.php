@@ -468,12 +468,22 @@ function processTabledbRows($html, $tableDbQueries, $param_norm, $param_nopen, $
     // Cache: run each namespace's query at most once per template render
     $resultCache = [];
 
+    // Baris siap-pakai dari pemanggil, per namespace.
+    //
+    // Dipakai mode contoh: contohnya harus memperlihatkan tabel yang TERISI,
+    // sementara tidak satu pun kueri boleh berjalan. Diletakkan di sini, bukan
+    // di pemanggilnya, karena pemanggilnya ada dua — layar dan PDF — dan
+    // keduanya harus menunjukkan tabel yang sama.
+    $barisSiap = isset($GLOBALS['ezdocBarisTabelSiap']) && is_array($GLOBALS['ezdocBarisTabelSiap'])
+        ? $GLOBALS['ezdocBarisTabelSiap']
+        : [];
+
     // Regex captures: (1) namespace optional, (2) selector, (3) format pipe optional
     // Selector allows: word chars, `=`, `*`, `:` (for verb:field), operators inside formulas
     // Selector allows spaces (untuk formulas seperti `=qty * harga`); trim di parser.
     $markerRegex = '/\{\{tabledb(?:\.([a-zA-Z_]\w*))?\.([^|}]+?)(?:\|([^}]+))?\}\}/';
 
-    return preg_replace_callback('/<tr\b[^>]*>[\s\S]*?<\/tr>/i', function ($m) use ($tableDbQueries, $param_norm, $param_nopen, $dbFields, $conn, &$resultCache, $markerRegex) {
+    return preg_replace_callback('/<tr\b[^>]*>[\s\S]*?<\/tr>/i', function ($m) use ($tableDbQueries, $param_norm, $param_nopen, $dbFields, $conn, &$resultCache, $markerRegex, $barisSiap) {
         $rowHtml = $m[0];
 
         if (!preg_match_all($markerRegex, $rowHtml, $refs, PREG_SET_ORDER)) {
@@ -489,7 +499,9 @@ function processTabledbRows($html, $tableDbQueries, $param_norm, $param_nopen, $
 
         // Execute query (cached per namespace)
         if (!array_key_exists($ns, $resultCache)) {
-            $resultCache[$ns] = executeDynQuery($cfg['sql'], $param_norm, $param_nopen, $dbFields, $conn);
+            $resultCache[$ns] = (isset($barisSiap[$ns]) && is_array($barisSiap[$ns]))
+                ? $barisSiap[$ns]
+                : executeDynQuery($cfg['sql'], $param_norm, $param_nopen, $dbFields, $conn);
         }
         $rows = $resultCache[$ns];
 

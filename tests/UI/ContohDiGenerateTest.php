@@ -55,6 +55,23 @@ final class ContohDiGenerateTest extends TestCase
         self::assertStringNotContainsString('ttd-placeholder', $halaman, 'penanda TTD tidak diproses');
     }
 
+    /**
+     * Tabel kuerinya TERISI, tanpa kueri yang berjalan.
+     *
+     * Dilaporkan pemakai: "kok tabelnya kosong ya?". Tabel kosong tidak
+     * menunjukkan apa pun tentang fitur tabel — sementara menjalankan kuerinya
+     * berarti contoh ini menyentuh database orang.
+     */
+    public function testTabelKueriTerisiDariBerkas(): void
+    {
+        $halaman = self::halaman();
+
+        self::assertStringContainsString('Konsultasi dokter umum', $halaman);
+        self::assertStringContainsString('Pemeriksaan laboratorium', $halaman);
+        self::assertStringContainsString('595.000', $halaman, 'penjumlahannya ikut terhitung');
+        self::assertStringNotContainsString('{{tabledb', $halaman);
+    }
+
     /** Orang yang membukanya diberi tahu bahwa ini contoh, dan ke mana simpanannya pergi. */
     public function testAdaPenandaModeContoh(): void
     {
