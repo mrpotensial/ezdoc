@@ -289,13 +289,36 @@ if ($template_id <= 0 && $contohSlug === '') {
 $template = null;
 if ($contohSlug !== '') {
     $template = \Ezdoc\Template\Contoh::muat($contohSlug);
-    // Baca saja, dan tanpa dokumen: lihat catatan di atas.
-    $param_is_locked = 1;
+
+    // Boleh DICOBA, tapi tidak menyentuh server.
+    //
+    // Diminta pemakai: "tombolnya kok read only semua, aku ingin bisa aksi…
+    // save sementara aja atau di localstorage browser jika takut db
+    // terganggu". Jadi isiannya hidup dan tanda tangannya bisa digambar; yang
+    // berubah cuma tujuan simpannya — skrip mode contoh di bawah membatalkan
+    // simpan lewat kait `ezcetak:before-save` (kait resmi halaman ini, memang
+    // disediakan untuk dibatalkan) lalu menulis ke peramban.
+    //
+    // Yang tetap mustahil: tidak ada baris template dan tidak ada dokumen,
+    // jadi tidak ada sasaran yang bisa ditimpa seandainya satu permintaan
+    // lolos.
     $doc_id = 0;
-    $param_norm = '';
-    $param_nopen = '';
+    // Identitas contoh — supaya tombol Simpan bisa dicoba tanpa mengarang
+    // nomor rekam medis milik orang sungguhan.
+    if ($param_norm === '') { $param_norm = '00-12-3456'; }
+    if ($param_nopen === '') { $param_nopen = '2026-000042'; }
     // Perender isi adalah fungsi, jadi ia tidak melihat variabel di sini.
     $GLOBALS['ezdocModeContoh'] = true;
+    if (is_array($template)) {
+        // OTP menuntut dokumen sungguhan: kodenya dicatat di database lalu
+        // dikirim ke nomor orang. Di contoh, slotnya ditandatangani langsung;
+        // aturan OTP-nya tetap terbaca di halaman penjelasan.
+        $template['template_html'] = (string) preg_replace(
+            '/\s+data-(require-otp|otp-phone-source|otp-ttl)="[^"]*"/',
+            '',
+            (string) $template['template_html']
+        );
+    }
 } else {
 $stmt = mysqli_prepare($conn, "
     SELECT id, uuid, version,
@@ -836,11 +859,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         $canSignThisTtd = function_exists('ezdoc_can_sign_ttd')
             ? ezdoc_can_sign_ttd($ttdRbac)
             : true;
-        // Mode contoh: tidak ada dokumen yang bisa dituju tanda tangannya.
-        // Menawarkan tombolnya hanya mengantar orang ke penolakan server.
-        if (!empty($GLOBALS['ezdocModeContoh'])) {
-            $canSignThisTtd = false;
-        }
+
 
         if (!$ttdId) return $m[0];
 
@@ -1693,15 +1712,163 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
             . (strpos($__urlContohBase, '?') === false ? '?' : '&')
             . (string) $config->get('app.query_key', 'ezdoc_page') . '=contoh';
         ?>
-    <div style="margin:12px 250px 0 16px;padding:8px 12px;border-left:4px solid #f59e0b;background:#fffbeb;color:#92400e;font:13px/1.5 system-ui,-apple-system,'Segoe UI',sans-serif;border-radius:4px;">
-        <strong>Mode contoh.</strong>
-        Dokumen ini dibaca dari berkas <code>contoh/<?= h($contohSlug) ?>/</code> — tidak ada di database,
-        tidak bisa disimpan, dan tidak bisa ditandatangani. Isiannya sengaja dikunci.
-        <a href="<?= h($__urlContoh) ?>" style="color:#92400e;text-decoration:underline;">Lihat penjelasan fiturnya →</a>
+    <style>
+        /* Pita mode contoh — selebar kertasnya, supaya ia terbaca sebagai
+           bagian dari halaman, bukan tempelan yang menggantung di kiri. */
+        .ez-pita-contoh {
+            width: <?= $paperDim['width'] ?>mm;
+            max-width: calc(100% - 32px);
+            margin: 14px auto 0;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px 12px;
+            padding: 8px 12px;
+            border: 1px solid #fcd34d;
+            background: #fffbeb;
+            border-radius: 6px;
+            color: #92400e;
+            font: 12.5px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif;
+            box-sizing: border-box;
+        }
+        .ez-pita-contoh b { font-weight: 600; }
+        .ez-pita-contoh .ez-pita-isi { flex: 1 1 320px; min-width: 0; }
+        .ez-pita-contoh code { font-size: 11.5px; background: rgba(146,64,14,.08); padding: 0 4px; border-radius: 3px; }
+        .ez-pita-contoh a, .ez-pita-contoh button {
+            color: #92400e;
+            background: transparent;
+            border: 1px solid #fcd34d;
+            border-radius: 4px;
+            padding: 3px 9px;
+            font: inherit;
+            cursor: pointer;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        .ez-pita-contoh a:hover, .ez-pita-contoh button:hover { background: #fef3c7; }
+        @media print { .ez-pita-contoh { display: none; } }
+    </style>
+    <div class="ez-pita-contoh">
+        <span class="ez-pita-isi">
+            <b>Mode contoh.</b>
+            Silakan dicoba: isi, tanda tangani, lalu Simpan — tersimpan di <b>peramban ini saja</b>.
+            Dokumennya dibaca dari berkas <code>contoh/<?= h($contohSlug) ?>/</code>, database tidak disentuh
+            dan OTP tidak dikirim.
+        </span>
+        <button type="button" id="ezContohHapus">Hapus simpanan</button>
+        <a href="<?= h($__urlContoh) ?>">Penjelasan fiturnya →</a>
     </div>
-    <style>/* Mode contoh: yang tidak bisa dipakai harus terlihat begitu. */
-    button[disabled] { opacity: .45; cursor: not-allowed; }</style>
-    <?php endif; ?>
+    <script>
+    (function () {
+        // ── Simpan ke peramban, bukan ke server ──────────────────────────
+        //
+        // Memakai kait resmi halaman ini (`ezcetak:before-save`, yang memang
+        // disediakan untuk dibatalkan konsumen), jadi tombol, validasi, dan
+        // umpan baliknya tetap yang asli. Menulis jalur simpan tiruan akan
+        // menyimpang dari yang asli tanpa ada yang tahu kapan.
+        var KUNCI = 'ezdoc_contoh_<?= h($contohSlug) ?>';
+        var ABAIKAN = { _ajax: 1, template_id: 1, _doc_id: 1, verify_url: 1 };
+        // Slot tanda tangan dikenali dari daftarnya, bukan dari ada-tidaknya
+        // elemen `ttd_<nama>`: field NAMA penanda tangan juga punya elemen
+        // bernama begitu, dan menebak dari situ membuat nama pasien dipulihkan
+        // ke tempat yang salah.
+        var TTD = <?= json_encode(array_values(array_column($configTtd, 'id'))) ?>;
+
+        function kabar(teks, jenis) {
+            if (typeof showToast === 'function') { showToast(teks, jenis || 'success'); return; }
+            console.log('[ezdoc contoh]', teks);
+        }
+
+        function formulir() { return document.getElementById('mainForm'); }
+
+        function simpan(formData) {
+            var isi = {};
+            formData.forEach(function (nilai, nama) {
+                if (typeof nilai === 'string' && !ABAIKAN[nama]) { isi[nama] = nilai; }
+            });
+            // Checkbox yang tidak dicentang tidak ikut FormData sama sekali.
+            // Tanpa catatan terpisah, "tidak dicentang" tidak akan pernah pulih.
+            var centang = {};
+            Array.prototype.forEach.call(formulir().querySelectorAll('input[type="checkbox"][name]'), function (el) {
+                centang[el.name] = el.checked ? '1' : '0';
+            });
+            try {
+                localStorage.setItem(KUNCI, JSON.stringify({ isi: isi, centang: centang, waktu: Date.now() }));
+                kabar('Tersimpan di peramban ini saja — database tidak disentuh.');
+                if (typeof markClean === 'function') { markClean(); }
+            } catch (e) {
+                kabar('Peramban menolak menyimpan: ' + e.message, 'error');
+            }
+        }
+
+        function pasangTtd(id, nilai) {
+            if (TTD.indexOf(id) === -1) { return false; }
+            var input = document.getElementById('ttd_' + id);
+            if (!input) { return false; }
+            input.value = nilai;
+            if (nilai.indexOf('data:image') !== 0) { return true; }
+            var pratinjau = document.getElementById('preview_' + id);
+            if (!pratinjau) { return true; }
+            var sasaran = pratinjau.querySelector('.ttd-area-image') || pratinjau;
+            sasaran.innerHTML = '<img src="' + nilai + '" class="ttd-signature" alt="TTD">';
+            return true;
+        }
+
+        function pulihkan() {
+            var mentah = null;
+            try { mentah = localStorage.getItem(KUNCI); } catch (e) { return; }
+            if (!mentah) { return; }
+            var simpanan = null;
+            try { simpanan = JSON.parse(mentah); } catch (e) { return; }
+            var f = formulir();
+            if (!f || !simpanan) { return; }
+
+            Object.keys(simpanan.isi || {}).forEach(function (nama) {
+                if (!/^[A-Za-z0-9_-]+$/.test(nama)) { return; }
+                var nilai = simpanan.isi[nama];
+                if (pasangTtd(nama, nilai)) { return; }
+                // Satu field bisa punya lebih dari satu elemen bernama sama:
+                // yang terlihat (input tanggal, angka) dan bayangannya yang
+                // tersembunyi. Keduanya harus ikut, kalau tidak yang tersimpan
+                // berbeda dengan yang terbaca.
+                var elemen = f.querySelectorAll('[name="' + nama + '"]');
+                if (!elemen.length) { return; }
+                Array.prototype.forEach.call(elemen, function (el) {
+                    if (el.type === 'checkbox' || el.type === 'radio') { return; }
+                    el.value = nilai;
+                });
+                // Field isi dokumen digambar sebagai elemen contenteditable yang
+                // dibayangi input tersembunyi; keduanya harus ikut.
+                var terlihat = document.querySelector('[data-field="' + nama + '"]');
+                if (terlihat && terlihat.isContentEditable) { terlihat.textContent = nilai; }
+            });
+
+            Object.keys(simpanan.centang || {}).forEach(function (nama) {
+                if (!/^[A-Za-z0-9_-]+$/.test(nama)) { return; }
+                var el = f.querySelector('input[type="checkbox"][name="' + nama + '"]');
+                if (el) { el.checked = (simpanan.centang[nama] === '1'); }
+            });
+
+            kabar('Isian contoh dipulihkan dari peramban.');
+        }
+
+        window.addEventListener('ezcetak:before-save', function (e) {
+            e.preventDefault();
+            simpan(e.detail && e.detail.formData ? e.detail.formData : new FormData(formulir()));
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            pulihkan();
+            var hapus = document.getElementById('ezContohHapus');
+            if (hapus) {
+                hapus.addEventListener('click', function () {
+                    try { localStorage.removeItem(KUNCI); } catch (e) { /* peramban menolak */ }
+                    location.reload();
+                });
+            }
+        });
+    })();
+    </script>    <?php endif; ?>
     <?php if ($saveMessage): ?>
     <div class="toast <?= $saveSuccess ? 'success' : 'error' ?>"><?= h($saveMessage) ?></div>
     <?php endif; ?>

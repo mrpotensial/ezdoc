@@ -175,13 +175,17 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
             <h1 class="text-xl font-semibold tracking-tight text-gray-900">Contoh konversi dokumen</h1>
             <a href="<?= h($urlGenerate) ?>"
                class="inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
-                Buka di halaman Buat dokumen
+                Coba di halaman Buat dokumen
                 <span class="text-gray-400">→</span>
             </a>
         </div>
         <p class="text-sm text-gray-600 max-w-3xl">
             Satu surat kertas dibedah sampai selesai: bagian mana jadi fitur apa, ditulis bagaimana, dan
             disimpan di mana. Dokumennya karangan — nama, alamat, dan angkanya tidak nyata.
+        </p>
+        <p class="text-sm text-gray-600 max-w-3xl">
+            Contoh yang sama bisa dicoba di halaman Buat dokumen: isiannya hidup dan tanda tangannya bisa
+            digambar. Tombol Simpan di sana menulis ke peramban Anda saja — database tidak disentuh.
         </p>
         <p class="text-xs text-gray-500">
             Halaman ini hanya membaca berkas di <code class="font-mono">contoh/<?= h((string) $contoh['slug']) ?>/</code>.

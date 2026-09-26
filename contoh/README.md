@@ -9,8 +9,10 @@ Dua pintu:
   mengelola template). Ia merender contoh ini dengan perender yang sama dengan
   yang mencetak dokumen sungguhan, jadi contoh yang rusak langsung terlihat.
 - **`?ezdoc_page=generate&template_id=contoh`** — contoh yang sama, dibuka di
-  halaman pembuatan dokumen. Baca saja: terkunci, tombol Simpan mati, tanda
-  tangan tidak ditawarkan, dan tidak ada dokumen yang dibuat.
+  halaman pembuatan dokumen, dan **boleh dicoba**: isian hidup, tanda tangan
+  bisa digambar, tombol Simpan bisa ditekan. Simpannya dibatalkan lewat kait
+  `ezcetak:before-save` lalu ditulis ke `localStorage` peramban. Database tidak
+  disentuh, OTP tidak dikirim, dan tidak ada dokumen yang dibuat.
 
 ## Isi folder
 

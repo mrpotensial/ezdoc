@@ -6,6 +6,42 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Changed — mode contoh boleh dicoba, simpannya ke peramban (2026-09-26)**
+
+Dilaporkan pemakai: "warningnya kok tidak rapi? dan tombol nya kok read only
+semua, aku ingin bisa aksi — save sementara aja atau di localstorage browser
+jika takut db terganggu".
+
+**Pitanya dirapikan**: selebar kertasnya (bukan menggantung di kiri layar),
+bersudut lembut, dengan tombol *Hapus simpanan* dan tautan ke penjelasan
+fiturnya. Ia hilang saat dokumennya dicetak.
+
+**Halamannya jadi hidup**: isian bisa diketik, tanda tangan bisa digambar, dan
+tombol Simpan bisa ditekan. Yang berubah tujuan simpannya:
+
+- Simpan dibatalkan lewat `ezcetak:before-save` — kait resmi halaman ini, yang
+  memang disediakan untuk dibatalkan konsumen. Jadi tombol, validasi, dan umpan
+  baliknya tetap yang asli; tidak ada jalur simpan tiruan yang bisa menyimpang
+  diam-diam.
+- Isinya ditulis ke `localStorage` peramban, satu kunci per contoh, lalu
+  dipulihkan saat halaman dimuat ulang — termasuk tanda tangan yang digambar
+  (beserta pratinjaunya) dan kotak centang yang TIDAK dicentang, yang memang
+  tidak pernah ikut di data formulir.
+- OTP dilucuti di mode contoh: kodenya menuntut dokumen sungguhan di database.
+  Atributnya tetap utuh di berkas contohnya, supaya aturannya tetap bisa dibaca
+  dan disalin.
+
+Yang menjaga database tetap sama, dan bukan tombol yang dimatikan: tidak ada
+baris template dan tidak ada dokumen yang ditunjuk (`template_id=0`,
+`doc_id=0`), jadi tidak ada sasaran yang bisa ditimpa seandainya satu permintaan
+lolos.
+
+4 uji baru — skrip mode contohnya diambil dari halaman yang sudah dirender lalu
+DIJALANKAN di atas DOM tiruan: simpan dibatalkan, isinya mendarat di peramban,
+muat ulang mengembalikannya, dan nama penanda tangan tidak tertukar dengan slot
+tanda tangan. Satu uji lama ditulis ulang. Dicoba juga di Chrome sungguhan:
+ketik, tanda tangani, Simpan, muat ulang, hapus simpanan.
+
 **Changed — contoh bisa dibuka di halaman Buat dokumen, dan isinya dibenahi (2026-09-26)**
 
 Dua hal dari pemakai.

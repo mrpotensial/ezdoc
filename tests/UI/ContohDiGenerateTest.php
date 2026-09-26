@@ -10,15 +10,17 @@ use PHPUnit\Framework\TestCase;
  * Contoh dibuka di halaman pembuatan dokumen.
  *
  * Diminta pemakai: "apa tidak bisa dilihat langsung di generate, misal
- * ?ezdoc_page=generate&template_id=contoh". Yang dinilai orang sebelum memakai
- * sesuatu adalah tampilan tempat ia akan bekerja, bukan halaman penjelasan.
+ * ?ezdoc_page=generate&template_id=contoh" — lalu, setelah mencobanya:
+ * "tombolnya kok read only semua, aku ingin bisa aksi".
  *
- * Yang dijaga di sini satu kalimat: **mode contoh tidak boleh bisa menulis apa
- * pun**. Halamannya dikunci lewat jalur yang sama dengan dokumen terkunci,
- * tombol Simpan mati, tanda tangan tidak ditawarkan, dan tidak ada dokumen yang
- * dicari maupun dibuat. Prosesnya sengaja dijalankan tanpa database MySQL sama
- * sekali: kalau ada jalur yang diam-diam bertanya ke sana, uji ini yang gagal
- * duluan.
+ * Jadi halamannya HIDUP: isian bisa diketik, tanda tangan bisa digambar,
+ * tombol Simpan bisa ditekan. Yang menjaga database bukan tombol yang mati,
+ * melainkan tiga hal yang tidak bisa ditawar: tidak ada baris template, tidak
+ * ada dokumen yang ditunjuk, dan simpannya dibatalkan sebelum berangkat lalu
+ * dialihkan ke peramban (lihat ContohSimpanBrowserTest).
+ *
+ * Prosesnya sengaja dijalankan tanpa MySQL sama sekali: kalau ada jalur yang
+ * diam-diam bertanya ke sana, uji ini yang gagal duluan.
  */
 final class ContohDiGenerateTest extends TestCase
 {
@@ -53,43 +55,53 @@ final class ContohDiGenerateTest extends TestCase
         self::assertStringNotContainsString('ttd-placeholder', $halaman, 'penanda TTD tidak diproses');
     }
 
-    /** Orang yang membukanya diberi tahu bahwa ini contoh. */
+    /** Orang yang membukanya diberi tahu bahwa ini contoh, dan ke mana simpanannya pergi. */
     public function testAdaPenandaModeContoh(): void
     {
         $halaman = self::halaman();
 
         self::assertStringContainsString('Mode contoh', $halaman);
+        self::assertStringContainsString('ez-pita-contoh', $halaman, 'pitanya harus punya gayanya sendiri');
+        self::assertStringContainsString('peramban ini saja', $halaman, 'tujuan simpannya harus disebut');
         self::assertStringContainsString('contoh/surat-keterangan-tindakan/', $halaman);
         self::assertStringContainsString('ezdoc_page=contoh', $halaman, 'tidak ada jalan kembali ke penjelasannya');
+        self::assertStringContainsString('ezContohHapus', $halaman, 'harus ada cara membuang simpanan percobaan');
     }
 
     /**
-     * Tidak ada yang bisa ditulis.
+     * Halamannya bisa dicoba — dan tetap tidak menyentuh database.
      *
-     * Tiga lapis sekaligus, karena satu lapis selalu ada yang melewatinya:
-     * halamannya terkunci, tombol Simpan mati, dan tombol tanda tangan tidak
-     * pernah dirender.
+     * Dua hal yang gampang dikira bertentangan. Yang menjaganya bukan tombol
+     * yang mati: tidak ada template maupun dokumen yang ditunjuk, jadi tidak
+     * ada sasaran yang bisa ditimpa seandainya satu permintaan lolos.
      */
-    public function testTidakAdaYangBisaDitulis(): void
+    public function testBisaDicobaTanpaSasaranYangBisaDitimpa(): void
     {
         $halaman = self::halaman();
 
-        self::assertStringContainsString('edit-off', $halaman, 'halaman contoh harus baca-saja');
+        self::assertStringContainsString('<body class="edit-on"', $halaman, 'isian contoh harus hidup');
         self::assertSame(
-            1,
+            0,
             preg_match('/<button[^>]*onclick="submitForm\(\)"[^>]*disabled/', $halaman),
-            'tombol Simpan harus mati'
+            'tombol Simpan tidak perlu dimatikan — simpannya yang dialihkan'
         );
 
-        // Yang dihitung tombol di halamannya, bukan teks di dalam skrip: skripnya
-        // memang menyimpan cetakan tombol untuk keadaan halaman yang lain.
+        // Tombol tanda tangan dihitung di halamannya, bukan di dalam skrip.
         $tanpaSkrip = (string) preg_replace('/<script\b[\s\S]*?<\/script>/i', '', $halaman);
-        self::assertSame(0, substr_count($tanpaSkrip, 'openSign('), 'tanda tangan tidak boleh ditawarkan');
+        self::assertGreaterThan(0, substr_count($tanpaSkrip, 'openSign('), 'tanda tangan harus bisa dicoba');
 
-        // Tidak menunjuk dokumen maupun template mana pun: kalaupun ada yang
-        // memaksa mengirim formulirnya, tidak ada sasaran yang bisa ditimpa.
         self::assertStringContainsString('name="_doc_id" id="docIdInput" value="0"', $halaman);
         self::assertStringContainsString('name="template_id" value="0"', $halaman);
+        self::assertStringContainsString("window.addEventListener('ezcetak:before-save'", $halaman, 'simpannya harus dibatalkan');
+    }
+
+    /** Identitas dokumennya diisi contoh, bukan nomor rekam medis milik orang. */
+    public function testIdentitasnyaContohJuga(): void
+    {
+        $halaman = self::halaman();
+
+        self::assertStringContainsString('00-12-3456', $halaman);
+        self::assertStringContainsString('2026-000042', $halaman);
     }
 
     /** Nama contoh yang tidak ada tidak menghasilkan halaman apa pun. */
@@ -123,7 +135,7 @@ final class ContohDiGenerateTest extends TestCase
         $sumber = self::sumberGenerate();
 
         self::assertStringContainsString('\Ezdoc\Template\Contoh::muat($contohSlug)', $sumber, 'templatenya harus datang dari pemuat berkas');
-        self::assertStringContainsString('$param_is_locked = 1;', $sumber);
         self::assertStringContainsString("\$GLOBALS['ezdocModeContoh'] = true;", $sumber);
+        self::assertStringContainsString("'/\\s+data-(require-otp|otp-phone-source|otp-ttl)=\"[^\"]*\"/", $sumber, 'OTP harus dilucuti di mode contoh');
     }
 }
