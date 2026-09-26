@@ -1933,6 +1933,14 @@
                     box-shadow: 0 4px 20px rgba(0,0,0,0.3);
                     box-sizing: border-box;
                     position: relative;
+                    /* Kertas ini harus jadi lapisan tersendiri — sebab yang sama
+                       dengan .page di halaman pembuatan dokumen: elemen "di
+                       belakang teks" memakai z-index: -1, dan tanpa lapisan
+                       sendiri itu berarti di belakang latar putih ini. Cap yang
+                       dipasang di belakang teks jadi tidak terlihat sama sekali
+                       di designer, padahal ia ada dan ikut tercetak.
+                       Dilaporkan pemakai: "di designer kok tidak ada stempel". */
+                    isolation: isolate;
                     /* Page break hint — 1px semi-transparent line di setiap
                        paper-height mark. Simple + accurate — no cumulative
                        displacement across pages.

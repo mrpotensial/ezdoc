@@ -171,6 +171,35 @@ final class ContohKonversiTest extends TestCase
         self::assertStringContainsString('Materai TIDAK dipakai', (string) file_get_contents(self::akar() . '/views/contoh.php'), 'alasannya harus tertulis');
     }
 
+    /**
+     * Cap mengambangnya berada di dalam kertas.
+     *
+     * Dilaporkan pemakai: "posisi stempel salah" — capnya menclok di tengah
+     * teks, bukan menimpa tanda tangan seperti di kertas aslinya. Koordinatnya
+     * piksel dari sudut kiri-atas kertas, jadi angka yang keliru tidak
+     * menghasilkan galat apa pun: ia cuma mendarat di tempat yang salah.
+     */
+    public function testCapMengambangBeradaDiDalamKertas(): void
+    {
+        $tpl = self::template();
+
+        self::assertSame(1, preg_match('/data-logo="stempel"[^>]*data-pos-x="(\d+)" data-pos-y="(\d+)"/', $tpl, $m), 'koordinat cap tidak ketemu');
+        [$x, $y] = [(int) $m[1], (int) $m[2]];
+
+        self::assertSame(1, preg_match('/data-logo="stempel" data-width="(\d+)px"/', $tpl, $w), 'lebar cap tidak ketemu');
+        $sisi = (int) $w[1];
+
+        // A4 tegak pada 96 dpi: 794 x 1123 piksel.
+        self::assertGreaterThan(0, $x);
+        self::assertGreaterThan(0, $y);
+        self::assertLessThanOrEqual(794, $x + $sisi, 'cap melewati tepi kanan kertas');
+        self::assertLessThanOrEqual(1123, $y + $sisi, 'cap melewati tepi bawah kertas');
+
+        // Dan ia memang berada di paruh bawah, tempat tanda tangan berkumpul —
+        // seperti cap di kertas aslinya.
+        self::assertGreaterThan(560, $y, 'cap mendarat di tengah teks, bukan di area tanda tangan');
+    }
+
     /** Tiap field yang dipakai template punya nilai contoh — pratinjaunya tidak setengah kosong. */
     public function testSetiapFieldPunyaNilaiContoh(): void
     {

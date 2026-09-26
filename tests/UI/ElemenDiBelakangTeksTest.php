@@ -41,6 +41,27 @@ final class ElemenDiBelakangTeksTest extends TestCase
         self::assertStringContainsString('isolation: isolate;', $aturan, 'tanpa ini elemen di belakang teks hilang di layar');
     }
 
+    /**
+     * Kertas di designer juga lapisan tersendiri.
+     *
+     * Dilaporkan pemakai: "di designer kok tidak ada stempel". Sebab yang sama,
+     * tempat berbeda: di designer kertasnya adalah `body` editor, dan latar
+     * putihnya menempel di sana karena `html` sudah memakai latar abu-abu —
+     * jadi latarnya tidak berpindah ke kanvas, dan elemen ber-z-index -1
+     * jatuh di belakangnya.
+     */
+    public function testKertasDiDesignerJugaLapisanSendiri(): void
+    {
+        $skrip = self::baca('views/_partials/designer_scripts.php');
+
+        $awal = strpos($skrip, '                body {');
+        self::assertNotFalse($awal, 'aturan body editor tidak ketemu');
+        $aturan = substr($skrip, $awal, (int) strpos($skrip, chr(10) . '                }', $awal) - $awal);
+
+        self::assertStringContainsString('background-color: white;', $aturan, 'premis tes: kertasnya memang berlatar putih');
+        self::assertStringContainsString('isolation: isolate;', $aturan, 'tanpa ini cap di belakang teks hilang di designer');
+    }
+
     /** Kedua perender memakai angka yang sama untuk "di belakang teks". */
     public function testLayarDanPdfSepakatSoalAngkanya(): void
     {

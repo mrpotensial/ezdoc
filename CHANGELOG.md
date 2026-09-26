@@ -6,6 +6,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Fixed — cap tidak terlihat di designer, dan letaknya di contoh meleset (2026-09-26)**
+
+Dua laporan pemakai, satu sebab dan satu salah angka.
+
+**"di designer kok tidak ada stempel"** — sebab yang sama dengan di halaman
+pembuatan dokumen, tempat berbeda: di designer kertasnya adalah `body` editor,
+dan latar putihnya menempel di sana karena `html` sudah memakai latar abu-abu.
+Elemen ber-`z-index: -1` jatuh di belakang latar itu. `body` editor kini
+`isolation: isolate` juga, jadi cap di belakang teks terlihat di designer,
+di layar pembuatan dokumen, dan di PDF — ketiganya sama.
+
+**"posisi stempel salah"** — capnya menclok di tengah teks, bukan menimpa
+tanda tangan seperti di kertas aslinya. Koordinatnya diukur ulang di dokumen
+hasil (kertas 658×1082 px setelah tepi): capnya kini menimpa kolom tanda tangan
+dokter, persis seperti di pindaian. Salah angka seperti ini tidak menghasilkan
+galat apa pun — ia cuma mendarat di tempat yang salah, jadi sekarang ada uji
+yang menjaga capnya tetap di dalam kertas dan di paruh bawah halaman.
+
+2 uji baru.
+
 **Fixed — elemen "di belakang teks" hilang di layar (2026-09-26)**
 
 Dilaporkan pemakai: "kenapa di pdf raw ada stempel tapi di generate tidak ada?".
