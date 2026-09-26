@@ -6,6 +6,53 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Fixed — elemen "di belakang teks" hilang di layar (2026-09-26)**
+
+Dilaporkan pemakai: "kenapa di pdf raw ada stempel tapi di generate tidak ada?".
+
+Cap, kop air, dan logo mode *behind* memakai `z-index: -1`. Angka itu berarti
+"di belakang latar lapisan terdekat" — dan selama kertas `.page` bukan lapisan
+tersendiri, lapisan terdekatnya adalah halaman, jadi capnya jatuh di belakang
+latar putih `.page` dan hilang sama sekali. Di jalur PDF `.page` memang tanpa
+latar, makanya di sana ia tampak. Perbedaan itulah masalahnya: yang dilihat
+petugas di layar bukan yang tercetak.
+
+Kertas di layar kini `isolation: isolate` — latar putih dulu, cap di atasnya,
+teks di atas keduanya. Pola yang sama dipakai kop air di Word dan Google Docs.
+
+**Fixed — QR tanda tangan tidak muncul di contoh**
+
+Dilaporkan pemakai: "qr nya pun tidak tampil di contoh". QR tanda tangan
+menunjuk record tanda tangan di server, dan contoh tidak punya dokumen — jadi
+yang tampil cuma tulisan "simpan dokumen dulu". Di mode contoh sekarang dipakai
+alamat verifikasi contoh, supaya bentuk, tempat, dan ukurannya tetap terlihat.
+QR verifikasi di kaki surat tidak berubah: ia dirender di server dari field
+`link_verifikasi` seperti dokumen biasa.
+
+**Added — contoh bisa dibuka di designer (2026-09-26)**
+
+Diminta pemakai: "buat agar bisa edit di designer juga contohnya? untuk
+memastikan terhubung dengan benar, tapi gunakan local storage aja".
+
+`?ezdoc_page=designer&action=edit&id=contoh` (atau `id=contoh:<nama-folder>`).
+Yang terbuka designer sungguhan dengan contohnya sebagai isi: panel kanan
+mendeteksi 11 field, 3 tanda tangan, dan 2 logo — dan justru itu gunanya, karena
+kalau markupnya salah, panel itu yang pertama diam.
+
+- **Simpan menulis ke peramban**, lewat `ezdoc:before-save` — kait resmi
+  halaman ini yang memang disediakan untuk dibatalkan konsumen. Draf terakhir
+  dipulihkan sebelum editor menyala, termasuk nama template dan config-nya.
+- **Lapis kedua di sisi server**: nomor template di mode contoh berupa teks
+  (`contoh:<nama-folder>`), dan `save_template.php` menolaknya sebelum nomor itu
+  sempat jadi `0` — karena `0` artinya "buat template baru", dan contoh yang
+  dicoba-coba orang tidak boleh mendarat sebagai template sungguhan.
+- Halaman contoh dapat tombol **Buka di Designer**, di samping **Coba di halaman
+  Buat dokumen**.
+
+10 uji baru. Alur designer dicoba di Chrome sungguhan: ubah nama dan isi,
+Simpan, muat ulang (pulih), hapus draf (kembali ke contoh semula), tanpa satu
+pun permintaan simpan ke server.
+
 **Fixed — PDF contoh tidak bisa dibuka (2026-09-26)**
 
 Dilaporkan pemakai: "pdf raw nya gak bisa dilihat ya contoh?".

@@ -1792,6 +1792,12 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
         // umpan baliknya tetap yang asli. Menulis jalur simpan tiruan akan
         // menyimpang dari yang asli tanpa ada yang tahu kapan.
         var KUNCI = 'ezdoc_contoh_<?= h($contohSlug) ?>';
+
+        // Mode contoh tidak punya dokumen, jadi tidak ada URL verifikasi
+        // sungguhan — dan tanpa itu QR tanda tangan cuma menulis "simpan dokumen
+        // dulu". Dipakai alamat contoh supaya QR-nya tetap terlihat: yang ingin
+        // ditunjukkan bentuk, tempat, dan ukurannya, bukan isinya.
+        window.EZDOC_CONTOH_VERIFY = <?= json_encode($dbFields['link_verifikasi'] ?? 'https://contoh.example/verifikasi/CONTOH') ?>;
         var ABAIKAN = { _ajax: 1, template_id: 1, _doc_id: 1, verify_url: 1 };
         // Slot tanda tangan dikenali dari daftarnya, bukan dari ada-tidaknya
         // elemen `ttd_<nama>`: field NAMA penanda tangan juga punya elemen

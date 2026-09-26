@@ -57,6 +57,7 @@ return [
         'days'    => '{n}h lalu',
     ],
     'response' => [
+        'contoh_not_saveable'      => 'Contoh bukan template — ia tidak bisa disimpan.',
         'hide_signed_needs_reason' => 'Versi ini memuat {count} tanda tangan. Beri alasan minimal {min} karakter sebelum menyembunyikannya.',
         'version_not_hidden'       => 'Versi ini tidak tersembunyi — tidak ada yang perlu dikembalikan.',
         'version_restored'         => 'Versi v{version} kembali ke daftar.',

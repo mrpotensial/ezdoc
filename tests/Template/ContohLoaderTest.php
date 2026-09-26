@@ -45,7 +45,11 @@ final class ContohLoaderTest extends TestCase
         }
         self::assertIsString($contoh['config_header']);
         self::assertIsArray(json_decode((string) $contoh['config_header'], true));
-        self::assertSame(1, $contoh['is_locked'], 'contoh harus terkunci — tidak ada yang boleh ditulis');
+        // Tidak terkunci: contohnya memang untuk dicoba-coba, di halaman
+        // pembuatan dokumen maupun di designer. Yang menjaga database bukan
+        // gembok melainkan ketiadaan sasaran — tidak ada baris template dan
+        // tidak ada dokumen yang bisa ditimpa.
+        self::assertSame(0, $contoh['is_locked']);
     }
 
     /** Nama folder yang tidak sah ditolak, bukan dicoba. */

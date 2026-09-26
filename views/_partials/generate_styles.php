@@ -33,6 +33,18 @@
             background-color: #fff;
             box-shadow: 0 4px 20px rgba(0,0,0,0.3);
             position: relative;
+            /* Kertas ini harus jadi lapisan tersendiri.
+               Elemen "di belakang teks" (cap, kop air) memakai z-index: -1, dan
+               -1 berarti di belakang latar lapisan TERDEKAT. Selama .page bukan
+               lapisan sendiri, lapisan terdekatnya halaman — jadi cap itu jatuh
+               di belakang latar putih .page dan hilang sama sekali di layar,
+               padahal di PDF ia tampak (di sana .page memang tanpa latar).
+               Dilaporkan pemakai: "kenapa di pdf raw ada stempel tapi di
+               generate tidak ada?".
+               `isolation` mengurungnya: latar putih dulu, cap di atasnya, teks
+               di atas keduanya. Pola yang sama dipakai kop air di Word dan
+               Google Docs. */
+            isolation: isolate;
             /* Page break preview (edit-on only) — dashed horizontal line at
                every paperH mm boundary. Same dual-layer bg masking technique
                dari designer.php (Notion / Google Docs page marker convention):

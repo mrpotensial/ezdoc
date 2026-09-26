@@ -43,6 +43,18 @@ ezdoc_set_role_provider([
 // database, jadi SQLite kosong di memori sudah cukup. Kalau ada jalur yang
 // diam-diam bertanya ke database, ia akan gagal di sini — dan itu memang
 // yang ingin ketahuan.
+/**
+ * Pembuat QR milik "aplikasi pemakai".
+ *
+ * Di dunia nyata konsumen yang menyediakannya (lewat Context::withQr() atau
+ * fungsi global ini). Dipasang di sini supaya jalur QR ikut terjalani —
+ * gambarnya sendiri tidak penting, yang diuji apakah datanya sampai.
+ */
+function generateQrForDompdf($data, $size = 200, $margin = 5)
+{
+    return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+}
+
 \Ezdoc\Context::setDefault(new \Ezdoc\Context(
     new \PDO('sqlite::memory:'),
     new class implements \Ezdoc\Auth\RoleProvider {

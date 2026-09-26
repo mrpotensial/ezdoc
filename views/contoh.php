@@ -119,6 +119,7 @@ $qk = (string) $config->get('app.query_key', 'ezdoc_page');
 $base = (string) $config->get('app.base_path', '');
 $join = (strpos($base, '?') === false) ? '?' : '&';
 $urlGenerate = $base . $join . $qk . '=generate&template_id=contoh:' . rawurlencode((string) $contoh['slug']);
+$urlDesigner = $base . $join . $qk . '=designer&action=edit&id=contoh:' . rawurlencode((string) $contoh['slug']);
 
 $aturan = [
     'Nama field huruf kecil dengan garis bawah. Nama yang sama dipakai di {{nama}}, data-nama-field, data-qr, dan data-cond.',
@@ -176,19 +177,27 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
     <header class="space-y-2">
         <div class="flex flex-wrap items-start justify-between gap-3">
             <h1 class="text-xl font-semibold tracking-tight text-gray-900">Contoh konversi dokumen</h1>
-            <a href="<?= h($urlGenerate) ?>"
-               class="inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
-                Coba di halaman Buat dokumen
-                <span class="text-gray-400">→</span>
-            </a>
+            <div class="flex flex-wrap items-center gap-2">
+                <a href="<?= h($urlDesigner) ?>"
+                   class="inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                    Buka di Designer
+                    <span class="text-gray-400">→</span>
+                </a>
+                <a href="<?= h($urlGenerate) ?>"
+                   class="inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                    Coba di halaman Buat dokumen
+                    <span class="text-gray-400">→</span>
+                </a>
+            </div>
         </div>
         <p class="text-sm text-gray-600 max-w-3xl">
             Satu surat kertas dibedah sampai selesai: bagian mana jadi fitur apa, ditulis bagaimana, dan
             disimpan di mana. Dokumennya karangan — nama, alamat, dan angkanya tidak nyata.
         </p>
         <p class="text-sm text-gray-600 max-w-3xl">
-            Contoh yang sama bisa dicoba di halaman Buat dokumen: isiannya hidup dan tanda tangannya bisa
-            digambar. Tombol Simpan di sana menulis ke peramban Anda saja — database tidak disentuh.
+            Contoh yang sama bisa dibuka di Designer (untuk melihat apakah tiap elemen memang terbaca
+            panelnya) dan di halaman Buat dokumen (untuk mengisi dan menandatangani). Tombol Simpan di
+            kedua tempat itu menulis ke peramban Anda saja — database tidak disentuh.
         </p>
         <p class="text-xs text-gray-500">
             Halaman ini hanya membaca berkas di <code class="font-mono">contoh/<?= h((string) $contoh['slug']) ?>/</code>.

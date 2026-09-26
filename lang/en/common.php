@@ -38,6 +38,7 @@ return [
         'days'    => '{n}d ago',
     ],
     'response' => [
+        'contoh_not_saveable'      => 'The example is not a template — it cannot be saved.',
         'hide_signed_needs_reason' => 'This version carries {count} signature(s). Give a reason of at least {min} characters before hiding it.',
         'version_not_hidden' => 'This version is not hidden — there is nothing to restore.',
         'version_restored' => 'Version v{version} is back in the list.',

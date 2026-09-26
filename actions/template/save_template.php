@@ -34,6 +34,21 @@ global $author_id;
 ezdoc_require_manage_templates('Tidak berhak simpan template');
 
 // Frontend backward compat: legacy key names
+// Contoh tidak pernah jadi template.
+//
+// Halaman designer mengalihkan simpannya ke peramban, tapi lapisan itu hidup
+// di JavaScript — dan yang hidup di JavaScript bisa gagal. Nomor template di
+// mode contoh berupa teks (`contoh:<nama-folder>`), dan tanpa penjaga ini teks
+// itu jadi 0 sepuluh baris di bawah — artinya "buat template baru", dan contoh
+// yang dicoba-coba orang mendarat sebagai template sungguhan.
+$__tidMentah = (string) ($_POST['template_id'] ?? '');
+if ($__tidMentah !== '' && strncmp($__tidMentah, 'contoh', 6) === 0) {
+    ezdoc_respond_error(
+        t('response.contoh_not_saveable', [], 'The example is not a template — it cannot be saved.'),
+        400
+    );
+}
+
 $name = trim($_POST['nama_template'] ?? '');
 $category = trim($_POST['category'] ?? '');
 if (mb_strlen($category) > 100) $category = mb_substr($category, 0, 100);

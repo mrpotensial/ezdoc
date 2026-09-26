@@ -116,10 +116,11 @@ final class Contoh
                 ? (string) json_encode($data['verify_config'])
                 : null,
             'access_config' => null,
-            // Ditandai terkunci sebagai template: contoh ini untuk disalin,
-            // bukan disunting di tempat. Halaman pembuatan dokumen TIDAK ikut
-            // terkunci — di sana ia memang untuk dicoba.
-            'is_locked' => 1,
+            // TIDAK terkunci: contoh ini memang untuk dicoba-coba, baik di
+            // halaman pembuatan dokumen maupun di designer. Yang menjaganya
+            // bukan gembok melainkan ketiadaan sasaran — tidak ada baris
+            // template dan tidak ada dokumen yang bisa ditimpa.
+            'is_locked' => 0,
 
             // ── Tambahan khusus contoh ──
             'slug' => $slug,

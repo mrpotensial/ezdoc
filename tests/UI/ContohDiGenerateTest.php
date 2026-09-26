@@ -158,6 +158,34 @@ final class ContohDiGenerateTest extends TestCase
         self::assertStringContainsString('const templateId = "contoh:surat-keterangan-tindakan"', $halaman, 'sisi JS masih memakai nomor');
     }
 
+    /**
+     * QR-nya ikut tampil di contoh.
+     *
+     * Dilaporkan pemakai: "qr nya pun tidak tampil di contoh". Dua QR yang
+     * berbeda urusan: yang di kaki surat datang dari field `link_verifikasi`
+     * dan dirender di server, sedangkan QR tanda tangan menunjuk record yang —
+     * di contoh — memang tidak ada. Yang kedua diberi alamat contoh supaya
+     * bentuknya tetap terlihat.
+     */
+    public function testKeduaQrTampilDiContoh(): void
+    {
+        $halaman = self::halaman();
+
+        self::assertSame(
+            1,
+            preg_match('/<img src="data:image\/[^"]+" class="qr-img"/', $halaman),
+            'QR verifikasi di kaki surat tidak dirender'
+        );
+        self::assertStringContainsString('window.EZDOC_CONTOH_VERIFY = "https:', $halaman, 'contoh tidak punya alamat verifikasi contoh');
+
+        $skrip = (string) file_get_contents(dirname(__DIR__, 2) . '/views/_partials/generate_scripts.php');
+        self::assertStringContainsString(
+            "if (!qrData && window.EZDOC_CONTOH_VERIFY) {",
+            $skrip,
+            'QR tanda tangan tidak punya isi cadangan untuk mode contoh'
+        );
+    }
+
     /** Nama contoh yang tidak ada tidak menghasilkan halaman apa pun. */
     public function testNamaContohTidakDikenalTidakMenampilkanDokumen(): void
     {

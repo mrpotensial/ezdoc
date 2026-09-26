@@ -3019,6 +3019,14 @@
             // yang memindai dapat "tanda tangan tidak dikenal".
             if (!qrData && isSigned) qrData = ttdVerifyUrl;
 
+            // Mode contoh: tidak ada dokumen, jadi tidak ada record yang bisa
+            // ditunjuk. Alamat contoh dipakai supaya QR-nya tetap muncul —
+            // di halaman contoh yang ditanyakan orang "seperti apa bentuknya",
+            // bukan "menunjuk ke mana".
+            if (!qrData && window.EZDOC_CONTOH_VERIFY) {
+                qrData = window.EZDOC_CONTOH_VERIFY + '#' + ttdId;
+            }
+
             if (!qrData) {
                 preview.innerHTML = '<small class="text-gray-400 text-[10px]">' + t('ttd.save_first', {}, 'Save document first') + '</small>';
                 return;
