@@ -6,6 +6,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Fixed — PDF contoh tidak bisa dibuka (2026-09-26)**
+
+Dilaporkan pemakai: "pdf raw nya gak bisa dilihat ya contoh?".
+
+Sebabnya alamat mandiri halaman. Di mode contoh nomor templatenya bukan angka
+melainkan `contoh:<nama-folder>`, sementara setiap tautan yang dibuat halaman
+ini — PDF Raw, cetak, ganti versi — masih menulis `template_id=0`. Halaman
+menjawab nomor nol dengan pemilih template, bukan dengan dokumen. Sekarang
+alamat mandirinya membawa nama contohnya, di sisi PHP maupun JS.
+
+Ditambah **tombol "Lihat PDF" di pita mode contoh**, tanpa `raw=1`: contoh tidak
+punya dokumen, jadi tidak ada artefak beku yang perlu dilewati, dan tombolnya
+bisa dipakai siapa pun yang boleh membuka contohnya. Bagian **Admin** di bilah
+alat sengaja TIDAK ikut dibuka — ia superadmin saja, dan itu keputusan yang
+sudah dijaga tesnya sendiri.
+
+3 uji baru: PDF mentah contoh benar-benar dirakit (nilai contoh dan tabelnya
+ikut, tanpa penanda tersisa), alamat mandirinya membawa nama contoh, dan pitanya
+punya pintu ke PDF.
+
 **Changed — cara menandatangani dipilih sesudah slotnya diklik (2026-09-26)**
 
 Diminta pemakai: "jika mode ttd qr/image aktif, tab ganti mode nya jangan di

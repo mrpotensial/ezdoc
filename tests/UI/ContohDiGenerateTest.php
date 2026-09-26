@@ -24,15 +24,16 @@ use PHPUnit\Framework\TestCase;
  */
 final class ContohDiGenerateTest extends TestCase
 {
-    private static function halaman(string $templateId = 'contoh', string $boleh = 'ya'): string
+    private static function halaman(string $templateId = 'contoh', string $boleh = 'ya', string $tambahan = ''): string
     {
         $baris = [];
         exec(sprintf(
-            '%s %s %s %s 2>&1',
+            '%s %s %s %s %s 2>&1',
             escapeshellarg(PHP_BINARY),
             escapeshellarg(dirname(__DIR__) . '/fixtures/jalankan_contoh_generate.php'),
             escapeshellarg($templateId),
-            escapeshellarg($boleh)
+            escapeshellarg($boleh),
+            escapeshellarg($tambahan)
         ), $baris);
 
         return implode("\n", $baris);
@@ -83,6 +84,13 @@ final class ContohDiGenerateTest extends TestCase
         self::assertStringContainsString('contoh/surat-keterangan-tindakan/', $halaman);
         self::assertStringContainsString('ezdoc_page=contoh', $halaman, 'tidak ada jalan kembali ke penjelasannya');
         self::assertStringContainsString('ezContohHapus', $halaman, 'harus ada cara membuang simpanan percobaan');
+        // Pintu ke PDF-nya di pita ini, bukan di bagian Admin — yang memang
+        // superadmin saja. Tanpa raw=1: contoh tidak punya artefak beku.
+        self::assertSame(
+            1,
+            preg_match('/<a href="\?template_id=contoh%3A[^"]*view=pdf"[^>]*>/', $halaman),
+            'contoh tidak punya jalan melihat PDF-nya'
+        );
     }
 
     /**
@@ -119,6 +127,35 @@ final class ContohDiGenerateTest extends TestCase
 
         self::assertStringContainsString('00-12-3456', $halaman);
         self::assertStringContainsString('2026-000042', $halaman);
+    }
+
+    /**
+     * PDF mentahnya bisa dilihat juga untuk contoh.
+     *
+     * Dilaporkan pemakai: "pdf raw nya gak bisa dilihat ya contoh?". Sebabnya
+     * tautan mandiri halaman membawa `template_id=0` — dan halaman menjawab
+     * nomor nol dengan pemilih template, bukan dengan dokumen.
+     */
+    public function testPdfMentahBisaDilihat(): void
+    {
+        // debug=html: jalur yang sama, berhenti tepat sebelum diserahkan ke
+        // mesin PDF — yang memang disediakan aplikasi pemakai, bukan pustaka.
+        $keluaran = self::halaman('contoh', 'ya', 'view=pdf&raw=1&debug=html');
+
+        self::assertStringContainsString('<!DOCTYPE html>', $keluaran);
+        self::assertStringContainsString('Siti Rahmawati', $keluaran);
+        self::assertStringContainsString('Konsultasi dokter umum', $keluaran, 'tabelnya ikut terisi di PDF');
+        self::assertStringNotContainsString('field-placeholder', $keluaran);
+        self::assertStringNotContainsString('{{', $keluaran);
+    }
+
+    /** Tautan mandiri halaman membawa nama contohnya, bukan nomor nol. */
+    public function testTautanMandiriMembawaNamaContoh(): void
+    {
+        $halaman = self::halaman();
+
+        self::assertStringContainsString('template_id=contoh%3Asurat-keterangan-tindakan', $halaman, 'alamat halaman sendiri kehilangan nama contoh');
+        self::assertStringContainsString('const templateId = "contoh:surat-keterangan-tindakan"', $halaman, 'sisi JS masih memakai nomor');
     }
 
     /** Nama contoh yang tidak ada tidak menghasilkan halaman apa pun. */

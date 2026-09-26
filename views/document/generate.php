@@ -1508,7 +1508,14 @@ function renderFieldInputRaw($name, $type, $val, $options, $label, $validation =
     }
 }
 
-$currentUrl = "?template_id=$template_id";
+// Alamat halaman ini SENDIRI.
+//
+// Di mode contoh nomornya bukan angka melainkan `contoh:<nama-folder>`. Tanpa
+// ini setiap tautan mandiri — PDF Raw, cetak, ganti versi — kembali membawa
+// `template_id=0`, dan halaman menjawabnya dengan pemilih template. Dilaporkan
+// pemakai: "pdf raw nya gak bisa dilihat ya contoh?".
+$__tidUrl = $contohSlug !== '' ? 'contoh:' . $contohSlug : (string) $template_id;
+$currentUrl = "?template_id=" . rawurlencode($__tidUrl);
 if ($doc_id > 0) $currentUrl .= "&doc_id=$doc_id";
 elseif ($param_norm && $param_nopen) {
     $currentUrl .= "&norm=" . urlencode($param_norm) . "&nopen=" . urlencode($param_nopen);
@@ -1540,6 +1547,9 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
     //
     // Dilewati untuk debug=html, dan untuk raw=1 dari superadmin — tombol
     // "PDF Raw" memang ada untuk melihat render mentah.
+    // Tetap superadmin saja, dan mode contoh tidak perlu dikecualikan: ia tidak
+    // punya dokumen (doc_id = 0), jadi cabang artefak beku di bawah tidak pernah
+    // berlaku untuknya sejak syarat pertamanya.
     $__mintaMentah = isset($_GET['raw']) && $_GET['raw'] === '1' && $isSuperadmin;
     if ($docSigningComplete && (int) $doc_id > 0 && !isset($_GET['debug']) && !$__mintaMentah) {
         $__beku = ezdoc_frozen_pdf(\Ezdoc\Context::default()->connection(), (int) $doc_id);
@@ -1762,6 +1772,14 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
             Dokumennya dibaca dari berkas <code>contoh/<?= h($contohSlug) ?>/</code>, database tidak disentuh
             dan OTP tidak dikirim.
         </span>
+        <?php // Pintu ke PDF-nya ditaruh di sini, bukan di bagian Admin.
+        //
+        // Bagian Admin sengaja superadmin saja, dan itu keputusan yang dijaga
+        // tesnya sendiri. Pita ini milik mode contoh, jadi di sinilah tempat
+        // yang benar untuk tombol yang hanya berlaku di mode contoh.
+        // Tanpa `raw=1`: contoh tidak punya dokumen, jadi tidak ada artefak
+        // beku yang perlu dilewati. Dilaporkan pemakai. ?>
+        <a href="<?= h($currentUrl) ?>&amp;view=pdf" target="_blank" rel="noopener">Lihat PDF</a>
         <button type="button" id="ezContohHapus">Hapus simpanan</button>
         <a href="<?= h($__urlContoh) ?>">Penjelasan fiturnya →</a>
     </div>

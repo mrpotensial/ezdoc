@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Buka contoh di halaman pembuatan dokumen, di proses terpisah, lalu cetak
  * HTML-nya.
  *
- *   php jalankan_contoh_generate.php [template_id] [ya|tidak]
+ *   php jalankan_contoh_generate.php [template_id] [ya|tidak] [query tambahan]
  *
  * Argumen kedua: apakah pembukanya punya peran pengelola template.
  *
@@ -62,6 +62,15 @@ $ctx = \Ezdoc\Context::default();
 
 $_GET['template_id'] = $templateId;
 $_SERVER['REQUEST_METHOD'] = 'GET';
+
+// Parameter tambahan, mis. "view=pdf&raw=1&debug=html".
+if (isset($argv[3]) && $argv[3] !== '') {
+    $tambahan = [];
+    parse_str((string) $argv[3], $tambahan);
+    foreach ($tambahan as $kunci => $nilai) {
+        $_GET[$kunci] = $nilai;
+    }
+}
 
 ob_start();
 include $akar . '/views/document/generate.php';

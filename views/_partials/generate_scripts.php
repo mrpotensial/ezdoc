@@ -36,7 +36,9 @@
         window.EZDOC_DEBUG.saves = [];
         console.log('%c[ezdoc:load]', 'color:#0e7490;font-weight:bold', window.EZDOC_DEBUG.load);
 
-        const templateId = <?= $template_id ?>;
+        // Teks, bukan angka: di mode contoh isinya `contoh:<nama-folder>`.
+        // Semua pemakainya cuma menaruhnya di parameter permintaan.
+        const templateId = <?= json_encode(isset($__tidUrl) ? $__tidUrl : (string) $template_id) ?>;
         const isEditMode = <?= $isEditMode ? 'true' : 'false' ?>;
         // editMode is driven by the document lock state (inverse of is_locked)
         const editMode = <?= $param_is_locked ? 'false' : 'true' ?>;
