@@ -226,6 +226,24 @@ $ezdocUrls = [
 $isSuperadmin = $ctx->roleProvider->hasRole($adminRoleSlug);
 
 $template_id = isset($_GET['template_id']) ? (int)$_GET['template_id'] : 0;
+
+// Contoh dari berkas: `?ezdoc_page=generate&template_id=contoh` atau
+// `template_id=contoh:<nama-folder>`.
+//
+// Gunanya melihat contoh di halaman kerjanya sendiri, bukan di halaman
+// penjelasan — yang dinilai orang sebelum memakai sesuatu adalah tampilan
+// tempat ia akan bekerja.
+//
+// Templatenya dibaca dari berkas: tidak ada baris template, tidak ada dokumen,
+// tidak ada yang ditulis. Penguncinya BUKAN cabang khusus melainkan
+// `$param_is_locked` — jalur yang sama dengan dokumen terkunci, yang sudah
+// mematikan tombol Simpan dan seluruh isian. Cabang khusus bisa terlewat di
+// satu tempat; jalur yang sudah dipakai di mana-mana tidak.
+$contohSlug = '';
+$__tidMentah = isset($_GET['template_id']) ? (string) $_GET['template_id'] : '';
+if (preg_match('/^contoh(?::([a-z0-9-]+))?$/', $__tidMentah, $__mContoh) === 1) {
+    $contohSlug = ($__mContoh[1] ?? '') !== '' ? $__mContoh[1] : \Ezdoc\Template\Contoh::BAWAAN;
+}
 $doc_id = isset($_GET['doc_id']) ? (int)$_GET['doc_id'] : 0;
 $param_norm = trim($_GET['norm'] ?? $_POST['_norm'] ?? '');
 $param_nopen = trim($_GET['nopen'] ?? $_POST['_nopen'] ?? '');
@@ -245,7 +263,7 @@ $docMeta = [
 
 // Template selection — allow caller override $templates (demo/consumer bypass DB)
 // spec: ezdoc-spec/views/generate.md#picker-templates-injection
-if ($template_id <= 0) {
+if ($template_id <= 0 && $contohSlug === '') {
     if (!isset($templates) || !is_array($templates)) {
         $result = mysqli_query($conn, "SELECT id, name AS nama_template FROM ezdoc_templates WHERE content IS NOT NULL AND content != '' AND is_current = 1 AND deleted_at IS NULL ORDER BY name");
         $templates = [];
@@ -268,6 +286,17 @@ if ($template_id <= 0) {
 }
 
 // Load template — pakai alias supaya kode rendering existing tetap works
+$template = null;
+if ($contohSlug !== '') {
+    $template = \Ezdoc\Template\Contoh::muat($contohSlug);
+    // Baca saja, dan tanpa dokumen: lihat catatan di atas.
+    $param_is_locked = 1;
+    $doc_id = 0;
+    $param_norm = '';
+    $param_nopen = '';
+    // Perender isi adalah fungsi, jadi ia tidak melihat variabel di sini.
+    $GLOBALS['ezdocModeContoh'] = true;
+} else {
 $stmt = mysqli_prepare($conn, "
     SELECT id, uuid, version,
            name AS nama_template,
@@ -287,6 +316,7 @@ mysqli_stmt_bind_param($stmt, "i", $template_id);
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 $template = mysqli_fetch_assoc($result);
+}
 
 if (!$template) {
     // spec: ezdoc-spec/views/generate.md#not-found-redirect
@@ -333,6 +363,12 @@ $dbTtd = [];
 // generate.php di-include dari method scope (Router::renderView).
 $GLOBALS['dbFields'] = $dbFields;
 $GLOBALS['dbTtd']    = $dbTtd;
+if ($contohSlug !== '') {
+    // Nilai contoh dari berkas. Tanpa ini halamannya tampil kosong, dan contoh
+    // yang kosong tidak menunjukkan apa pun tentang hasilnya.
+    $dbFields = is_array($template['nilai'] ?? null) ? $template['nilai'] : [];
+    $GLOBALS['dbFields'] = $dbFields;
+}
 $isEditMode = false;
 // Membuka versi yang disembunyikan lewat ?preview_deleted=1 — SELALU baca-saja.
 //
@@ -396,6 +432,11 @@ if ($isGeneralDoc) {
 } else {
     $canLookup = ($param_norm !== '' && $param_nopen !== '');
 }
+// Mode contoh tidak punya dokumen tersimpan untuk dicari.
+if ($contohSlug !== '') {
+    $canLookup = false;
+}
+
 // Init client-side debug bag (dump ke window.EZDOC_DEBUG lewat script inline di bawah)
 $__ezdocLoadDebug = null;
 
@@ -795,6 +836,11 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         $canSignThisTtd = function_exists('ezdoc_can_sign_ttd')
             ? ezdoc_can_sign_ttd($ttdRbac)
             : true;
+        // Mode contoh: tidak ada dokumen yang bisa dituju tanda tangannya.
+        // Menawarkan tombolnya hanya mengantar orang ke penolakan server.
+        if (!empty($GLOBALS['ezdocModeContoh'])) {
+            $canSignThisTtd = false;
+        }
 
         if (!$ttdId) return $m[0];
 
@@ -1641,6 +1687,21 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
 $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
 ?>
 <body class="<?= $__bacaSaja ? 'edit-off' : 'edit-on' ?>">
+    <?php if ($contohSlug !== ''):
+        $__urlContohBase = (string) $config->get('app.base_path', '');
+        $__urlContoh = $__urlContohBase
+            . (strpos($__urlContohBase, '?') === false ? '?' : '&')
+            . (string) $config->get('app.query_key', 'ezdoc_page') . '=contoh';
+        ?>
+    <div style="margin:12px 250px 0 16px;padding:8px 12px;border-left:4px solid #f59e0b;background:#fffbeb;color:#92400e;font:13px/1.5 system-ui,-apple-system,'Segoe UI',sans-serif;border-radius:4px;">
+        <strong>Mode contoh.</strong>
+        Dokumen ini dibaca dari berkas <code>contoh/<?= h($contohSlug) ?>/</code> — tidak ada di database,
+        tidak bisa disimpan, dan tidak bisa ditandatangani. Isiannya sengaja dikunci.
+        <a href="<?= h($__urlContoh) ?>" style="color:#92400e;text-decoration:underline;">Lihat penjelasan fiturnya →</a>
+    </div>
+    <style>/* Mode contoh: yang tidak bisa dipakai harus terlihat begitu. */
+    button[disabled] { opacity: .45; cursor: not-allowed; }</style>
+    <?php endif; ?>
     <?php if ($saveMessage): ?>
     <div class="toast <?= $saveSuccess ? 'success' : 'error' ?>"><?= h($saveMessage) ?></div>
     <?php endif; ?>

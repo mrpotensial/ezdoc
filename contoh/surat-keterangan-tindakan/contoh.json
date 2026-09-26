@@ -57,9 +57,10 @@
         "pulang_membaik": "1",
         "dirujuk": "0",
         "nama_wali": "Bambang Rahmawan",
-        "nama_petugas": "dr. Andi Pratama",
         "nomor_hp_pasien": "0812-0000-0000",
-        "link_verifikasi": "https://rs-contoh.example/verifikasi/ABCD-1234"
+        "link_verifikasi": "https://rs-contoh.example/verifikasi/ABCD-1234",
+        "nama_perawat": "Rina Kusuma",
+        "nama_dokter": "dr. Andi Pratama"
     },
     "peta": [
         {
@@ -138,7 +139,7 @@
             "no": 7,
             "pin": {
                 "x": 10,
-                "y": 59
+                "y": 59.5
             },
             "bagian": "Dua kotak centang",
             "fitur": "Field checkbox",
@@ -150,7 +151,7 @@
             "no": 8,
             "pin": {
                 "x": 31,
-                "y": 65
+                "y": 66
             },
             "bagian": "Kalimat persetujuan wali",
             "fitur": "Blok bersyarat",
@@ -161,44 +162,44 @@
         {
             "no": 9,
             "pin": {
-                "x": 23,
-                "y": 78
+                "x": 19,
+                "y": 79.5
             },
-            "bagian": "Kotak materai",
-            "fitur": "Materai",
-            "markup": "<div class=\"materai-placeholder\" data-materai=\"materai_pasien\" data-width=\"92\" data-height=\"56\">",
-            "simpan": "Ikut HTML template (ukuran dalam angka polos, tanpa px)",
-            "catatan": "Gambar materainya diunggah saat dokumen dibuat (mode `upload`); mode `kosong` menyisakan tempat untuk materai tempel sungguhan."
+            "bagian": "Tanda tangan pasien / wali",
+            "fitur": "TTD dengan OTP + pilihan gambar atau QR",
+            "markup": "<div class=\"ttd-placeholder\" data-ttd=\"pasien\" data-nama-field=\"nama_pasien\" data-ttd-modes=\"image,qr\" data-require-otp=\"1\" data-otp-phone-source=\"nomor_hp_pasien\" data-otp-ttl=\"300\">",
+            "simpan": "Ikut HTML template; nilainya di kolom tanda tangan dokumen",
+            "catatan": "Di kertas ketiga tanda tangan sama saja. Di ezdoc masing-masing punya aturan. Yang ini: sebelum tanda tangannya tercatat, satu kode sekali pakai dikirim ke nomor pada field `nomor_hp_pasien`, berlaku 300 detik (`data-otp-ttl`). `image,qr` berarti penanda tangan boleh memilih — menggambar tanda tangan, atau memunculkan QR yang menunjuk catatan di server (gambar bisa disalin ke dokumen lain, penunjuk tidak)."
         },
         {
             "no": 10,
             "pin": {
-                "x": 23,
-                "y": 82
+                "x": 50,
+                "y": 79.5
             },
-            "bagian": "Tanda tangan pasien",
-            "fitur": "TTD dengan OTP",
-            "markup": "<div class=\"ttd-placeholder\" data-ttd=\"pasien\" data-nama-field=\"nama_pasien\" data-ttd-modes=\"image,qr\" data-require-otp=\"1\" data-otp-phone-source=\"nomor_hp_pasien\">",
-            "simpan": "Ikut HTML template; config TTD dibaca dari atribut ini",
-            "catatan": "Isinya WAJIB tiga div berurutan: label, kotak tanda tangan, nama. Perendernya mencocokkan bentuk itu — kalau ditambah satu div lagi, tanda tangannya tidak ikut tercetak. `data-nama-field` menunjuk field nama penanda tangan."
+            "bagian": "Tanda tangan perawat",
+            "fitur": "TTD yang hanya boleh ditandatangani peran tertentu",
+            "markup": "<div class=\"ttd-placeholder\" data-ttd=\"perawat\" data-nama-field=\"nama_perawat\" data-ttd-modes=\"image\" data-allowed-roles=\"perawat,kepala_ruangan\">",
+            "simpan": "Ikut HTML template",
+            "catatan": "Hanya pemilik peran yang disebut yang melihat tombol tanda tangan; yang lain melihat slot terkunci. Bisa juga per orang dengan `data-allowed-users=\"12,34\"`. Kosong berarti siapa pun boleh."
         },
         {
             "no": 11,
             "pin": {
-                "x": 77,
-                "y": 82
+                "x": 81,
+                "y": 79.5
             },
-            "bagian": "Tanda tangan petugas",
-            "fitur": "TTD biasa + nama bawaan",
-            "markup": "<div class=\"ttd-placeholder\" data-ttd=\"petugas\" data-ttd-modes=\"image\" data-default-nama=\"dr. Andi Pratama\">",
+            "bagian": "Tanda tangan dokter",
+            "fitur": "TTD mode QR saja + nama bawaan",
+            "markup": "<div class=\"ttd-placeholder\" data-ttd=\"dokter\" data-ttd-modes=\"qr\" data-allowed-roles=\"dokter\" data-default-nama=\"dr. Andi Pratama\">",
             "simpan": "Ikut HTML template",
-            "catatan": "Dua tanda tangan diletakkan berdampingan dengan tabel dua kolom tanpa garis — cara yang sama dipakai di kertas."
+            "catatan": "Tanpa gambar sama sekali: yang tercetak sebuah QR yang menunjuk catatan tanda tangan di server. Tiap tanda tangan yang masuk juga membekukan PDF dokumen saat itu, dan halaman verifikasi memakai berkas beku itu — bukan merender ulang."
         },
         {
             "no": 12,
             "pin": {
-                "x": 83,
-                "y": 74
+                "x": 89,
+                "y": 71
             },
             "bagian": "Cap bulat di belakang tulisan",
             "fitur": "Logo mengambang (di belakang teks)",
@@ -210,7 +211,7 @@
             "no": 13,
             "pin": {
                 "x": 11,
-                "y": 92.5
+                "y": 90
             },
             "bagian": "Kode QR di kaki surat",
             "fitur": "QR verifikasi",

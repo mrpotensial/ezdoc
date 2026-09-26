@@ -20,7 +20,11 @@ define('EZDOC_DOC_META_HELPERS_LOADED', true);
  */
 function ezdoc_fetch_creator_name($conn, $idPegawai)
 {
-    if (!$conn || $idPegawai === null || $idPegawai === '') return null;
+    // Sambungan yang bukan mysqli ditolak di sini, bukan di baris berikutnya.
+    // Sejak PHP 8 argumen bertipe salah melempar TypeError, dan lemparan itu
+    // tidak tertahan `@` — halaman yang memakai adaptor lain (PDO lewat
+    // Ezdoc\Context) mati alih-alih kehilangan satu nama.
+    if (!($conn instanceof \mysqli) || $idPegawai === null || $idPegawai === '') return null;
 
     $stmt = mysqli_prepare($conn, "SELECT nama_pegawai FROM pegawai WHERE id_pegawai = ? LIMIT 1");
     if (!$stmt) return null;
@@ -51,7 +55,9 @@ function ezdoc_fetch_creator_name($conn, $idPegawai)
 function ezdoc_load_whitelisted_vars($conn)
 {
     $out = [];
-    if (!$conn) return $out;
+    // Gagal tertutup: tanpa sambungan mysqli, daftar putihnya kosong — bukan
+    // halaman yang mati. Lihat catatan di ezdoc_fetch_creator_name().
+    if (!($conn instanceof \mysqli)) return $out;
 
     $res = @mysqli_query($conn, "SELECT var_name FROM surat_default_vars");
     if (!$res) return $out;

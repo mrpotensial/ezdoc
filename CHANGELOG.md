@@ -6,6 +6,47 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Changed — contoh bisa dibuka di halaman Buat dokumen, dan isinya dibenahi (2026-09-26)**
+
+Dua hal dari pemakai.
+
+**Pertama**: "apa tidak bisa dilihat langsung di generate, misal
+`?ezdoc_page=generate&template_id=contoh`". Sekarang bisa — persis alamat itu,
+atau `template_id=contoh:<nama-folder>` untuk contoh lain. Templatenya dibaca
+dari berkas lewat `Ezdoc\Template\Contoh`, dan halamannya dikunci lewat jalur
+yang sama dengan dokumen terkunci: tombol Simpan mati, tanda tangan tidak
+ditawarkan, tidak ada dokumen yang dicari maupun dibuat. Penguncinya bukan
+cabang khusus — cabang khusus bisa terlewat di satu tempat; jalur yang sudah
+dipakai di mana-mana tidak. Ada penanda kuning di atas halaman, dengan tautan
+balik ke penjelasannya.
+
+**Kedua**: "contoh belum menggunakan ttd digital, ttd otp dll belum lengkap,
+malah materai fitur yang belum selesai sudah digunakan". Benar, dan yang kedua
+lebih berbahaya: contoh itu disalin orang, dan yang menyalin tidak punya cara
+tahu mana yang belum jadi.
+
+- **Materai dicabut** dari contoh, dan alasannya ditulis di halamannya.
+- **Tanda tangannya jadi tiga, sengaja berbeda aturan** — di kertas ketiganya
+  sama saja, di ezdoc tidak:
+  - *pasien*: OTP ke nomor pada field `nomor_hp_pasien`, berlaku 300 detik,
+    boleh gambar atau QR (`data-ttd-modes="image,qr"`);
+  - *perawat*: hanya peran `perawat`/`kepala_ruangan` yang boleh menandatangani
+    (`data-allowed-roles`);
+  - *dokter*: mode QR saja, tanpa gambar, plus nama bawaan.
+- Aturan barunya ikut masuk ke daftar "sering bikin gagal" dan ke ringkasan
+  untuk AI, termasuk bahwa tiap tanda tangan membekukan PDF dokumen saat itu.
+
+**Fixed — dua pencarian di `lib/doc_meta_helpers.php` mematikan halaman di PHP 8**
+
+Ditemukan saat menjalankan halaman pembuatan dokumen tanpa MySQL. Keduanya
+menjaga diri dengan `if (!$conn)` dan `@`, yang cukup sampai PHP 7; sejak PHP 8
+argumen bertipe salah melempar TypeError dan `@` tidak menahannya. Pemakai yang
+mewiring Context dengan PDO — yang memang didukung — mendapat halaman mati, bukan
+satu nama yang hilang. Sekarang keduanya gagal tertutup.
+
+12 uji baru (pemuat contoh, mode contoh di halaman pembuatan dokumen), 3 uji lama
+disesuaikan. Tampilan diperiksa di 1280 px.
+
 **Added — halaman contoh konversi dokumen (2026-09-25)**
 
 Diminta pemakai: contoh mengubah dokumen (gambar) jadi template ezdoc, memakai

@@ -123,8 +123,12 @@ final class ContohKonversiTest extends TestCase
             'penjumlahan' => '{{tabledb.tindakan.sum:=jumlah*tarif|number:0}}',
             'blok bersyarat' => 'class="conditional-section" data-cond="umur&lt;17"',
             'ttd dengan OTP' => 'data-require-otp="1"',
-            'ttd biasa' => 'data-ttd="petugas"',
-            'materai' => 'class="materai-placeholder"',
+            'sumber nomor OTP' => 'data-otp-phone-source="nomor_hp_pasien"',
+            'umur OTP' => 'data-otp-ttl="300"',
+            'ttd boleh gambar atau QR' => 'data-ttd-modes="image,qr"',
+            'ttd dibatasi peran' => 'data-allowed-roles="perawat,kepala_ruangan"',
+            'ttd mode QR saja' => 'data-ttd-modes="qr"',
+            'nama penanda tangan bawaan' => 'data-default-nama="dr. Andi Pratama"',
             'qr' => 'class="qr-placeholder" data-qr="link_verifikasi"',
         ];
 
@@ -140,15 +144,26 @@ final class ContohKonversiTest extends TestCase
      * div di dalamnya. Satu div tambahan membuat tanda tangan tidak tercetak,
      * dan gagalnya diam — dokumennya terbit tanpa tanda tangan.
      */
-    public function testBentukTtdDanMateraiSesuaiYangDicariPerender(): void
+    public function testBentukTtdSesuaiYangDicariPerender(): void
     {
         $tpl = self::template();
 
         $ttd = '/<div([^>]*class="[^"]*ttd-placeholder[^"]*"[^>]*)>\s*<div[^>]*>.*?<\/div>\s*<div[^>]*>.*?<\/div>\s*<div[^>]*>.*?<\/div>\s*<\/div>/s';
-        self::assertSame(2, preg_match_all($ttd, $tpl), 'bentuk TTD tidak cocok dengan yang dibaca perender');
+        self::assertSame(3, preg_match_all($ttd, $tpl), 'bentuk TTD tidak cocok dengan yang dibaca perender');
+    }
 
-        $materai = '/<div([^>]*class="[^"]*materai-placeholder[^"]*"[^>]*)>\s*<div[^>]*>[\s\S]*?<\/div>\s*<\/div>/s';
-        self::assertSame(1, preg_match_all($materai, $tpl), 'bentuk materai tidak cocok dengan yang dibaca perender');
+    /**
+     * Contoh tidak memakai fitur yang belum selesai.
+     *
+     * Dilaporkan pemakai: "materai fitur yang belum selesai sudah digunakan".
+     * Contoh itu disalin orang — memakai yang belum selesai sama saja
+     * menyebarkannya, dan yang menyalin tidak punya cara tahu.
+     */
+    public function testContohTidakMemakaiFiturYangBelumSelesai(): void
+    {
+        self::assertStringNotContainsString('materai', self::template(), 'fitur materai belum selesai');
+        self::assertStringNotContainsString('materai', json_encode(self::data()['peta']), 'peta masih menyebut materai');
+        self::assertStringContainsString('Materai TIDAK dipakai', (string) file_get_contents(self::akar() . '/views/contoh.php'), 'alasannya harus tertulis');
     }
 
     /** Tiap field yang dipakai template punya nilai contoh — pratinjaunya tidak setengah kosong. */
@@ -165,7 +180,7 @@ final class ContohKonversiTest extends TestCase
         }
 
         // Nama penanda tangan dan isi QR juga field — keduanya dirujuk atribut.
-        foreach (['nama_petugas', 'link_verifikasi', 'nomor_hp_pasien'] as $field) {
+        foreach (['nama_perawat', 'nama_dokter', 'link_verifikasi', 'nomor_hp_pasien'] as $field) {
             self::assertArrayHasKey($field, $data['nilai_contoh'], 'field rujukan ' . $field . ' tidak punya nilai contoh');
         }
     }

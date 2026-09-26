@@ -6,8 +6,9 @@ declare(strict_types=1);
  * Halaman contoh konversi — dari gambar dokumen ke template ezdoc.
  *
  * Satu dokumen kertas dibedah: bagian mana jadi fitur apa, ditulis bagaimana,
- * dan disimpan di mana. Semuanya dibaca dari berkas di `contoh/`, tidak ada
- * yang diambil dari database dan tidak ada yang ditulis ke sana.
+ * dan disimpan di mana. Semuanya dibaca dari berkas lewat
+ * {@see \Ezdoc\Template\Contoh}, tidak ada yang diambil dari database dan tidak
+ * ada yang ditulis ke sana.
  *
  * Halaman ini juga ditujukan untuk dibaca MESIN: bagian "Ringkasan untuk AI"
  * berisi seluruh aturan + template dalam satu blok teks, siap disalin ke
@@ -30,17 +31,17 @@ if (function_exists('ezdoc_can_manage_templates') && !ezdoc_can_manage_templates
     return;
 }
 
-$dirContoh = dirname(__DIR__) . '/contoh/surat-keterangan-tindakan';
-$berkasHtml = $dirContoh . '/template.html';
-$berkasJson = $dirContoh . '/contoh.json';
-$berkasGambar = $dirContoh . '/asal.jpg';
+$slugContoh = isset($_GET['contoh']) && is_string($_GET['contoh'])
+    ? $_GET['contoh']
+    : \Ezdoc\Template\Contoh::BAWAAN;
+$contoh = \Ezdoc\Template\Contoh::muat($slugContoh);
 
-if (!is_file($berkasHtml) || !is_file($berkasJson)) {
+if ($contoh === null) {
     ?>
     <section class="max-w-2xl mx-auto p-6">
         <div class="rounded-lg border-l-4 border-red-400 bg-red-50 p-4">
             <p class="text-sm text-red-900">
-                Berkas contoh tidak ditemukan di <code>contoh/surat-keterangan-tindakan/</code>.
+                Berkas contoh tidak ditemukan di <code>contoh/</code>.
             </p>
         </div>
     </section>
@@ -48,13 +49,13 @@ if (!is_file($berkasHtml) || !is_file($berkasJson)) {
     return;
 }
 
-$templateHtml = (string) file_get_contents($berkasHtml);
-$data = json_decode((string) file_get_contents($berkasJson), true);
-if (!is_array($data)) {
-    $data = [];
+$templateHtml = (string) $contoh['template_html'];
+$peta = $contoh['peta'];
+$nilai = $contoh['nilai'];
+$configHeader = json_decode((string) $contoh['config_header'], true);
+if (!is_array($configHeader)) {
+    $configHeader = [];
 }
-$peta = isset($data['peta']) && is_array($data['peta']) ? $data['peta'] : [];
-$nilai = isset($data['nilai_contoh']) && is_array($data['nilai_contoh']) ? $data['nilai_contoh'] : [];
 
 // ── Pratinjau: dirender perender yang sama dengan yang mencetak dokumen ──
 // Bukan gambar hasil tangkapan layar. Kalau contohnya rusak, halaman ini yang
@@ -67,13 +68,7 @@ if (function_exists('ezdoc_document_pdf_html')) {
             ezdoc_set_document_locale('id');
         }
         $pratinjau = ezdoc_document_pdf_html([
-            'template' => [
-                'nama_template' => (string) ($data['nama_template'] ?? 'Contoh'),
-                'template_html' => $templateHtml,
-                'config_ttd' => '[]',
-                'config_header' => json_encode($data['config_header'] ?? []),
-                'doc_scope' => (string) ($data['doc_scope'] ?? 'patient'),
-            ],
+            'template' => $contoh,
             'doc_id' => 0,
             'fields' => $nilai,
             'ttd_values' => [],
@@ -103,31 +98,41 @@ if ($pratinjau !== '' && strpos($pratinjau, '<img src="" class="qr-img"') !== fa
 }
 
 // Config untuk ditampilkan: gambar logo dipotong supaya terbaca orang.
-$configTampil = $data['config_header'] ?? [];
+$configTampil = $configHeader;
 if (isset($configTampil['logos']) && is_array($configTampil['logos'])) {
     foreach ($configTampil['logos'] as $nama => $isi) {
-        $configTampil['logos'][$nama] = substr((string) $isi, 0, 38) . '… (dipotong, aslinya ' . number_format(strlen((string) $isi) / 1024, 0) . ' KB)';
+        $configTampil['logos'][$nama] = substr((string) $isi, 0, 38)
+            . '… (dipotong, aslinya ' . number_format(strlen((string) $isi) / 1024, 0) . ' KB)';
     }
 }
 $configTeks = json_encode($configTampil, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-$gambarUri = is_file($berkasGambar)
-    ? 'data:image/jpeg;base64,' . base64_encode((string) file_get_contents($berkasGambar))
+$gambarUri = ($contoh['gambar'] !== '' && is_file($contoh['gambar']))
+    ? 'data:image/jpeg;base64,' . base64_encode((string) file_get_contents($contoh['gambar']))
     : '';
+
+// Tautan ke halaman pembuatan dokumen, memakai contoh yang sama.
+$qk = (string) $config->get('app.query_key', 'ezdoc_page');
+$base = (string) $config->get('app.base_path', '');
+$join = (strpos($base, '?') === false) ? '?' : '&';
+$urlGenerate = $base . $join . $qk . '=generate&template_id=contoh:' . rawurlencode((string) $contoh['slug']);
 
 $aturan = [
     'Nama field huruf kecil dengan garis bawah. Nama yang sama dipakai di {{nama}}, data-nama-field, data-qr, dan data-cond.',
     'Teks yang tidak pernah berubah ditulis sebagai teks biasa. Field hanya untuk yang berbeda tiap dokumen.',
-    'Isi TTD WAJIB tiga div berurutan: label, kotak tanda tangan, nama. Materai WAJIB satu div di dalamnya. Perender mencocokkan bentuk itu.',
+    'Isi TTD WAJIB tiga div berurutan: label, kotak tanda tangan, nama. Perender mencocokkan bentuk itu; satu div tambahan membuat tanda tangannya tidak tercetak.',
+    'data-ttd-modes memilih bentuk tanda tangan: image, qr, atau image,qr (penanda tangan yang memilih).',
+    'data-require-otp="1" mengirim kode sekali pakai ke nomor pada field yang disebut data-otp-phone-source, berlaku selama data-otp-ttl detik.',
+    'Siapa yang boleh menandatangani diatur data-allowed-roles atau data-allowed-users. Kosong berarti siapa pun boleh.',
+    'Tiap tanda tangan yang masuk membekukan PDF dokumen saat itu; halaman verifikasi memakai berkas beku itu, bukan merender ulang.',
     'Elemen mengambang dibungkus <p class="floating-only" contenteditable="false">, dan posisinya piksel dari sudut kiri-atas halaman.',
-    'Ukuran materai ditulis angka polos (92), ukuran logo pakai satuan (68px). Ini beda, dan tertukar berarti ukurannya diabaikan.',
     'Tanda kurang-dari di dalam atribut ditulis sebagai entitas: data-cond="umur&lt;17", bukan data-cond="umur<17".',
     'Untuk tabel kueri cukup satu baris <tr>; baris itu digandakan sebanyak hasil. Baris yang isinya hanya penjumlahan muncul sekali.',
     'Kueri tabel hanya boleh SELECT. Parameternya {norm}, {nopen}, atau {nama_field}.',
     'data-qr menunjuk NAMA FIELD yang berisi isi kodenya, bukan isinya. Pembuat kode QR-nya disediakan aplikasi pemakai.',
     'Gambar logo disimpan di config_header.logos sebagai data URI, bukan <img src> di dalam HTML.',
     'Field bertipe date dicetak d/m/Y. Kalau mau "24 September 2026", pakai nilai bawaan date:d F Y atau field teks.',
-    'Ukuran TTD dikunci mengikuti hasil cetak — jangan diubah lewat CSS di template.',
+    'Materai TIDAK dipakai di contoh ini: fiturnya belum selesai. Jangan menyalinnya dari template lain sampai selesai.',
 ];
 
 $langkah = [
@@ -137,12 +142,13 @@ $langkah = [
     'Atur halaman: A4, tegak, tepi 18 mm, mode continuous.',
     'Unggah dua logo dengan nama persis: kop dan stempel.',
     'Buat kueri tabel bernama tindakan, isi SQL-nya, sesuaikan nama tabel dan kolom dengan database Anda.',
+    'Sesuaikan peran penanda tangan (data-allowed-roles) dengan peran yang ada di aplikasi Anda.',
     'Simpan. Buat satu dokumen percobaan untuk melihat hasilnya.',
 ];
 
 // Satu blok teks berisi semuanya — untuk disalin ke percakapan dengan AI lain.
 $ringkasan = "# Cara mengubah dokumen (gambar) jadi template ezdoc\n\n"
-    . "Contoh lengkap: " . (string) ($data['nama_template'] ?? '') . "\n\n"
+    . 'Contoh lengkap: ' . (string) $contoh['nama_template'] . "\n\n"
     . "## Langkah\n";
 foreach ($langkah as $i => $l) {
     $ringkasan .= ($i + 1) . '. ' . $l . "\n";
@@ -165,13 +171,20 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
 <section class="max-w-6xl mx-auto px-4 py-6 md:py-8 space-y-8">
 
     <header class="space-y-2">
-        <h1 class="text-xl font-semibold tracking-tight text-gray-900">Contoh konversi dokumen</h1>
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <h1 class="text-xl font-semibold tracking-tight text-gray-900">Contoh konversi dokumen</h1>
+            <a href="<?= h($urlGenerate) ?>"
+               class="inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                Buka di halaman Buat dokumen
+                <span class="text-gray-400">→</span>
+            </a>
+        </div>
         <p class="text-sm text-gray-600 max-w-3xl">
             Satu surat kertas dibedah sampai selesai: bagian mana jadi fitur apa, ditulis bagaimana, dan
             disimpan di mana. Dokumennya karangan — nama, alamat, dan angkanya tidak nyata.
         </p>
         <p class="text-xs text-gray-500">
-            Halaman ini hanya membaca berkas di <code class="font-mono">contoh/surat-keterangan-tindakan/</code>.
+            Halaman ini hanya membaca berkas di <code class="font-mono">contoh/<?= h((string) $contoh['slug']) ?>/</code>.
             Tidak ada yang diambil dari database, tidak ada yang ditulis ke sana, dan contoh ini tidak
             terdaftar sebagai template.
         </p>
@@ -218,7 +231,7 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
                     </div>
                     <ul class="mt-2 space-y-1 text-[11px] text-gray-500">
                         <li>Baris tabel kosong karena halaman ini tidak menyentuh database — kueri tidak dijalankan.</li>
-                        <li>Tanda tangan dan materai kosong karena keduanya diisi saat dokumen dibuat.</li>
+                        <li>Kotak tanda tangan kosong karena diisi saat dokumen dibuat dan ditandatangani.</li>
                     </ul>
                 <?php else: ?>
                     <div class="rounded border-l-4 border-red-400 bg-red-50 p-3 text-xs text-red-900">
@@ -254,7 +267,7 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
 
     <!-- ── Aturan + langkah ──────────────────────────────────────────── -->
     <div class="grid gap-5 lg:grid-cols-2">
-        <div class="rounded-lg border border-gray-200 bg-white">
+        <div class="min-w-0 rounded-lg border border-gray-200 bg-white">
             <div class="border-b border-gray-100 px-4 py-2.5">
                 <h2 class="text-sm font-semibold text-gray-900">4 · Cara memakai contoh ini</h2>
             </div>
@@ -264,7 +277,7 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
                 <?php endforeach; ?>
             </ol>
         </div>
-        <div class="rounded-lg border border-gray-200 bg-white">
+        <div class="min-w-0 rounded-lg border border-gray-200 bg-white">
             <div class="border-b border-gray-100 px-4 py-2.5">
                 <h2 class="text-sm font-semibold text-gray-900">5 · Aturan yang sering bikin gagal</h2>
             </div>
@@ -280,7 +293,7 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
     <div class="rounded-lg border border-gray-200 bg-white">
         <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-2.5">
             <h2 class="text-sm font-semibold text-gray-900">6 · Berkas contoh</h2>
-            <span class="text-[11px] text-gray-500 font-mono">contoh/surat-keterangan-tindakan/</span>
+            <span class="text-[11px] text-gray-500 font-mono">contoh/<?= h((string) $contoh['slug']) ?>/</span>
         </div>
         <div class="space-y-4 p-4">
             <div>
