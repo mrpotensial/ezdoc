@@ -16,6 +16,11 @@ $idTemplate = (string) ($argv[1] ?? 'contoh');
 
 $akar = dirname(__DIR__, 2);
 
+// Folder tempat kop tersimpan, kalau kasusnya memang menguji kop.
+if (isset($argv[2]) && $argv[2] !== '') {
+    define('EZDOC_STORAGE_PATH', (string) $argv[2]);
+}
+
 define('EZDOC_DEBUG', true);
 define('EZDOC_TEMPLATE_MANAGER_ROLES', ['pembuat_template']);
 

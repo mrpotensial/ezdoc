@@ -37,6 +37,11 @@ if ($skenario === 'tanpa-hak') {
     define('EZDOC_ENFORCE_RBAC', true);
 }
 
+// Folder tempat kop tersimpan, kalau kasusnya memang menguji kop.
+if (isset($argv[3]) && $argv[3] !== '') {
+    define('EZDOC_STORAGE_PATH', (string) $argv[3]);
+}
+
 require $root . '/bootstrap.php';
 
 $pdo = new PDO('sqlite::memory:');
@@ -93,6 +98,12 @@ register_shutdown_function(static function () use ($db) {
     // dari kolom itu cuma "ada isinya" — jadi dipotong supaya keluarannya masih
     // bisa dibaca orang waktu tesnya gagal.
     foreach ($baris as $i => $b) {
+        // Logo kop juga ikut di sini, dan panjangnya yang membedakan logo
+        // contoh dari logo yang diatur pemakainya.
+        $kepala = json_decode((string) $b['layout_config'], true);
+        $baris[$i]['logo_kop_panjang'] = is_array($kepala)
+            ? strlen((string) ($kepala['logos']['kop'] ?? ''))
+            : 0;
         $baris[$i]['layout_config'] = $b['layout_config'] === null
             ? null
             : substr((string) $b['layout_config'], 0, 90) . '…';

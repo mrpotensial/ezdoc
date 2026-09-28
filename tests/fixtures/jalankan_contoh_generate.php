@@ -20,6 +20,11 @@ $GLOBALS['ezdocBoleh'] = $boleh;
 
 $akar = dirname(__DIR__, 2);
 
+// Folder tempat kop tersimpan, kalau kasusnya memang menguji kop.
+if (isset($argv[4]) && $argv[4] !== '') {
+    define('EZDOC_STORAGE_PATH', (string) $argv[4]);
+}
+
 define('EZDOC_DEBUG', true);
 define('EZDOC_TEMPLATE_MANAGER_ROLES', ['pembuat_template']);
 

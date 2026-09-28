@@ -150,6 +150,134 @@ final class KopContohUiTest extends TestCase
         self::assertArrayNotHasKey('logo', $h['tersimpan']);
     }
 
+    // ── Kop yang sama di semua tempat contohnya dilihat ──────────────────
+
+    /**
+     * Kop yang diatur ikut ke halaman pembuatan dokumen dan ke designer.
+     *
+     * Kalau hanya halaman contoh yang memakainya, yang mengisi formulir atau
+     * merapikan rancangan melihat kop yang berbeda dari yang tadi ia atur —
+     * dan tidak punya alasan menduga keduanya dibaca dari tempat berbeda.
+     */
+    public function testKopIkutKeHalamanBuatDokumenDanDesigner(): void
+    {
+        $tempat = self::tempatBerkop();
+
+        $buat = self::halamanBuat($tempat);
+        self::assertStringContainsString('RUMAH SAKIT UJI KOP', $buat, 'halaman buat dokumen memakai kop lain');
+        self::assertStringNotContainsString('RUMAH SAKIT CONTOH SEJAHTERA', $buat);
+
+        $designer = self::halamanDesigner($tempat);
+        self::assertStringContainsString('RUMAH SAKIT UJI KOP', $designer, 'designer memakai kop lain');
+        self::assertStringNotContainsString('RUMAH SAKIT CONTOH SEJAHTERA', $designer);
+    }
+
+    /**
+     * Dan ikut ke template yang disimpan dari contoh, isi maupun logonya.
+     *
+     * Ini yang paling mahal kalau salah: templatenya dipakai berbulan-bulan,
+     * dan kop karangan di dalamnya baru terlihat setelah dokumennya dicetak.
+     */
+    public function testKopIkutKeTemplateYangDisimpan(): void
+    {
+        $tempat = self::tempatBerkop();
+
+        $baris = [];
+        exec(sprintf(
+            '%s %s %s %s %s 2>&1',
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg(dirname(__DIR__) . '/fixtures/jalankan_simpan_contoh.php'),
+            escapeshellarg('baru'),
+            escapeshellarg('skor-bishop'),
+            escapeshellarg($tempat)
+        ), $baris);
+        $keluaran = implode("\n", $baris);
+
+        $bagian = explode("\n---\n", $keluaran, 2);
+        self::assertCount(2, $bagian, $keluaran);
+        $isi = json_decode(trim($bagian[1]), true);
+        self::assertIsArray($isi);
+
+        $template = $isi['templates'][0] ?? null;
+        self::assertIsArray($template, 'tidak ada template tersimpan');
+
+        self::assertStringContainsString('RUMAH SAKIT UJI KOP', (string) $template['content']);
+        self::assertStringContainsString('Kota Kop', (string) $template['content']);
+        self::assertStringNotContainsString('RUMAH SAKIT CONTOH SEJAHTERA', (string) $template['content']);
+
+        // Logo contohnya dan logo yang diatur berbeda panjangnya; yang ikut
+        // tersimpan harus yang diatur.
+        self::assertGreaterThan(0, (int) $template['logo_kop_panjang'], 'template tersimpan tanpa logo');
+        self::assertNotSame(
+            self::logoContohPanjang(),
+            (int) $template['logo_kop_panjang'],
+            'yang tersimpan masih logo bawaan contohnya'
+        );
+    }
+
+    /** Folder berisi kop tersimpan, lengkap dengan logonya. */
+    private static function tempatBerkop(): string
+    {
+        $tempat = self::tempat();
+
+        $gambar = imagecreatetruecolor(600, 600);
+        imagefilledrectangle($gambar, 0, 0, 599, 599, imagecolorallocate($gambar, 200, 30, 30));
+        ob_start();
+        imagepng($gambar);
+        $png = (string) ob_get_clean();
+        imagedestroy($gambar);
+
+        file_put_contents($tempat . '/kop-contoh.json', (string) json_encode([
+            'name' => 'RUMAH SAKIT UJI KOP',
+            'address' => ['Jalan Uji No. 9', 'Telp 000'],
+            'city' => 'Kota Kop',
+            'logo' => 'data:image/png;base64,' . base64_encode($png),
+        ]));
+
+        return $tempat;
+    }
+
+    /** Panjang logo bawaan contohnya, untuk dibandingkan. */
+    private static function logoContohPanjang(): int
+    {
+        $data = json_decode(
+            (string) file_get_contents(dirname(__DIR__, 2) . '/contoh/skor-bishop/contoh.json'),
+            true
+        );
+
+        return strlen((string) ($data['config_header']['logos']['kop'] ?? ''));
+    }
+
+    private static function halamanBuat(string $tempat): string
+    {
+        $baris = [];
+        exec(sprintf(
+            '%s %s %s %s %s %s 2>&1',
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg(dirname(__DIR__) . '/fixtures/jalankan_contoh_generate.php'),
+            escapeshellarg('contoh:skor-bishop'),
+            escapeshellarg('ya'),
+            escapeshellarg(''),
+            escapeshellarg($tempat)
+        ), $baris);
+
+        return implode("\n", $baris);
+    }
+
+    private static function halamanDesigner(string $tempat): string
+    {
+        $baris = [];
+        exec(sprintf(
+            '%s %s %s %s 2>&1',
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg(dirname(__DIR__) . '/fixtures/jalankan_contoh_designer.php'),
+            escapeshellarg('contoh:skor-bishop'),
+            escapeshellarg($tempat)
+        ), $baris);
+
+        return implode("\n", $baris);
+    }
+
     // ── Yang TIDAK boleh terjadi ─────────────────────────────────────────
 
     /** Yang tidak berhak merancang template tidak bisa mengubah kop. */
