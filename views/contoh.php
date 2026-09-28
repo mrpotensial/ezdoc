@@ -129,6 +129,17 @@ $urlAksi = $base . $join . $qk . '=action';
 // bukan contoh lagi.
 $namaUsul = trim((string) preg_replace('/\s*\(contoh\)\s*$/iu', '', (string) $contoh['nama_template']));
 
+// Kop yang sedang berlaku, untuk mengisi formulir pengaturannya. Yang
+// tersimpan lewat halaman ini menang atas nilai di berkas mount; keduanya
+// ditampilkan apa adanya supaya yang mengatur tahu ia sedang mengubah apa.
+$kopBerlaku = \Ezdoc\Template\Contoh::kopBerlaku($config);
+$kopTersimpan = \Ezdoc\Template\Contoh::kopTersimpan();
+$kopBisaDiatur = \Ezdoc\Template\Contoh::berkasKop() !== null;
+$kopAlamat = is_array($kopBerlaku['address'] ?? '')
+    ? implode("\n", $kopBerlaku['address'])
+    : (string) ($kopBerlaku['address'] ?? '');
+$kopAdaLogo = trim((string) ($kopBerlaku['logo'] ?? '')) !== '';
+
 $aturan = [
     'Nama field huruf kecil dengan garis bawah. Nama yang sama dipakai di {{nama}}, data-nama-field, data-qr, dan data-cond.',
     'Teks yang tidak pernah berubah ditulis sebagai teks biasa. Field hanya untuk yang berbeda tiap dokumen.',
@@ -235,6 +246,72 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
                 Template baru dibuat baru; tidak ada template lain yang tersentuh.
             </p>
         </div>
+
+        <?php // Kop surat: dari sini, bukan dari berkas config.
+        //
+        // Diminta pemakai: "maksudku konfigurasi di halaman example, karena
+        // tiap consumer kan beda beda". Nilai di berkas mount tetap jadi
+        // titik awal; yang diketik di sini menimpanya, dan ikut ke tiap
+        // template yang disimpan dari contoh. ?>
+        <details class="rounded-lg border border-gray-200 bg-white" id="ezKopPanel"<?= $kopTersimpan !== [] ? ' open' : '' ?>>
+            <summary class="cursor-pointer px-3 py-2 text-xs font-medium text-gray-700">
+                Kop surat
+                <span class="ml-1 font-normal text-gray-500">
+                    <?= $kopTersimpan !== [] ? '— diatur dari halaman ini' : '— dari konfigurasi aplikasi' ?>
+                </span>
+            </summary>
+            <div class="border-t border-gray-100 p-3">
+                <?php if (!$kopBisaDiatur): ?>
+                <p class="text-[11.5px] text-amber-800">
+                    Pemasangan ini belum punya folder penyimpanan, jadi kop hanya bisa diatur lewat
+                    <code class="font-mono">letterhead.*</code> di berkas mount.
+                </p>
+                <?php else: ?>
+                <div class="grid gap-2 sm:grid-cols-2">
+                    <label class="block">
+                        <span class="text-[11.5px] text-gray-600">Nama</span>
+                        <input id="ezKopNama" type="text" maxlength="200" value="<?= h((string) ($kopBerlaku['name'] ?? '')) ?>"
+                               class="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-xs">
+                    </label>
+                    <label class="block">
+                        <span class="text-[11.5px] text-gray-600">Kota (di atas tanda tangan)</span>
+                        <input id="ezKopKota" type="text" maxlength="100" value="<?= h((string) ($kopBerlaku['city'] ?? '')) ?>"
+                               class="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-xs">
+                    </label>
+                    <label class="block sm:col-span-2">
+                        <span class="text-[11.5px] text-gray-600">Alamat — satu baris teks jadi satu baris kop (maksimal 4)</span>
+                        <textarea id="ezKopAlamat" rows="2"
+                                  class="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-xs font-sans"><?= h($kopAlamat) ?></textarea>
+                    </label>
+                    <label class="block sm:col-span-2">
+                        <span class="text-[11.5px] text-gray-600">
+                            Logo <?= $kopAdaLogo ? '— sudah ada; pilih berkas baru untuk menggantinya' : '' ?>
+                        </span>
+                        <input id="ezKopLogo" type="file" accept="image/*"
+                               class="mt-0.5 w-full text-[11.5px] file:mr-2 file:rounded file:border-0 file:bg-gray-100 file:px-2 file:py-1 file:text-[11.5px]">
+                    </label>
+                </div>
+                <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <button type="button" id="ezKopSimpan"
+                            class="rounded px-3 py-1.5 text-xs font-medium text-white"
+                            style="background: var(--ezdoc-primary, #4f46e5);"
+                            data-url="<?= h($urlAksi) ?>">Simpan kop</button>
+                    <button type="button" id="ezKopReset"
+                            class="rounded border border-gray-300 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50">Kembalikan ke bawaan</button>
+                    <?php if ($kopAdaLogo): ?>
+                    <label class="text-[11.5px] text-gray-600">
+                        <input id="ezKopHapusLogo" type="checkbox" class="align-middle"> hapus logo
+                    </label>
+                    <?php endif; ?>
+                    <span id="ezKopKabar" class="text-[11.5px] text-gray-500" role="status"></span>
+                </div>
+                <p class="mt-1.5 text-[11.5px] text-gray-500">
+                    Berlaku untuk semua contoh, dan ikut ke tiap template yang disimpan dari contoh.
+                    Berkas contohnya sendiri tidak berubah.
+                </p>
+                <?php endif; ?>
+            </div>
+        </details>
 
         <p class="text-xs text-gray-500">
             Halaman ini hanya membaca berkas di <code class="font-mono">contoh/<?= h((string) $contoh['slug']) ?>/</code>.
@@ -354,6 +431,12 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
             <div>
                 <div class="mb-1.5 flex items-center justify-between">
                     <span class="text-xs font-medium text-gray-700 font-mono">template.html — isi editor</span>
+                    <?php // Yang ditampilkan isi yang sudah dipasangi kop — itulah yang
+                    // disalin orang ke designer, dan itu yang tersimpan kalau tombol
+                    // simpan ditekan. Berkas di folder contoh sendiri tetap netral. ?>
+                    <?php if ($kopTersimpan !== [] || ($kopBerlaku['name'] ?? '') !== ''): ?>
+                    <span class="text-[11px] text-gray-400">kop sudah dari pengaturan</span>
+                    <?php endif; ?>
                     <button type="button" data-ez-salin="ezTpl" class="rounded border border-gray-300 px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-50">Salin</button>
                 </div>
                 <pre id="ezTpl" class="max-h-72 overflow-auto rounded bg-gray-50 p-3 text-[11.5px] leading-relaxed text-gray-800 ring-1 ring-gray-200"><code><?= h($templateHtml) ?></code></pre>
@@ -450,6 +533,56 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
                     lapor.textContent = 'Gagal menyimpan: ' + e.message;
                 });
         });
+    }
+
+    // ── Kop surat ──
+    // Halaman ini dimuat ulang sesudah tersimpan: pratinjaunya dirender di
+    // server, jadi menambal DOM di sini hanya akan menghasilkan dua kebenaran
+    // yang bisa berbeda.
+    var kopSimpan = document.getElementById('ezKopSimpan');
+    if (kopSimpan) {
+        var kopKabar = document.getElementById('ezKopKabar');
+        var kirimKop = function (data, tombol) {
+            tombol.disabled = true;
+            kopKabar.textContent = 'Menyimpan…';
+            fetch(kopSimpan.dataset.url, { method: 'POST', body: data })
+                .then(function (r) { return r.json(); })
+                .then(function (j) {
+                    tombol.disabled = false;
+                    if (j && j.success) {
+                        kopKabar.textContent = (j.message || 'Tersimpan.') + ' Memuat ulang…';
+                        location.reload();
+                        return;
+                    }
+                    kopKabar.textContent = (j && (j.message || j.error)) || 'Gagal menyimpan.';
+                })
+                .catch(function (e) { tombol.disabled = false; kopKabar.textContent = 'Gagal menyimpan: ' + e.message; });
+        };
+
+        kopSimpan.addEventListener('click', function () {
+            var data = new FormData();
+            data.append('ajax', '1');
+            data.append('action', 'save_kop');
+            data.append('nama', document.getElementById('ezKopNama').value);
+            data.append('alamat', document.getElementById('ezKopAlamat').value);
+            data.append('kota', document.getElementById('ezKopKota').value);
+            var hapus = document.getElementById('ezKopHapusLogo');
+            if (hapus && hapus.checked) { data.append('hapus_logo', '1'); }
+            var berkas = document.getElementById('ezKopLogo');
+            if (berkas && berkas.files && berkas.files[0]) { data.append('logo', berkas.files[0]); }
+            kirimKop(data, kopSimpan);
+        });
+
+        var kopReset = document.getElementById('ezKopReset');
+        if (kopReset) {
+            kopReset.addEventListener('click', function () {
+                var data = new FormData();
+                data.append('ajax', '1');
+                data.append('action', 'save_kop');
+                data.append('reset', '1');
+                kirimKop(data, kopReset);
+            });
+        }
     }
 
     var kabar = document.getElementById('ezSalinKabar');

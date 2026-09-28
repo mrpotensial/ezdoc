@@ -105,12 +105,13 @@ final class Contoh
             }
         }
 
-        $isi = self::pasangKop((string) file_get_contents($html), $config);
+        $kop = self::kopBerlaku($config);
+        $isi = self::pasangKop((string) file_get_contents($html), $kop);
 
         // Logo kop ikut konfigurasi kalau disediakan; kalau tidak, yang di
         // berkas contoh yang dipakai.
         $kepala = isset($data['config_header']) && is_array($data['config_header']) ? $data['config_header'] : [];
-        $logo = self::logoKop($config);
+        $logo = self::logoKop((string) $kop['logo']);
         if ($logo !== '') {
             $kepala['logos'] = isset($kepala['logos']) && is_array($kepala['logos']) ? $kepala['logos'] : [];
             $kepala['logos']['kop'] = $logo;
@@ -173,18 +174,13 @@ final class Contoh
      * Nilainya di-escape sebelum disisipkan: config datang dari berkas
      * aplikasi pemakai, tapi ia tetap teks yang masuk ke dokumen orang lain.
      */
-    private static function pasangKop(string $html, ?Config $config): string
+    private static function pasangKop(string $html, array $kop): string
     {
-        if ($config === null) {
-            return $html;
+        if (($kop['name'] ?? '') !== '') {
+            $html = self::gantiIsi($html, 'p', 'ezdoc-kop-nama', self::aman((string) $kop['name']));
         }
 
-        $nama = trim((string) $config->get('letterhead.name', ''));
-        if ($nama !== '') {
-            $html = self::gantiIsi($html, 'p', 'ezdoc-kop-nama', self::aman($nama));
-        }
-
-        $alamat = $config->get('letterhead.address', '');
+        $alamat = $kop['address'] ?? '';
         if (is_array($alamat)) {
             $baris = [];
             foreach ($alamat as $satu) {
@@ -201,12 +197,127 @@ final class Contoh
             $html = self::gantiIsi($html, 'p', 'ezdoc-kop-alamat', $alamat);
         }
 
-        $kota = trim((string) $config->get('letterhead.city', ''));
-        if ($kota !== '') {
-            $html = self::gantiIsi($html, 'span', 'ezdoc-kop-kota', self::aman($kota));
+        if (($kop['city'] ?? '') !== '') {
+            $html = self::gantiIsi($html, 'span', 'ezdoc-kop-kota', self::aman((string) $kop['city']));
         }
 
         return $html;
+    }
+
+    /**
+     * Kop yang berlaku: yang disimpan lewat halaman contoh menang atas config.
+     *
+     * Diminta pemakai: "maksudku konfigurasi di halaman example, karena tiap
+     * consumer kan beda beda". Config di berkas mount tetap ada sebagai nilai
+     * awal — pemasangan baru tidak perlu mengisi apa pun dulu — dan apa yang
+     * diketik di halaman itu menimpanya. Mengosongkan satu kolom berarti
+     * kembali ke config, bukan jadi kosong.
+     *
+     * @return array{name:string,address:mixed,city:string,logo:string}
+     */
+    public static function kopBerlaku(?Config $config = null): array
+    {
+        $kop = [
+            'name' => $config !== null ? trim((string) $config->get('letterhead.name', '')) : '',
+            'address' => $config !== null ? $config->get('letterhead.address', '') : '',
+            'city' => $config !== null ? trim((string) $config->get('letterhead.city', '')) : '',
+            'logo' => $config !== null ? trim((string) $config->get('letterhead.logo', '')) : '',
+        ];
+
+        foreach (self::kopTersimpan() as $kunci => $nilai) {
+            if (!array_key_exists($kunci, $kop)) {
+                continue;
+            }
+            if (is_array($nilai) ? $nilai !== [] : trim((string) $nilai) !== '') {
+                $kop[$kunci] = $nilai;
+            }
+        }
+
+        return $kop;
+    }
+
+    /**
+     * Kop yang tersimpan lewat halaman contoh.
+     *
+     * Berupa berkas JSON di folder penyimpanan, bukan baris basis data: ini
+     * pengaturan satu pemasangan, bukan data dokumen. Tidak ada tabel baru yang
+     * perlu dibuat, dan mengembalikannya ke semula cukup dengan menghapus satu
+     * berkas.
+     *
+     * @return array<string,mixed>
+     */
+    public static function kopTersimpan(): array
+    {
+        $berkas = self::berkasKop();
+        if ($berkas === null || !is_file($berkas)) {
+            return [];
+        }
+
+        $isi = json_decode((string) file_get_contents($berkas), true);
+
+        return is_array($isi) ? $isi : [];
+    }
+
+    /**
+     * Simpan kop. Larik kosong menghapusnya kembali ke nilai config.
+     *
+     * @param array<string,mixed> $kop
+     */
+    public static function simpanKop(array $kop): bool
+    {
+        $berkas = self::berkasKop();
+        if ($berkas === null) {
+            return false;
+        }
+
+        if ($kop === []) {
+            return !is_file($berkas) || @unlink($berkas);
+        }
+
+        $dir = dirname($berkas);
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+            return false;
+        }
+
+        $json = json_encode($kop, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        if (!is_string($json)) {
+            return false;
+        }
+
+        // Tulis lewat berkas sementara lalu pindahkan: pembaca yang kebetulan
+        // datang di tengah penulisan tidak pernah melihat JSON separuh.
+        $sementara = $berkas . '.' . bin2hex(random_bytes(4)) . '.tmp';
+        if (@file_put_contents($sementara, $json, LOCK_EX) === false) {
+            return false;
+        }
+        if (!@rename($sementara, $berkas)) {
+            @unlink($sementara);
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Tempat kop tersimpan, atau null kalau pemasangan ini tidak punya folder
+     * penyimpanan — halaman contohnya tetap terbuka, kopnya saja yang tidak
+     * bisa diatur dari layar.
+     */
+    public static function berkasKop(): ?string
+    {
+        foreach (['EZDOC_LETTERHEAD_PATH', 'EZDOC_STORAGE_PATH', 'EZDOC_ARTIFACT_STORAGE_PATH'] as $tetapan) {
+            $nilai = defined($tetapan) ? (string) constant($tetapan) : (string) getenv($tetapan);
+            $nilai = trim($nilai);
+            if ($nilai === '') {
+                continue;
+            }
+
+            return $tetapan === 'EZDOC_LETTERHEAD_PATH'
+                ? $nilai
+                : rtrim($nilai, '/\\') . '/kop-contoh.json';
+        }
+
+        return null;
     }
 
     /** Ganti isi elemen berkelas tertentu, atributnya dibiarkan apa adanya. */
@@ -218,20 +329,20 @@ final class Contoh
     }
 
     /**
-     * Logo kop dari konfigurasi: data URI dipakai apa adanya, berkas dibaca.
+     * Logo kop: data URI dipakai apa adanya, berkas dibaca lalu dikecilkan.
+     *
+     * Umum supaya aksi penyimpan kop memakai jalur yang sama dengan pemuat —
+     * dua tempat yang mengecilkan gambar dengan caranya sendiri akan berbeda
+     * hasilnya, dan bedanya baru terlihat di kertas.
      *
      * Berkas yang tidak terbaca atau kelewat besar menghasilkan string kosong,
      * bukan galat: kop bawaan contohnya masih ada, dan halaman tetap terbuka.
      * Logo ikut tersimpan ke tiap template yang dibuat dari contoh, jadi yang
      * kelewat besar bukan cuma lambat — ia menggandakan diri.
      */
-    private static function logoKop(?Config $config): string
+    public static function logoKop(string $sumber): string
     {
-        if ($config === null) {
-            return '';
-        }
-
-        $sumber = trim((string) $config->get('letterhead.logo', ''));
+        $sumber = trim($sumber);
         if ($sumber === '') {
             return '';
         }

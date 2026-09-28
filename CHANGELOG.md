@@ -6,6 +6,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — kop contoh diatur dari halaman contoh (2026-09-28)**
+
+Diminta pemakai: "maksudku konfigurasi di halaman example, karena tiap consumer
+kan beda beda". Nilai `letterhead.*` di berkas mount tetap jadi titik awal, dan
+panel **Kop surat** di halaman contoh menimpanya — nama, alamat, kota, logo.
+
+```
+POST ajax=1 action=save_kop   (nama, alamat, kota, logo, hapus_logo, reset)
+```
+
+- **Tidak menyentuh basis data.** Kop adalah pengaturan satu pemasangan, bukan
+  data dokumen: ia tinggal sebagai `kop-contoh.json` di folder penyimpanan
+  (`EZDOC_STORAGE_PATH`, atau `EZDOC_LETTERHEAD_PATH`). Tidak ada tabel baru,
+  tidak ada migrasi, dan membatalkannya cukup dengan menghapus berkas itu.
+- **Kolom yang dikosongkan kembali ke nilai config**, bukan jadi kosong. Kop
+  tanpa nama bukan kop — satu kesalahan ketik tidak boleh menghapus nama
+  rumah sakit dari tiap dokumen yang dicetak sesudahnya.
+- **Logo yang sudah tersimpan bertahan** saat teksnya saja yang diubah, dan
+  dibuang hanya kalau diminta. Berkas unggahan diperiksa asal
+  (`is_uploaded_file`), ukuran (5 MB), dan jenisnya, lalu dikecilkan lewat
+  jalur yang sama dengan pemuat contoh.
+- Pemasangan tanpa folder penyimpanan mengatakannya di panel itu, bukan gagal
+  diam-diam.
+- Hak yang sama dengan menyimpan template; tercatat sebagai
+  `contoh.letterhead_saved` / `contoh.letterhead_reset`.
+
 **Added — kop contoh datang dari konfigurasi (2026-09-28)**
 
 Diminta pemakai: "kopnya apa tidak bisa langsung [pakai milik saya]? atau kita

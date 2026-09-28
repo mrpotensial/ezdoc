@@ -9,12 +9,18 @@ declare(strict_types=1);
  * globalnya, dan karena gerbang aksesnya diuji dengan jawaban yang berbeda-beda
  * — keduanya tidak boleh menular ke berkas uji lain.
  *
- *   php jalankan_contoh.php [ya|tidak]
+ *   php jalankan_contoh.php [ya|tidak] [nama-folder] [folder-penyimpanan]
  *
- * Argumen: apakah yang membuka halaman punya peran pengelola template.
+ * Argumen pertama: apakah yang membuka halaman punya peran pengelola template.
+ * Argumen ketiga: folder tempat kop tersimpan; tanpa itu panel pengaturan kop
+ * mengatakan pemasangannya tidak punya tempat menyimpan.
  */
 
 $boleh = (($argv[1] ?? 'ya') === 'ya');
+
+if (isset($argv[3]) && $argv[3] !== '') {
+    define('EZDOC_STORAGE_PATH', (string) $argv[3]);
+}
 
 // Contoh mana yang dibuka; kosong = yang bawaan.
 if (isset($argv[2]) && $argv[2] !== '') {

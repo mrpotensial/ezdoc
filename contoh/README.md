@@ -93,10 +93,22 @@ sungguhan datang dari konfigurasi mount aplikasi:
 'letterhead.logo'    => __DIR__ . '/logo.png',         // atau data URI
 ```
 
+**Atau langsung dari halaman contoh.** Di sana ada panel **Kop surat**: nama,
+alamat, kota, dan logo bisa diisi dan disimpan tanpa menyentuh berkas PHP —
+tiap pemasangan berbeda, dan yang mengaturnya belum tentu punya akses ke
+berkasnya. Yang disimpan dari sana menimpa nilai config; tombol "Kembalikan ke
+bawaan" menghapusnya lagi.
+
+Tersimpan sebagai satu berkas `kop-contoh.json` di folder penyimpanan
+(`EZDOC_STORAGE_PATH`, atau `EZDOC_LETTERHEAD_PATH` kalau ingin tempat lain).
+Bukan baris basis data: ini pengaturan satu pemasangan, bukan data dokumen —
+tidak ada tabel baru, dan membatalkannya cukup dengan menghapus berkas itu.
+Tanpa folder penyimpanan, panelnya mengatakan begitu dan config tetap dipakai.
+
 Yang diganti adalah tiga penanda di dalam template — `ezdoc-kop-nama`,
 `ezdoc-kop-alamat`, `ezdoc-kop-kota` — plus logo `kop` di pengaturan halaman.
 Penggantian terjadi saat contohnya dimuat, jadi yang tampil di layar dan yang
-tersimpan jadi template adalah kop Anda. Tanpa konfigurasi itu, contohnya tetap
+tersimpan jadi template adalah kop Anda. Tanpa keduanya, contohnya tetap
 terbuka dengan kop karangan.
 
 Logo ikut tertanam di tiap template yang dibuat dari contoh, jadi berkas yang
@@ -118,6 +130,8 @@ hanya boleh huruf kecil, angka, dan tanda hubung.
 - `tests/UI/ContohKonversiTest.php` menjaga yang khas surat keterangan
   tindakan (tabel kueri, letak cap, isi halamannya).
 - `tests/UI/SimpanContohJadiTemplateTest.php` menjaga tombol simpannya.
+- `tests/UI/KopContohUiTest.php` dan `tests/Template/KopContohTest.php` menjaga
+  pengaturan kopnya, termasuk bahwa berkas contohnya tidak ikut berubah.
 
 ```
 vendor/bin/phpunit --filter Contoh

@@ -49,7 +49,10 @@ return [
     // satu organisasi pun; nilai di bawah inilah yang menggantikannya — di
     // layar, di cetakan, dan di template yang disimpan dari contoh itu.
     //
-    // Tanpa ini contohnya tetap terbuka, cuma kopnya karangan.
+    // Tanpa ini contohnya tetap terbuka, cuma kopnya karangan. Nilai di sini
+    // adalah titik awal: halaman contoh punya panel "Kop surat" yang bisa
+    // menimpanya tanpa menyentuh berkas ini (tersimpan di folder penyimpanan
+    // sebagai kop-contoh.json).
     //
     // 'letterhead.name'    => 'NAMA ORGANISASI ANDA',
     // 'letterhead.address' => 'Alamat satu baris',   // larik = beberapa baris
