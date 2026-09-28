@@ -1,0 +1,194 @@
+<table style="width:100%;border-collapse:collapse;border:none;border-bottom:3px double #000;margin:0 0 16px;">
+<tbody>
+<tr>
+<td style="width:84px;border:none;vertical-align:middle;"><span class="logo-placeholder" data-logo="kop" data-width="68px" contenteditable="false">[Logo: kop]</span></td>
+<td style="border:none;vertical-align:middle;padding:0 0 6px;">
+<p style="margin:0;font-size:16pt;font-weight:bold;letter-spacing:0.5px;">RUMAH SAKIT CONTOH SEJAHTERA</p>
+<p style="margin:0;font-size:9pt;">Jl. Melati No. 12, Kota Contoh 40123 &middot; Telp (021) 555-0100 &middot; rs-contoh.example</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p style="text-align:center;font-size:14pt;font-weight:bold;letter-spacing:1px;text-decoration:underline;margin:0;">PEMERIKSAAN PANGGUL DALAM</p>
+<p style="text-align:center;margin:2px 0 14px;font-size:9pt;">Pelvimetri klinis</p>
+<table style="width:100%;border-collapse:collapse;border:none;margin:0 0 10px;font-size:10pt;">
+<tbody>
+<tr>
+<td style="border:none;width:120px;">Nama pasien</td><td style="border:none;width:10px;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Nama pasien">{{nama_pasien}}</span></td>
+<td style="border:none;width:110px;padding-left:12px;">Nomor rekam medis</td><td style="border:none;width:10px;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Nomor rekam medis">{{no_rekam_medis}}</span></td>
+</tr>
+<tr>
+<td style="border:none;">Tanggal lahir</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="date" data-label="Tanggal lahir">{{tanggal_lahir}}</span></td>
+<td style="border:none;padding-left:12px;">Umur</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="number" data-label="Umur">{{umur}}</span> tahun</td>
+</tr>
+<tr>
+<td style="border:none;">G &ndash; P &ndash; A</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="text" data-label="G-P-A">{{gpa}}</span></td>
+<td style="border:none;padding-left:12px;">Usia kehamilan</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="number" data-label="Usia kehamilan">{{usia_kehamilan}}</span> minggu</td>
+</tr>
+<tr>
+<td style="border:none;">Ruangan / poli</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Ruangan atau poli">{{ruangan}}</span></td>
+<td style="border:none;padding-left:12px;">Tanggal / jam</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="date" data-label="Tanggal periksa" data-default="date:d F Y">{{tanggal_periksa}}</span> <span class="field-placeholder" data-type="time" data-label="Jam periksa" data-default="time:H:i">{{jam_periksa}}</span></td>
+</tr>
+<tr>
+<td style="border:none;">Indikasi</td><td style="border:none;">:</td>
+<td colspan="4" style="border:none;"><span class="field-placeholder" data-type="text" data-label="Indikasi pemeriksaan">{{indikasi}}</span></td>
+</tr>
+</tbody>
+</table>
+<table style="width:100%;border-collapse:collapse;font-size:9.5pt;">
+<tbody>
+<tr>
+<th style="border:1px solid #000;padding:4px 6px;width:30px;">No</th>
+<th style="border:1px solid #000;padding:4px 6px;width:150px;text-align:left;">Pemeriksaan</th>
+<th style="border:1px solid #000;padding:4px 6px;text-align:left;">Hasil</th>
+<th style="border:1px solid #000;padding:4px 6px;width:170px;text-align:left;">Nilai rujukan</th>
+</tr>
+<tr>
+<td colspan="4" style="border:1px solid #000;padding:3px 6px;background:#e8e8e8;font-weight:bold;font-size:9pt;">A. PINTU ATAS PANGGUL</td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">1</td>
+<td style="border:1px solid #000;padding:4px 6px;font-weight:bold;">Promontorium</td>
+<td style="border:1px solid #000;padding:4px 6px;">
+<span class="field-placeholder" data-type="radio" data-label="Promontorium" data-options="Tidak teraba,Teraba">{{promontorium}}</span><br>
+Konjugata diagonalis (CD): <span class="field-placeholder" data-type="number" data-label="Konjugata diagonalis" data-min="0" data-max="20">{{konjugata_diagonalis}}</span> cm
+</td>
+<td style="border:1px solid #000;padding:4px 6px;font-size:8.5pt;">Tidak teraba = panggul cukup. Bila teraba, ukur CD; CD normal &ge; 11.5 cm.</td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">2</td>
+<td style="border:1px solid #000;padding:4px 6px;font-weight:bold;">Konjugata vera</td>
+<td style="border:1px solid #000;padding:4px 6px;">
+CV = CD &minus; 1.5 cm = <b><span class="field-placeholder" data-type="calc" data-formula="konjugata_diagonalis - 1.5" data-decimals="1">{{konjugata_vera}}</span></b> cm<br>
+<span class="field-placeholder" data-type="radio" data-label="Kesan konjugata vera" data-options="&ge; 10 cm (cukup),8.5 &ndash; &lt;10 cm (batas),&lt; 8.5 cm (sempit)">{{kesan_konjugata_vera}}</span>
+</td>
+<td style="border:1px solid #000;padding:4px 6px;font-size:8.5pt;">CV normal &plusmn; 11 cm. Di bawah 10 cm perlu pertimbangan cara persalinan.</td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">3</td>
+<td style="border:1px solid #000;padding:4px 6px;font-weight:bold;">Linea innominata</td>
+<td style="border:1px solid #000;padding:4px 6px;">
+Kanan: <span class="field-placeholder" data-type="radio" data-label="Linea innominata kanan" data-options="tidak teraba,&lt;1/3,1/3&ndash;2/3,seluruh">{{linea_kanan}}</span><br>
+Kiri: <span class="field-placeholder" data-type="radio" data-label="Linea innominata kiri" data-options="tidak teraba,&lt;1/3,1/3&ndash;2/3,seluruh">{{linea_kiri}}</span>
+</td>
+<td style="border:1px solid #000;padding:4px 6px;font-size:8.5pt;">Teraba sebagian masih wajar. Teraba seluruh lingkaran = curiga panggul sempit.</td>
+</tr>
+<tr>
+<td colspan="4" style="border:1px solid #000;padding:3px 6px;background:#e8e8e8;font-weight:bold;font-size:9pt;">B. PANGGUL TENGAH</td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">4</td>
+<td style="border:1px solid #000;padding:4px 6px;font-weight:bold;">Spina ischiadica</td>
+<td style="border:1px solid #000;padding:4px 6px;">
+<span class="field-placeholder" data-type="radio" data-label="Spina ischiadica" data-options="Tidak menonjol,Menonjol,Sangat menonjol">{{spina_ischiadica}}</span><br>
+Distansia interspinarum: <span class="field-placeholder" data-type="number" data-label="Distansia interspinarum" data-min="0" data-max="20">{{distansia_interspinarum}}</span> cm
+</td>
+<td style="border:1px solid #000;padding:4px 6px;font-size:8.5pt;">Tidak menonjol = normal. Jarak antar spina &ge; 10 cm (&plusmn; 10.5 cm).</td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">5</td>
+<td style="border:1px solid #000;padding:4px 6px;font-weight:bold;">Dinding samping</td>
+<td style="border:1px solid #000;padding:4px 6px;"><span class="field-placeholder" data-type="radio" data-label="Dinding samping" data-options="Lurus,Menyempit ke bawah (konvergen),Melebar (divergen)">{{dinding_samping}}</span></td>
+<td style="border:1px solid #000;padding:4px 6px;font-size:8.5pt;">Lurus = normal. Konvergen mempersempit panggul tengah.</td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">6</td>
+<td style="border:1px solid #000;padding:4px 6px;font-weight:bold;">Os sakrum</td>
+<td style="border:1px solid #000;padding:4px 6px;"><span class="field-placeholder" data-type="radio" data-label="Os sakrum" data-options="Cekung (konkaf),Datar / lurus,Menonjol ke depan">{{os_sakrum}}</span></td>
+<td style="border:1px solid #000;padding:4px 6px;font-size:8.5pt;">Cekung = normal, ruang panggul belakang luas.</td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">7</td>
+<td style="border:1px solid #000;padding:4px 6px;font-weight:bold;">Incisura ischiadica</td>
+<td style="border:1px solid #000;padding:4px 6px;"><span class="field-placeholder" data-type="radio" data-label="Incisura ischiadica" data-options="Muat 2 jari (lebar),Kurang dari 2 jari (sempit)">{{incisura_ischiadica}}</span></td>
+<td style="border:1px solid #000;padding:4px 6px;font-size:8.5pt;">Lebar &ge; 2 jari = normal; sempit menyertai panggul android.</td>
+</tr>
+<tr>
+<td colspan="4" style="border:1px solid #000;padding:3px 6px;background:#e8e8e8;font-weight:bold;font-size:9pt;">C. PINTU BAWAH PANGGUL</td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">8</td>
+<td style="border:1px solid #000;padding:4px 6px;font-weight:bold;">Arkus pubis</td>
+<td style="border:1px solid #000;padding:4px 6px;">
+<span class="field-placeholder" data-type="radio" data-label="Arkus pubis" data-options="&gt; 90&deg; (tumpul),&le; 90&deg; (sempit)">{{arkus_pubis}}</span><br>
+Uji dua jari di bawah simfisis: <span class="field-placeholder" data-type="radio" data-label="Uji dua jari arkus pubis" data-options="muat,tidak muat">{{arkus_dua_jari}}</span>
+</td>
+<td style="border:1px solid #000;padding:4px 6px;font-size:8.5pt;">Sudut &gt; 90&deg; (dua jari muat di bawah simfisis) = normal.</td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">9</td>
+<td style="border:1px solid #000;padding:4px 6px;font-weight:bold;">Os koksigis</td>
+<td style="border:1px solid #000;padding:4px 6px;"><span class="field-placeholder" data-type="radio" data-label="Os koksigis" data-options="Mudah digerakkan,Kaku / menonjol">{{os_koksigis}}</span></td>
+<td style="border:1px solid #000;padding:4px 6px;font-size:8.5pt;">Mudah digerakkan = normal, jalan lahir bisa melebar saat persalinan.</td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">10</td>
+<td style="border:1px solid #000;padding:4px 6px;font-weight:bold;">Distansia intertuberosum</td>
+<td style="border:1px solid #000;padding:4px 6px;">
+Hasil ukur: <span class="field-placeholder" data-type="number" data-label="Distansia intertuberosum" data-min="0" data-max="20">{{distansia_intertuberosum}}</span> cm &nbsp;
+<span class="field-placeholder" data-type="radio" data-label="Kesan intertuberosum" data-options="&ge; 8 cm,&lt; 8 cm">{{kesan_intertuberosum}}</span><br>
+Uji kepalan tangan: <span class="field-placeholder" data-type="radio" data-label="Uji kepalan tangan" data-options="muat,tidak muat">{{uji_kepalan}}</span>
+</td>
+<td style="border:1px solid #000;padding:4px 6px;font-size:8.5pt;">&ge; 8 cm dianggap cukup (rata-rata &plusmn; 10.5 cm).</td>
+</tr>
+<tr>
+<td colspan="4" style="border:1px solid #000;padding:3px 6px;background:#e8e8e8;font-weight:bold;font-size:9pt;">D. TURUNNYA BAGIAN TERENDAH</td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">11</td>
+<td style="border:1px solid #000;padding:4px 6px;font-weight:bold;">Station</td>
+<td style="border:1px solid #000;padding:4px 6px;">
+Bagian terendah: <span class="field-placeholder" data-type="radio" data-label="Bagian terendah" data-options="kepala,bokong,lain">{{bagian_terendah}}</span>
+<span class="field-placeholder" data-type="text" data-label="Bagian terendah lain">{{bagian_terendah_lain}}</span><br>
+Station: <span class="field-placeholder" data-type="radio" data-label="Station" data-options="&minus;5,&minus;4,&minus;3,&minus;2,&minus;1,0,+1,+2,+3,+4,+5">{{station}}</span><br>
+Bidang Hodge: <span class="field-placeholder" data-type="radio" data-label="Bidang Hodge" data-options="I,II,III,IV">{{bidang_hodge}}</span>
+</td>
+<td style="border:1px solid #000;padding:4px 6px;font-size:8.5pt;">Station 0 = setinggi spina ischiadica = Hodge III. H I pintu atas panggul &middot; H II tepi bawah simfisis &middot; H IV ujung tulang ekor.</td>
+</tr>
+</tbody>
+</table>
+<table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:9.5pt;">
+<tbody>
+<tr>
+<td style="border:1px solid #000;padding:5px 7px;">
+<p style="margin:0 0 3px;">Uji kesesuaian kepala&ndash;panggul: <span class="field-placeholder" data-type="radio" data-label="Cara uji kesesuaian" data-options="Osborn,Muller&ndash;Munro Kerr">{{cara_uji_kesesuaian}}</span> &rarr; <span class="field-placeholder" data-type="radio" data-label="Hasil uji kesesuaian" data-options="negatif (sesuai),ragu,positif (disproporsi)">{{hasil_uji_kesesuaian}}</span></p>
+<p style="margin:0 0 3px;">Perkiraan bentuk panggul: <span class="field-placeholder" data-type="radio" data-label="Bentuk panggul" data-options="ginekoid,android,antropoid,platipeloid">{{bentuk_panggul}}</span></p>
+<p style="margin:0;font-size:9pt;">Pelvimetri luar (bila dilakukan) &mdash;
+distansia spinarum <span class="field-placeholder" data-type="number" data-label="Distansia spinarum" data-min="0" data-max="50">{{distansia_spinarum}}</span> cm (24&ndash;26) &middot;
+kristarum <span class="field-placeholder" data-type="number" data-label="Distansia kristarum" data-min="0" data-max="50">{{distansia_kristarum}}</span> cm (28&ndash;30) &middot;
+konjugata eksterna <span class="field-placeholder" data-type="number" data-label="Konjugata eksterna" data-min="0" data-max="50">{{konjugata_eksterna}}</span> cm (18&ndash;20) &middot;
+lingkar panggul <span class="field-placeholder" data-type="number" data-label="Lingkar panggul" data-min="0" data-max="150">{{lingkar_panggul}}</span> cm (80&ndash;90)</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p style="margin:10px 0 0;"><b>Kesan panggul:</b> <span class="field-placeholder" data-type="radio" data-label="Kesan panggul" data-options="luas / cukup,batas (borderline),sempit">{{kesan_panggul}}</span></p>
+<p style="margin:4px 0 0;"><b>Rencana persalinan:</b> <span class="field-placeholder" data-type="radio" data-label="Rencana persalinan" data-options="pervaginam,partus percobaan,seksio sesarea,lain">{{rencana_persalinan}}</span> <span class="field-placeholder" data-type="text" data-label="Rencana persalinan lain">{{rencana_lain}}</span></p>
+<div class="conditional-section" data-cond="konjugata_vera&lt;10" style="margin-top:6px;">
+<p style="margin:0;font-size:9.5pt;font-style:italic;">Konjugata vera di bawah 10 cm &mdash; panggul sempit atau batas. Pertimbangkan partus percobaan terpimpin atau seksio sesarea, dan catat alasannya di bawah.</p>
+</div>
+<p style="margin:6px 0 0;"><b>Catatan:</b> <span class="field-placeholder" data-type="text" data-label="Catatan pemeriksa">{{catatan}}</span></p>
+<p style="text-align:right;margin-top:18px;">Kota Contoh, <span class="field-placeholder" data-type="date" data-label="Tanggal surat" data-default="date:d F Y">{{tanggal_surat}}</span></p>
+<table style="width:100%;border-collapse:collapse;border:none;">
+<tbody>
+<tr>
+<td style="border:none;width:60%;"></td>
+<td style="border:none;width:40%;text-align:center;vertical-align:top;">
+<div class="ttd-placeholder" data-ttd="pemeriksa" data-label="Dokter / pemeriksa," data-nama-field="nama_pemeriksa" data-ttd-modes="image" data-allowed-roles="dokter,bidan" contenteditable="false">
+<div style="font-size:12pt;margin-bottom:5px;">Dokter / pemeriksa,</div>
+<div style="width:100px;height:50px;border:1px dashed #10b981;background:#ecfdf5;margin:0 auto;"></div>
+<div style="font-size:11pt;margin-top:3px;">(..................)</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<p style="border-top:1px solid #bbb;margin-top:20px;padding-top:3px;font-size:8pt;color:#444;">No. Form: <span class="field-placeholder" data-type="text" data-label="Nomor formulir">{{no_form}}</span> &middot; Revisi: <span class="field-placeholder" data-type="text" data-label="Revisi formulir">{{revisi_form}}</span> &middot; Tanggal terbit: <span class="field-placeholder" data-type="date" data-label="Tanggal terbit formulir">{{tanggal_terbit_form}}</span></p>

@@ -6,6 +6,44 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — empat form obstetri jadi contoh siap simpan (2026-09-28)**
+
+Diminta pemakai: "update cetak_form_pemeriksaan_panggul.php agar jadi template
+ezdoc, itu bekas aku test buat preview, jadikan 4 form terpisah", dengan
+identitas pasien "semua jadi field" (tidak diambil dari database).
+
+Satu berkas cetak berisi empat lembar dipecah jadi empat contoh terpisah —
+keempatnya diisi di saat berbeda oleh orang berbeda, jadi memang bukan satu
+dokumen:
+
+| Folder | Fitur yang ditonjolkan |
+| --- | --- |
+| `contoh/panggul-dalam/` | 21 field pilihan, field hitung konjugata vera (CD &minus; 1,5), blok bersyarat atas hasil hitungan |
+| `contoh/klasifikasi-robson/` | field pilihan, 16 field centang dalam tabel, blok bersyarat atas field centang |
+| `contoh/skor-flamm-geiger/` | field hitung menjumlahkan lima parameter dengan batas berbeda-beda |
+| `contoh/skor-bishop/` | dilengkapi: identitas penuh, kotak penafsiran, rencana, kaki pengendalian dokumen |
+
+Bisa langsung dilihat (halaman Contoh, Buat dokumen, designer) lalu disimpan
+jadi template dengan satu tombol.
+
+**Fixed — pilihan yang memuat tanda &lt; atau &gt; tidak pernah tercentang**
+
+Nilai tersimpan datang dalam bentuk siap-cetak (sudah di-escape), pilihannya
+tidak: `&amp;gt; 90 derajat` tidak akan pernah sama dengan `&gt; 90 derajat`. Akibatnya
+field radio dan select yang pilihannya memuat tanda kurang-dari atau
+lebih-dari terbuka seolah belum diisi — dan yang membukanya mengisi ulang dari
+nol tanpa tahu jawabannya sudah pernah ada. Keduanya kini dibandingkan dalam
+bentuk mentah, escape hanya saat mencetak.
+
+**Added — uji yang berlaku untuk setiap contoh**
+
+`tests/UI/SemuaContohTest.php` menemukan sendiri semua folder di `contoh/` dan
+memberlakukan aturan yang sama: dirender tanpa sisa penanda, tiap field punya
+nilai contoh (kecuali field hitung), rumus hanya menyebut field yang ada, tipe
+fieldnya dikenali perender, field pilihan punya pilihannya dan nilainya
+benar-benar terpilih, petanya lengkap. Contoh baru ikut terjaga pada menit ia
+dibuat.
+
 **Added — contoh bisa disimpan jadi template, satu tombol (2026-09-28)**
 
 Diminta pemakai, sesudah usulan halaman "tempel HTML lalu impor" ditolak dua

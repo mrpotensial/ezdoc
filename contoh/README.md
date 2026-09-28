@@ -1,60 +1,67 @@
-# Contoh konversi dokumen
+# Contoh template
 
-Satu dokumen kertas, dibedah sampai selesai jadi template ezdoc. Isinya berkas —
-tidak ada baris database, dan contohnya tidak terdaftar sebagai template.
+Template yang hidup sebagai **berkas**, bukan baris database. Bisa dibuka,
+diisi, ditandatangani, dan diubah di designer tanpa satu baris pun masuk
+database — lalu disimpan jadi template sungguhan kalau memang cocok.
 
-Dua pintu:
+Tiga pintu untuk tiap contoh:
 
-- **`?ezdoc_page=contoh`** — halaman penjelasan (menu "Example", untuk yang boleh
-  mengelola template). Ia merender contoh ini dengan perender yang sama dengan
-  yang mencetak dokumen sungguhan, jadi contoh yang rusak langsung terlihat.
-- **`?ezdoc_page=generate&template_id=contoh`** — contoh yang sama, dibuka di
-  halaman pembuatan dokumen, dan **boleh dicoba**: isian hidup, tanda tangan
+- **`?ezdoc_page=contoh&contoh=<nama-folder>`** — halaman penjelasan (menu
+  "Example", untuk yang boleh mengelola template). Ia merender contohnya dengan
+  perender yang sama dengan yang mencetak dokumen sungguhan, jadi contoh yang
+  rusak langsung terlihat.
+- **`?ezdoc_page=generate&template_id=contoh:<nama-folder>`** — dibuka di
+  halaman pembuatan dokumen dan **boleh dicoba**: isian hidup, tanda tangan
   bisa digambar, tombol Simpan bisa ditekan. Simpannya dibatalkan lewat kait
   `ezcetak:before-save` lalu ditulis ke `localStorage` peramban. Database tidak
   disentuh, OTP tidak dikirim, dan tidak ada dokumen yang dibuat.
+- **`?ezdoc_page=designer&action=edit&id=contoh:<nama-folder>`** — dibuka di
+  designer. Simpannya juga mendarat di peramban saja.
+
+## Yang ada sekarang
+
+| Folder | Isi | Fitur yang ditonjolkan |
+| --- | --- | --- |
+| `surat-keterangan-tindakan/` | Surat keterangan tindakan | Tabel dari kueri (rumus per baris + penjumlahan), logo mengambang di belakang teks, QR verifikasi, tiga tanda tangan dengan aturan berbeda, blok bersyarat |
+| `panggul-dalam/` | Pemeriksaan panggul dalam (pelvimetri klinis) | 21 field pilihan, field angka berbatas, field hitung (konjugata vera = CD &minus; 1,5), blok bersyarat atas hasil hitungan |
+| `klasifikasi-robson/` | Klasifikasi Robson (WHO) | Field pilihan, 16 field centang dalam tabel, blok bersyarat atas field centang |
+| `skor-flamm-geiger/` | Skor Flamm &amp; Geiger | Field hitung menjumlahkan lima parameter, field angka dengan batas berbeda-beda, field centang syarat |
+| `skor-bishop/` | Lembar Skor Bishop | Field hitung, field angka berbatas, blok bersyarat |
+
+Empat yang terakhir satu rangkaian: bentuk kertasnya berasal dari satu berkas
+cetak obstetri yang dipecah jadi empat template terpisah, karena keempatnya
+diisi di saat yang berbeda oleh orang yang berbeda.
 
 ## Isi folder
 
 ```
-surat-keterangan-tindakan/
-  asal.jpg        dokumen kertasnya (karangan; nama, alamat, angka tidak nyata)
-  template.html   isi editor — inilah yang disalin ke designer
+<nama-folder>/
+  template.html   isi editor — inilah yang jadi isi template
   contoh.json     config halaman, kueri tabel, nilai contoh, dan peta fitur
+  asal.jpg        (opsional) dokumen kertasnya, untuk dibandingkan
 ```
 
 `contoh.json` berisi:
 
 | kunci | isi |
 | --- | --- |
+| `nama_template` | nama yang dipakai; akhiran "(contoh)" dibuang saat disimpan |
 | `config_header` | ukuran kertas, tepi, logo (data URI), dan `tableDbQueries` |
 | `verify_config` | field yang tampil di halaman verifikasi |
 | `nilai_contoh` | nilai field untuk merender pratinjau |
 | `peta` | tiap bagian kertas → fitur ezdoc, markup-nya, dan tempat simpannya |
 
 `peta` adalah sumber tunggal penjelasan: halaman contoh membacanya, termasuk
-titik nomor yang ditempel di atas gambar (`pin.x` / `pin.y` dalam persen).
+titik nomor yang ditempel di atas gambar (`pin.x` / `pin.y` dalam persen) kalau
+folder itu punya `asal.jpg`.
 
-## Fitur yang dipakai contoh ini
-
-Logo sebaris, logo mengambang di belakang teks, field teks/tanggal/angka/centang,
-nilai bawaan tanggal, tabel dari kueri (kolom, rumus per baris, penjumlahan),
-blok bersyarat, dan QR verifikasi.
-
-Tanda tangannya tiga, sengaja berbeda aturan — di kertas ketiganya sama saja:
-
-| slot | aturan |
-| --- | --- |
-| pasien | OTP ke nomor pada field `nomor_hp_pasien`, boleh gambar atau QR |
-| perawat | hanya peran `perawat` / `kepala_ruangan` yang boleh menandatangani |
-| dokter | mode QR saja (tanpa gambar) + nama bawaan |
-
-**Materai sengaja TIDAK dipakai**: fiturnya belum selesai. Contoh itu disalin
-orang, dan yang menyalin tidak punya cara tahu mana yang belum jadi.
+**Materai sengaja TIDAK dipakai** di contoh mana pun: fiturnya belum selesai.
+Contoh itu disalin orang, dan yang menyalin tidak punya cara tahu mana yang
+belum jadi.
 
 ## Cara memakainya
 
-**Satu tombol: “Simpan jadi template”.** Ada di tiga tempat contohnya bisa
+**Satu tombol: "Simpan jadi template".** Ada di tiga tempat contohnya bisa
 dilihat — halaman Contoh (dengan kotak nama), pita kuning di halaman Buat
 dokumen, dan pita kuning di designer. Sekali tekan, contohnya jadi template
 sungguhan: isi, pengaturan kertas, logo, kueri tabel, tanda tangan, dan
@@ -62,8 +69,10 @@ pengaturan halaman verifikasi ikut semua.
 
 Yang perlu diperiksa sesudahnya:
 
-1. **Kueri tabel** — nama tabel dan kolom di SQL-nya masih milik contoh ini.
-2. **`data-allowed-roles`** pada tanda tangan — sesuaikan dengan peran di
+1. **Kop** — contoh memakai kop karangan ("Rumah Sakit Contoh Sejahtera").
+   Ganti logo dan dua baris teks di bagian atas template dengan milik Anda.
+2. **Kueri tabel** — nama tabel dan kolom di SQL-nya masih milik contoh.
+3. **`data-allowed-roles`** pada tanda tangan — sesuaikan dengan peran di
    aplikasi Anda.
 
 Yang dijaga tombol itu: ia hanya **menambah**, tidak pernah mengubah template
@@ -73,13 +82,22 @@ digandakan diam-diam).
 Di designer, yang tersimpan adalah **yang sedang di layar** — jadi rancangannya
 boleh dirapikan dulu di sana sebelum ditekan.
 
+## Membuat contoh baru
+
+Cukup buat folder berisi `template.html` dan `contoh.json`; pemuatnya menemukan
+sendiri, dan uji di bawah langsung berlaku untuk folder baru itu. Nama folder
+hanya boleh huruf kecil, angka, dan tanda hubung.
+
 ## Kalau contoh ini diubah
 
-Tiga berkas uji menjaganya: `tests/UI/ContohKonversiTest.php` (templatenya
-benar-benar dirender tanpa menyisakan penanda, fiturnya ada, tiap field punya
-nilai contoh), `tests/Template/ContohLoaderTest.php` (pemuatnya menolak nama
-folder yang aneh), dan `tests/UI/ContohDiGenerateTest.php` (mode contoh tidak
-bisa menulis apa pun). Jalankan:
+- `tests/UI/SemuaContohTest.php` berlaku untuk **setiap** folder: templatenya
+  benar-benar dirender tanpa menyisakan penanda, tiap field punya nilai contoh
+  (kecuali field hitung, yang nilainya datang dari rumus), rumus hanya menyebut
+  field yang ada, tipe fieldnya dikenali perender, field pilihan punya
+  pilihannya dan nilainya benar-benar terpilih, petanya lengkap.
+- `tests/UI/ContohKonversiTest.php` menjaga yang khas surat keterangan
+  tindakan (tabel kueri, letak cap, isi halamannya).
+- `tests/UI/SimpanContohJadiTemplateTest.php` menjaga tombol simpannya.
 
 ```
 vendor/bin/phpunit --filter Contoh

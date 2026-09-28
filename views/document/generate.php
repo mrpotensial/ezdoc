@@ -1509,27 +1509,34 @@ function renderFieldInputRaw($name, $type, $val, $options, $label, $validation =
             return '<label class="field-checkbox-wrap"' . $vAttrs . '><input type="checkbox" class="field-checkbox" name="' . $hName . '" value="1"' . $checked . ' data-field="' . $hName . '">' . $labelHtml . $reqMark . '</label>';
 
         case 'radio':
+        case 'select':
+            // Nilai tersimpan datang dalam bentuk siap-cetak (sudah di-escape),
+            // sedangkan pilihannya sudah dipulihkan dari entitas. Tanpa
+            // disamakan lebih dulu, pilihan yang memuat < atau > tidak pernah
+            // tercentang: "&gt; 90 derajat" tidak akan pernah sama dengan
+            // "> 90 derajat". Polanya sama dengan yang dipakai kerangka lain —
+            // banding nilai mentah, escape hanya saat mencetak.
+            $valPilihan = html_entity_decode((string) $val, ENT_QUOTES, 'UTF-8');
             $opts = array_map('trim', explode(',', $options));
+            if ($type === 'select') {
+                $html = '<select class="field-select" name="' . $hName . '" data-field="' . $hName . '">';
+                $html .= '<option value="">' . h(t('field.select_placeholder', [], '-- Select --')) . '</option>';
+                foreach ($opts as $opt) {
+                    $hOpt = h($opt);
+                    $selected = ($valPilihan === $opt) ? ' selected' : '';
+                    $html .= '<option value="' . $hOpt . '"' . $selected . '>' . $hOpt . '</option>';
+                }
+                $html .= '</select>';
+                return '<span class="f-wrap"' . $vAttrs . '>' . $html . $reqMark . '</span>';
+            }
             $html = '<span class="field-radio-wrap" data-field="' . $hName . '"' . $vAttrs . '>';
             foreach ($opts as $opt) {
                 $hOpt = h($opt);
-                $checked = ($val === $opt) ? ' checked' : '';
+                $checked = ($valPilihan === $opt) ? ' checked' : '';
                 $html .= '<label class="field-radio-label"><input type="radio" name="' . $hName . '" value="' . $hOpt . '"' . $checked . '> ' . $hOpt . '</label> ';
             }
             $html .= $reqMark . '</span>';
             return $html;
-
-        case 'select':
-            $opts = array_map('trim', explode(',', $options));
-            $html = '<select class="field-select" name="' . $hName . '" data-field="' . $hName . '">';
-            $html .= '<option value="">' . h(t('field.select_placeholder', [], '-- Select --')) . '</option>';
-            foreach ($opts as $opt) {
-                $hOpt = h($opt);
-                $selected = ($val === $opt) ? ' selected' : '';
-                $html .= '<option value="' . $hOpt . '"' . $selected . '>' . $hOpt . '</option>';
-            }
-            $html .= '</select>';
-            return '<span class="f-wrap"' . $vAttrs . '>' . $html . $reqMark . '</span>';
 
         default: // text
             return '<span class="f-wrap"' . $vAttrs . '><span class="f" contenteditable="true" data-field="' . $hName . '">' . ($hVal ?: '') . '</span><input type="hidden" name="' . $hName . '" value="' . $hVal . '">' . $reqMark . '</span>';

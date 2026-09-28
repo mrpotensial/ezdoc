@@ -6,10 +6,10 @@
         "paperSize": "A4",
         "orientation": "portrait",
         "padding": {
-            "top": 18,
-            "right": 18,
-            "bottom": 18,
-            "left": 18
+            "top": 16,
+            "right": 16,
+            "bottom": 16,
+            "left": 16
         },
         "layoutMode": "continuous",
         "logos": {
@@ -41,7 +41,17 @@
         "bishop_posisi": "1",
         "catatan": "Rencana induksi besok pagi bila skor tidak membaik.",
         "tanggal_surat": "2026-09-24",
-        "nama_pemeriksa": "dr. Andi Pratama"
+        "nama_pemeriksa": "dr. Andi Pratama",
+        "tanggal_lahir": "1996-04-12",
+        "umur": "30",
+        "gpa": "G2 P1 A0",
+        "ruangan": "Kamar bersalin",
+        "indikasi_induksi": "Kehamilan lewat waktu 41 minggu",
+        "rencana": "induksi oksitosin",
+        "rencana_lain": "",
+        "no_form": "RM-18",
+        "revisi_form": "00",
+        "tanggal_terbit_form": "2026-09-01"
     },
     "peta": [
         {

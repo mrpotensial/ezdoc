@@ -1,0 +1,144 @@
+<table style="width:100%;border-collapse:collapse;border:none;border-bottom:3px double #000;margin:0 0 16px;">
+<tbody>
+<tr>
+<td style="width:84px;border:none;vertical-align:middle;"><span class="logo-placeholder" data-logo="kop" data-width="68px" contenteditable="false">[Logo: kop]</span></td>
+<td style="border:none;vertical-align:middle;padding:0 0 6px;">
+<p style="margin:0;font-size:16pt;font-weight:bold;letter-spacing:0.5px;">RUMAH SAKIT CONTOH SEJAHTERA</p>
+<p style="margin:0;font-size:9pt;">Jl. Melati No. 12, Kota Contoh 40123 &middot; Telp (021) 555-0100 &middot; rs-contoh.example</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p style="text-align:center;font-size:14pt;font-weight:bold;letter-spacing:1px;text-decoration:underline;margin:0;">SKOR FLAMM &amp; GEIGER</p>
+<p style="text-align:center;margin:2px 0 14px;font-size:9pt;">Perkiraan keberhasilan persalinan pervaginam setelah seksio sesarea</p>
+<table style="width:100%;border-collapse:collapse;border:none;margin:0 0 10px;font-size:10pt;">
+<tbody>
+<tr>
+<td style="border:none;width:120px;">Nama pasien</td><td style="border:none;width:10px;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Nama pasien">{{nama_pasien}}</span></td>
+<td style="border:none;width:110px;padding-left:12px;">Nomor rekam medis</td><td style="border:none;width:10px;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Nomor rekam medis">{{no_rekam_medis}}</span></td>
+</tr>
+<tr>
+<td style="border:none;">Tanggal lahir</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="date" data-label="Tanggal lahir">{{tanggal_lahir}}</span></td>
+<td style="border:none;padding-left:12px;">Umur</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="number" data-label="Umur">{{umur}}</span> tahun</td>
+</tr>
+<tr>
+<td style="border:none;">G &ndash; P &ndash; A</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="text" data-label="G-P-A">{{gpa}}</span></td>
+<td style="border:none;padding-left:12px;">Usia kehamilan</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="number" data-label="Usia kehamilan">{{usia_kehamilan}}</span> minggu</td>
+</tr>
+<tr>
+<td style="border:none;">Ruangan</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Ruangan">{{ruangan}}</span></td>
+<td style="border:none;padding-left:12px;">Tanggal / jam</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="date" data-label="Tanggal masuk" data-default="date:d F Y">{{tanggal_periksa}}</span> <span class="field-placeholder" data-type="time" data-label="Jam masuk" data-default="time:H:i">{{jam_periksa}}</span></td>
+</tr>
+</tbody>
+</table>
+<table style="width:100%;border-collapse:collapse;margin:0 0 10px;font-size:9.5pt;">
+<tbody>
+<tr>
+<td style="border:1px solid #000;padding:5px 7px;">
+<p style="margin:0 0 4px;font-weight:bold;">Syarat dinilai &mdash; semua harus terpenuhi sebelum skor dipakai</p>
+<p style="margin:0 0 2px;"><span class="field-placeholder" data-type="checkbox" data-label="Riwayat seksio sesarea dengan irisan melintang di segmen bawah rahim">{{syarat_irisan}}</span></p>
+<p style="margin:0 0 2px;"><span class="field-placeholder" data-type="checkbox" data-label="Tidak ada kontraindikasi persalinan pervaginam">{{syarat_kontraindikasi}}</span></p>
+<p style="margin:0 0 2px;"><span class="field-placeholder" data-type="checkbox" data-label="Tersedia kamar operasi dan tim untuk seksio darurat">{{syarat_kamar_operasi}}</span></p>
+<p style="margin:0;"><span class="field-placeholder" data-type="checkbox" data-label="Pasien sudah diberi penjelasan dan setuju">{{syarat_persetujuan}}</span></p>
+</td>
+</tr>
+</tbody>
+</table>
+<table style="width:100%;border-collapse:collapse;font-size:9.5pt;">
+<tbody>
+<tr>
+<th style="border:1px solid #000;padding:4px 6px;width:36px;">No</th>
+<th style="border:1px solid #000;padding:4px 6px;width:190px;text-align:left;">Parameter</th>
+<th style="border:1px solid #000;padding:4px 6px;text-align:left;">Temuan dan nilainya</th>
+<th style="border:1px solid #000;padding:4px 6px;width:60px;">Nilai</th>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">1</td>
+<td style="border:1px solid #000;padding:4px 6px;">Usia ibu</td>
+<td style="border:1px solid #000;padding:4px 6px;font-size:9pt;">kurang dari 40 tahun = 2 &middot; 40 tahun atau lebih = 0</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="number" data-label="Nilai usia ibu" data-min="0" data-max="2">{{flamm_usia}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">2</td>
+<td style="border:1px solid #000;padding:4px 6px;">Riwayat persalinan pervaginam</td>
+<td style="border:1px solid #000;padding:4px 6px;font-size:9pt;">pernah sebelum dan sesudah seksio pertama = 4 &middot; hanya sesudah = 2 &middot; hanya sebelum = 1 &middot; belum pernah = 0</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="number" data-label="Nilai riwayat pervaginam" data-min="0" data-max="4">{{flamm_riwayat}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">3</td>
+<td style="border:1px solid #000;padding:4px 6px;">Indikasi seksio sesarea pertama</td>
+<td style="border:1px solid #000;padding:4px 6px;font-size:9pt;">indikasi lain = 1 &middot; persalinan tidak maju (kemacetan persalinan) = 0</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="number" data-label="Nilai indikasi seksio pertama" data-min="0" data-max="1">{{flamm_indikasi}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">4</td>
+<td style="border:1px solid #000;padding:4px 6px;">Pendataran serviks saat masuk</td>
+<td style="border:1px solid #000;padding:4px 6px;font-size:9pt;">lebih dari 75% = 2 &middot; 25&ndash;75% = 1 &middot; kurang dari 25% = 0</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="number" data-label="Nilai pendataran serviks" data-min="0" data-max="2">{{flamm_pendataran}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">5</td>
+<td style="border:1px solid #000;padding:4px 6px;">Pembukaan serviks saat masuk</td>
+<td style="border:1px solid #000;padding:4px 6px;font-size:9pt;">4 cm atau lebih = 1 &middot; kurang dari 4 cm = 0</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="number" data-label="Nilai pembukaan serviks" data-min="0" data-max="1">{{flamm_pembukaan}}</span></td>
+</tr>
+<tr>
+<td colspan="3" style="border:1px solid #000;padding:5px 7px;text-align:right;font-weight:bold;">JUMLAH SKOR (maksimal 10)</td>
+<td style="border:1px solid #000;padding:5px 7px;text-align:center;font-weight:bold;font-size:13pt;"><span class="field-placeholder" data-type="calc" data-formula="flamm_usia + flamm_riwayat + flamm_indikasi + flamm_pendataran + flamm_pembukaan" data-decimals="0">{{total_flamm}}</span></td>
+</tr>
+</tbody>
+</table>
+<table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:9pt;">
+<tbody>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;font-weight:bold;">Jumlah skor</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">0 &ndash; 2</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">3</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">4</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">5</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">6</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">7</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">8 &ndash; 10</td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;font-weight:bold;">Perkiraan berhasil</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">&plusmn; 49%</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">&plusmn; 60%</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">&plusmn; 67%</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">&plusmn; 77%</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">&plusmn; 89%</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">&plusmn; 93%</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;">&plusmn; 95%</td>
+</tr>
+</tbody>
+</table>
+<p style="margin:10px 0 0;"><b>Keputusan:</b> <span class="field-placeholder" data-type="radio" data-label="Keputusan" data-options="dicoba persalinan pervaginam,seksio sesarea berencana">{{keputusan}}</span></p>
+<div class="conditional-section" data-cond="total_flamm&lt;4" style="margin-top:6px;">
+<p style="margin:0;font-size:9.5pt;font-style:italic;">Skor di bawah 4 &mdash; perkiraan keberhasilan pervaginam di bawah 70%. Jelaskan angkanya kepada pasien dan catat pilihannya.</p>
+</div>
+<p style="margin:6px 0 0;"><b>Catatan:</b> <span class="field-placeholder" data-type="text" data-label="Catatan">{{catatan}}</span></p>
+<p style="margin:8px 0 0;font-size:8.5pt;color:#333;">Angka di atas hanya perkiraan dari penelitian aslinya. Skor ini membantu memberi gambaran kepada pasien, bukan penentu tunggal cara persalinan &mdash; keputusan tetap pada penilaian klinis dan kesiapan fasilitas.</p>
+<p style="text-align:right;margin-top:16px;">Kota Contoh, <span class="field-placeholder" data-type="date" data-label="Tanggal surat" data-default="date:d F Y">{{tanggal_surat}}</span></p>
+<table style="width:100%;border-collapse:collapse;border:none;">
+<tbody>
+<tr>
+<td style="border:none;width:60%;"></td>
+<td style="border:none;width:40%;text-align:center;vertical-align:top;">
+<div class="ttd-placeholder" data-ttd="pemeriksa" data-label="Dokter penanggung jawab," data-nama-field="nama_pemeriksa" data-ttd-modes="image" data-allowed-roles="dokter" contenteditable="false">
+<div style="font-size:12pt;margin-bottom:5px;">Dokter penanggung jawab,</div>
+<div style="width:100px;height:50px;border:1px dashed #10b981;background:#ecfdf5;margin:0 auto;"></div>
+<div style="font-size:11pt;margin-top:3px;">(..................)</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<p style="border-top:1px solid #bbb;margin-top:20px;padding-top:3px;font-size:8pt;color:#444;">No. Form: <span class="field-placeholder" data-type="text" data-label="Nomor formulir">{{no_form}}</span> &middot; Revisi: <span class="field-placeholder" data-type="text" data-label="Revisi formulir">{{revisi_form}}</span> &middot; Tanggal terbit: <span class="field-placeholder" data-type="date" data-label="Tanggal terbit formulir">{{tanggal_terbit_form}}</span></p>

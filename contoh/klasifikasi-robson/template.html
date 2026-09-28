@@ -1,0 +1,167 @@
+<table style="width:100%;border-collapse:collapse;border:none;border-bottom:3px double #000;margin:0 0 16px;">
+<tbody>
+<tr>
+<td style="width:84px;border:none;vertical-align:middle;"><span class="logo-placeholder" data-logo="kop" data-width="68px" contenteditable="false">[Logo: kop]</span></td>
+<td style="border:none;vertical-align:middle;padding:0 0 6px;">
+<p style="margin:0;font-size:16pt;font-weight:bold;letter-spacing:0.5px;">RUMAH SAKIT CONTOH SEJAHTERA</p>
+<p style="margin:0;font-size:9pt;">Jl. Melati No. 12, Kota Contoh 40123 &middot; Telp (021) 555-0100 &middot; rs-contoh.example</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p style="text-align:center;font-size:14pt;font-weight:bold;letter-spacing:1px;text-decoration:underline;margin:0;">KLASIFIKASI ROBSON</p>
+<p style="text-align:center;margin:2px 0 14px;font-size:9pt;">Robson Ten Group Classification System &ndash; WHO</p>
+<table style="width:100%;border-collapse:collapse;border:none;margin:0 0 10px;font-size:10pt;">
+<tbody>
+<tr>
+<td style="border:none;width:120px;">Nama pasien</td><td style="border:none;width:10px;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Nama pasien">{{nama_pasien}}</span></td>
+<td style="border:none;width:110px;padding-left:12px;">Nomor rekam medis</td><td style="border:none;width:10px;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Nomor rekam medis">{{no_rekam_medis}}</span></td>
+</tr>
+<tr>
+<td style="border:none;">Tanggal lahir</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="date" data-label="Tanggal lahir">{{tanggal_lahir}}</span></td>
+<td style="border:none;padding-left:12px;">Umur</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="number" data-label="Umur">{{umur}}</span> tahun</td>
+</tr>
+<tr>
+<td style="border:none;">G &ndash; P &ndash; A</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="text" data-label="G-P-A">{{gpa}}</span></td>
+<td style="border:none;padding-left:12px;">Usia kehamilan</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="number" data-label="Usia kehamilan">{{usia_kehamilan}}</span> minggu</td>
+</tr>
+<tr>
+<td style="border:none;">Ruangan</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Ruangan">{{ruangan}}</span></td>
+<td style="border:none;padding-left:12px;">Tanggal / jam</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="date" data-label="Tanggal persalinan" data-default="date:d F Y">{{tanggal_periksa}}</span> <span class="field-placeholder" data-type="time" data-label="Jam persalinan" data-default="time:H:i">{{jam_periksa}}</span></td>
+</tr>
+</tbody>
+</table>
+<table style="width:100%;border-collapse:collapse;margin:0 0 10px;font-size:9.5pt;">
+<tbody>
+<tr>
+<td style="border:1px solid #000;padding:5px 7px;">
+<p style="margin:0 0 4px;font-weight:bold;">Data dasar penentu kelompok</p>
+<p style="margin:0 0 2px;">Paritas: <span class="field-placeholder" data-type="radio" data-label="Paritas" data-options="nulipara,multipara">{{paritas}}</span></p>
+<p style="margin:0 0 2px;">Riwayat seksio sesarea: <span class="field-placeholder" data-type="radio" data-label="Riwayat seksio sesarea" data-options="tidak ada,1 kali,2 kali atau lebih">{{riwayat_sc}}</span></p>
+<p style="margin:0 0 2px;">Jumlah janin: <span class="field-placeholder" data-type="radio" data-label="Jumlah janin" data-options="tunggal,ganda / lebih">{{jumlah_janin}}</span></p>
+<p style="margin:0 0 2px;">Letak / presentasi: <span class="field-placeholder" data-type="radio" data-label="Letak atau presentasi" data-options="kepala,bokong (sungsang),lintang / oblik">{{presentasi}}</span></p>
+<p style="margin:0 0 2px;">Usia kehamilan: <span class="field-placeholder" data-type="radio" data-label="Kelompok usia kehamilan" data-options="&ge; 37 minggu (aterm),&lt; 37 minggu (preterm)">{{kelompok_usia_kehamilan}}</span></p>
+<p style="margin:0 0 2px;">Awal persalinan: <span class="field-placeholder" data-type="radio" data-label="Awal persalinan" data-options="spontan,induksi,seksio sesarea sebelum ada tanda persalinan">{{awal_persalinan}}</span></p>
+<p style="margin:0;">Cara persalinan akhir: <span class="field-placeholder" data-type="radio" data-label="Cara persalinan akhir" data-options="spontan,vakum / forsep,seksio sesarea">{{cara_persalinan}}</span></p>
+</td>
+</tr>
+</tbody>
+</table>
+<table style="width:100%;border-collapse:collapse;font-size:9.5pt;">
+<tbody>
+<tr>
+<th style="border:1px solid #000;padding:4px 6px;width:70px;">Kelompok</th>
+<th style="border:1px solid #000;padding:4px 6px;text-align:left;">Populasi obstetri</th>
+<th style="border:1px solid #000;padding:4px 6px;width:70px;">Centang</th>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;font-weight:bold;">1</td>
+<td style="border:1px solid #000;padding:4px 6px;">Nulipara, janin tunggal, presentasi kepala, &ge; 37 minggu, persalinan mulai spontan.</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="checkbox">{{robson_1}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;font-weight:bold;">2</td>
+<td style="border:1px solid #000;padding:4px 6px;">Nulipara, janin tunggal, presentasi kepala, &ge; 37 minggu, persalinan diinduksi atau seksio sesarea sebelum ada tanda persalinan.</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="checkbox">{{robson_2}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;font-weight:bold;">2a</td>
+<td style="border:1px solid #000;padding:4px 6px;padding-left:18px;font-size:9pt;">&mdash; induksi persalinan</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="checkbox">{{robson_2a}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;font-weight:bold;">2b</td>
+<td style="border:1px solid #000;padding:4px 6px;padding-left:18px;font-size:9pt;">&mdash; seksio sesarea sebelum ada tanda persalinan</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="checkbox">{{robson_2b}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;font-weight:bold;">3</td>
+<td style="border:1px solid #000;padding:4px 6px;">Multipara tanpa riwayat seksio sesarea, janin tunggal, presentasi kepala, &ge; 37 minggu, persalinan mulai spontan.</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="checkbox">{{robson_3}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;font-weight:bold;">4</td>
+<td style="border:1px solid #000;padding:4px 6px;">Multipara tanpa riwayat seksio sesarea, janin tunggal, presentasi kepala, &ge; 37 minggu, persalinan diinduksi atau seksio sesarea sebelum ada tanda persalinan.</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="checkbox">{{robson_4}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;font-weight:bold;">4a</td>
+<td style="border:1px solid #000;padding:4px 6px;padding-left:18px;font-size:9pt;">&mdash; induksi persalinan</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="checkbox">{{robson_4a}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;font-weight:bold;">4b</td>
+<td style="border:1px solid #000;padding:4px 6px;padding-left:18px;font-size:9pt;">&mdash; seksio sesarea sebelum ada tanda persalinan</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="checkbox">{{robson_4b}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;font-weight:bold;">5</td>
+<td style="border:1px solid #000;padding:4px 6px;">Multipara dengan riwayat seksio sesarea, janin tunggal, presentasi kepala, &ge; 37 minggu.</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="checkbox">{{robson_5}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;font-weight:bold;">5.1</td>
+<td style="border:1px solid #000;padding:4px 6px;padding-left:18px;font-size:9pt;">&mdash; riwayat 1 kali seksio sesarea</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="checkbox">{{robson_5_1}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;font-weight:bold;">5.2</td>
+<td style="border:1px solid #000;padding:4px 6px;padding-left:18px;font-size:9pt;">&mdash; riwayat 2 kali atau lebih seksio sesarea</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="checkbox">{{robson_5_2}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;font-weight:bold;">6</td>
+<td style="border:1px solid #000;padding:4px 6px;">Semua nulipara dengan janin tunggal presentasi bokong.</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="checkbox">{{robson_6}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;font-weight:bold;">7</td>
+<td style="border:1px solid #000;padding:4px 6px;">Semua multipara dengan janin tunggal presentasi bokong, termasuk yang punya riwayat seksio sesarea.</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="checkbox">{{robson_7}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;font-weight:bold;">8</td>
+<td style="border:1px solid #000;padding:4px 6px;">Semua kehamilan ganda (gemeli atau lebih), termasuk yang punya riwayat seksio sesarea.</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="checkbox">{{robson_8}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;font-weight:bold;">9</td>
+<td style="border:1px solid #000;padding:4px 6px;">Semua janin tunggal letak lintang atau oblik, termasuk yang punya riwayat seksio sesarea.</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="checkbox">{{robson_9}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;font-weight:bold;">10</td>
+<td style="border:1px solid #000;padding:4px 6px;">Semua janin tunggal presentasi kepala, &lt; 37 minggu, termasuk yang punya riwayat seksio sesarea.</td>
+<td style="border:1px solid #000;padding:4px 6px;text-align:center;"><span class="field-placeholder" data-type="checkbox">{{robson_10}}</span></td>
+</tr>
+</tbody>
+</table>
+<p style="margin:10px 0 0;"><b>Kelompok Robson:</b> <span class="field-placeholder" data-type="text" data-label="Kelompok Robson">{{kelompok_robson}}</span> &nbsp; <b>Indikasi seksio sesarea:</b> <span class="field-placeholder" data-type="text" data-label="Indikasi seksio sesarea">{{indikasi_sc}}</span></p>
+<div class="conditional-section" data-cond="robson_5=1" style="margin-top:6px;">
+<p style="margin:0;font-size:9.5pt;font-style:italic;">Kelompok 5 (bekas seksio sesarea) &mdash; rincikan 5.1 atau 5.2 di atas, karena rekap WHO memisahkan keduanya.</p>
+</div>
+<p style="margin:8px 0 0;font-size:8.5pt;color:#333;"><b>Cara pakai:</b> setiap persalinan masuk tepat ke satu kelompok, jadi hanya satu kotak yang dicentang (2a/2b, 4a/4b, dan 5.1/5.2 adalah rincian dari kelompok induknya). Rekapnya dipakai untuk menilai angka seksio sesarea per kelompok, bukan untuk menilai satu pasien.</p>
+<p style="text-align:right;margin-top:16px;">Kota Contoh, <span class="field-placeholder" data-type="date" data-label="Tanggal surat" data-default="date:d F Y">{{tanggal_surat}}</span></p>
+<table style="width:100%;border-collapse:collapse;border:none;">
+<tbody>
+<tr>
+<td style="border:none;width:60%;"></td>
+<td style="border:none;width:40%;text-align:center;vertical-align:top;">
+<div class="ttd-placeholder" data-ttd="petugas" data-label="Petugas yang mengisi," data-nama-field="nama_petugas" data-ttd-modes="image" contenteditable="false">
+<div style="font-size:12pt;margin-bottom:5px;">Petugas yang mengisi,</div>
+<div style="width:100px;height:50px;border:1px dashed #10b981;background:#ecfdf5;margin:0 auto;"></div>
+<div style="font-size:11pt;margin-top:3px;">(..................)</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<p style="border-top:1px solid #bbb;margin-top:20px;padding-top:3px;font-size:8pt;color:#444;">No. Form: <span class="field-placeholder" data-type="text" data-label="Nomor formulir">{{no_form}}</span> &middot; Revisi: <span class="field-placeholder" data-type="text" data-label="Revisi formulir">{{revisi_form}}</span> &middot; Tanggal terbit: <span class="field-placeholder" data-type="date" data-label="Tanggal terbit formulir">{{tanggal_terbit_form}}</span></p>
