@@ -6,6 +6,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Fixed — jarak kosong antara kop dan garis pembatas di contoh (2026-09-28)**
+
+Dilaporkan pemakai: "ada jarak kosong dari header ke garis 2 hr pembatas,
+harusnya tidak ada". Garis itu dibawa paragraf kosong berisi `&nbsp;`, dan
+`&nbsp;` itulah yang menyisakan satu baris teks di atas garisnya — lengkap
+dengan kursor yang bisa mendarat di sana.
+
+Garisnya kini menempel di tabel kop sendiri (`border-bottom`), jadi tidak ada
+elemen tambahan sama sekali.
+
+Sempat dicoba membungkus kopnya dengan `<div>` bergaris: di designer, `div`
+dideklarasikan sebagai elemen INLINE (`custom_elements: '~span,~div'`), jadi
+`div` yang memuat tabel tidak bertahan — ia dibuang beserta gayanya. Catatan itu
+ditinggalkan di sini karena bentuk yang sama akan dicoba orang lain lagi.
+
+Letak cap ikut disesuaikan (dokumennya 6 piksel lebih pendek sesudah paragraf
+itu hilang).
+
 **Fixed — cap di halaman contoh masih meleset, dan keterangannya basi (2026-09-26)**
 
 Dilaporkan pemakai: "kok hasil ezdoc jelek ya di contoh? tapi di generate sudah
