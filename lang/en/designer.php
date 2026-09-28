@@ -126,6 +126,10 @@ return [
         'margin_right' => 'Right',
     ],
     'field' => [
+        'formula_label'       => 'Formula',
+        'formula_placeholder' => 'e.g. score_a + score_b + score_c',
+        'formula_hint'        => 'Names of other fields, with + - * / and parentheses. Empty entries count as zero; if all are empty, the result is empty.',
+        'decimals_label'      => 'Decimals',
         'search_placeholder' => 'Search field (name/label/type)...',
         'clear_search_title' => 'Clear',
         'empty_hint' => 'Click "+ Field" in the editor',
@@ -153,6 +157,7 @@ return [
         'drag_hint' => 'Drag {item} in the editor to change its position',
     ],
     'field_type' => [
+        'calc' => 'Calculated',
         'text' => 'Text',
         'number' => 'Number',
         'date' => 'Date',
@@ -362,6 +367,9 @@ return [
         'used_in_docs_count' => '{used} / {total} doc(s)',
     ],
     'toolbar_insert' => [
+        'field_type_calc' => 'Calculated (formula)',
+        'formula_prompt'  => "Formula (names of other fields):
+Example: score_a + score_b + score_c",
         // Editor toolbar button labels. These were hardcoded in
         // designer_scripts.php, and two of them were Indonesian ("TTD",
         // "Materai") sitting in a library meant to be installed elsewhere —

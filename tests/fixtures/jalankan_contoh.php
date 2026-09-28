@@ -16,6 +16,11 @@ declare(strict_types=1);
 
 $boleh = (($argv[1] ?? 'ya') === 'ya');
 
+// Contoh mana yang dibuka; kosong = yang bawaan.
+if (isset($argv[2]) && $argv[2] !== '') {
+    $_GET['contoh'] = (string) $argv[2];
+}
+
 $akar = dirname(__DIR__, 2);
 
 // Gerbang halaman diuji lewat jalur yang sesungguhnya: daftar peran pengelola

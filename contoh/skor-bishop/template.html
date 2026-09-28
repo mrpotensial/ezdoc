@@ -1,0 +1,86 @@
+<table style="width:100%;border-collapse:collapse;border:none;border-bottom:3px double #000;margin:0 0 16px;">
+<tbody>
+<tr>
+<td style="width:84px;border:none;vertical-align:middle;"><span class="logo-placeholder" data-logo="kop" data-width="68px" contenteditable="false">[Logo: kop]</span></td>
+<td style="border:none;vertical-align:middle;padding:0 0 6px;">
+<p style="margin:0;font-size:16pt;font-weight:bold;letter-spacing:0.5px;">RUMAH SAKIT CONTOH SEJAHTERA</p>
+<p style="margin:0;font-size:9pt;">Jl. Melati No. 12, Kota Contoh 40123 &middot; Telp (021) 555-0100 &middot; rs-contoh.example</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p style="text-align:center;font-size:14pt;font-weight:bold;letter-spacing:1px;text-decoration:underline;margin:0;">LEMBAR SKOR BISHOP</p>
+<p style="text-align:center;margin:2px 0 16px;font-size:9pt;">Kematangan serviks sebelum induksi persalinan</p>
+<table style="border-collapse:collapse;border:none;margin-left:6px;">
+<tbody>
+<tr><td style="border:none;width:150px;">Nama pasien</td><td style="border:none;width:12px;">:</td><td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Nama pasien">{{nama_pasien}}</span></td></tr>
+<tr><td style="border:none;">Nomor rekam medis</td><td style="border:none;">:</td><td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Nomor rekam medis">{{no_rekam_medis}}</span></td></tr>
+<tr><td style="border:none;">Usia kehamilan (minggu)</td><td style="border:none;">:</td><td style="border:none;"><span class="field-placeholder" data-type="number" data-label="Usia kehamilan">{{usia_kehamilan}}</span></td></tr>
+<tr><td style="border:none;">Tanggal / jam periksa</td><td style="border:none;">:</td><td style="border:none;"><span class="field-placeholder" data-type="date" data-label="Tanggal periksa" data-default="date:d F Y">{{tanggal_periksa}}</span> <span class="field-placeholder" data-type="time" data-label="Jam periksa" data-default="time:H:i">{{jam_periksa}}</span></td></tr>
+</tbody>
+</table>
+<p style="margin:16px 0 6px;">Nilai tiap butir 0&ndash;3 sesuai temuan pemeriksaan dalam:</p>
+<table style="width:100%;border-collapse:collapse;">
+<tbody>
+<tr>
+<th style="border:1px solid #000;padding:5px 8px;width:36px;">No</th>
+<th style="border:1px solid #000;padding:5px 8px;">Butir penilaian</th>
+<th style="border:1px solid #000;padding:5px 8px;width:210px;">Acuan nilai</th>
+<th style="border:1px solid #000;padding:5px 8px;width:70px;">Nilai</th>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:5px 8px;text-align:center;">1</td>
+<td style="border:1px solid #000;padding:5px 8px;">Pembukaan serviks</td>
+<td style="border:1px solid #000;padding:5px 8px;font-size:9pt;">0 cm = 0 &middot; 1&ndash;2 = 1 &middot; 3&ndash;4 = 2 &middot; &ge;5 = 3</td>
+<td style="border:1px solid #000;padding:5px 8px;text-align:center;"><span class="field-placeholder" data-type="number" data-label="Pembukaan" data-min="0" data-max="3">{{bishop_pembukaan}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:5px 8px;text-align:center;">2</td>
+<td style="border:1px solid #000;padding:5px 8px;">Pendataran serviks</td>
+<td style="border:1px solid #000;padding:5px 8px;font-size:9pt;">0&ndash;30% = 0 &middot; 40&ndash;50 = 1 &middot; 60&ndash;70 = 2 &middot; &ge;80 = 3</td>
+<td style="border:1px solid #000;padding:5px 8px;text-align:center;"><span class="field-placeholder" data-type="number" data-label="Pendataran" data-min="0" data-max="3">{{bishop_pendataran}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:5px 8px;text-align:center;">3</td>
+<td style="border:1px solid #000;padding:5px 8px;">Penurunan kepala (station)</td>
+<td style="border:1px solid #000;padding:5px 8px;font-size:9pt;">&minus;3 = 0 &middot; &minus;2 = 1 &middot; &minus;1/0 = 2 &middot; +1/+2 = 3</td>
+<td style="border:1px solid #000;padding:5px 8px;text-align:center;"><span class="field-placeholder" data-type="number" data-label="Penurunan" data-min="0" data-max="3">{{bishop_penurunan}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:5px 8px;text-align:center;">4</td>
+<td style="border:1px solid #000;padding:5px 8px;">Konsistensi serviks</td>
+<td style="border:1px solid #000;padding:5px 8px;font-size:9pt;">keras = 0 &middot; sedang = 1 &middot; lunak = 2</td>
+<td style="border:1px solid #000;padding:5px 8px;text-align:center;"><span class="field-placeholder" data-type="number" data-label="Konsistensi" data-min="0" data-max="2">{{bishop_konsistensi}}</span></td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:5px 8px;text-align:center;">5</td>
+<td style="border:1px solid #000;padding:5px 8px;">Posisi serviks</td>
+<td style="border:1px solid #000;padding:5px 8px;font-size:9pt;">posterior = 0 &middot; tengah = 1 &middot; anterior = 2</td>
+<td style="border:1px solid #000;padding:5px 8px;text-align:center;"><span class="field-placeholder" data-type="number" data-label="Posisi" data-min="0" data-max="2">{{bishop_posisi}}</span></td>
+</tr>
+<tr>
+<td colspan="3" style="border:1px solid #000;padding:6px 8px;text-align:right;font-weight:bold;">TOTAL SKOR BISHOP</td>
+<td style="border:1px solid #000;padding:6px 8px;text-align:center;font-weight:bold;font-size:13pt;"><span class="field-placeholder" data-type="calc" data-formula="bishop_pembukaan + bishop_pendataran + bishop_penurunan + bishop_konsistensi + bishop_posisi" data-decimals="0">{{total_bishop}}</span></td>
+</tr>
+</tbody>
+</table>
+<p style="margin:10px 0 0;font-size:9.5pt;">Acuan pembacaan: &le;5 serviks belum matang &middot; 6&ndash;7 meragukan &middot; &ge;8 matang.</p>
+<div class="conditional-section" data-cond="total_bishop&lt;6" style="margin-top:8px;">
+<p style="margin:0;font-size:9.5pt;font-style:italic;">Skor di bawah 6 &mdash; pertimbangkan pematangan serviks lebih dulu sebelum induksi.</p>
+</div>
+<p style="margin:14px 0 0;">Catatan pemeriksa: <span class="field-placeholder" data-type="text" data-label="Catatan pemeriksa">{{catatan}}</span></p>
+<p style="text-align:right;margin-top:20px;">Kota Contoh, <span class="field-placeholder" data-type="date" data-label="Tanggal surat" data-default="date:d F Y">{{tanggal_surat}}</span></p>
+<table style="width:100%;border-collapse:collapse;border:none;">
+<tbody>
+<tr>
+<td style="border:none;width:60%;"></td>
+<td style="border:none;width:40%;text-align:center;vertical-align:top;">
+<div class="ttd-placeholder" data-ttd="pemeriksa" data-label="Dokter / bidan pemeriksa," data-nama-field="nama_pemeriksa" data-ttd-modes="image" data-allowed-roles="dokter,bidan" contenteditable="false">
+<div style="font-size:12pt;margin-bottom:5px;">Dokter / bidan pemeriksa,</div>
+<div style="width:100px;height:50px;border:1px dashed #10b981;background:#ecfdf5;margin:0 auto;"></div>
+<div style="font-size:11pt;margin-top:3px;">(..................)</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>

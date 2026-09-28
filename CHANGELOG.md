@@ -6,6 +6,47 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — field hitung: nilainya dari rumus, bukan diketik (2026-09-28)**
+
+Diminta pemakai untuk lembar skor (Bishop, Flamm & Geiger): "aku lebih suka
+[fitur hitung], sekaligus agar ada fitur baru yang bisa direuse, pastikan
+kompatibel berbagai bentuk, dan bisa digunakan lebih dari 1" — lalu "pastikan
+fitur B bisa diatur via designer juga".
+
+Sebelum ini penjumlahan hanya ada untuk tabel dari kueri database
+(`{{tabledb.ns.sum:…}}`). Isian formulir tidak punya apa pun, jadi totalnya
+diketik ulang orang.
+
+```html
+<span class="field-placeholder" data-type="calc"
+      data-formula="bishop_pembukaan + bishop_pendataran + bishop_penurunan"
+      data-decimals="0">{{total_bishop}}</span>
+```
+
+- **Bahasanya bahasa rumus yang sudah ada** — `Ezdoc\Table\FormulaEvaluator`
+  yang dipakai rumus tabel: `+ - * / ( )`, angka, nama field, tanpa `eval()`.
+  Yang sudah paham rumus tabel tidak perlu belajar lagi.
+- **Diatur dari designer**: toolbar Field → *Hitung (rumus)*, lalu kolom
+  **Rumus** dan **Desimal** di kartu field panel kanan.
+- **Dihitung dua kali, sengaja**: di peramban supaya angkanya berubah saat
+  diketik, dan di server supaya yang tercetak tidak bergantung pada peramban.
+  Ada uji yang menjalankan kasus yang sama lewat kedua sisi.
+- **Boleh lebih dari satu, dan berantai** (dua putaran).
+- **Blok bersyarat boleh membaca hasilnya** — nilai hitung dilengkapi sebelum
+  syarat dievaluasi, kalau tidak `total<6` membandingkan dengan kosong dan
+  kalimat sarannya muncul di dokumen yang skornya 8.
+- Kosong dihitung nol; kalau SEMUA kosong hasilnya kosong (formulir yang belum
+  disentuh tidak boleh tercetak dengan "0" di kolom skor); rumus salah tulis
+  menghasilkan kosong, bukan pesan galat di kertas pasien.
+
+Contoh barunya: `contoh/skor-bishop/` — lembar Skor Bishop dengan lima butir
+angka, satu field hitung, dan satu blok bersyarat yang membaca hasilnya.
+Halaman Contoh sekarang punya pemilih contoh, dan contoh yang tidak lahir dari
+selembar kertas tampil tanpa panel "Dokumen asal".
+
+Dokumentasi: `docs/FIELD-HITUNG.md`. 17 uji baru; alurnya dicoba di Chrome
+sungguhan (ketik → angkanya berubah → kalimat bersyarat ikut muncul).
+
 **Fixed — jarak kosong antara kop dan garis pembatas di contoh (2026-09-28)**
 
 Dilaporkan pemakai: "ada jarak kosong dari header ke garis 2 hr pembatas,

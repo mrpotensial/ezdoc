@@ -110,6 +110,10 @@ if (isset($configTampil['logos']) && is_array($configTampil['logos'])) {
 }
 $configTeks = json_encode($configTampil, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
+$daftarContoh = \Ezdoc\Template\Contoh::daftar();
+// Tidak semua contoh lahir dari selembar kertas. Yang memperagakan satu fitur
+// tidak punya dokumen asal — dan panel "Dokumen asal" yang kosong lebih
+// membingungkan daripada tidak ada.
 $gambarUri = ($contoh['gambar'] !== '' && is_file($contoh['gambar']))
     ? 'data:image/jpeg;base64,' . base64_encode((string) file_get_contents($contoh['gambar']))
     : '';
@@ -178,6 +182,15 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
         <div class="flex flex-wrap items-start justify-between gap-3">
             <h1 class="text-xl font-semibold tracking-tight text-gray-900">Contoh konversi dokumen</h1>
             <div class="flex flex-wrap items-center gap-2">
+                <?php if (count($daftarContoh) > 1): ?>
+                    <select onchange="location.href=this.value"
+                            class="rounded border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-700">
+                        <?php foreach ($daftarContoh as $slug => $nama):
+                            $u = $base . $join . $qk . '=contoh&contoh=' . rawurlencode($slug); ?>
+                            <option value="<?= h($u) ?>" <?= $slug === $contoh['slug'] ? 'selected' : '' ?>><?= h($nama) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                <?php endif; ?>
                 <a href="<?= h($urlDesigner) ?>"
                    class="inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
                     Buka di Designer
@@ -207,7 +220,8 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
     </header>
 
     <!-- ── Dua sisi: kertas dan hasilnya ─────────────────────────────── -->
-    <div class="grid gap-5 lg:grid-cols-2">
+    <div class="grid gap-5 <?= $gambarUri !== '' ? 'lg:grid-cols-2' : '' ?>">
+        <?php if ($gambarUri !== ''): ?>
         <div class="min-w-0 rounded-lg border border-gray-200 bg-white">
             <div class="flex items-baseline justify-between border-b border-gray-100 px-4 py-2.5">
                 <h2 class="text-sm font-semibold text-gray-900">1 · Dokumen asal</h2>
@@ -231,10 +245,11 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
                 <p class="mt-2 text-[11px] text-gray-500">Klik nomornya untuk melompat ke penjelasan.</p>
             </div>
         </div>
+        <?php endif; ?>
 
         <div class="min-w-0 rounded-lg border border-gray-200 bg-white">
             <div class="flex items-baseline justify-between border-b border-gray-100 px-4 py-2.5">
-                <h2 class="text-sm font-semibold text-gray-900">2 · Hasil ezdoc</h2>
+                <h2 class="text-sm font-semibold text-gray-900"><?= $gambarUri !== '' ? '2 · Hasil ezdoc' : 'Hasil ezdoc' ?></h2>
                 <span class="text-[11px] text-gray-500">dirender perender yang mencetak dokumen</span>
             </div>
             <div class="p-3">
@@ -261,7 +276,7 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
     <!-- ── Peta fitur ────────────────────────────────────────────────── -->
     <div class="rounded-lg border border-gray-200 bg-white">
         <div class="border-b border-gray-100 px-4 py-2.5">
-            <h2 class="text-sm font-semibold text-gray-900">3 · Bagian kertas → fitur ezdoc</h2>
+            <h2 class="text-sm font-semibold text-gray-900"><?= $gambarUri !== '' ? '3 · Bagian kertas → fitur ezdoc' : 'Fitur yang dipakai' ?></h2>
         </div>
         <div class="divide-y divide-gray-100">
             <?php foreach ($peta as $p): ?>

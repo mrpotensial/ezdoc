@@ -1061,6 +1061,10 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
 
     // ===== CONDITIONAL SECTIONS (#7) =====
     // Strip blocks where condition fails; keep inner content of blocks where it passes.
+    // Nilai field hitung dilengkapi DULU: syarat seperti `total<6` membaca peta
+    // nilai, dan yang dihitung belum ada di sana sampai baris ini.
+    $dbFields = \Ezdoc\Format\CalcField::lengkapiNilai($html, $dbFields);
+
     $html = processConditionalSections($html, $dbFields);
 
     // Replace field placeholders with value text for PDF
@@ -1080,6 +1084,22 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
         // If no saved value, use resolved default
         if ($val === '' && $default !== '') {
             $val = resolveDefault($default);
+        }
+
+        // Field hitung: nilainya dihitung ulang dari isian yang lain, bukan
+        // dibaca dari yang tersimpan. Yang tersimpan hasil hitungan peramban —
+        // dan yang tercetak tidak boleh bergantung pada peramban siapa pun.
+        if ($type === 'calc') {
+            $rumus = '';
+            $desimal = 0;
+            if (preg_match('/data-formula=["\']([^"\']*)["\']/', $attrs, $fm)) {
+                $rumus = html_entity_decode($fm[1], ENT_QUOTES, 'UTF-8');
+            }
+            if (preg_match('/data-decimals=["\'](\d+)["\']/', $attrs, $dcm)) {
+                $desimal = (int) $dcm[1];
+            }
+            $val = (string) (\Ezdoc\Format\CalcField::hitung($rumus, $dbFields, $desimal) ?? '');
+            $type = 'number';
         }
 
         return renderFieldForPdf($name, $type, $val, $label);

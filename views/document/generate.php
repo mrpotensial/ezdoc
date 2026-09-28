@@ -1331,9 +1331,27 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             $val = h(resolveDefault($default));
         }
 
+        // ── Field hitung ──
+        // Nilainya milik rumusnya, bukan milik yang mengetik. Dihitung di sini
+        // supaya yang tercetak tidak pernah bergantung pada JavaScript; sisi
+        // peramban menghitung ulang yang sama saat isiannya berubah.
+        $hitung = [];
+        if ($type === 'calc') {
+            $rumus = '';
+            $desimal = 0;
+            if (preg_match('/data-formula=["\']([^"\']*)["\']/', $attrs, $fm)) {
+                $rumus = html_entity_decode($fm[1], ENT_QUOTES, 'UTF-8');
+            }
+            if (preg_match('/data-decimals=["\'](\d+)["\']/', $attrs, $dcm)) {
+                $desimal = (int) $dcm[1];
+            }
+            $hitung = ['formula' => $rumus, 'decimals' => $desimal];
+            $val = h((string) (\Ezdoc\Format\CalcField::hitung($rumus, $GLOBALS['dbFields'] ?? [], $desimal) ?? ''));
+        }
+
         $isFrozen = $frozenFields === null || isset($frozenFields[$name]);
 
-        return renderFieldInput($name, $type, $val, $options, $label, $validation, $isFrozen);
+        return renderFieldInput($name, $type, $val, $options, $label, $validation, $isFrozen, $hitung);
     }, $html);
 
     // Handle bare {{field}} without span wrapper (fallback) - text type
@@ -1429,8 +1447,8 @@ function freezeFieldHtml(string $html, string $title): string
 // ditolak guard §7b. Dirender tidak bisa diedit supaya penolakan itu tidak
 // datang sebagai kejutan setelah petugas mengetik. Batas sebenarnya tetap di
 // sisi simpan — ini keterlihatan, bukan keamanan.
-function renderFieldInput($name, $type, $val, $options, $label, $validation = [], $frozen = false) {
-    $html = renderFieldInputRaw($name, $type, $val, $options, $label, $validation);
+function renderFieldInput($name, $type, $val, $options, $label, $validation = [], $frozen = false, $hitung = []) {
+    $html = renderFieldInputRaw($name, $type, $val, $options, $label, $validation, $hitung);
 
     if (!$frozen) {
         return $html;
@@ -1446,7 +1464,7 @@ function renderFieldInput($name, $type, $val, $options, $label, $validation = []
     );
 }
 
-function renderFieldInputRaw($name, $type, $val, $options, $label, $validation = []) {
+function renderFieldInputRaw($name, $type, $val, $options, $label, $validation = [], $hitung = []) {
     $hName = h($name);
     $hVal = h($val);
 
@@ -1460,6 +1478,16 @@ function renderFieldInputRaw($name, $type, $val, $options, $label, $validation =
     $reqMark = !empty($validation['required']) ? '<span class="field-required-mark" title="' . h(t('validation.required', [], 'Required')) . '">*</span>' : '';
 
     switch ($type) {
+        case 'calc':
+            // Tidak bisa diketik — nilainya hasil rumus. Rumusnya ikut dibawa
+            // ke layar supaya sisi peramban bisa menghitung ulang saat isian
+            // yang dirujuk berubah, tanpa bertanya ke server.
+            return '<span class="f-wrap"' . $vAttrs . '><span class="f field-calc" data-field="' . $hName . '"'
+                . ' data-calc-formula="' . h((string) ($hitung['formula'] ?? '')) . '"'
+                . ' data-calc-decimals="' . (int) ($hitung['decimals'] ?? 0) . '"'
+                . ' title="' . h(t('field.calc_title', [], 'Filled automatically from a formula')) . '">'
+                . ($hVal ?: '') . '</span><input type="hidden" name="' . $hName . '" value="' . $hVal . '">' . $reqMark . '</span>';
+
         case 'number':
             // Filter non-numeric on input (contenteditable tidak respect type="number").
             // Allowed: digits + optional decimal point + leading minus (industri standard).

@@ -145,6 +145,7 @@ return [
         'materai_serial'    => 'No. Seri (opsional)',
     ],
     'field' => [
+        'calc_title' => 'Terisi sendiri dari rumus',
         'select_placeholder' => '-- Pilih --',
     ],
     'save' => [

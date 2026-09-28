@@ -135,6 +135,167 @@
             });
         });
 
+
+        // ═══════════════ FIELD HITUNG ═══════════════
+        //
+        // Field yang nilainya rumus, bukan ketikan: skor Bishop yang
+        // menjumlahkan butirnya, total biaya, selisih dua angka.
+        //
+        // Dihitung DUA KALI dengan sengaja: di sini supaya angkanya berubah saat
+        // isiannya diketik, dan di server saat dicetak supaya yang tercetak tidak
+        // pernah bergantung pada peramban. Keduanya memakai tata bahasa yang
+        // sama — `+ - * / ( )`, angka, dan nama field — dan ada uji yang
+        // menjalankan kasus yang sama lewat kedua sisi.
+        //
+        // Nilai yang kosong dihitung nol; kalau SEMUA yang dirujuk kosong,
+        // hasilnya kosong (formulir yang belum disentuh tidak boleh tercetak
+        // dengan "0" di kolom skor). Aturan yang sama persis dengan
+        // Ezdoc\Format\CalcField.
+
+        /** Nilai satu field, dibaca dari formulirnya. */
+        function _nilaiFieldHitung(nama) {
+            const kotak = document.querySelector('input[type="checkbox"][name="' + CSS.escape(nama) + '"]');
+            if (kotak) return kotak.checked ? '1' : '';
+            const radio = document.querySelector('input[type="radio"][name="' + CSS.escape(nama) + '"]:checked');
+            if (radio) return radio.value || '';
+            const el = document.querySelector('[name="' + CSS.escape(nama) + '"]');
+            if (el) return (el.value || '').trim();
+            const tulis = document.querySelector('.f[data-field="' + CSS.escape(nama) + '"]');
+            return tulis ? (tulis.innerText || '').trim() : '';
+        }
+
+        /** Tata bahasa yang sama dengan FormulaEvaluator di sisi server. */
+        function _pecahRumus(rumus) {
+            const token = [];
+            let i = 0;
+            while (i < rumus.length) {
+                const c = rumus[i];
+                if (c === ' ' || c === '\t' || c === '\n' || c === '{' || c === '}') { i++; continue; }
+                if ('+-*/()'.indexOf(c) !== -1) { token.push({ j: 'op', v: c }); i++; continue; }
+                if (c >= '0' && c <= '9') {
+                    let n = '';
+                    while (i < rumus.length && ((rumus[i] >= '0' && rumus[i] <= '9') || rumus[i] === '.')) { n += rumus[i++]; }
+                    token.push({ j: 'angka', v: parseFloat(n) });
+                    continue;
+                }
+                if (/[a-zA-Z_]/.test(c)) {
+                    let n = '';
+                    while (i < rumus.length && /[a-zA-Z0-9_]/.test(rumus[i])) { n += rumus[i++]; }
+                    token.push({ j: 'field', v: n });
+                    continue;
+                }
+                return null; // huruf yang tidak dikenal: rumusnya salah tulis
+            }
+            return token;
+        }
+
+        function _hitungRumus(rumus, ambilNilai) {
+            const token = _pecahRumus(rumus);
+            if (!token || !token.length) return null;
+
+            const prioritas = { '+': 1, '-': 1, '*': 2, '/': 2 };
+            const keluar = [];
+            const tumpuk = [];
+            for (const t of token) {
+                if (t.j === 'angka') { keluar.push(t); continue; }
+                if (t.j === 'field') { keluar.push(t); continue; }
+                if (t.v === '(') { tumpuk.push(t.v); continue; }
+                if (t.v === ')') {
+                    while (tumpuk.length && tumpuk[tumpuk.length - 1] !== '(') keluar.push({ j: 'op', v: tumpuk.pop() });
+                    if (!tumpuk.length) return null; // kurung tidak seimbang
+                    tumpuk.pop();
+                    continue;
+                }
+                while (tumpuk.length && tumpuk[tumpuk.length - 1] !== '('
+                    && prioritas[tumpuk[tumpuk.length - 1]] >= prioritas[t.v]) {
+                    keluar.push({ j: 'op', v: tumpuk.pop() });
+                }
+                tumpuk.push(t.v);
+            }
+            while (tumpuk.length) {
+                const sisa = tumpuk.pop();
+                if (sisa === '(') return null;
+                keluar.push({ j: 'op', v: sisa });
+            }
+
+            const nilai = [];
+            for (const t of keluar) {
+                if (t.j === 'angka') { nilai.push(t.v); continue; }
+                if (t.j === 'field') {
+                    const v = ambilNilai(t.v);
+                    nilai.push(v === null ? 0 : v);
+                    continue;
+                }
+                if (nilai.length < 2) return null;
+                const b = nilai.pop();
+                const a = nilai.pop();
+                if (t.v === '+') nilai.push(a + b);
+                else if (t.v === '-') nilai.push(a - b);
+                else if (t.v === '*') nilai.push(a * b);
+                else { if (b === 0) return null; nilai.push(a / b); }
+            }
+            return nilai.length === 1 && isFinite(nilai[0]) ? nilai[0] : null;
+        }
+
+        /**
+         * Hitung ulang semua field hitung di halaman ini.
+         *
+         * Dua putaran: sebuah field hitung boleh merujuk field hitung lain, dan
+         * yang dirujuk belum tentu berada lebih dulu di halaman. Aturan yang
+         * sama dengan sisi server (CalcField::lengkapiNilai).
+         */
+        function terapkanFieldHitung() {
+            _hitungSatuPutaran();
+            _hitungSatuPutaran();
+            // Blok bersyarat sering membaca hasil hitungan ("skor < 6"), jadi ia
+            // diperbarui SESUDAH angkanya berubah — bukan menunggu pewaktunya
+            // sendiri, yang urutannya cuma kebetulan.
+            if (typeof applyConditionalSections === 'function') applyConditionalSections();
+        }
+
+        function _hitungSatuPutaran() {
+            document.querySelectorAll('.field-calc[data-calc-formula]').forEach(function (el) {
+                const rumus = el.getAttribute('data-calc-formula') || '';
+                const desimal = Math.max(0, Math.min(6, parseInt(el.getAttribute('data-calc-decimals') || '0', 10) || 0));
+                if (!rumus.trim()) return;
+
+                let adaIsi = false;
+                const ambil = function (nama) {
+                    let mentah = _nilaiFieldHitung(nama);
+                    if (mentah !== '' && isNaN(Number(mentah))) {
+                        mentah = ['ya', 'yes', 'true', 'on'].indexOf(String(mentah).toLowerCase()) !== -1 ? '1' : '';
+                    }
+                    if (mentah === '') return 0;
+                    adaIsi = true;
+                    return Number(mentah);
+                };
+
+                const hasil = _hitungRumus(rumus, ambil);
+                const teks = (!adaIsi || hasil === null) ? '' : hasil.toFixed(desimal);
+
+                if ((el.innerText || '') !== teks) el.innerText = teks;
+                const tersembunyi = el.nextElementSibling;
+                if (tersembunyi && tersembunyi.type === 'hidden' && tersembunyi.value !== teks) {
+                    tersembunyi.value = teks;
+                }
+            });
+        }
+
+        // Field hitung ikut jalur yang sama: satu perubahan isian, satu
+        // perhitungan ulang.
+        document.addEventListener('DOMContentLoaded', function () {
+            terapkanFieldHitung();
+            let _hitungTimer = null;
+            const picu = function () {
+                clearTimeout(_hitungTimer);
+                _hitungTimer = setTimeout(terapkanFieldHitung, 120);
+            };
+            document.querySelectorAll('.f[data-field], input[name], select[name]').forEach(function (el) {
+                el.addEventListener('input', picu);
+                el.addEventListener('change', picu);
+            });
+        });
+
         // ===== DIRTY STATE TRACKING (#22 unsaved changes indicator) =====
         let isDirty = false;
         const ORIG_TITLE = document.title;

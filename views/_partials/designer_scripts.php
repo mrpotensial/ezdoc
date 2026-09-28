@@ -2523,7 +2523,8 @@
                             { type: 'menuitem', text: t('field_type.time', {}, 'Time'), onAction: () => insertFieldPrompt('time') },
                             { type: 'menuitem', text: t('field_type.checkbox', {}, 'Checkbox'), onAction: () => insertFieldPrompt('checkbox') },
                             { type: 'menuitem', text: t('toolbar_insert.field_type_radio', {}, 'Radio (single choice)'), onAction: () => insertFieldPrompt('radio') },
-                            { type: 'menuitem', text: t('toolbar_insert.field_type_select', {}, 'Select (dropdown)'), onAction: () => insertFieldPrompt('select') }
+                            { type: 'menuitem', text: t('toolbar_insert.field_type_select', {}, 'Select (dropdown)'), onAction: () => insertFieldPrompt('select') },
+                            { type: 'menuitem', text: t('toolbar_insert.field_type_calc', {}, 'Calculated (formula)'), onAction: () => insertFieldPrompt('calc') }
                         ]);
                     }
                 });
@@ -2549,6 +2550,16 @@
                     }
 
                     // Ask for default value
+                    // Field hitung: yang ditanyakan rumusnya, bukan nilai bawaannya —
+                    // nilainya memang tidak pernah diketik orang.
+                    if (fieldType === 'calc') {
+                        const rumus = prompt(t('toolbar_insert.formula_prompt', {}, 'Formula (names of other fields):\nExample: skor_a + skor_b + skor_c'), '');
+                        if (rumus === null || rumus.trim() === '') return;
+                        const rumusBersih = rumus.trim().replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        editor.insertContent(`<span class="field-placeholder" data-type="calc" data-formula="${rumusBersih}" data-decimals="0">{{${cleanName}}}</span>&nbsp;`);
+                        return;
+                    }
+
                     const defaultVal = prompt(t('toolbar_insert.default_value_prompt', {}, 'Default value (leave empty if none):\nExample: plain text, date:d F Y, $author_nama'), '') || '';
 
                     let attrs = `data-type="${fieldType}"`;
@@ -3698,6 +3709,14 @@
                 const defaultMatch = attrs.match(/data-default="([^"]+)"/);
                 if (defaultMatch) defaultVal = defaultMatch[1].replace(/&quot;/g, '"');
 
+                // Field hitung: rumus + jumlah desimalnya.
+                let formula = '';
+                const formulaMatch = attrs.match(/data-formula="([^"]*)"/);
+                if (formulaMatch) formula = formulaMatch[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+                let decimals = '';
+                const decimalsMatch = attrs.match(/data-decimals="(\d+)"/);
+                if (decimalsMatch) decimals = decimalsMatch[1];
+
                 // Validation attributes (#6)
                 const required = /data-required="1"/.test(attrs);
                 const minMatch = attrs.match(/data-min="([^"]+)"/);
@@ -3709,7 +3728,7 @@
                 const pattern = patternMatch ? patternMatch[1].replace(/&quot;/g, '"') : '';
                 const errorMsg = errMsgMatch ? errMsgMatch[1].replace(/&quot;/g, '"') : '';
 
-                fieldData.push({ name, type, options, label, defaultVal, required, min, max, pattern, errorMsg });
+                fieldData.push({ name, type, options, label, defaultVal, formula, decimals, required, min, max, pattern, errorMsg });
             }
 
             renderFieldPanel(fieldData);
@@ -3800,6 +3819,8 @@
             list.innerHTML = fields.map((field, i) => {
                 const needsOptions = ['radio', 'select'].includes(field.type);
                 const needsLabel = ['checkbox'].includes(field.type);
+                // Field hitung tidak punya nilai bawaan — nilainya rumusnya.
+                const needsFormula = field.type === 'calc';
                 const badgeCls = typeBadgeClasses[field.type] || typeBadgeClasses['text'];
                 const headerBg  = typeHeaderBg[field.type] || typeHeaderBg['text'];
                 const accentCls = typeAccent[field.type] || typeAccent['text'];
@@ -3809,6 +3830,8 @@
                 const eLabel = escapeHtml(field.label || '');
                 const eOptions = escapeHtml(field.options || '');
                 const eDefault = escapeHtml(field.defaultVal || '');
+                const eFormula = escapeHtml(field.formula || '');
+                const eDecimals = escapeHtml(field.decimals || '0');
 
                 const searchText = (eName + ' ' + (field.label || '') + ' ' + field.type).toLowerCase();
                 return `
@@ -3838,14 +3861,35 @@
                                     <option value="checkbox" ${field.type === 'checkbox' ? 'selected' : ''}>${t('field_type.checkbox', {}, 'Checkbox')}</option>
                                     <option value="radio" ${field.type === 'radio' ? 'selected' : ''}>${t('field_type.radio', {}, 'Radio')}</option>
                                     <option value="select" ${field.type === 'select' ? 'selected' : ''}>${t('field_type.select', {}, 'Select')}</option>
+                                    <option value="calc" ${field.type === 'calc' ? 'selected' : ''}>${t('field_type.calc', {}, 'Calculated')}</option>
                                 </select>
                             </div>
                         </div>
+                        ${needsFormula ? `
+                        <!-- Field hitung: rumus + desimal -->
+                        <div class="grid grid-cols-4 gap-1.5">
+                            <div class="col-span-3">
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field.formula_label', {}, 'Formula')}</label>
+                                <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 font-mono"
+                                       value="${eFormula}"
+                                       placeholder="${t('field.formula_placeholder', {}, 'e.g. skor_a + skor_b + skor_c')}"
+                                       onchange="updateFieldFormula('${eName}', this.value)">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field.decimals_label', {}, 'Decimals')}</label>
+                                <input type="number" min="0" max="6" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1"
+                                       value="${eDecimals}"
+                                       onchange="updateFieldDecimals('${eName}', this.value)">
+                            </div>
+                        </div>
+                        <p class="text-[10px] leading-relaxed text-gray-500">${t('field.formula_hint', {}, 'Names of other fields, with + - * / and parentheses. Empty entries count as zero.')}</p>
+                        ` : `
                         <!-- Row 2: Default value — full width -->
                         <div>
                             <label class="block text-[10px] font-medium text-gray-500 mb-0.5 uppercase tracking-wide">${t('field.default_label', {}, 'Default')}</label>
                             <input type="text" class="w-full rounded border-gray-300 shadow-sm focus:border-gray-500 focus:ring-1 focus:ring-gray-400 text-xs px-2 py-1 bg-white" value="${eDefault}" onchange="updateFieldDefault('${eName}', this.value)" placeholder="text, date:d F Y, time:H:i, \$author_nama">
                         </div>
+                        `}
                         <!-- Row 3: Conditional (Label / Opsi) -->
                         ${needsLabel ? `
                         <div>
@@ -4059,6 +4103,49 @@
                 // Add new data-default (only if not empty)
                 const defaultAttr = escapedDefault ? ` data-default="${escapedDefault}"` : '';
                 return `<span${classAttr}${restAttrs}${defaultAttr}>{{${name}}}</span>`;
+            });
+
+            editor.setContent(content);
+            scanFieldPlaceholders();
+        }
+
+        /**
+         * Rumus field hitung.
+         *
+         * Ditulis ke atribut `data-formula` pada penandanya — satu tempat yang
+         * sama dengan yang dibaca perender layar dan perender PDF, jadi tidak
+         * ada salinan kedua yang bisa menyimpang.
+         */
+        function updateFieldFormula(name, formula) {
+            const editor = tinymce.get('editor');
+            if (!editor) return;
+
+            const bersih = (formula || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            let content = editor.getContent();
+            const regex = new RegExp(`<span([^>]*class="[^"]*field-placeholder[^"]*")([^>]*)>\\{\\{${name}\\}\\}<\\/span>`, 'g');
+
+            content = content.replace(regex, (match, classAttr, restAttrs) => {
+                restAttrs = restAttrs.replace(/\s*data-formula="[^"]*"/g, '');
+                const attr = bersih.trim() ? ` data-formula="${bersih}"` : '';
+                return `<span${classAttr}${restAttrs}${attr}>{{${name}}}</span>`;
+            });
+
+            editor.setContent(content);
+            scanFieldPlaceholders();
+        }
+
+        /** Berapa angka di belakang koma yang dicetak field hitung. */
+        function updateFieldDecimals(name, decimals) {
+            const editor = tinymce.get('editor');
+            if (!editor) return;
+
+            const angka = Math.max(0, Math.min(6, parseInt(decimals, 10) || 0));
+            let content = editor.getContent();
+            const regex = new RegExp(`<span([^>]*class="[^"]*field-placeholder[^"]*")([^>]*)>\\{\\{${name}\\}\\}<\\/span>`, 'g');
+
+            content = content.replace(regex, (match, classAttr, restAttrs) => {
+                restAttrs = restAttrs.replace(/\s*data-decimals="[^"]*"/g, '');
+                return `<span${classAttr}${restAttrs} data-decimals="${angka}">{{${name}}}</span>`;
             });
 
             editor.setContent(content);

@@ -127,6 +127,10 @@ return [
         'margin_right'         => 'Kanan',
     ],
     'field' => [
+        'formula_label'       => 'Rumus',
+        'formula_placeholder' => 'mis. skor_a + skor_b + skor_c',
+        'formula_hint'        => 'Nama field lain, dengan + - * / dan kurung. Isian kosong dihitung nol; kalau semuanya kosong, hasilnya kosong.',
+        'decimals_label'      => 'Desimal',
         'search_placeholder'  => 'Cari field (nama/label/tipe)...',
         'clear_search_title'  => 'Clear',
         'empty_hint'          => 'Klik "+ Field" di editor',
@@ -154,6 +158,7 @@ return [
         'drag_hint' => 'Drag {item} di editor untuk ubah posisi',
     ],
     'field_type' => [
+        'calc' => 'Hitung',
         'text'     => 'Text',
         'number'   => 'Number',
         'date'     => 'Date',
@@ -363,6 +368,9 @@ return [
         'used_in_docs_count'          => '{used} / {total} dok',
     ],
     'toolbar_insert' => [
+        'field_type_calc' => 'Hitung (rumus)',
+        'formula_prompt'  => "Rumus (nama field lain):
+Contoh: skor_a + skor_b + skor_c",
         // Label tombol toolbar editor. Dulu hardcoded di designer_scripts.php,
         // dan dua di antaranya bahasa Indonesia di dalam library yang
         // dimaksudkan untuk dipasang orang lain. Di sini justru tempatnya.

@@ -127,6 +127,7 @@ return [
         'materai_serial' => 'Serial No. (optional)',
     ],
     'field' => [
+        'calc_title' => 'Filled automatically from a formula',
         'select_placeholder' => '-- Select --',
     ],
     'save' => [
