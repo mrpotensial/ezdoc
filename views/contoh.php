@@ -34,7 +34,7 @@ if (function_exists('ezdoc_can_manage_templates') && !ezdoc_can_manage_templates
 $slugContoh = isset($_GET['contoh']) && is_string($_GET['contoh'])
     ? $_GET['contoh']
     : \Ezdoc\Template\Contoh::BAWAAN;
-$contoh = \Ezdoc\Template\Contoh::muat($slugContoh);
+$contoh = \Ezdoc\Template\Contoh::muat($slugContoh, $config);
 
 if ($contoh === null) {
     ?>

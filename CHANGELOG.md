@@ -6,6 +6,35 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — kop contoh datang dari konfigurasi (2026-09-28)**
+
+Diminta pemakai: "kopnya apa tidak bisa langsung [pakai milik saya]? atau kita
+tambahkan konfigurasi ... agar defaultnya berubah nama, logo, alamat", lalu
+diperjelas: "maksudku agar contoh muncul sebagai hasil konfigurasi, tapi berkas
+contohnya tetap netral".
+
+```php
+'letterhead.name'    => 'NAMA ORGANISASI ANDA',
+'letterhead.address' => ['Baris satu', 'Baris dua'],   // string juga boleh
+'letterhead.city'    => 'Kota',                        // di atas tanda tangan
+'letterhead.logo'    => __DIR__ . '/logo.png',         // atau data URI
+```
+
+- Berkas contoh tetap memakai kop karangan — pustaka ini dipakai lebih dari
+  satu tempat, dan nama sungguhan di dalamnya membuat contohnya salah untuk
+  semua pemakai lain.
+- Yang diganti tiga penanda di template (`ezdoc-kop-nama`, `ezdoc-kop-alamat`,
+  `ezdoc-kop-kota`) plus logo `kop` di pengaturan halaman. Penggantian terjadi
+  saat contohnya dimuat, jadi yang tampil di layar DAN yang tersimpan jadi
+  template adalah kop pemakainya — kalau cuma tampil, template hasil simpan
+  membawa kop karangan dan baru ketahuan di kertas.
+- Teks dari konfigurasi di-escape sebelum disisipkan: ia berakhir di dokumen
+  yang dibaca orang lain, dan template hasil simpan menyimpannya selamanya.
+- Logo ikut tertanam di tiap template dan tiap dokumen, jadi berkas yang lebih
+  lebar dari 400 piksel dikecilkan otomatis (logo 1414 piksel 448 KB → 104 KB).
+  Tanpa GD, berkas aslinya dipakai apa adanya.
+- Tanpa konfigurasi, contohnya tetap terbuka — kopnya karangan.
+
 **Added — empat form obstetri jadi contoh siap simpan (2026-09-28)**
 
 Diminta pemakai: "update cetak_form_pemeriksaan_panggul.php agar jadi template

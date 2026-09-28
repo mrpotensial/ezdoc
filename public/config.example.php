@@ -41,6 +41,20 @@ return [
     // Bahasa ISI dokumen — tanggal ("22 Agustus 2026") dan angka ("1.500")
     // di dokumen, cetakan, dan arsip PDF bekunya. Kosong = ikut app.locale.
     // 'document.locale' => 'id',
+
+    // ── Kop surat organisasi ──
+    //
+    // Dibaca contoh template (?ezdoc_page=contoh). Berkas contoh di folder
+    // `contoh/` sengaja memakai kop karangan supaya pustaka ini tidak memihak
+    // satu organisasi pun; nilai di bawah inilah yang menggantikannya — di
+    // layar, di cetakan, dan di template yang disimpan dari contoh itu.
+    //
+    // Tanpa ini contohnya tetap terbuka, cuma kopnya karangan.
+    //
+    // 'letterhead.name'    => 'NAMA ORGANISASI ANDA',
+    // 'letterhead.address' => 'Alamat satu baris',   // larik = beberapa baris
+    // 'letterhead.city'    => 'Kota',                // dipakai di atas tanda tangan
+    // 'letterhead.logo'    => __DIR__ . '/logo.png', // atau data URI
 ];
 
 // ── Cara 2: serahkan pemuatan bootstrap ke App ──────────────────────────────

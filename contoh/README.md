@@ -69,10 +69,8 @@ pengaturan halaman verifikasi ikut semua.
 
 Yang perlu diperiksa sesudahnya:
 
-1. **Kop** — contoh memakai kop karangan ("Rumah Sakit Contoh Sejahtera").
-   Ganti logo dan dua baris teks di bagian atas template dengan milik Anda.
-2. **Kueri tabel** — nama tabel dan kolom di SQL-nya masih milik contoh.
-3. **`data-allowed-roles`** pada tanda tangan — sesuaikan dengan peran di
+1. **Kueri tabel** — nama tabel dan kolom di SQL-nya masih milik contoh.
+2. **`data-allowed-roles`** pada tanda tangan — sesuaikan dengan peran di
    aplikasi Anda.
 
 Yang dijaga tombol itu: ia hanya **menambah**, tidak pernah mengubah template
@@ -81,6 +79,28 @@ digandakan diam-diam).
 
 Di designer, yang tersimpan adalah **yang sedang di layar** — jadi rancangannya
 boleh dirapikan dulu di sana sebelum ditekan.
+
+## Kop surat
+
+Berkas contoh di sini memakai kop **karangan** ("Rumah Sakit Contoh
+Sejahtera"), supaya pustaka ini tidak memihak satu organisasi pun. Kop
+sungguhan datang dari konfigurasi mount aplikasi:
+
+```php
+'letterhead.name'    => 'NAMA ORGANISASI ANDA',
+'letterhead.address' => ['Baris satu', 'Baris dua'],   // string juga boleh
+'letterhead.city'    => 'Kota',                        // di atas tanda tangan
+'letterhead.logo'    => __DIR__ . '/logo.png',         // atau data URI
+```
+
+Yang diganti adalah tiga penanda di dalam template — `ezdoc-kop-nama`,
+`ezdoc-kop-alamat`, `ezdoc-kop-kota` — plus logo `kop` di pengaturan halaman.
+Penggantian terjadi saat contohnya dimuat, jadi yang tampil di layar dan yang
+tersimpan jadi template adalah kop Anda. Tanpa konfigurasi itu, contohnya tetap
+terbuka dengan kop karangan.
+
+Logo ikut tertanam di tiap template yang dibuat dari contoh, jadi berkas yang
+lebih lebar dari 400 piksel dikecilkan otomatis saat dibaca.
 
 ## Membuat contoh baru
 

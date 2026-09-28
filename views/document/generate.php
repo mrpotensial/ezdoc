@@ -288,7 +288,7 @@ if ($template_id <= 0 && $contohSlug === '') {
 // Load template — pakai alias supaya kode rendering existing tetap works
 $template = null;
 if ($contohSlug !== '') {
-    $template = \Ezdoc\Template\Contoh::muat($contohSlug);
+    $template = \Ezdoc\Template\Contoh::muat($contohSlug, $config);
 
     // Boleh DICOBA, tapi tidak menyentuh server.
     //

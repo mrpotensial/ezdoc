@@ -180,7 +180,7 @@ $template = null;
 if ($contohSlug !== '') {
     // Berkas, bukan baris database. Bentuknya sama dengan baris template, jadi
     // sisa halaman ini tidak perlu tahu contohnya datang dari mana.
-    $template = \Ezdoc\Template\Contoh::muat($contohSlug);
+    $template = \Ezdoc\Template\Contoh::muat($contohSlug, $config);
     if ($template === null) {
         header("Location: " . $urlList);
         exit;

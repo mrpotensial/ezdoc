@@ -216,7 +216,7 @@ final class ContohDiGenerateTest extends TestCase
     {
         $sumber = self::sumberGenerate();
 
-        self::assertStringContainsString('\Ezdoc\Template\Contoh::muat($contohSlug)', $sumber, 'templatenya harus datang dari pemuat berkas');
+        self::assertStringContainsString('\Ezdoc\Template\Contoh::muat($contohSlug', $sumber, 'templatenya harus datang dari pemuat berkas');
         self::assertStringContainsString("\$GLOBALS['ezdocModeContoh'] = true;", $sumber);
         self::assertStringContainsString("'/\\s+data-(require-otp|otp-phone-source|otp-ttl)=\"[^\"]*\"/", $sumber, 'OTP harus dilucuti di mode contoh');
     }

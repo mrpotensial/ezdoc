@@ -38,7 +38,9 @@ global $author_id;
 ezdoc_require_manage_templates('Tidak berhak menyimpan template');
 
 $slug = trim((string) ($_POST['contoh'] ?? ''));
-$contoh = Contoh::muat($slug !== '' ? $slug : Contoh::BAWAAN);
+// Kopnya ikut konfigurasi aplikasi ini, sama dengan yang dilihat di
+// layar — kalau tidak, yang tersimpan berbeda dari yang dinilai.
+$contoh = Contoh::muat($slug !== '' ? $slug : Contoh::BAWAAN, $config ?? null);
 if ($contoh === null) {
     ezdoc_respond_error(t('response.contoh_not_found', [], 'Example not found'), 404);
 }

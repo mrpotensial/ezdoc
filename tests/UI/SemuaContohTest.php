@@ -295,6 +295,29 @@ final class SemuaContohTest extends TestCase
     }
 
     /**
+     * Kopnya bisa diganti dari konfigurasi.
+     *
+     * Tiga penanda ini yang dicari pemuat contoh saat aplikasi pemakainya
+     * menyebutkan kop miliknya sendiri. Contoh baru yang lupa memasangnya akan
+     * selamanya membawa kop karangan ke tiap template yang dibuat darinya, dan
+     * itu baru terlihat di kertas.
+     *
+     * @dataProvider contoh
+     */
+    public function testKopnyaBisaDigantiDariKonfigurasi(string $slug): void
+    {
+        $template = self::template($slug);
+
+        foreach (['ezdoc-kop-nama', 'ezdoc-kop-alamat', 'ezdoc-kop-kota'] as $penanda) {
+            self::assertStringContainsString(
+                'class="' . $penanda . '"',
+                $template,
+                $slug . ': penanda ' . $penanda . ' tidak ada — kopnya tidak bisa diganti dari konfigurasi'
+            );
+        }
+    }
+
+    /**
      * Petanya lengkap dan pinnya masuk akal.
      *
      * Peta adalah sumber tunggal penjelasan halaman contoh: nomor di gambar,

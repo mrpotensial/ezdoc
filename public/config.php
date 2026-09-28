@@ -46,6 +46,23 @@ return [
     'app.author_id'    => $author_id ?? null,
     'app.author_roles' => $author_role_array ?? [],
 
+    // ── Kop surat ──
+    // Dibaca contoh template (?ezdoc_page=contoh). Berkas contohnya sendiri
+    // netral — kop karangan — dan nilai di bawah inilah yang menggantikannya,
+    // di layar maupun di template yang disimpan dari contoh itu. Jadi contoh
+    // langsung terlihat seperti dokumen tempat ini, tanpa satu nama pun
+    // tertanam di berkas contohnya.
+    //
+    // Logonya ikut tersimpan di tiap template yang dibuat dari contoh, jadi
+    // yang kelewat lebar dikecilkan otomatis saat dibaca.
+    'letterhead.name'    => 'RUMAH SAKIT IBU DAN ANAK ANUGRAH',
+    'letterhead.address' => [
+        'Jalan Sungai Raya Dalam No. 43, Sungai Raya 78391 · Telp. (0561) 721176 / 723368',
+        'WA 0821-4866-3619 · rsia_anugrah@yahoo.com · Kubu Raya, Kalimantan Barat',
+    ],
+    'letterhead.city'    => 'Kubu Raya',
+    'letterhead.logo'    => dirname(__DIR__, 2) . '/uploads/LOGO RSIA ANUGRAH.png',
+
     'app.locale' => 'en',
     // Isi dokumen tetap berbahasa Indonesia walau layar diuji dalam bahasa
     // Inggris: tanggal "22 Agustus 2026", angka "1.500" — di dokumen, di
