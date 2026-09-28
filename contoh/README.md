@@ -54,14 +54,24 @@ orang, dan yang menyalin tidak punya cara tahu mana yang belum jadi.
 
 ## Cara memakainya
 
-1. Buka **Templates** → buat template baru.
-2. Di toolbar editor, pindah ke tampilan kode (Source code).
-3. Tempel isi `template.html` apa adanya.
-4. Atur halaman: A4, tegak, tepi 18 mm, mode continuous.
-5. Unggah dua logo dengan nama persis: `kop` dan `stempel`.
-6. Buat kueri tabel bernama `tindakan`, isi SQL-nya dari `contoh.json`, lalu
-   sesuaikan nama tabel dan kolomnya dengan database Anda.
-7. Sesuaikan `data-allowed-roles` pada tanda tangan dengan peran di aplikasi Anda.
+**Satu tombol: “Simpan jadi template”.** Ada di tiga tempat contohnya bisa
+dilihat — halaman Contoh (dengan kotak nama), pita kuning di halaman Buat
+dokumen, dan pita kuning di designer. Sekali tekan, contohnya jadi template
+sungguhan: isi, pengaturan kertas, logo, kueri tabel, tanda tangan, dan
+pengaturan halaman verifikasi ikut semua.
+
+Yang perlu diperiksa sesudahnya:
+
+1. **Kueri tabel** — nama tabel dan kolom di SQL-nya masih milik contoh ini.
+2. **`data-allowed-roles`** pada tanda tangan — sesuaikan dengan peran di
+   aplikasi Anda.
+
+Yang dijaga tombol itu: ia hanya **menambah**, tidak pernah mengubah template
+yang sudah ada, dan nama yang sudah dipakai ditolak (bukan ditimpa, bukan
+digandakan diam-diam).
+
+Di designer, yang tersimpan adalah **yang sedang di layar** — jadi rancangannya
+boleh dirapikan dulu di sana sebelum ditekan.
 
 ## Kalau contoh ini diubah
 

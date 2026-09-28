@@ -57,6 +57,11 @@ return [
         'days'    => '{n}h lalu',
     ],
     'response' => [
+        'contoh_not_found'             => 'Contoh tidak ditemukan',
+        'template_name_taken'          => 'Sudah ada template bernama "{nama}" — pilih nama lain.',
+        'template_name_required'       => 'Nama template harus diisi',
+        'template_save_failed'         => 'Template gagal disimpan',
+        'template_created_from_contoh' => 'Tersimpan sebagai template "{nama}"',
         'contoh_not_saveable'      => 'Contoh bukan template — ia tidak bisa disimpan.',
         'hide_signed_needs_reason' => 'Versi ini memuat {count} tanda tangan. Beri alasan minimal {min} karakter sebelum menyembunyikannya.',
         'version_not_hidden'       => 'Versi ini tidak tersembunyi — tidak ada yang perlu dikembalikan.',

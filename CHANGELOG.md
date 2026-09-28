@@ -6,6 +6,40 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — contoh bisa disimpan jadi template, satu tombol (2026-09-28)**
+
+Diminta pemakai, sesudah usulan halaman "tempel HTML lalu impor" ditolak dua
+kali: "aku ingin langsung bisa lihat hasil ai tanpa aksi, aksi ku hanya lihat
+hasil aja, jika aku merasa cocok simpan ke template".
+
+Rancangan template hidup sebagai **berkas** lebih dulu (`contoh/<nama>/`): bisa
+dibuka di halaman Contoh, di halaman Buat dokumen, dan di designer tanpa
+menyentuh database sama sekali. Yang menilai cukup melihat. Tindakannya satu:
+
+```
+POST ajax=1 action=save_contoh, contoh=<nama-folder>, nama_template=<opsional>
+```
+
+- **Tombolnya di tiga tempat contohnya bisa dilihat** — halaman Contoh (dengan
+  kotak nama), pita mode contoh di Buat dokumen, dan pita mode contoh di
+  designer. Yang sedang melihat hasilnya tidak perlu pindah halaman untuk
+  menyimpannya.
+- **Di designer yang tersimpan adalah yang di layar**, termasuk yang baru
+  diubah di sana: jalurnya simpan resmi designer dengan nomor template
+  dikosongkan, bukan aksi baca-berkas. Sesudah tersimpan halaman pindah ke
+  template sungguhannya, jadi Simpan berikutnya menulis ke tempat yang terlihat.
+- **INSERT saja.** Tidak ada cabang UPDATE di jalur ini — dijaga uji yang
+  membaca berkasnya — jadi tidak ada urutan permintaan apa pun yang bisa
+  mengubah template yang sudah ada lewat pintu ini.
+- **Nama yang sudah dipakai ditolak** (409), bukan ditimpa dan bukan digandakan
+  diam-diam. Nama bawaannya nama contohnya dikurangi kata "(contoh)".
+- **Elemen mengapung dipetik ke kolomnya sendiri** (`floating_elements`), sama
+  seperti simpan dari designer — kalau tidak, stempelnya tercetak dua kali atau
+  hilang sama sekali.
+- Hak yang sama dengan menyimpan template dari designer; tombolnya disembunyikan
+  dari yang tidak berhak, bukan cuma ditolak sesudah ditekan. Tercatat di log
+  audit sebagai `template.created_from_contoh` dengan nama contohnya.
+
 **Added — field hitung: nilainya dari rumus, bukan diketik (2026-09-28)**
 
 Diminta pemakai untuk lembar skor (Bishop, Flamm & Geiger): "aku lebih suka

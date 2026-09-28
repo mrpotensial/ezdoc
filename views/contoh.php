@@ -124,6 +124,10 @@ $base = (string) $config->get('app.base_path', '');
 $join = (strpos($base, '?') === false) ? '?' : '&';
 $urlGenerate = $base . $join . $qk . '=generate&template_id=contoh:' . rawurlencode((string) $contoh['slug']);
 $urlDesigner = $base . $join . $qk . '=designer&action=edit&id=contoh:' . rawurlencode((string) $contoh['slug']);
+$urlAksi = $base . $join . $qk . '=action';
+// Nama yang ditawarkan: nama contohnya tanpa kata "(contoh)" — yang tersimpan
+// bukan contoh lagi.
+$namaUsul = trim((string) preg_replace('/\s*\(contoh\)\s*$/iu', '', (string) $contoh['nama_template']));
 
 $aturan = [
     'Nama field huruf kecil dengan garis bawah. Nama yang sama dipakai di {{nama}}, data-nama-field, data-qr, dan data-cond.',
@@ -212,6 +216,26 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
             panelnya) dan di halaman Buat dokumen (untuk mengisi dan menandatangani). Tombol Simpan di
             kedua tempat itu menulis ke peramban Anda saja — database tidak disentuh.
         </p>
+        <?php // Satu-satunya tindakan di halaman ini: kalau rancangannya cocok,
+        // ia jadi template sungguhan. Sebelum tombol ini ditekan, tidak ada satu
+        // baris pun yang masuk database. ?>
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <div class="flex flex-wrap items-center gap-2">
+                <label for="ezNamaTemplate" class="text-xs font-medium text-gray-700">Kalau sudah cocok, simpan jadi template:</label>
+                <input id="ezNamaTemplate" type="text" value="<?= h($namaUsul) ?>" maxlength="200"
+                       class="min-w-[240px] flex-1 rounded border border-gray-300 px-2 py-1.5 text-xs">
+                <button type="button" id="ezSimpanTemplate"
+                        class="rounded px-3 py-1.5 text-xs font-medium text-white"
+                        style="background: var(--ezdoc-primary, #4f46e5);"
+                        data-url="<?= h($urlAksi) ?>" data-contoh="<?= h((string) $contoh['slug']) ?>">
+                    Simpan jadi template
+                </button>
+            </div>
+            <p id="ezSimpanKabar" class="mt-1.5 text-[11.5px] text-gray-500" role="status">
+                Template baru dibuat baru; tidak ada template lain yang tersentuh.
+            </p>
+        </div>
+
         <p class="text-xs text-gray-500">
             Halaman ini hanya membaca berkas di <code class="font-mono">contoh/<?= h((string) $contoh['slug']) ?>/</code>.
             Tidak ada yang diambil dari database, tidak ada yang ditulis ke sana, dan contoh ini tidak
@@ -384,6 +408,49 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
     }
     skalakan();
     window.addEventListener('resize', skalakan);
+
+    // ── Simpan jadi template ──
+    // Satu permintaan, satu baris baru. Yang menekan memutuskan namanya; kalau
+    // namanya sudah dipakai, server menolak dan halaman ini mengatakannya —
+    // tidak ada yang ditimpa diam-diam.
+    var tombolSimpan = document.getElementById('ezSimpanTemplate');
+    if (tombolSimpan) {
+        tombolSimpan.addEventListener('click', function () {
+            var kotak = document.getElementById('ezNamaTemplate');
+            var lapor = document.getElementById('ezSimpanKabar');
+            var nama = (kotak && kotak.value || '').trim();
+            if (!nama) { lapor.textContent = 'Nama templatenya diisi dulu.'; return; }
+
+            tombolSimpan.disabled = true;
+            lapor.textContent = 'Menyimpan…';
+
+            var data = new FormData();
+            data.append('ajax', '1');
+            data.append('action', 'save_contoh');
+            data.append('contoh', tombolSimpan.dataset.contoh);
+            data.append('nama_template', nama);
+
+            fetch(tombolSimpan.dataset.url, { method: 'POST', body: data })
+                .then(function (r) { return r.json(); })
+                .then(function (j) {
+                    tombolSimpan.disabled = false;
+                    if (!j || !j.success) {
+                        lapor.textContent = (j && (j.message || j.error)) || 'Gagal menyimpan.';
+                        lapor.className = 'mt-1.5 text-[11.5px] text-red-700';
+                        return;
+                    }
+                    lapor.className = 'mt-1.5 text-[11.5px] text-green-700';
+                    lapor.innerHTML = (j.message || 'Tersimpan.') + ' — '
+                        + '<a class="underline" href="<?= h($base . $join . $qk) ?>=designer&action=edit&id=' + j.id + '">buka di designer</a>'
+                        + ' · <a class="underline" href="<?= h($base . $join . $qk) ?>=generate&template_id=' + j.id + '">buat dokumen</a>';
+                })
+                .catch(function (e) {
+                    tombolSimpan.disabled = false;
+                    lapor.className = 'mt-1.5 text-[11.5px] text-red-700';
+                    lapor.textContent = 'Gagal menyimpan: ' + e.message;
+                });
+        });
+    }
 
     var kabar = document.getElementById('ezSalinKabar');
     Array.prototype.forEach.call(document.querySelectorAll('[data-ez-salin]'), function (tombol) {

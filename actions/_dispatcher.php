@@ -34,6 +34,7 @@
  *   POST ajax=1 action=save                 → template/save_template.php
  *   POST ajax=1 action=toggle_lock          → template/toggle_template_lock.php
  *   POST ajax=1 action=copy_template        → template/copy_template.php
+ *   POST ajax=1 action=save_contoh          → template/save_contoh_as_template.php
  *   POST ajax=1 action=analyze_query        → template/analyze_query.php
  *   POST ajax=1 action=list_categories      → template/list_categories.php
  *   POST ajax=1 action=field_usage          → template/field_usage.php
@@ -153,6 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax']) && isset($_PO
         'save'             => 'save_template.php',
         'toggle_lock'      => 'toggle_template_lock.php',
         'copy_template'    => 'copy_template.php',
+        'save_contoh'      => 'save_contoh_as_template.php',
         'analyze_query'    => 'analyze_query.php',
         'list_categories'  => 'list_categories.php',
         'field_usage'      => 'field_usage.php',

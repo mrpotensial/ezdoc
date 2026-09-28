@@ -482,6 +482,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     $__join = (strpos($__base, '?') === false) ? '?' : '&';
                     $__urlContohPenjelasan = $__base . $__join . $__qk . '=contoh';
                     $__urlContohBuat = $__base . $__join . $__qk . '=generate&template_id=contoh:' . rawurlencode($contohSlug);
+                    $__urlContohEdit = $__base . $__join . $__qk . '=designer&action=edit&id=';
+                    $__namaUsulContoh = trim((string) preg_replace('/\s*\(contoh\)\s*$/iu', '', (string) ($template['nama_template'] ?? $contohSlug)));
                     ?>
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[12.5px] leading-snug text-amber-900">
                     <span class="flex-1 min-w-[280px]">
@@ -489,6 +491,11 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                         Boleh diubah-ubah: Simpan menulis ke <b>peramban ini saja</b>, bukan jadi template.
                         Sumbernya berkas <code class="rounded bg-amber-900/10 px-1"><?= h('contoh/' . $contohSlug . '/') ?></code>.
                     </span>
+                    <?php if (!function_exists('ezdoc_can_manage_templates') || ezdoc_can_manage_templates()): ?>
+                    <button type="button" id="ezContohJadiTemplate"
+                            data-nama="<?= h($__namaUsulContoh) ?>"
+                            class="rounded border border-amber-400 bg-white px-2 py-0.5 text-[11.5px] font-medium hover:bg-amber-100">Simpan jadi template</button>
+                    <?php endif; ?>
                     <button type="button" id="ezContohDesainerHapus"
                             class="rounded border border-amber-300 px-2 py-0.5 text-[11.5px] hover:bg-amber-100">Hapus draf</button>
                     <a href="<?= h($__urlContohBuat) ?>" class="rounded border border-amber-300 px-2 py-0.5 text-[11.5px] hover:bg-amber-100">Buka di Buat dokumen</a>
@@ -1487,7 +1494,12 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             }
         } catch (e) { /* peramban menolak menyimpan: contohnya tetap apa adanya */ }
 
+        // Ditinggikan saat tombol "Simpan jadi template" yang menekan simpan,
+        // supaya kait di bawah tidak membelokkannya ke peramban.
+        var jadiTemplateBerjalan = false;
+
         window.addEventListener('ezdoc:before-save', function (e) {
+            if (jadiTemplateBerjalan) { return; }
             e.preventDefault();
             var fd = e.detail && e.detail.formData;
             if (!fd) { return; }
@@ -1504,6 +1516,52 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 kabar('Peramban menolak menyimpan: ' + err.message);
             }
         });
+
+        // ── Simpan jadi template ──────────────────────────────────────
+        //
+        // Yang tersimpan adalah YANG DI LAYAR, termasuk editan di sini —
+        // bukan berkas contohnya. Jalurnya simpan resmi designer dengan nomor
+        // template dikosongkan, jadi semua yang berlaku untuk template baru
+        // (pemetikan elemen mengapung, pemeriksaan nama, catatan audit) tetap
+        // berlaku. Menulis jalur simpan sendiri berarti dua jalur yang harus
+        // sama selamanya.
+        var jadiTemplate = document.getElementById('ezContohJadiTemplate');
+        if (jadiTemplate && typeof saveTemplate === 'function') {
+            jadiTemplate.addEventListener('click', function () {
+                var isiId = document.getElementById('templateId');
+                var isiNama = document.getElementById('namaTemplate');
+                if (!isiId) { return; }
+
+                // Nama contoh berakhiran "(contoh)"; yang tersimpan bukan
+                // contoh lagi, jadi kata itu dibuang kecuali sudah diganti.
+                if (isiNama && isiNama.value === <?= json_encode((string) ($template['nama_template'] ?? '')) ?>) {
+                    isiNama.value = jadiTemplate.dataset.nama || isiNama.value;
+                }
+
+                var idLama = isiId.value;
+                isiId.value = '';           // 0 di sisi server = buat baru
+                jadiTemplateBerjalan = true;
+                jadiTemplate.disabled = true;
+
+                Promise.resolve(saveTemplate()).then(function () {
+                    jadiTemplateBerjalan = false;
+                    jadiTemplate.disabled = false;
+                    var idBaru = parseInt(isiId.value, 10);
+                    if (idBaru > 0) {
+                        // Halaman ini masih halaman contoh: pitanya, kait
+                        // peramban, dan kuncinya semua masih mode contoh. Yang
+                        // sudah tersimpan dibuka sebagai template sungguhan,
+                        // supaya Simpan berikutnya menulis ke tempat yang
+                        // terlihat di layar.
+                        try { localStorage.removeItem(KUNCI); } catch (err) { /* tidak apa-apa */ }
+                        if (window.ezdocMarkClean) { window.ezdocMarkClean(); }
+                        location.href = <?= json_encode($__urlContohEdit) ?> + idBaru;
+                        return;
+                    }
+                    isiId.value = idLama;   // gagal: kembalikan mode contoh
+                });
+            });
+        }
 
         var hapus = document.getElementById('ezContohDesainerHapus');
         if (hapus) {

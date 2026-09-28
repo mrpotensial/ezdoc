@@ -1753,9 +1753,12 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
 <body class="<?= $__bacaSaja ? 'edit-off' : 'edit-on' ?>">
     <?php if ($contohSlug !== ''):
         $__urlContohBase = (string) $config->get('app.base_path', '');
-        $__urlContoh = $__urlContohBase
-            . (strpos($__urlContohBase, '?') === false ? '?' : '&')
-            . (string) $config->get('app.query_key', 'ezdoc_page') . '=contoh';
+        $__qkContoh = (string) $config->get('app.query_key', 'ezdoc_page');
+        $__gabungContoh = (strpos($__urlContohBase, '?') === false ? '?' : '&');
+        $__urlContoh = $__urlContohBase . $__gabungContoh . $__qkContoh . '=contoh&contoh=' . rawurlencode($contohSlug);
+        $__urlAksiContoh = $__urlContohBase . $__gabungContoh . $__qkContoh . '=action';
+        $__urlDesignerContoh = $__urlContohBase . $__gabungContoh . $__qkContoh . '=designer&action=edit&id=';
+        $__namaUsulContoh = trim((string) preg_replace('/\s*\(contoh\)\s*$/iu', '', (string) ($template['nama_template'] ?? $contohSlug)));
         ?>
     <style>
         /* Pita mode contoh — selebar kertasnya, supaya ia terbaca sebagai
@@ -1778,6 +1781,11 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
         }
         .ez-pita-contoh b { font-weight: 600; }
         .ez-pita-contoh .ez-pita-isi { flex: 1 1 320px; min-width: 0; }
+        /* Tombolnya satu rombongan: kalau tidak muat, semuanya turun
+           bersama. Kalau masing-masing membungkus sendiri, satu tombol
+           menggantung sendirian di baris kedua — dan tulisan tombol yang
+           memanjang sesudah ditekan menggeser seluruh halaman. */
+        .ez-pita-contoh .ez-pita-aksi { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
         .ez-pita-contoh code { font-size: 11.5px; background: rgba(146,64,14,.08); padding: 0 4px; border-radius: 3px; }
         .ez-pita-contoh a, .ez-pita-contoh button {
             color: #92400e;
@@ -1807,9 +1815,19 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
         // yang benar untuk tombol yang hanya berlaku di mode contoh.
         // Tanpa `raw=1`: contoh tidak punya dokumen, jadi tidak ada artefak
         // beku yang perlu dilewati. Dilaporkan pemakai. ?>
+        <span class="ez-pita-aksi">
         <a href="<?= h($currentUrl) ?>&amp;view=pdf" target="_blank" rel="noopener">Lihat PDF</a>
+        <?php // Yang tidak berhak merancang template tidak diberi tombol yang
+        // pasti ditolak sisi server. Penjaganya tetap di sana; ini soal
+        // tidak menawarkan pintu yang terkunci. ?>
+        <?php if (!function_exists('ezdoc_can_manage_templates') || ezdoc_can_manage_templates()): ?>
+        <button type="button" id="ezContohJadiTemplate"
+                data-url="<?= h($__urlAksiContoh) ?>" data-contoh="<?= h($contohSlug) ?>"
+                data-nama="<?= h($__namaUsulContoh) ?>">Simpan jadi template</button>
+        <?php endif; ?>
         <button type="button" id="ezContohHapus">Hapus simpanan</button>
         <a href="<?= h($__urlContoh) ?>">Penjelasan fiturnya →</a>
+        </span>
     </div>
     <script>
     (function () {
@@ -1918,6 +1936,48 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
 
         document.addEventListener('DOMContentLoaded', function () {
             pulihkan();
+            // ── Simpan jadi template ─────────────────────────────────
+            //
+            // Rancangan hidup sebagai berkas lebih dulu supaya bisa dinilai
+            // dengan melihat. Kalau cocok, satu tombol ini yang membuatnya
+            // jadi template sungguhan — sekali tekan, satu baris baru, tanpa
+            // menempel apa pun. Nama yang sudah dipakai ditolak server, jadi
+            // tidak ada template orang lain yang bisa tertimpa dari sini.
+            var ALAMAT_DESIGNER = <?= json_encode($__urlDesignerContoh) ?>;
+            var jadiTemplate = document.getElementById('ezContohJadiTemplate');
+            var idTersimpan = 0;
+            if (jadiTemplate) {
+                jadiTemplate.addEventListener('click', function () {
+                    // Sesudah tersimpan tombolnya jadi pintu ke templatenya.
+                    // Tanpa ini, tekan kedua kali mengirim permintaan simpan
+                    // lagi dan yang membaca hanya melihat "nama sudah dipakai".
+                    if (idTersimpan > 0) { location.href = ALAMAT_DESIGNER + idTersimpan; return; }
+
+                    jadiTemplate.disabled = true;
+                    var data = new FormData();
+                    data.append('ajax', '1');
+                    data.append('action', 'save_contoh');
+                    data.append('contoh', jadiTemplate.dataset.contoh);
+                    data.append('nama_template', jadiTemplate.dataset.nama);
+                    fetch(jadiTemplate.dataset.url, { method: 'POST', body: data })
+                        .then(function (r) { return r.json(); })
+                        .then(function (j) {
+                            jadiTemplate.disabled = false;
+                            if (j && j.success && j.id) {
+                                idTersimpan = j.id;
+                                jadiTemplate.textContent = 'Tersimpan — buka templatenya';
+                                kabar(j.message || 'Tersimpan jadi template.');
+                                return;
+                            }
+                            kabar((j && (j.message || j.error)) || 'Gagal menyimpan.');
+                        })
+                        .catch(function (e) {
+                            jadiTemplate.disabled = false;
+                            kabar('Gagal menyimpan: ' + e.message);
+                        });
+                });
+            }
+
             var hapus = document.getElementById('ezContohHapus');
             if (hapus) {
                 hapus.addEventListener('click', function () {
