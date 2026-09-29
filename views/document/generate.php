@@ -2804,6 +2804,20 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
         ?>
         window.EZDOC_AUDIT_DETAIL = <?= (function_exists('ezdoc_can_view_audit_detail') && ezdoc_can_view_audit_detail()) ? 'true' : 'false' ?>;
 
+        <?php
+        // Bolehkah versi baru dimulai kosong?
+        //
+        // Ada pemasangan yang tidak pernah membutuhkannya: versi baru selalu
+        // revisi dari yang sebelumnya. Di sana pilihannya bukan cuma tak
+        // terpakai, ia berbahaya — terukur di satu basis data pemakai, 51 dari
+        // 152 versi lanjutan lahir kosong karena orang mengklik, bukan memilih.
+        //
+        // Ini KOSMETIK. Yang benar-benar menutupnya ada di server, di
+        // actions/document/new_version.php — halaman yang sudah lama terbuka
+        // masih membawa dialog versi lama.
+        ?>
+        window.EZDOC_VERSION_ALLOW_BLANK = <?= $config->get('version.allow_blank', true) ? 'true' : 'false' ?>;
+
         <?php // Apakah jalur "minta kode lewat QR" tersedia di pemasangan ini.
         // Diputuskan server, bukan ditebak sisi tampilan: tanpa pola tautan yang
         // dikonfigurasi, tombolnya cuma akan menghasilkan 503. ?>

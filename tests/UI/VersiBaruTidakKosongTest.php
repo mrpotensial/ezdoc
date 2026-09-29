@@ -151,4 +151,75 @@ final class VersiBaruTidakKosongTest extends TestCase
             );
         }
     }
+
+    // ── Setelan pemasangan menutup pilihan kosong ────────────────────
+
+    /**
+     * Saat setelan menutupnya, dialognya tidak menawarkan "kosong" sama sekali.
+     *
+     * Bukan disembunyikan dengan CSS: radionya memang tidak dibuat. Pilihan
+     * yang masih ada di DOM masih bisa terpilih — lewat keyboard, lewat
+     * pembaca layar, lewat skrip.
+     */
+    public function testDialognyaTidakMenawarkanKosongSaatDitutup(): void
+    {
+        $skrip = self::skrip();
+
+        self::assertSame(
+            1,
+            preg_match('/const bolehKosong = window\.EZDOC_VERSION_ALLOW_BLANK !== false;/', $skrip),
+            'dialognya tidak membaca setelan pemasangan'
+        );
+        self::assertSame(
+            1,
+            preg_match('/const sumberHtml = bolehKosong \? `/', $skrip),
+            'pilihan sumbernya tidak bercabang mengikuti setelan'
+        );
+        self::assertSame(
+            1,
+            preg_match('/value="blank"/', $skrip),
+            'radio kosongnya ada di lebih dari satu cabang — cabang tertutup ikut membawanya'
+        );
+    }
+
+    /**
+     * Versi mana yang disalin tetap bisa dipilih.
+     *
+     * Yang ditutup kekosongannya, bukan pilihannya. Dialog yang tidak
+     * menyebutkan apa pun bukan konfirmasi, cuma penghalang.
+     */
+    public function testPilihanVersiTetapAdaSaatDitutup(): void
+    {
+        $skrip = self::skrip();
+        $cabang = substr($skrip, (int) strpos($skrip, '` : `'), 400);
+
+        self::assertStringContainsString('id="copyVerSelect"', $cabang, 'cabang tertutup tidak punya pilihan versi');
+        self::assertStringContainsString('modal.new_version.source_copy', $cabang, 'pilihannya tidak berlabel');
+    }
+
+    /** Dan pembuatnya tidak punya jalan ke "kosong" saat setelan menutupnya. */
+    public function testPembuatnyaIkutTertutup(): void
+    {
+        self::assertSame(
+            1,
+            preg_match("/const source = \(window\.EZDOC_VERSION_ALLOW_BLANK === false\)\s*\n\s*\? 'copy'/", self::skrip()),
+            'setelan tertutup masih bisa dilewati dari fungsi pembuatnya'
+        );
+    }
+
+    /**
+     * Setelannya sampai ke halaman, dan bawaannya membolehkan.
+     *
+     * Pemasangan yang tidak tahu-menahu tidak boleh berubah perilakunya.
+     */
+    public function testSetelannyaSampaiKeHalamanDenganBawaanMembolehkan(): void
+    {
+        $halaman = (string) file_get_contents(dirname(__DIR__, 2) . '/views/document/generate.php');
+
+        self::assertSame(
+            1,
+            preg_match('/window\.EZDOC_VERSION_ALLOW_BLANK = <\?= \$config->get\(.version\.allow_blank., true\)/', $halaman),
+            'setelannya tidak dibawa ke halaman, atau bawaannya bukan true'
+        );
+    }
 }

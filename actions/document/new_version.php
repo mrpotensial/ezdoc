@@ -53,6 +53,34 @@ $nextVersion = (int) $db->fetchScalar(
 );
 if ($nextVersion < 1) $nextVersion = 1;
 
+// Setelan pemasangan boleh menutup pilihan "mulai dari kosong", dan yang
+// menutupnya harus server: halaman yang sudah lama terbuka masih membawa
+// dialog versi lama, dan permintaannya bisa dikirim tanpa halaman sama sekali.
+//
+// Yang dilakukan bukan menolak. Menolak membuat orang mentok padahal yang
+// dimintanya wajar — membuat versi baru. Permintaannya dibawa ke satu-satunya
+// bentuk yang diizinkan setelan itu, menyalin versi terakhir, dan itu dicatat.
+//
+// Versi pertama di sebuah slot tetap lahir kosong: tidak ada yang bisa disalin.
+$bolehKosong = (isset($config) && $config instanceof \Ezdoc\UI\Config)
+    ? (bool) $config->get('version.allow_blank', true)
+    : true;
+$kosongDialihkan = false;
+if (!$bolehKosong && $sourceVersion <= 0) {
+    // Yang dicari versi yang masih hidup — $nextVersion di atas ikut menghitung
+    // yang sudah disembunyikan supaya nomornya tidak bertabrakan, tapi yang
+    // sudah disembunyikan tidak bisa jadi sumber salinan.
+    $terakhir = (int) $db->fetchScalar(
+        'SELECT COALESCE(MAX(version), 0) FROM ezdoc_documents
+         WHERE template_uuid = ? AND subject_id = ? AND context_id = ? AND label = ? AND deleted_at IS NULL',
+        [$templateUuid, $n, $np, $lb]
+    );
+    if ($terakhir > 0) {
+        $sourceVersion = $terakhir;
+        $kosongDialihkan = true;
+    }
+}
+
 // Copy dari source atau blank
 // Isi disalin. Tanda tangan TIDAK — dan itu pembedaan yang menentukan.
 //
@@ -124,8 +152,12 @@ ezdoc_audit_log('doc.version_created', [
         'nopen'          => $np,
         'label'          => $lb,
         'template_uuid'  => $templateUuid,
+        // Ada saat permintaannya meminta kosong tapi setelan tidak mengizinkan.
+        // Yang tercatat harus yang terjadi, bukan yang diminta.
+        'blank_redirected' => $kosongDialihkan,
     ],
-    'message' => "Versi baru v{$nextVersion} " . ($sourceVersion > 0 ? "(copy dari v{$sourceVersion})" : '(blank)'),
+    'message' => "Versi baru v{$nextVersion} "
+        . ($sourceVersion > 0 ? "(copy dari v{$sourceVersion}" . ($kosongDialihkan ? ', diminta kosong' : '') . ')' : '(blank)'),
 ]);
 
 ezdoc_respond_success([

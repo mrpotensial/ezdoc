@@ -6,6 +6,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — pilihan "versi baru dimulai kosong" bisa ditutup lewat setelan (2026-09-29)**
+
+Diminta pemakai: "apa bisa opsi salin kosong itu diatur via config? jadi pesan
+cuma konfirmasi dan pasti salin aja". Setelan barunya `version.allow_blank`,
+bawaannya `true` — pemasangan yang tidak tahu-menahu tidak berubah.
+
+Di tempat yang versi barunya selalu revisi dari yang sebelumnya, pilihan
+"kosong" bukan cuma tak terpakai: terukur di satu basis data pemakai, 51 dari
+152 versi lanjutan lahir kosong karena orang mengklik, bukan memilih.
+
+- **Dialognya jadi konfirmasi.** Yang tersisa hanya versi mana yang disalin —
+  bukan dua jalan yang salah satunya merusak. Radionya tidak dibuat, bukan
+  disembunyikan dengan CSS: pilihan yang masih ada di DOM masih bisa terpilih
+  lewat keyboard, pembaca layar, atau skrip.
+- **Yang benar-benar menutupnya server.** Halaman yang sudah lama terbuka masih
+  membawa dialog versi lama, dan permintaan bisa dikirim tanpa halaman sama
+  sekali. Permintaan "kosong" tidak ditolak — menolak membuat orang mentok
+  padahal yang dimintanya wajar — melainkan dibawa ke satu-satunya bentuk yang
+  diizinkan setelan itu: menyalin versi terakhir yang masih hidup. Pengalihan
+  itu tercatat di audit (`blank_redirected`), jadi yang tercatat tetap yang
+  terjadi, bukan yang diminta.
+- **Versi pertama di sebuah slot tetap lahir kosong.** Tidak ada yang bisa
+  disalin, dan setelan ini bukan larangan membuat dokumen pertama.
+
 **Fixed — tanda tangan yang disalin membawa id kembar; empat kotak terbaca dua (2026-09-29)**
 
 Dilaporkan pemakai: sebuah template punya empat kotak tanda tangan, tapi yang

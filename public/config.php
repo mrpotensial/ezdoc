@@ -63,6 +63,12 @@ return [
     'letterhead.city'    => 'Kubu Raya',
     'letterhead.logo'    => dirname(__DIR__, 2) . '/uploads/LOGO RSIA ANUGRAH.png',
 
+    // Versi baru di sini selalu revisi dari yang sebelumnya, jadi pilihan
+    // "mulai dari kosong" ditutup: dialognya tinggal konfirmasi versi mana
+    // yang disalin. Versi PERTAMA di sebuah slot tetap lahir kosong — tidak
+    // ada yang bisa disalin.
+    'version.allow_blank' => false,
+
     'app.locale' => 'id',
     // Ditulis terpisah, bukan dibiarkan ikut layar: kalau suatu hari layarnya
     // dipindah ke bahasa lain, isi dokumen tetap berbahasa Indonesia — tanggal

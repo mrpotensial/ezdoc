@@ -2117,6 +2117,10 @@
                 : (versions.length ? versions[0].version : 0);
             const berikut = versions.reduce((m, v) => Math.max(m, parseInt(v.version, 10) || 0), 0) + 1;
 
+            // Setelan pemasangan; tanpa bendera itu (halaman lama, atau
+            // pemakai yang menyambung sendiri) pilihannya tetap ada.
+            const bolehKosong = window.EZDOC_VERSION_ALLOW_BLANK !== false;
+
             const optsHtml = versions.map(v =>
                 `<option value="${v.version}"${v.version === dasar ? ' selected' : ''}>v${v.version}${v.is_locked ? ' [Locked]' : ''}</option>`
             ).join('');
@@ -2127,11 +2131,11 @@
             // lanjutan di basis data ini lahir kosong — 51 dari 152. Tiga di
             // antaranya dibuat dalam 65 detik oleh orang yang jelas sedang
             // mengklik, bukan memilih. Bawaan yang merusak bukan bawaan.
-            modal.innerHTML = `
-                <div class="bg-white rounded-[10px] w-[90%] max-w-[420px] p-5" style="font-family:sans-serif;">
-                    <h5 class="mt-0 mr-0 mb-2 ml-0">${t('modal.new_version.title_n', {n: berikut}, 'Create version v{n}')}</h5>
-                    <p class="text-gray-500 text-[13px] mb-3">${t('modal.new_version.description_n', {from: dasar, n: berikut}, 'v{n} starts as a copy of v{from}. v{from} stays exactly as it is.')}</p>
-
+            // Pemasangan yang tidak pernah memulai versi dari kosong bisa
+            // menutup pilihan itu (`version.allow_blank`). Yang tersisa cuma
+            // versi mana yang disalin — dialognya jadi konfirmasi, bukan
+            // persimpangan.
+            const sumberHtml = bolehKosong ? `
                     <label class="block mb-2 cursor-pointer">
                         <input type="radio" name="newVerSource" value="copy" checked>
                         ${t('modal.new_version.source_copy', {}, 'Copy from version:')}
@@ -2146,6 +2150,20 @@
                     <p class="text-amber-700 text-[12px] mt-0 mb-0 ml-5" id="newVerBlankWarn" style="display:none">
                         ${t('modal.new_version.blank_warning', {}, 'Every field will be empty, including the patient details.')}
                     </p>
+            ` : `
+                    <label class="block mb-1">
+                        ${t('modal.new_version.source_copy', {}, 'Copy from version:')}
+                        <select id="copyVerSelect" class="ml-1.5 py-0.5 px-1.5">
+                            ${optsHtml}
+                        </select>
+                    </label>
+            `;
+
+            modal.innerHTML = `
+                <div class="bg-white rounded-[10px] w-[90%] max-w-[420px] p-5" style="font-family:sans-serif;">
+                    <h5 class="mt-0 mr-0 mb-2 ml-0">${t('modal.new_version.title_n', {n: berikut}, 'Create version v{n}')}</h5>
+                    <p class="text-gray-500 text-[13px] mb-3">${t('modal.new_version.description_n', {from: dasar, n: berikut}, 'v{n} starts as a copy of v{from}. v{from} stays exactly as it is.')}</p>
+                    ${sumberHtml}
 
                     <div class="flex gap-2 mt-4 justify-end">
                         <button onclick="document.getElementById('newVersionModal').remove()" class="py-1.5 px-4 border border-gray-300 bg-white rounded-md cursor-pointer">${t('actions.cancel', {}, 'Cancel')}</button>
@@ -2170,8 +2188,11 @@
             if (!_nvSlot) _nvSlot = { norm: CURRENT_NORM, nopen: CURRENT_NOPEN, label: CURRENT_LABEL };
             // Bawaannya menyalin, sama dengan yang tercentang di dialog. Yang
             // memanggil fungsi ini tanpa dialog (jalur lama) tidak sedang
-            // meminta dokumen kosong.
-            const source = document.querySelector('input[name="newVerSource"]:checked')?.value || 'copy';
+            // meminta dokumen kosong. Dan kalau setelan pemasangan menutup
+            // pilihan kosong, tidak ada jalan menuju ke sana dari sini.
+            const source = (window.EZDOC_VERSION_ALLOW_BLANK === false)
+                ? 'copy'
+                : (document.querySelector('input[name="newVerSource"]:checked')?.value || 'copy');
             const _pilihan = document.getElementById('copyVerSelect');
             const sourceVersion = source === 'copy'
                 ? (parseInt((_pilihan && _pilihan.value) || '0', 10) || CURRENT_VERSION)
