@@ -53,6 +53,7 @@ return [
         'version_draft'         => 'draf',
         'version_hidden'        => 'disembunyikan',
         'version_no_slots'      => 'Tanpa slot tanda tangan',
+        'version_detail'        => 'Detail',
         'locked'                => 'Locked',
         'update'                => 'Update',
         'save_new'              => 'Simpan Baru',
@@ -281,8 +282,16 @@ return [
         'new_version' => [
             'title'         => 'Buat Versi Baru',
             'description'   => 'Pilih sumber data untuk versi baru:',
-            'source_blank'  => 'Kosong (start dari awal)',
-            'source_copy'   => 'Copy dari versi:',
+            // Judul dan tombolnya menyebut nomor yang akan dibuat. "Create New
+            // Version" tidak memberi tahu apa pun tentang hasilnya; "Buat v3"
+            // memberi tahu, dan itu satu-satunya kalimat yang sempat dibaca
+            // orang yang sedang buru-buru.
+            'title_n'       => 'Buat versi v{n}',
+            'description_n' => 'v{n} dimulai sebagai salinan v{from}. v{from} tetap seperti apa adanya.',
+            'confirm_n'     => 'Buat v{n}',
+            'source_blank'  => 'Kosongkan — mulai dari nol',
+            'source_copy'   => 'Salin dari versi:',
+            'blank_warning' => 'Semua isian akan kosong, termasuk identitas pasien.',
         ],
         'shortcuts' => [
             'title'            => 'Keyboard Shortcuts',

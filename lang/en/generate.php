@@ -36,6 +36,7 @@ return [
         'version_draft' => 'draft',
         'version_hidden' => 'hidden',
         'version_no_slots' => 'No signature slots',
+        'version_detail' => 'Detail',
         'locked' => 'Locked',
         'update' => 'Update',
         'save_new' => 'Save New',
@@ -256,8 +257,12 @@ return [
         'new_version' => [
             'title' => 'Create New Version',
             'description' => 'Choose the data source for the new version:',
-            'source_blank' => 'Blank (start from scratch)',
+            'title_n' => 'Create version v{n}',
+            'description_n' => 'v{n} starts as a copy of v{from}. v{from} stays exactly as it is.',
+            'confirm_n' => 'Create v{n}',
+            'source_blank' => 'Empty — start from nothing',
             'source_copy' => 'Copy from version:',
+            'blank_warning' => 'Every field will be empty, including the patient details.',
         ],
         'shortcuts' => [
             'title' => 'Keyboard Shortcuts',

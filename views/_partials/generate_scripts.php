@@ -1634,6 +1634,7 @@
             });
 
             renderVersionPanel(data.versions, data.slot_total || 0);
+            renderVersionCard(data.versions, data.slot_total || 0);
 
             // Penyaringnya hanya muncul untuk yang memang boleh mengurusnya.
             // Tombol yang muncul lalu selalu ditolak lebih buruk daripada tombol
@@ -1758,23 +1759,100 @@
 
                 wadah.appendChild(baris);
             });
+        }
 
-            // Teks pemicunya ikut ringkasan versi yang sedang dibuka, supaya
-            // keadaan itu terbaca tanpa membuka panelnya.
-            const pemicu = document.getElementById('versionTriggerText');
-            if (pemicu) {
-                const sekarang = versions.find(v => v.version === CURRENT_VERSION);
-                const total = parseInt(slotTotal || 0, 10);
-                pemicu.textContent = 'v' + CURRENT_VERSION
-                    + (sekarang && total > 0 ? ' \u00b7 ' + (sekarang.signed_count || 0) + '/' + total : '');
+
+        // ── Kartu daftar versi ───────────────────────────────────────────
+        //
+        // Diminta pemakai: "user suka asal klik buat versi, jadi sebaiknya list
+        // versi langsung tampil saja kali ya?". Daftarnya kini tidak menunggu
+        // satu klik pun. Isinya sengaja sebaris per versi — nomor, kemajuan
+        // tanda tangan, kapan — dan yang butuh cerita lengkap membuka Detail.
+
+        /** Letakkan kartunya menempel pada sidebar, di bawah atau di atasnya. */
+        function positionVersionCard() {
+            const kartu = document.getElementById('versionCard');
+            const sidebar = document.getElementById('toolbarPanel');
+            if (!kartu || !sidebar || kartu.hasAttribute('hidden')) return;
+
+            const sb = sidebar.getBoundingClientRect();
+            // Di layar sempit sidebar menempel ke dasar layar; kartunya naik ke
+            // atasnya. Yang menentukan letak sidebar sungguhan, bukan tebakan
+            // dari lebar jendela — aturannya bisa berubah di CSS tanpa ke sini.
+            const menempelBawah = (window.innerHeight - sb.bottom) < (sb.top);
+            if (menempelBawah) {
+                kartu.style.top = 'auto';
+                kartu.style.bottom = Math.round(window.innerHeight - sb.top + 8) + 'px';
+            } else {
+                kartu.style.bottom = 'auto';
+                kartu.style.top = Math.round(sb.bottom + 8) + 'px';
             }
+        }
+
+        function renderVersionCard(versions, slotTotal) {
+            const kartu = document.getElementById('versionCard');
+            const wadah = document.getElementById('versionCardList');
+            if (!kartu || !wadah) return;
+
+            // Satu versi berarti tidak ada yang perlu dipilih. Kartu yang
+            // isinya satu baris tanpa alternatif cuma memakan tempat.
+            if (versions.length < 2) {
+                kartu.setAttribute('hidden', '');
+                return;
+            }
+            kartu.removeAttribute('hidden');
+
+            wadah.innerHTML = '';
+            const total = parseInt(slotTotal || 0, 10);
+
+            versions.forEach(v => {
+                const ini = v.version === CURRENT_VERSION;
+                const baris = document.createElement('button');
+                baris.type = 'button';
+                baris.className = 'ez-versi-kartu-baris';
+                baris.dataset.version = v.version;
+                baris.dataset.hidden = v.is_hidden ? '1' : '0';
+                if (ini) baris.setAttribute('aria-current', 'true');
+
+                const kiri = document.createElement('span');
+                kiri.className = 'ez-versi-kartu-kiri';
+                kiri.textContent = 'v' + v.version
+                    + (total > 0 ? ' \u00b7 ' + (v.signed_count || 0) + '/' + total : '');
+                baris.appendChild(kiri);
+
+                const kanan = document.createElement('span');
+                kanan.className = 'ez-versi-kartu-kanan';
+                kanan.textContent = ini
+                    ? t('toolbar.version_open_now', {}, 'open now')
+                    : _versiWaktu(v.updated_at);
+                baris.appendChild(kanan);
+
+                baris.title = v.is_hidden
+                    ? t('toolbar.version_hidden', {}, 'hidden')
+                    : kiri.textContent + ' \u00b7 ' + kanan.textContent;
+
+                if (ini) {
+                    baris.disabled = true;
+                } else {
+                    baris.addEventListener('click', () => switchVersion(v.version));
+                }
+                wadah.appendChild(baris);
+            });
+
+            positionVersionCard();
+        }
+
+        window.addEventListener('resize', positionVersionCard);
+        if (typeof ResizeObserver === 'function') {
+            const _sb = document.getElementById('toolbarPanel');
+            if (_sb) new ResizeObserver(positionVersionCard).observe(_sb);
         }
 
         /** Buka atau tutup panelnya. Tanpa argumen: kebalikan keadaan sekarang. */
         function toggleVersionPanel(show) {
             const panel = document.getElementById('versionPanel');
             const tirai = document.getElementById('versionBackdrop');
-            const pemicu = document.getElementById('btnVersionPanel');
+            const pemicu = document.querySelector('.ez-versi-kartu-detail');
             if (!panel) return;
 
             const buka = (typeof show === 'boolean') ? show : panel.hasAttribute('hidden');
@@ -2102,41 +2180,78 @@
                 modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:4000;display:flex;align-items:center;justify-content:center;';
                 document.body.appendChild(modal);
             }
+            // Yang ditawarkan untuk disalin: versi yang sedang dibuka kalau
+            // slotnya memang slot halaman ini, dan versi terbaru kalau bukan.
+            //
+            // `slot` hanya dikirim dari dialog tabrakan slot — form baru yang
+            // menabrak dokumen orang lain. Di sana nomor versi halaman ini
+            // menggambarkan form yang sedang diisi, bukan slot yang ditabrak,
+            // dan kebetulan nomornya sama akan menyalin versi yang salah.
+            const verHalaman = slot ? 0 : CURRENT_VERSION;
+            const dasar = versions.some(v => v.version === verHalaman)
+                ? verHalaman
+                : (versions.length ? versions[0].version : 0);
+            const berikut = versions.reduce((m, v) => Math.max(m, parseInt(v.version, 10) || 0), 0) + 1;
+
             const optsHtml = versions.map(v =>
-                `<option value="${v.version}">v${v.version}${v.is_locked ? ' [Locked]' : ''}</option>`
+                `<option value="${v.version}"${v.version === dasar ? ' selected' : ''}>v${v.version}${v.is_locked ? ' [Locked]' : ''}</option>`
             ).join('');
 
+            // Bawaannya MENYALIN, bukan mengosongkan.
+            //
+            // Sebelum ini bawaannya "blank", dan sepertiga dari semua versi
+            // lanjutan di basis data ini lahir kosong — 51 dari 152. Tiga di
+            // antaranya dibuat dalam 65 detik oleh orang yang jelas sedang
+            // mengklik, bukan memilih. Bawaan yang merusak bukan bawaan.
             modal.innerHTML = `
-                <div class="bg-white rounded-[10px] w-[90%] max-w-[400px] p-5" style="font-family:sans-serif;">
-                    <h5 class="mt-0 mr-0 mb-3 ml-0">${t('modal.new_version.title', {}, 'Create New Version')}</h5>
-                    <p class="text-gray-500 text-[13px] mb-3">${t('modal.new_version.description', {}, 'Choose the data source for the new version:')}</p>
+                <div class="bg-white rounded-[10px] w-[90%] max-w-[420px] p-5" style="font-family:sans-serif;">
+                    <h5 class="mt-0 mr-0 mb-2 ml-0">${t('modal.new_version.title_n', {n: berikut}, 'Create version v{n}')}</h5>
+                    <p class="text-gray-500 text-[13px] mb-3">${t('modal.new_version.description_n', {from: dasar, n: berikut}, 'v{n} starts as a copy of v{from}. v{from} stays exactly as it is.')}</p>
 
                     <label class="block mb-2 cursor-pointer">
-                        <input type="radio" name="newVerSource" value="blank" checked>
-                        ${t('modal.new_version.source_blank', {}, 'Blank (start from scratch)')}
-                    </label>
-                    <label class="block mb-2 cursor-pointer">
-                        <input type="radio" name="newVerSource" value="copy">
+                        <input type="radio" name="newVerSource" value="copy" checked>
                         ${t('modal.new_version.source_copy', {}, 'Copy from version:')}
                         <select id="copyVerSelect" class="ml-1.5 py-0.5 px-1.5">
                             ${optsHtml}
                         </select>
                     </label>
+                    <label class="block mb-1 cursor-pointer">
+                        <input type="radio" name="newVerSource" value="blank">
+                        ${t('modal.new_version.source_blank', {}, 'Empty \u2014 start from nothing')}
+                    </label>
+                    <p class="text-amber-700 text-[12px] mt-0 mb-0 ml-5" id="newVerBlankWarn" style="display:none">
+                        ${t('modal.new_version.blank_warning', {}, 'Every field will be empty, including the patient details.')}
+                    </p>
 
                     <div class="flex gap-2 mt-4 justify-end">
                         <button onclick="document.getElementById('newVersionModal').remove()" class="py-1.5 px-4 border border-gray-300 bg-white rounded-md cursor-pointer">${t('actions.cancel', {}, 'Cancel')}</button>
-                        <button onclick="doCreateNewVersion()" class="py-1.5 px-4 border-0 bg-violet-500 text-white rounded-md cursor-pointer">${t('modal.new_version.title', {}, 'Create New Version')}</button>
+                        <button onclick="doCreateNewVersion()" class="py-1.5 px-4 border-0 bg-violet-500 text-white rounded-md cursor-pointer">${t('modal.new_version.confirm_n', {n: berikut}, 'Create v{n}')}</button>
                     </div>
                 </div>
             `;
+
+            // Peringatannya baru muncul saat "kosong" dipilih. Peringatan yang
+            // selalu ada dibaca sebagai hiasan.
+            modal.querySelectorAll('input[name="newVerSource"]').forEach(r => {
+                r.addEventListener('change', () => {
+                    const warn = document.getElementById('newVerBlankWarn');
+                    if (warn) warn.style.display = (r.value === 'blank' && r.checked) ? '' : 'none';
+                });
+            });
         }
 
         async function doCreateNewVersion() {
             // Dipanggil dari tombol modal, jadi _nvSlot sudah diisi. Bawaan
             // ini cuma jaring kalau ada yang memanggilnya langsung.
             if (!_nvSlot) _nvSlot = { norm: CURRENT_NORM, nopen: CURRENT_NOPEN, label: CURRENT_LABEL };
-            const source = document.querySelector('input[name="newVerSource"]:checked')?.value || 'blank';
-            const sourceVersion = source === 'copy' ? parseInt(document.getElementById('copyVerSelect').value || '0') : 0;
+            // Bawaannya menyalin, sama dengan yang tercentang di dialog. Yang
+            // memanggil fungsi ini tanpa dialog (jalur lama) tidak sedang
+            // meminta dokumen kosong.
+            const source = document.querySelector('input[name="newVerSource"]:checked')?.value || 'copy';
+            const _pilihan = document.getElementById('copyVerSelect');
+            const sourceVersion = source === 'copy'
+                ? (parseInt((_pilihan && _pilihan.value) || '0', 10) || CURRENT_VERSION)
+                : 0;
 
             const fd = new FormData();
             fd.append('_doc_action', 'new_version');
@@ -2179,6 +2294,8 @@
             btn.innerHTML = isCollapsed ? '&#9776;' : '&minus; ' + t('toolbar.hide_label', {}, 'Hide');
             btn.title = isCollapsed ? t('title.show_toolbar', {}, 'Show Toolbar') : t('title.hide_toolbar', {}, 'Hide Toolbar');
             try { localStorage.setItem('surat_toolbar_collapsed', isCollapsed ? '1' : '0'); } catch (e) {}
+            // Kartunya menempel pada sidebar, jadi ia ikut bergeser.
+            positionVersionCard();
         }
 
         // Apply saved toolbar state on load (default: collapsed on narrow screens)

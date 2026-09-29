@@ -39,10 +39,16 @@ const teks = (el) => (el.textContent || '') + el.anak.map(teks).join(' ');
 
 const daftar = buatEl('div');
 const jumlah = buatEl('span');
-const pemicu = buatEl('span');
+const kartu = buatEl('aside');
+const kartuIsi = buatEl('div');
+kartu.hasAttribute = function (k) { return Object.prototype.hasOwnProperty.call(this.atribut, k); };
+kartu.removeAttribute = function (k) { delete this.atribut[k]; };
+kartu.style = {};
+kartu.setAttribute('hidden', '');
 
 const ctx = {
     console,
+    window: { innerHeight: 900, addEventListener() {} },
     CURRENT_VERSION: 2,
     switchVersion: (v) => { ctx._pindah = v; },
     toggleVersionPanel: () => { ctx._tutup = true; },
@@ -56,7 +62,8 @@ const ctx = {
         getElementById: (id) => {
             if (id === 'versionPanelList') return daftar;
             if (id === 'versionPanelCount') return jumlah;
-            if (id === 'versionTriggerText') return pemicu;
+            if (id === 'versionCard') return kartu;
+            if (id === 'versionCardList') return kartuIsi;
             return null;
         },
         createElement: buatEl,
@@ -103,8 +110,29 @@ v1._klik();
 if (ctx._tutup !== true) gagal('panelnya tidak ditutup saat memilih versi');
 if (ctx._pindah !== 1) gagal('pindah ke versi ' + ctx._pindah + ', harusnya 1');
 
-// Teks pemicunya meringkas versi yang sedang dibuka.
-if (pemicu.textContent !== 'v2 · 1/3') gagal('teks pemicu: ' + pemicu.textContent);
+// ── Kartu yang selalu tampil ─────────────────────────────────────────────
+ctx.renderVersionCard([
+    { version: 3, signed_count: 0, is_hidden: 0, updated_at: '2026-09-29 10:14:00' },
+    { version: 2, signed_count: 1, is_hidden: 0, updated_at: '2026-09-26 09:02:00' },
+    { version: 1, signed_count: 3, is_hidden: 0, updated_at: '2026-09-25 14:40:00' },
+], 3);
+
+if (kartu.hasAttribute('hidden')) gagal('kartunya tetap tersembunyi padahal versinya tiga');
+if (kartuIsi.anak.length !== 3) gagal('baris kartu ' + kartuIsi.anak.length + ', harusnya 3');
+
+const [k3, k2] = kartuIsi.anak;
+if (!teks(k3).includes('v3 · 0/3')) gagal('baris kartu v3: ' + teks(k3));
+if (!teks(k2).includes('open now')) gagal('baris kartu yang sedang dibuka tidak ditandai');
+if (k2.disabled !== true) gagal('baris kartu yang sedang dibuka masih bisa diklik');
+
+ctx._pindah = null;
+k3._klik();
+if (ctx._pindah !== 3) gagal('klik kartu tidak pindah versi, dapat ' + ctx._pindah);
+
+// Satu versi saja: tidak ada yang perlu dipilih, kartunya tidak muncul.
+kartuIsi.anak = [];
+ctx.renderVersionCard([{ version: 1, signed_count: 0, is_hidden: 0, updated_at: '2026-09-25 14:40:00' }], 3);
+if (!kartu.hasAttribute('hidden')) gagal('kartunya muncul padahal versinya cuma satu');
 
 // ── Template tanpa slot tanda tangan ─────────────────────────────────────
 daftar.anak = [];

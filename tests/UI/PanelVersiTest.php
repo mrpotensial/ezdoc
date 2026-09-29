@@ -132,19 +132,55 @@ final class PanelVersiTest extends TestCase
 
     // ── Panelnya ─────────────────────────────────────────────────────────
 
-    /** Panelnya ada, dan pemicunya menggantikan dropdown di sidebar. */
-    public function testPanelnyaAdaDanDropdownnyaTersembunyi(): void
+    /**
+     * Daftarnya tampil tanpa diklik, dan dropdown lamanya tidak terlihat.
+     *
+     * Diminta pemakai: "user suka asal klik buat versi, jadi sebaiknya list
+     * versi langsung tampil saja kali ya?". Daftar yang menunggu satu klik
+     * hanya menolong yang sudah tahu ada versi lain — dan yang tidak tahu
+     * itulah yang membuat versi baru.
+     */
+    public function testDaftarnyaTampilTanpaDiklik(): void
     {
         $view = self::baca('views/document/generate.php');
 
-        self::assertStringContainsString('id="versionPanel"', $view, 'panel daftar versi tidak ada');
-        self::assertStringContainsString('id="btnVersionPanel"', $view, 'pemicunya tidak ada');
+        self::assertStringContainsString('id="versionCard"', $view, 'kartu daftar versi tidak ada');
+        self::assertStringContainsString('id="versionCardList"', $view, 'isi kartunya tidak ada');
+        self::assertStringContainsString('id="versionPanel"', $view, 'panel detailnya tidak ada');
         self::assertStringContainsString('class="ez-versi-select"', $view, 'select-nya tidak ditandai untuk disembunyikan');
+
+        // Tidak ada lagi tombol pemicu di sidebar: kartunya yang menggantikannya.
+        self::assertStringNotContainsString('id="btnVersionPanel"', $view, 'masih ada pemicu yang menuntut klik');
 
         self::assertSame(
             1,
             preg_match('/\.ez-versi-select \{ display: none; \}/', self::baca('views/_partials/generate_styles.php')),
             'select lamanya masih terlihat'
+        );
+    }
+
+    /**
+     * Kartunya menempel pada sidebar, dan letaknya dihitung, bukan ditebak.
+     *
+     * Tinggi sidebar berubah-ubah: ia bisa digulung, dan isinya berbeda antar
+     * template. Satu angka `top` yang dipaku akan benar hari ini dan salah
+     * besok.
+     */
+    public function testLetakKartunyaMengikutiSidebar(): void
+    {
+        $skrip = self::baca('views/_partials/generate_scripts.php');
+
+        self::assertStringContainsString('function positionVersionCard(', $skrip);
+        self::assertStringContainsString("getElementById('toolbarPanel')", $skrip);
+        self::assertSame(
+            1,
+            preg_match("/window\.addEventListener\('resize', positionVersionCard\)/", $skrip),
+            'kartunya tidak ikut saat jendela diubah ukurannya'
+        );
+        self::assertSame(
+            1,
+            preg_match('/function toggleToolbar\(\)[\s\S]{0,700}?positionVersionCard\(\);/', $skrip),
+            'kartunya tidak ikut saat sidebar digulung'
         );
     }
 

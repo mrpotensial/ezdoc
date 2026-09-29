@@ -6,6 +6,47 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Fixed — versi baru dimulai kosong; sepertiga versi di basis data ikut kosong (2026-09-29)**
+
+Dilaporkan pemakai: "user suka asal klik buat versi". Yang diklik memang
+tombolnya, tapi yang membuat hasilnya kosong adalah bawaan dialognya: pilihan
+"Blank (start from scratch)" yang tercentang lebih dulu.
+
+Terukur di basis data pemakai: dari **152 versi lanjutan, 51 lahir kosong** —
+sepertiganya. Tiga di antaranya dibuat dalam 65 detik oleh satu orang. Satu
+slot sampai v29. Satu dokumen kehilangan nama pasiennya karena itu.
+
+Jalur penolakan §7b bahkan sudah menulis maksudnya di komentar — "versi baru
+menyalin isi versi ini, jadi apa yang diketik petugas tidak hilang" — tapi
+dialog yang dipanggilnya melakukan yang sebaliknya.
+
+- **Bawaannya sekarang menyalin**, dan yang disalin versi yang sedang dibuka.
+  Kalau dialognya dipanggil untuk slot LAIN (form baru yang menabrak dokumen
+  orang lain), yang ditawarkan versi terbaru slot itu — nomor versi halaman ini
+  tidak menggambarkan slot itu, dan kebetulan nomornya sama akan menyalin versi
+  yang salah.
+- **Judul dan tombolnya menyebut nomornya**: "Buat v3", bukan "Create New
+  Version". Itu satu-satunya kalimat yang sempat dibaca orang yang buru-buru.
+- Memilih "kosongkan" memunculkan peringatan bahwa semua isian akan kosong,
+  termasuk identitas pasien. Peringatan yang selalu ada dibaca sebagai hiasan,
+  jadi ia hanya muncul saat pilihan itu diambil.
+
+**Changed — daftar versi selalu tampil, tidak lagi menunggu diklik**
+
+Lanjutan dari panel versi kemarin. Diminta pemakai: "sebaiknya list versi
+langsung tampil saja kali ya?".
+
+Kartu tersendiri di bawah sidebar — sebaris per versi: nomor, kemajuan tanda
+tangan, dan kapan. Yang sedang dibuka disorot dan tidak bisa diklik. Tombol
+**Detail** membuka panel lengkap yang sudah ada.
+
+- Letaknya dihitung dari kotak sidebar, bukan dipaku: sidebar bisa digulung dan
+  tingginya berbeda antar template. Di layar sempit sidebar menempel ke dasar
+  layar, jadi kartunya naik ke atasnya.
+- Muncul hanya kalau versinya lebih dari satu. Kartu berisi satu baris tanpa
+  alternatif cuma memakan tempat.
+- Pemicu versi di sidebar dibuang — kartunya yang menggantikannya.
+
 **Changed — daftar versi jadi panel, bukan dropdown (2026-09-29)**
 
 Dilaporkan pemakai: "untuk versi ini user sering bingung… apa kita buat

@@ -39,11 +39,17 @@ class FormDataTiruan {
 
 const el = (extra = {}) => Object.assign({
   value: '', innerHTML: '', style: {}, remove() {}, appendChild() {},
+  // Dialog versi baru memasang penangan pada pilihan sumbernya; elemen
+  // sungguhan selalu punya querySelectorAll, tiruan ini dulu tidak.
+  querySelectorAll() { return []; },
 }, extra);
 
 const ctx = {
   console, Promise, JSON, Object, Array, String, Number, parseInt, URLSearchParams,
   FormData: FormDataTiruan,
+  // Halaman sungguhan selalu punya nomor versinya sendiri; dialog versi baru
+  // memakainya untuk menawarkan salinan versi yang sedang dibuka.
+  CURRENT_VERSION: 1,
   CURRENT_NORM: halaman.norm,
   CURRENT_NOPEN: halaman.nopen,
   CURRENT_LABEL: halaman.label,

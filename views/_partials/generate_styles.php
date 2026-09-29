@@ -814,17 +814,6 @@
            Ambang 1024px sengaja sama dengan yang sudah dipakai .toolbar. */
         .ez-versi-select { display: none; }
 
-        .toolbar button.ez-versi-pemicu {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 6px;
-            text-align: left;
-            font-size: 12px;
-            padding: 7px 9px;
-        }
-        .ez-versi-pemicu-tanda { opacity: .55; font-size: 15px; line-height: 1; }
-
         .ez-versi-tirai {
             position: fixed;
             inset: 0;
@@ -943,8 +932,106 @@
             .ez-versi-tersembunyi-pemicu { font-size: 13px; padding: 6px 0; }
         }
 
+
+        /* ══ Kartu daftar versi ══════════════════════════════════════════
+           Selalu tampil, menempel di bawah sidebar (di atasnya kalau sidebar
+           sedang menempel ke dasar layar). Letak tegaknya dihitung JavaScript:
+           tinggi sidebar berubah-ubah — ia bisa digulung, dan isinya berbeda
+           antar template — jadi tidak ada satu angka yang benar terus. */
+        .ez-versi-kartu {
+            position: fixed;
+            right: 20px;
+            width: 210px;
+            max-height: 30vh;
+            display: flex;
+            flex-direction: column;
+            background: #222;
+            color: #e5e7eb;
+            border-radius: 8px;
+            padding: 7px 8px 8px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+            z-index: 999;          /* di bawah sidebar, di bawah panel detail */
+            font-size: 11.5px;
+            box-sizing: border-box;
+        }
+        .ez-versi-kartu[hidden] { display: none; }
+
+        .ez-versi-kartu-kepala {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 6px;
+            margin-bottom: 5px;
+        }
+        #versionCardTitle {
+            font-size: 9.5px;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            color: #9ca3af;
+        }
+        .ez-versi-kartu-detail {
+            background: transparent;
+            border: 0;
+            color: #9ca3af;
+            font-size: 10.5px;
+            padding: 0;
+            cursor: pointer;
+        }
+        .ez-versi-kartu-detail:hover { color: #e5e7eb; }
+
+        .ez-versi-kartu-isi { overflow-y: auto; }
+
+        .ez-versi-kartu-baris {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 6px;
+            width: 100%;
+            text-align: left;
+            background: transparent;
+            border: 0;
+            border-left: 3px solid transparent;
+            border-radius: 4px;
+            padding: 4px 6px;
+            margin: 0;
+            color: #d1d5db;
+            cursor: pointer;
+            font: inherit;
+            line-height: 1.35;
+        }
+        .ez-versi-kartu-baris:hover { background: #2e2e2e; }
+        .ez-versi-kartu-baris:focus-visible { outline: 2px solid #6366f1; outline-offset: -2px; }
+        /* Yang sedang dibuka: ditandai garis di tepi, bukan warna latar penuh —
+           kartunya kecil, dan blok warna di dalamnya terbaca sebagai tombol. */
+        .ez-versi-kartu-baris[aria-current="true"] {
+            border-left-color: #818cf8;
+            background: #2a2840;
+            color: #f3f4f6;
+            cursor: default;
+        }
+        .ez-versi-kartu-baris[data-hidden="1"] { opacity: .55; }
+        .ez-versi-kartu-kiri { white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .ez-versi-kartu-kanan {
+            color: #9ca3af;
+            font-size: 10.5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ez-versi-kartu-kosong { color: #9ca3af; padding: 2px 6px; }
+
+        @media (hover: none) and (pointer: coarse) {
+            .ez-versi-kartu-baris { padding: 8px 6px; }
+            .ez-versi-kartu-detail { font-size: 12px; padding: 2px 0; }
+        }
+
         @media screen and (max-width: 1024px) {
             .toolbar { top: auto; bottom: 10px; right: 10px; max-height: 50vh; width: 170px; }
+
+            /* Sidebar menempel ke dasar layar di lebar ini, jadi kartunya naik
+               ke atasnya — letaknya diatur positionVersionCard(). */
+            .ez-versi-kartu { right: 10px; width: 170px; max-height: 26vh; }
+
 
             /* iPad tegak dan tablet: sidebar sudah pindah ke pojok bawah, jadi
                panel di sampingnya tidak muat. Jadi lembar bawah selebar layar. */
@@ -1094,7 +1181,7 @@
             }
             /* Hide screen-only pagination spacers (they exist untuk screen visual). */
             .ezdoc-page-spacer { display: none !important; }
-            .toolbar, .modal, .toast { display: none !important; }
+            .toolbar, .modal, .toast, .ez-versi-kartu, .ez-versi-panel, .ez-versi-tirai { display: none !important; }
             .f { border-bottom: none !important; background: transparent !important; }
             .f:empty::before { display: none; }
             .ttd-actions { display: none !important; }

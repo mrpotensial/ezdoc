@@ -2111,6 +2111,30 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
         </aside>
         <?php endif; ?>
 
+        <?php if ($isEditMode): ?>
+        <?php // Kartu daftar versi — selalu tampil.
+        //
+        // Diminta pemakai: "user suka asal klik buat versi, jadi sebaiknya list
+        // versi langsung tampil saja kali ya?". Di basis data ini sepertiga versi
+        // lanjutan lahir kosong; sebagiannya orang yang tidak tahu versi lain
+        // sudah ada.
+        //
+        // Kartu terpisah, bukan di dalam sidebar: sidebar sudah penuh, dan
+        // daftarnya harus tetap terbaca saat sidebar digulung. Letaknya dihitung
+        // JavaScript dari kotak sidebar (lihat positionVersionCard) karena tinggi
+        // sidebar berubah-ubah — ia bisa digulung, dan isinya berbeda antar
+        // template. ?>
+        <aside class="ez-versi-kartu" id="versionCard" aria-labelledby="versionCardTitle" hidden>
+            <div class="ez-versi-kartu-kepala">
+                <span id="versionCardTitle"><?= h(t('toolbar.version_label', [], 'Version')) ?></span>
+                <button type="button" class="ez-versi-kartu-detail" onclick="toggleVersionPanel()"
+                        aria-haspopup="dialog" aria-expanded="false" aria-controls="versionPanel"
+                        title="<?= h(t('title.version_panel', [], 'Show the list of versions')) ?>"><?= h(t('toolbar.version_detail', [], 'Detail')) ?> &rsaquo;</button>
+            </div>
+            <div class="ez-versi-kartu-isi" id="versionCardList"></div>
+        </aside>
+        <?php endif; ?>
+
         <div class="toolbar" id="toolbarPanel">
             <button type="button" class="toolbar-toggle" id="toolbarToggleBtn" onclick="toggleToolbar()" title="<?= h(t('title.toggle_toolbar', [], 'Show/Hide Toolbar')) ?>">&#9776;</button>
             <div class="toolbar-body">
@@ -2230,24 +2254,16 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                         <input type="text" name="_label" id="inputLabel" value="<?= h($param_label) ?>" placeholder="<?= h(t('placeholder.default_dash', [], '- (default)')) ?>" <?= $param_is_locked ? 'readonly' : '' ?>>
                     <?php endif; ?>
                     <?php if ($isEditMode): ?>
-                    <label><?= h(t('toolbar.version_label', [], 'Version')) ?></label>
-                    <?php // Pemicu daftar versi. Dulu di sini ada dropdown, dan isinya
-                    // cuma "v2 (current)" — tidak ada yang memberi tahu versi mana
-                    // yang tanda tangannya sudah lengkap, mana yang masih draf, dan
-                    // apa bedanya. Dilaporkan pemakai: "untuk versi ini user sering
-                    // bingung". Sekarang daftarnya panel tersendiri yang punya ruang
-                    // untuk menjawab itu. ?>
-                    <button type="button" id="btnVersionPanel" onclick="toggleVersionPanel()"
-                            class="ez-versi-pemicu" aria-haspopup="dialog" aria-expanded="false"
-                            aria-controls="versionPanel"
-                            title="<?= h(t('title.version_panel', [], 'Show the list of versions')) ?>">
-                        <span id="versionTriggerText">v<?= $param_version ?></span>
-                        <span class="ez-versi-pemicu-tanda" aria-hidden="true">&rsaquo;</span>
-                    </button>
-                    <?php // Select-nya tetap ada, tidak terlihat. Ia sumber data satu-satunya
-                    // untuk switchVersion() (termasuk penanda versi tersembunyi), dan ia
-                    // jalan keluar kalau JavaScript panelnya gagal: yang tersisa tetap
-                    // kontrol asli peramban, bukan halaman tanpa pemilih versi. ?>
+                    <?php // Tidak ada pemilih versi di sidebar lagi.
+                    //
+                    // Dulu dropdown, lalu tombol yang membuka panel. Keduanya menuntut
+                    // satu klik sebelum orang tahu ada versi lain — dan yang tidak
+                    // tahu, membuat versi baru. Sekarang daftarnya selalu tampil di
+                    // kartu tersendiri di bawah sidebar ini; yang tinggal di sini cuma
+                    // sumber datanya.
+                    //
+                    // Select-nya tidak terlihat tapi tetap ada: ia sumber data
+                    // switchVersion(), termasuk penanda versi tersembunyi. ?>
                     <select id="versionSelect" onchange="switchVersion(this.value)" class="ez-versi-select">
                         <option value="<?= $param_version ?>">v<?= $param_version ?> <?= h(t('toolbar.version_current_suffix', [], '(current)')) ?></option>
                     </select>
