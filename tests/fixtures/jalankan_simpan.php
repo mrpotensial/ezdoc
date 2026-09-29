@@ -12,6 +12,7 @@
  *   baru-bertanda  form BARU (tanpa _doc_id) di slot dokumen bertanda tangan
  *   buka-bertanda  dokumen itu dibuka (_doc_id=5), field bertanda tangan diubah
  *   baru-kosong    form BARU di slot dokumen yang belum ditandatangani
+ *   grafik         dokumen berisi papan grafik, nilainya dikirim sebagai deret
  *
  * Dipakai tests/Document/SlotTakenSignedTest.php.
  */
@@ -51,6 +52,17 @@ ezdoc_set_role_provider($provider);
 // ── Data ─────────────────────────────────────────────────────────────────
 $isi = '<p>Nama: {{nama}}</p>'
      . '<div class="ttd-placeholder" data-ttd="ttd_a" data-label="Petugas" data-nama-field="nama_petugas"></div>';
+
+if ($skenario === 'grafik') {
+    // Nama deretnya sengaja TIDAK muncul sebagai {{...}} di mana pun — ia hidup
+    // di dalam spesifikasi papan. Itulah yang diuji.
+    $spec = json_encode([
+        'start_field' => 'pantau_mulai',
+        'panels' => [['series' => [['field' => 'pantau_djj']]]],
+    ]);
+    $isi .= '<div class="chart-placeholder" data-chart="c1" data-chart-spec="'
+        . htmlspecialchars((string) $spec, ENT_QUOTES, 'UTF-8') . '"><span>papan</span></div>';
+}
 $db->execute(
     "INSERT INTO ezdoc_templates (id, uuid, slug, version, is_current, name, category, scope, content, is_active)
      VALUES (1, 'tpl-1', 'uji', 1, 1, 'Uji', 'umum', 'patient', ?, 1)",
@@ -65,11 +77,11 @@ $db->execute(
      VALUES (5, 'dok-5', 1, 'tpl-1', 1, 'Uji', '1', '11', '1', '11', '-', 2, ?, ?)",
     [
         json_encode(['nama' => 'Budi', 'nama_petugas' => 'Sari']),
-        $skenario === 'baru-kosong' ? '{}' : json_encode(['ttd_a' => $gambar]),
+        in_array($skenario, ['baru-kosong', 'grafik'], true) ? '{}' : json_encode(['ttd_a' => $gambar]),
     ]
 );
 
-if ($skenario !== 'baru-kosong') {
+if (!in_array($skenario, ['baru-kosong', 'grafik'], true)) {
     $db->execute(
         "INSERT INTO ezdoc_signatures (uuid, document_id, signature_id_within_doc, signer_id, provider, level,
                                        envelope_format, envelope, content_hash, signed_at, verify_status, metadata)
@@ -86,13 +98,30 @@ $_POST = [
     '_norm'       => '1',
     '_nopen'      => '11',
     '_label'      => '-',
-    '_doc_id'     => $skenario === 'buka-bertanda' ? '5' : '0',
+    '_doc_id'     => in_array($skenario, ['buka-bertanda', 'grafik'], true) ? '5' : '0',
     'nama'        => 'Ani',
 ];
 if ($skenario === 'buka-bertanda') {
     // Form yang dibuka mengirim ulang tanda tangan tersimpan pada tiap simpan.
     $_POST['ttd_a']        = $gambar;
     $_POST['nama_petugas'] = 'Sari';
+}
+
+if ($skenario === 'grafik') {
+    $_POST['pantau_mulai'] = '2026-09-29 08:00';
+    $_POST['pantau_djj'] = '[{"x":"2026-09-29 09:00","y":144}]';
+
+    // Action-nya mengakhiri permintaan dengan exit, jadi keadaan basis datanya
+    // dicetak dari sini.
+    register_shutdown_function(static function () use ($db) {
+        $baris = $db->fetchOne(
+            'SELECT field_values FROM ezdoc_documents WHERE norm = ? AND nopen = ? ORDER BY id DESC LIMIT 1',
+            ['1', '11']
+        );
+        echo "
+---
+" . (string) ($baris['field_values'] ?? '');
+    });
 }
 
 require $root . '/actions/_dispatcher.php';

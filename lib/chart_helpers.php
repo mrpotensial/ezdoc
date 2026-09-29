@@ -108,6 +108,40 @@ if (!function_exists('ezdoc_chart_values')) {
     }
 }
 
+if (!function_exists('ezdoc_chart_field_names')) {
+    /**
+     * Semua nama field yang dipakai papan-papan grafik di sebuah HTML template.
+     *
+     * Jalur penyimpanan dokumen menyusun daftar field yang akan disimpan dari
+     * penanda `{{...}}`, nama field tanda tangan, dan `data-qr`. Deret grafik
+     * bukan satu pun dari ketiganya — tanpa fungsi ini, angka yang sudah
+     * diletakkan orang di kisi tidak ikut tersimpan, dan hilangnya tidak
+     * terlihat sampai dokumennya dibuka lagi.
+     *
+     * @return array<int,string>
+     */
+    function ezdoc_chart_field_names(string $html): array
+    {
+        if (strpos($html, 'chart-placeholder') === false) {
+            return [];
+        }
+
+        $names = [];
+        if (preg_match_all(EZDOC_CHART_PATTERN, $html, $m) !== false) {
+            foreach ($m[1] as $tag) {
+                $spec = ezdoc_chart_spec_from_tag($tag);
+                if ($spec !== null) {
+                    foreach ($spec->fieldNames() as $name) {
+                        $names[$name] = true;
+                    }
+                }
+            }
+        }
+
+        return array_keys($names);
+    }
+}
+
 if (!function_exists('ezdoc_chart_render_screen')) {
     /**
      * Ganti semua penanda papan dengan gambar yang bisa diisi.

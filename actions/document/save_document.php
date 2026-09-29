@@ -291,6 +291,16 @@ foreach ($configTtd as $ttd) {
 preg_match_all('/data-qr="([^"]+)"/', $templateHtml, $qrMatches);
 foreach ($qrMatches[1] as $qrField) $allFields[$qrField] = true;
 
+// Deret papan grafik. Namanya tidak muncul sebagai `{{...}}` di mana pun —
+// ia hidup di dalam spesifikasi papan — jadi tanpa baris ini angka yang sudah
+// diletakkan orang di kisi tidak ikut tersimpan, dan hilangnya baru ketahuan
+// saat dokumennya dibuka lagi.
+if (function_exists('ezdoc_chart_field_names')) {
+    foreach (ezdoc_chart_field_names($templateHtml) as $chartField) {
+        $allFields[$chartField] = true;
+    }
+}
+
 $fieldData = [];
 foreach ($allFields as $fn => $v) {
     $fieldData[$fn] = $_POST[$fn] ?? '';
