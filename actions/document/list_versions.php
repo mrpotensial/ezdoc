@@ -6,7 +6,14 @@
  * List semua versi (active only) di slot dokumen — dari template family
  * via JOIN template_uuid.
  *
- * Response: { success: true, versions: [{ id, version, is_locked, updated_at }, ...] }
+ * Response: { success: true, slot_total, versions: [{ id, version, is_locked,
+ *              updated_at, is_hidden, hidden_at, signed_count, created_by_name }, ...] }
+ *
+ * `signed_count` dan `created_by_name` ada supaya daftar versi bisa menjawab
+ * pertanyaan yang sebenarnya ditanyakan orang — "yang mana yang sudah lengkap?"
+ * — tanpa membuka satu per satu. Keduanya diambil sekaligus untuk semua versi,
+ * bukan per baris: satu slot bisa punya belasan versi, dan satu kueri per baris
+ * adalah N+1 yang sama yang melahirkan eager loading di Doctrine dan Eloquent.
  *
  * Note: response backward-compat pakai key `versions` top-level (frontend
  * akses `data.versions`).
@@ -49,8 +56,13 @@ $db = Context::default()->connection();
 //
 // "Boleh mengurus versi tersembunyi" adalah sifat penggunanya, bukan sifat
 // permintaan ini.
-$tpl = $db->fetchOne('SELECT access_config FROM ezdoc_templates WHERE id = ? LIMIT 1', [$tid]);
+$tpl = $db->fetchOne('SELECT access_config, signature_config FROM ezdoc_templates WHERE id = ? LIMIT 1', [$tid]);
 $bolehMengurus = ezdoc_can_hide_versions(ezdoc_parse_access_config($tpl['access_config'] ?? null));
+
+// Berapa slot tanda tangan yang dipunyai templatenya. Sama untuk semua versi,
+// jadi dihitung sekali di sini dan dikirim di tingkat atas jawabannya.
+$__slot = json_decode((string) ($tpl['signature_config'] ?? '[]'), true);
+$slotTotal = is_array($__slot) ? count($__slot) : 0;
 
 // Barisnya baru ikut kalau DIMINTA dan BOLEH. Keduanya, bukan salah satu:
 // yang pertama menjaga daftar biasa tetap bersih, yang kedua menjaga
@@ -60,7 +72,7 @@ $sertakan = !empty($_POST['include_hidden']) && $bolehMengurus;
 $saring = $sertakan ? '' : ' AND d.deleted_at IS NULL';
 
 $rows = $db->fetchAll(
-    'SELECT d.id, d.version, d.is_locked, d.updated_at, d.deleted_at, d.deleted_by
+    'SELECT d.id, d.version, d.is_locked, d.updated_at, d.deleted_at, d.deleted_by, d.created_by
      FROM ezdoc_documents d
      INNER JOIN ezdoc_templates t ON t.uuid = d.template_uuid
      WHERE t.id = ? AND d.subject_id = ? AND d.context_id = ? AND d.label = ?' . $saring . '
@@ -68,7 +80,44 @@ $rows = $db->fetchAll(
     [$tid, $n, $np, $lb]
 );
 
-$versions = array_map(function ($row) {
+// ── Kemajuan tanda tangan tiap versi, sekali jalan ───────────────────────
+//
+// Yang dihitung SLOT yang terisi, bukan baris tanda tangan: satu slot yang
+// ditandatangani ulang meninggalkan lebih dari satu baris, dan "4 dari 3"
+// bukan kalimat yang menolong siapa pun.
+$idDokumen = [];
+foreach ($rows as $row) {
+    $idDokumen[] = (int) $row['id'];
+}
+
+$terisi = [];
+if ($idDokumen !== []) {
+    $tanda = implode(',', array_fill(0, count($idDokumen), '?'));
+    $barisTtd = $db->fetchAll(
+        'SELECT `document_id`, `metadata` FROM `ezdoc_signatures`
+         WHERE `document_id` IN (' . $tanda . ') AND `deleted_at` IS NULL',
+        $idDokumen
+    );
+    foreach ($barisTtd as $b) {
+        $meta = json_decode((string) ($b['metadata'] ?? ''), true);
+        if (is_array($meta) && !empty($meta['ttd_id'])) {
+            $terisi[(int) $b['document_id']][(string) $meta['ttd_id']] = true;
+        }
+    }
+}
+
+// Nama pembuat, juga sekaligus. Sumber namanya disambung aplikasi pemakai;
+// yang tidak ketemu tidak menghentikan apa pun — daftarnya cuma kehilangan
+// satu baris keterangan.
+$idPembuat = [];
+foreach ($rows as $row) {
+    if ((int) ($row['created_by'] ?? 0) > 0) {
+        $idPembuat[] = (int) $row['created_by'];
+    }
+}
+$namaPembuat = $idPembuat !== [] ? ezdoc_actor_names($idPembuat) : [];
+
+$versions = array_map(function ($row) use ($terisi, $namaPembuat) {
     return [
         'id'         => (int) $row['id'],
         'version'    => (int) $row['version'],
@@ -78,11 +127,15 @@ $versions = array_map(function ($row) {
         // daftar campuran harus bisa membedakan tanpa menebak dari panjangnya.
         'is_hidden'  => empty($row['deleted_at']) ? 0 : 1,
         'hidden_at'  => $row['deleted_at'] ?? null,
+        'signed_count' => isset($terisi[(int) $row['id']]) ? count($terisi[(int) $row['id']]) : 0,
+        'created_by_name' => (string) ($namaPembuat[(int) ($row['created_by'] ?? 0)] ?? ''),
     ];
 }, $rows);
 
 ezdoc_respond_success([
     'versions' => $versions,
+    // Penyebut "x dari y". Dikirim sekali, bukan diulang tiap baris.
+    'slot_total' => $slotTotal,
     // Supaya frontend tahu apakah menampilkan penyaringnya sama sekali. Tombol
     // yang muncul lalu selalu ditolak lebih buruk daripada tombol yang tidak ada.
     'may_hide' => $bolehMengurus ? 1 : 0,

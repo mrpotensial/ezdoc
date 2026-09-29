@@ -42,6 +42,17 @@ return [
         'nopen'                 => 'NOPEN',
         'version_label'         => 'Versi',
         'version_current_suffix'=> '(current)',
+        // Panel daftar versi. Dulu dropdown, dan isinya cuma nomor versi —
+        // sementara yang ditanyakan orang "yang mana yang sudah lengkap?".
+        'version_panel_title'   => 'Versi dokumen',
+        'version_count'         => '{n} versi',
+        'version_none'          => 'Belum ada versi.',
+        'version_open_now'      => 'sedang dibuka',
+        'version_complete'      => 'lengkap',
+        'version_partial'       => 'berjalan',
+        'version_draft'         => 'draf',
+        'version_hidden'        => 'disembunyikan',
+        'version_no_slots'      => 'Tanpa slot tanda tangan',
         'locked'                => 'Locked',
         'update'                => 'Update',
         'save_new'              => 'Simpan Baru',
@@ -61,6 +72,7 @@ return [
         'doc_info_id_edit'      => 'ID: {id} (Edit)',
     ],
     'title' => [
+        'version_panel'         => 'Lihat daftar versi',
         'restore_version'        => 'Kembalikan versi ini ke daftar',
         'toggle_hidden_versions' => 'Tampilkan atau sembunyikan versi yang disingkirkan dari daftar',
         'hide_version'        => 'Sembunyikan versi ini dari daftar — tetap bisa dibuka dan bisa dikembalikan',

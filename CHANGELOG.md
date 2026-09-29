@@ -6,6 +6,39 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Changed — daftar versi jadi panel, bukan dropdown (2026-09-29)**
+
+Dilaporkan pemakai: "untuk versi ini user sering bingung… apa kita buat
+disebelah kiri list versi yang ada detail lainnya gitu? jadi user bisa pilih
+dengan jelas bukan dari dropdown?".
+
+Dropdown lamanya menyebut nomor versi dan tidak lebih. Pertanyaan yang
+sebenarnya ditanyakan orang adalah "yang mana yang sudah lengkap tanda
+tangannya?" — dan itu tidak bisa dijawab daftar yang isinya "v1, v2, v3".
+
+Sekarang tiap baris menjawab tiga hal sekaligus: versi berapa, sudah berapa
+tanda tangan dari berapa, dan kapan serta oleh siapa dibuat. Lencananya
+membedakan **lengkap**, **berjalan**, **draf**, **disembunyikan**, dan yang
+**sedang dibuka** — yang terakhir tidak bisa diklik, karena tombol yang tidak
+melakukan apa-apa terbaca sebagai rusak.
+
+- **Dua perilaku lebar, bukan satu yang dipaksakan.** Di atas 1024px panel
+  menempel di kiri sidebar tanpa tirai, jadi dokumennya tetap terbaca sambil
+  memilih. Di bawah itu — iPad tegak, tablet — ia jadi lembar bawah selebar
+  layar dengan tirai, karena 320px di samping sidebar tidak muat lagi. Ambang
+  1024px sengaja sama dengan yang sudah dipakai sidebar. Sasaran sentuhnya
+  diperbesar hanya di perangkat sentuh (`pointer: coarse`).
+- **Endpoint `list_versions` kini membawa `signed_count`, `created_by_name`,
+  dan `slot_total`.** Yang dihitung SLOT yang terisi, bukan baris tanda tangan:
+  satu slot yang ditandatangani ulang meninggalkan lebih dari satu baris, dan
+  "4 dari 3" bukan kalimat yang menolong siapa pun. Keduanya diambil sekaligus
+  untuk semua versi, bukan per baris.
+- Daftarnya disegarkan tiap kali panel dibuka — versi bisa bertambah dari tab
+  lain, dan daftar basi lebih menyesatkan daripada tidak ada daftar.
+- Esc dan tirai menutupnya; `aria-expanded` ikut berubah.
+- `<select>` lamanya tetap ada tanpa terlihat: ia sumber data `switchVersion()`,
+  termasuk penanda versi tersembunyi.
+
 **Fixed — nilai field di-escape dua kali; nama berpetik merusak tanda tangan kedua (2026-09-29)**
 
 Dilaporkan pemakai: nama pasien "NIZAR RIFA'I" tampil jadi

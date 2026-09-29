@@ -2083,6 +2083,34 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
         </div>
 
         <!-- TOOLBAR V1 Style -->
+        <?php if ($isEditMode): ?>
+        <?php // Panel daftar versi.
+        //
+        // Saudara .toolbar, bukan anaknya: .toolbar punya `overflow-y: auto`,
+        // dan anak berposisi fixed di dalam kotak yang menggulung akan terpotong
+        // begitu daftarnya lebih panjang dari sidebar.
+        //
+        // Lebar >1024px ia menempel di kiri sidebar. Di bawah itu — iPad tegak,
+        // tablet — ia jadi lembar bawah selebar layar, karena 320px di samping
+        // sidebar tidak muat lagi. Lihat generate_styles.php. ?>
+        <div class="ez-versi-tirai" id="versionBackdrop" onclick="toggleVersionPanel(false)" hidden></div>
+        <aside class="ez-versi-panel" id="versionPanel" role="dialog" aria-modal="false"
+               aria-labelledby="versionPanelTitle" hidden>
+            <header class="ez-versi-kepala">
+                <h2 id="versionPanelTitle"><?= h(t('toolbar.version_panel_title', [], 'Document versions')) ?></h2>
+                <span class="ez-versi-jumlah" id="versionPanelCount"></span>
+                <button type="button" class="ez-versi-tutup" onclick="toggleVersionPanel(false)"
+                        aria-label="<?= h(t('actions.close', [], 'Close')) ?>">&times;</button>
+            </header>
+            <div class="ez-versi-isi" id="versionPanelList" tabindex="-1"></div>
+            <footer class="ez-versi-kaki">
+                <button type="button" id="btnToggleHidden" onclick="toggleHiddenVersions()" style="display:none"
+                        class="ez-versi-tersembunyi-pemicu"
+                        title="<?= h(t('title.toggle_hidden_versions', [], 'Show or hide versions that were hidden from the list')) ?>"><?= h(t('toolbar.show_hidden_versions', [], 'Show hidden')) ?></button>
+            </footer>
+        </aside>
+        <?php endif; ?>
+
         <div class="toolbar" id="toolbarPanel">
             <button type="button" class="toolbar-toggle" id="toolbarToggleBtn" onclick="toggleToolbar()" title="<?= h(t('title.toggle_toolbar', [], 'Show/Hide Toolbar')) ?>">&#9776;</button>
             <div class="toolbar-body">
@@ -2203,7 +2231,24 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                     <?php endif; ?>
                     <?php if ($isEditMode): ?>
                     <label><?= h(t('toolbar.version_label', [], 'Version')) ?></label>
-                    <select id="versionSelect" onchange="switchVersion(this.value)">
+                    <?php // Pemicu daftar versi. Dulu di sini ada dropdown, dan isinya
+                    // cuma "v2 (current)" — tidak ada yang memberi tahu versi mana
+                    // yang tanda tangannya sudah lengkap, mana yang masih draf, dan
+                    // apa bedanya. Dilaporkan pemakai: "untuk versi ini user sering
+                    // bingung". Sekarang daftarnya panel tersendiri yang punya ruang
+                    // untuk menjawab itu. ?>
+                    <button type="button" id="btnVersionPanel" onclick="toggleVersionPanel()"
+                            class="ez-versi-pemicu" aria-haspopup="dialog" aria-expanded="false"
+                            aria-controls="versionPanel"
+                            title="<?= h(t('title.version_panel', [], 'Show the list of versions')) ?>">
+                        <span id="versionTriggerText">v<?= $param_version ?></span>
+                        <span class="ez-versi-pemicu-tanda" aria-hidden="true">&rsaquo;</span>
+                    </button>
+                    <?php // Select-nya tetap ada, tidak terlihat. Ia sumber data satu-satunya
+                    // untuk switchVersion() (termasuk penanda versi tersembunyi), dan ia
+                    // jalan keluar kalau JavaScript panelnya gagal: yang tersisa tetap
+                    // kontrol asli peramban, bukan halaman tanpa pemilih versi. ?>
+                    <select id="versionSelect" onchange="switchVersion(this.value)" class="ez-versi-select">
                         <option value="<?= $param_version ?>">v<?= $param_version ?> <?= h(t('toolbar.version_current_suffix', [], '(current)')) ?></option>
                     </select>
                         <?php
@@ -2224,9 +2269,6 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                         // ada dan global. Semua tombol lain di berkas ini sudah
                         // memakai awalan btn* karena alasan yang sama.
                         ?>
-                        <button type="button" id="btnToggleHidden" onclick="toggleHiddenVersions()" style="display:none"
-                                class="!bg-transparent !text-gray-400 hover:!text-gray-200 !text-[9px] !py-0 !px-1 !m-0 underline"
-                                title="<?= h(t('title.toggle_hidden_versions', [], 'Show or hide versions that were hidden from the list')) ?>"><?= h(t('toolbar.show_hidden_versions', [], 'Show hidden')) ?></button>
                     <?php endif; ?>
                 </div>
 

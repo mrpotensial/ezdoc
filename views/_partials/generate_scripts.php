@@ -1633,6 +1633,8 @@
                 sel.appendChild(opt);
             });
 
+            renderVersionPanel(data.versions, data.slot_total || 0);
+
             // Penyaringnya hanya muncul untuk yang memang boleh mengurusnya.
             // Tombol yang muncul lalu selalu ditolak lebih buruk daripada tombol
             // yang tidak ada sama sekali.
@@ -1644,6 +1646,166 @@
                     : t('toolbar.show_hidden_versions', {}, 'Show hidden');
             }
         }
+
+
+        // ── Panel daftar versi ───────────────────────────────────────────
+        //
+        // Dilaporkan pemakai: "untuk versi ini user sering bingung". Dropdown
+        // lamanya cuma menyebut nomor versi; yang sebenarnya ditanyakan orang
+        // adalah "yang mana yang sudah lengkap tanda tangannya?". Tiap baris di
+        // sini menjawab tiga hal sekaligus: versi berapa, sudah berapa tanda
+        // tangan dari berapa, dan kapan serta oleh siapa dibuat.
+
+        /** "26 Sep 09:02" — tanggal singkat yang cukup untuk membedakan versi. */
+        function _versiWaktu(teks) {
+            if (!teks) return '';
+            // MySQL mengirim "2026-09-26 09:02:11"; Safari lebih suka pakai "T".
+            const d = new Date(String(teks).replace(' ', 'T'));
+            if (isNaN(d.getTime())) return String(teks);
+            try {
+                return d.toLocaleString(document.documentElement.lang || undefined, {
+                    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+                });
+            } catch (e) {
+                return String(teks);
+            }
+        }
+
+        function _versiLencana(teks, jenis) {
+            const el = document.createElement('span');
+            el.className = 'ez-versi-lencana ' + jenis;
+            el.textContent = teks;
+            return el;
+        }
+
+        function renderVersionPanel(versions, slotTotal) {
+            const wadah = document.getElementById('versionPanelList');
+            if (!wadah) return;
+
+            wadah.innerHTML = '';
+            const jumlah = document.getElementById('versionPanelCount');
+            if (jumlah) {
+                jumlah.textContent = t('toolbar.version_count', {n: versions.length}, '{n} versions');
+            }
+
+            if (!versions.length) {
+                const kosong = document.createElement('p');
+                kosong.className = 'ez-versi-kosong';
+                kosong.textContent = t('toolbar.version_none', {}, 'No versions yet.');
+                wadah.appendChild(kosong);
+                return;
+            }
+
+            versions.forEach(v => {
+                const ini = v.version === CURRENT_VERSION;
+                const ttd = parseInt(v.signed_count || 0, 10);
+                const total = parseInt(slotTotal || 0, 10);
+
+                const baris = document.createElement('button');
+                baris.type = 'button';
+                baris.className = 'ez-versi-baris';
+                baris.dataset.version = v.version;
+                baris.dataset.hidden = v.is_hidden ? '1' : '0';
+                if (ini) { baris.setAttribute('aria-current', 'true'); }
+
+                const atas = document.createElement('div');
+                atas.className = 'ez-versi-baris-atas';
+
+                const nomor = document.createElement('span');
+                nomor.className = 'ez-versi-nomor';
+                nomor.textContent = 'v' + v.version;
+                atas.appendChild(nomor);
+
+                if (ini) {
+                    atas.appendChild(_versiLencana(t('toolbar.version_open_now', {}, 'open now'), 'dibuka'));
+                }
+                if (total > 0 && ttd >= total) {
+                    atas.appendChild(_versiLencana(t('toolbar.version_complete', {}, 'complete'), 'lengkap'));
+                } else if (ttd > 0) {
+                    atas.appendChild(_versiLencana(t('toolbar.version_partial', {}, 'in progress'), 'sebagian'));
+                } else {
+                    atas.appendChild(_versiLencana(t('toolbar.version_draft', {}, 'draft'), 'draf'));
+                }
+                if (v.is_hidden) {
+                    atas.appendChild(_versiLencana(t('toolbar.version_hidden', {}, 'hidden'), 'disembunyikan'));
+                }
+                baris.appendChild(atas);
+
+                const kemajuan = document.createElement('p');
+                kemajuan.className = 'ez-versi-ttd';
+                kemajuan.textContent = total > 0
+                    ? t('signing_state.in_progress', {signed: ttd, total: total}, 'Signed {signed} of {total}')
+                    : t('toolbar.version_no_slots', {}, 'No signature slots');
+                baris.appendChild(kemajuan);
+
+                const kapan = document.createElement('p');
+                kapan.className = 'ez-versi-waktu';
+                const oleh = (v.created_by_name || '').trim();
+                kapan.textContent = _versiWaktu(v.updated_at) + (oleh ? ' \u00b7 ' + oleh : '');
+                baris.appendChild(kapan);
+
+                // Yang sedang dibuka tidak bisa diklik: switchVersion() memang
+                // menolaknya, dan tombol yang tidak melakukan apa-apa saat
+                // ditekan terbaca sebagai rusak.
+                if (ini) {
+                    baris.disabled = true;
+                } else {
+                    baris.addEventListener('click', () => {
+                        toggleVersionPanel(false);
+                        switchVersion(v.version);
+                    });
+                }
+
+                wadah.appendChild(baris);
+            });
+
+            // Teks pemicunya ikut ringkasan versi yang sedang dibuka, supaya
+            // keadaan itu terbaca tanpa membuka panelnya.
+            const pemicu = document.getElementById('versionTriggerText');
+            if (pemicu) {
+                const sekarang = versions.find(v => v.version === CURRENT_VERSION);
+                const total = parseInt(slotTotal || 0, 10);
+                pemicu.textContent = 'v' + CURRENT_VERSION
+                    + (sekarang && total > 0 ? ' \u00b7 ' + (sekarang.signed_count || 0) + '/' + total : '');
+            }
+        }
+
+        /** Buka atau tutup panelnya. Tanpa argumen: kebalikan keadaan sekarang. */
+        function toggleVersionPanel(show) {
+            const panel = document.getElementById('versionPanel');
+            const tirai = document.getElementById('versionBackdrop');
+            const pemicu = document.getElementById('btnVersionPanel');
+            if (!panel) return;
+
+            const buka = (typeof show === 'boolean') ? show : panel.hasAttribute('hidden');
+            if (buka) {
+                panel.removeAttribute('hidden');
+                if (tirai) tirai.removeAttribute('hidden');
+                if (pemicu) pemicu.setAttribute('aria-expanded', 'true');
+                // Daftarnya disegarkan tiap kali dibuka: versi bisa bertambah
+                // dari tab lain, dan daftar basi lebih menyesatkan daripada
+                // tidak ada daftar.
+                refreshVersionList();
+                const isi = document.getElementById('versionPanelList');
+                if (isi) isi.focus();
+            } else {
+                panel.setAttribute('hidden', '');
+                if (tirai) tirai.setAttribute('hidden', '');
+                if (pemicu) {
+                    pemicu.setAttribute('aria-expanded', 'false');
+                    pemicu.focus();
+                }
+            }
+        }
+
+        // Esc menutupnya, sama seperti dialog lain di halaman ini.
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape') return;
+            const panel = document.getElementById('versionPanel');
+            if (panel && !panel.hasAttribute('hidden')) {
+                toggleVersionPanel(false);
+            }
+        });
 
         async function toggleHiddenVersions() {
             SHOW_HIDDEN = !SHOW_HIDDEN;
