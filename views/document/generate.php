@@ -2084,54 +2084,40 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
 
         <!-- TOOLBAR V1 Style -->
         <?php if ($isEditMode): ?>
-        <?php // Panel daftar versi.
+        <?php // Kartu daftar versi — selalu tampil, lengkap dengan detailnya.
         //
-        // Saudara .toolbar, bukan anaknya: .toolbar punya `overflow-y: auto`,
-        // dan anak berposisi fixed di dalam kotak yang menggulung akan terpotong
-        // begitu daftarnya lebih panjang dari sidebar.
-        //
-        // Lebar >1024px ia menempel di kiri sidebar. Di bawah itu — iPad tegak,
-        // tablet — ia jadi lembar bawah selebar layar, karena 320px di samping
-        // sidebar tidak muat lagi. Lihat generate_styles.php. ?>
-        <div class="ez-versi-tirai" id="versionBackdrop" onclick="toggleVersionPanel(false)" hidden></div>
-        <aside class="ez-versi-panel" id="versionPanel" role="dialog" aria-modal="false"
-               aria-labelledby="versionPanelTitle" hidden>
-            <header class="ez-versi-kepala">
-                <h2 id="versionPanelTitle"><?= h(t('toolbar.version_panel_title', [], 'Document versions')) ?></h2>
-                <span class="ez-versi-jumlah" id="versionPanelCount"></span>
-                <button type="button" class="ez-versi-tutup" onclick="toggleVersionPanel(false)"
-                        aria-label="<?= h(t('actions.close', [], 'Close')) ?>">&times;</button>
-            </header>
-            <div class="ez-versi-isi" id="versionPanelList" tabindex="-1"></div>
-            <footer class="ez-versi-kaki">
-                <button type="button" id="btnToggleHidden" onclick="toggleHiddenVersions()" style="display:none"
-                        class="ez-versi-tersembunyi-pemicu"
-                        title="<?= h(t('title.toggle_hidden_versions', [], 'Show or hide versions that were hidden from the list')) ?>"><?= h(t('toolbar.show_hidden_versions', [], 'Show hidden')) ?></button>
-            </footer>
-        </aside>
-        <?php endif; ?>
-
-        <?php if ($isEditMode): ?>
-        <?php // Kartu daftar versi — selalu tampil.
-        //
-        // Diminta pemakai: "user suka asal klik buat versi, jadi sebaiknya list
-        // versi langsung tampil saja kali ya?". Di basis data ini sepertiga versi
-        // lanjutan lahir kosong; sebagiannya orang yang tidak tahu versi lain
-        // sudah ada.
+        // Diminta pemakai berturut-turut: "user suka asal klik buat versi, jadi
+        // sebaiknya list versi langsung tampil saja", lalu "tampilkan langsung
+        // detail aja versinya, tidak perlu klik detail". Di basis data pemakai
+        // sepertiga versi lanjutan lahir kosong; sebagiannya orang yang tidak
+        // tahu versi lain sudah ada.
         //
         // Kartu terpisah, bukan di dalam sidebar: sidebar sudah penuh, dan
-        // daftarnya harus tetap terbaca saat sidebar digulung. Letaknya dihitung
-        // JavaScript dari kotak sidebar (lihat positionVersionCard) karena tinggi
-        // sidebar berubah-ubah — ia bisa digulung, dan isinya berbeda antar
-        // template. ?>
+        // tingginya sendiri berubah-ubah. Letak dan batas tingginya dihitung
+        // JavaScript dari kotak sidebar — lihat positionVersionCard(). ?>
         <aside class="ez-versi-kartu" id="versionCard" aria-labelledby="versionCardTitle" hidden>
             <div class="ez-versi-kartu-kepala">
                 <span id="versionCardTitle"><?= h(t('toolbar.version_label', [], 'Version')) ?></span>
-                <button type="button" class="ez-versi-kartu-detail" onclick="toggleVersionPanel()"
-                        aria-haspopup="dialog" aria-expanded="false" aria-controls="versionPanel"
-                        title="<?= h(t('title.version_panel', [], 'Show the list of versions')) ?>"><?= h(t('toolbar.version_detail', [], 'Detail')) ?> &rsaquo;</button>
+                <span class="ez-versi-jumlah" id="versionCardCount"></span>
             </div>
             <div class="ez-versi-kartu-isi" id="versionCardList"></div>
+            <?php
+            // Penyaring versi tersembunyi. Sengaja disembunyikan sejak awal dan
+            // baru ditampilkan JS setelah server menjawab bahwa penggunanya
+            // memang boleh mengurusnya — lihat refreshVersionList().
+            //
+            // id-nya SENGAJA beda dari nama fungsinya. Tombol ini ada di dalam
+            // <form id="mainForm">, dan `onclick` sebaris dicari lewat rantai:
+            // elemen -> form induk -> document -> window. Form mengekspos
+            // kontrolnya berdasarkan id, jadi id yang sama dengan nama fungsi
+            // membuat nama itu ketemu TOMBOLNYA lebih dulu -- lalu tombol
+            // dipanggil sebagai fungsi.
+            ?>
+            <div class="ez-versi-kartu-kaki">
+                <button type="button" id="btnToggleHidden" onclick="toggleHiddenVersions()" style="display:none"
+                        class="ez-versi-tersembunyi-pemicu"
+                        title="<?= h(t('title.toggle_hidden_versions', [], 'Show or hide versions that were hidden from the list')) ?>"><?= h(t('toolbar.show_hidden_versions', [], 'Show hidden')) ?></button>
+            </div>
         </aside>
         <?php endif; ?>
 

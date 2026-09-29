@@ -7,20 +7,23 @@ namespace Ezdoc\Tests\UI;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Daftar versi: panel, bukan dropdown.
+ * Daftar versi: satu kartu yang selalu tampil, lengkap dengan detailnya.
  *
- * Dilaporkan pemakai: "untuk versi ini user sering bingung… apa kita buat
- * disebelah kiri list versi yang ada detail lainnya gitu? jadi user bisa pilih
- * dengan jelas bukan dari dropdown?".
+ * Diminta pemakai berturut-turut:
+ *   1. "untuk versi ini user sering bingung… bukan dari dropdown?"
+ *   2. "user suka asal klik buat versi, jadi sebaiknya list versi langsung
+ *      tampil saja kali ya?"
+ *   3. "tampilkan langsung detail aja versinya, tidak perlu klik detail"
  *
- * Dropdown lamanya menyebut nomor versi dan tidak lebih. Pertanyaan yang
- * sebenarnya ditanyakan orang adalah "yang mana yang sudah lengkap tanda
- * tangannya?" — dan itu tidak bisa dijawab dari daftar yang isinya "v1, v2,
- * v3". Jadi yang dijaga di sini bukan panelnya sendiri, melainkan keterangan
- * yang membuatnya berguna: kemajuan tanda tangan tiap versi, dan siapa yang
- * membuatnya.
+ * Tiga permintaan, satu arah yang sama: apa pun yang menuntut satu tindakan
+ * sebelum orang tahu ada versi lain adalah penghalang — dan yang tidak tahu,
+ * membuat versi baru. Di basis data pemakai sepertiga versi lanjutan lahir
+ * kosong.
+ *
+ * Jadi yang dijaga di sini: daftarnya tampil sendiri, isinya menjawab "yang
+ * mana yang sudah lengkap", dan ia tidak pernah lebih tinggi dari layar.
  */
-final class PanelVersiTest extends TestCase
+final class KartuVersiTest extends TestCase
 {
     private static function node(): ?string
     {
@@ -85,9 +88,7 @@ final class PanelVersiTest extends TestCase
     /** Dan siapa yang membuatnya, lewat sumber nama yang disambung pemakai. */
     public function testTiapVersiMembawaNamaPembuat(): void
     {
-        $data = self::daftarVersi();
-
-        foreach ($data['versions'] as $v) {
+        foreach (self::daftarVersi()['versions'] as $v) {
             self::assertSame('Bidan Ratna', $v['created_by_name'], 'nama pembuat versi tidak ikut');
         }
     }
@@ -115,8 +116,7 @@ final class PanelVersiTest extends TestCase
      * Keterangan tambahannya diambil sekaligus, bukan per baris.
      *
      * Satu slot bisa punya belasan versi. Satu kueri per versi adalah N+1 yang
-     * sama yang melahirkan eager loading di Doctrine dan Eloquent — dan panel
-     * ini dibuka justru saat orang sedang ragu, bukan saat ia santai menunggu.
+     * sama yang melahirkan eager loading di Doctrine dan Eloquent.
      */
     public function testKeteranganTambahannyaDiambilSekaligus(): void
     {
@@ -130,141 +130,137 @@ final class PanelVersiTest extends TestCase
         self::assertStringContainsString('ezdoc_actor_names(', $aksi, 'nama pembuat diambil satu per satu');
     }
 
-    // ── Panelnya ─────────────────────────────────────────────────────────
+    // ── Kartunya ─────────────────────────────────────────────────────────
 
-    /**
-     * Daftarnya tampil tanpa diklik, dan dropdown lamanya tidak terlihat.
-     *
-     * Diminta pemakai: "user suka asal klik buat versi, jadi sebaiknya list
-     * versi langsung tampil saja kali ya?". Daftar yang menunggu satu klik
-     * hanya menolong yang sudah tahu ada versi lain — dan yang tidak tahu
-     * itulah yang membuat versi baru.
-     */
-    public function testDaftarnyaTampilTanpaDiklik(): void
+    /** Daftarnya tampil sendiri: tidak ada pemicu, tidak ada panel terpisah. */
+    public function testDaftarnyaTampilTanpaTindakanApaPun(): void
     {
         $view = self::baca('views/document/generate.php');
 
         self::assertStringContainsString('id="versionCard"', $view, 'kartu daftar versi tidak ada');
         self::assertStringContainsString('id="versionCardList"', $view, 'isi kartunya tidak ada');
-        self::assertStringContainsString('id="versionPanel"', $view, 'panel detailnya tidak ada');
+        self::assertStringContainsString('id="versionCardCount"', $view, 'jumlah versinya tidak ada');
+        self::assertStringContainsString('id="btnToggleHidden"', $view, 'penyaring versi tersembunyi hilang');
         self::assertStringContainsString('class="ez-versi-select"', $view, 'select-nya tidak ditandai untuk disembunyikan');
 
-        // Tidak ada lagi tombol pemicu di sidebar: kartunya yang menggantikannya.
-        self::assertStringNotContainsString('id="btnVersionPanel"', $view, 'masih ada pemicu yang menuntut klik');
+        // Tiga hal yang sudah dibuang; masing-masing pernah menuntut satu klik.
+        foreach (['id="versionPanel"', 'id="btnVersionPanel"', 'ez-versi-kartu-detail'] as $sisa) {
+            self::assertStringNotContainsString($sisa, $view, 'masih ada ' . $sisa . ' yang menuntut klik');
+        }
+    }
 
+    /** Dan tidak ada sisa panel di gaya maupun skripnya. */
+    public function testTidakAdaSisaPanel(): void
+    {
+        foreach ([
+            'views/_partials/generate_styles.php' => ['ez-versi-panel', 'ez-versi-tirai'],
+            'views/_partials/generate_scripts.php' => ['toggleVersionPanel', 'renderVersionPanel'],
+        ] as $berkas => $sisaan) {
+            $isi = self::baca($berkas);
+            foreach ($sisaan as $sisa) {
+                self::assertStringNotContainsString($sisa, $isi, $berkas . ': ' . $sisa . ' tertinggal');
+            }
+        }
+    }
+
+    /**
+     * Kartunya saudara sidebar, bukan anaknya.
+     *
+     * `.toolbar` punya `overflow-y: auto`. Anak berposisi fixed di dalam kotak
+     * yang menggulung akan terpotong begitu daftarnya lebih panjang dari
+     * sidebar — dan justru daftar panjang yang butuh kartu ini.
+     */
+    public function testKartunyaDiLuarSidebar(): void
+    {
+        $view = self::baca('views/document/generate.php');
+
+        $posKartu = strpos($view, 'id="versionCard"');
+        $posToolbar = strpos($view, '<div class="toolbar" id="toolbarPanel">');
+        self::assertNotFalse($posKartu);
+        self::assertNotFalse($posToolbar);
+        self::assertLessThan($posToolbar, $posKartu, 'kartunya berada di dalam sidebar');
+    }
+
+    /**
+     * Tingginya dihitung dari ruang yang tersisa, bukan dari persentase layar.
+     *
+     * Diminta pemakai: "pastikan tinggi card dinamis agar tidak melebihi layar,
+     * jika versi banyak bisa di scroll". Persentase layar tidak tahu ada
+     * sidebar setinggi apa di atasnya — dan sidebar itulah yang berubah-ubah.
+     */
+    public function testTingginyaDihitungDariRuangYangTersisa(): void
+    {
+        $skrip = self::baca('views/_partials/generate_scripts.php');
+        $css = self::baca('views/_partials/generate_styles.php');
+
+        self::assertStringContainsString('kartu.style.maxHeight', $skrip, 'tinggi kartunya tidak pernah dibatasi');
         self::assertSame(
             1,
-            preg_match('/\.ez-versi-select \{ display: none; \}/', self::baca('views/_partials/generate_styles.php')),
-            'select lamanya masih terlihat'
+            preg_match('/Math\.max\(Math\.round\(ruang\), 120\)/', $skrip),
+            'di layar pendek kartunya bisa mengerut jadi garis'
+        );
+
+        // Yang menggulung isinya, bukan kartunya: kepala dan kakinya tetap terlihat.
+        self::assertSame(
+            1,
+            preg_match('/\.ez-versi-kartu-isi \{ overflow-y: auto; min-height: 0; \}/', $css),
+            'daftarnya tidak bisa digulung'
+        );
+        self::assertSame(
+            0,
+            preg_match('/\.ez-versi-kartu \{[^}]*max-height/s', $css),
+            'tingginya dipaku di CSS, jadi perhitungannya tidak berlaku'
         );
     }
 
     /**
-     * Kartunya menempel pada sidebar, dan letaknya dihitung, bukan ditebak.
+     * Sidebar digulung, kartunya ikut.
      *
-     * Tinggi sidebar berubah-ubah: ia bisa digulung, dan isinya berbeda antar
-     * template. Satu angka `top` yang dipaku akan benar hari ini dan salah
-     * besok.
+     * Diminta pemakai: "jika klik hidden ikut hidden". Yang menggulung sidebar
+     * sedang ingin melihat dokumennya; kartu yang tetap menggantung di situ
+     * melawan maksud itu.
      */
-    public function testLetakKartunyaMengikutiSidebar(): void
+    public function testKartunyaIkutTersembunyiSaatSidebarDigulung(): void
     {
         $skrip = self::baca('views/_partials/generate_scripts.php');
 
-        self::assertStringContainsString('function positionVersionCard(', $skrip);
-        self::assertStringContainsString("getElementById('toolbarPanel')", $skrip);
         self::assertSame(
             1,
-            preg_match("/window\.addEventListener\('resize', positionVersionCard\)/", $skrip),
-            'kartunya tidak ikut saat jendela diubah ukurannya'
+            preg_match("/sidebar\.classList\.contains\('collapsed'\)/", $skrip),
+            'kartunya tidak tahu sidebar sedang digulung'
         );
         self::assertSame(
             1,
             preg_match('/function toggleToolbar\(\)[\s\S]{0,700}?positionVersionCard\(\);/', $skrip),
             'kartunya tidak ikut saat sidebar digulung'
         );
+        self::assertSame(
+            1,
+            preg_match("/window\.addEventListener\('resize', positionVersionCard\)/", $skrip),
+            'kartunya tidak ikut saat jendela diubah ukurannya'
+        );
     }
 
     /**
-     * Panelnya saudara sidebar, bukan anaknya.
-     *
-     * `.toolbar` punya `overflow-y: auto`. Anak berposisi fixed di dalam kotak
-     * yang menggulung akan terpotong begitu daftarnya lebih panjang dari
-     * sidebar — dan justru daftar panjang yang butuh panel ini.
-     */
-    public function testPanelnyaDiLuarSidebar(): void
-    {
-        $view = self::baca('views/document/generate.php');
-
-        $posPanel = strpos($view, 'id="versionPanel"');
-        $posToolbar = strpos($view, '<div class="toolbar" id="toolbarPanel">');
-        self::assertNotFalse($posPanel);
-        self::assertNotFalse($posToolbar);
-        self::assertLessThan($posToolbar, $posPanel, 'panelnya berada di dalam sidebar');
-    }
-
-    /**
-     * Dua perilaku lebar, bukan satu yang dipaksakan.
+     * Dua lebar, dan sasaran sentuh yang lebih besar hanya di layar sentuh.
      *
      * Diminta pemakai: "pastikan responsive ya, karena kadang buka di tablet
-     * dan ipad". Di bawah 1024px sidebar sudah pindah ke pojok bawah dan panel
-     * 320px di sampingnya tidak muat lagi, jadi ia jadi lembar bawah selebar
-     * layar. Ambangnya sengaja sama dengan yang sudah dipakai sidebar.
+     * dan ipad".
      */
-    public function testPanelnyaBerubahBentukDiLayarSempit(): void
+    public function testLebarnyaMenyesuaikanLayar(): void
     {
         $css = self::baca('views/_partials/generate_styles.php');
 
-        // Lebar: menempel di kiri sidebar.
+        self::assertSame(1, preg_match('/\.ez-versi-kartu \{[^}]*width: 260px;/s', $css), 'lebar bawaannya berubah');
         self::assertSame(
             1,
-            preg_match('/\.ez-versi-panel \{[^}]*right: 246px;/s', $css),
-            'panelnya tidak menempel di kiri sidebar'
+            preg_match('/@media screen and \(max-width: 1024px\) \{[\s\S]*?\.ez-versi-kartu \{ right: 10px; width: 210px; \}/', $css),
+            'kartunya tidak menyempit di layar sempit'
         );
-
-        // Sempit: lembar bawah, di dalam media query yang sudah ada.
         self::assertSame(
             1,
-            preg_match('/@media screen and \(max-width: 1024px\) \{[\s\S]*?\.ez-versi-panel \{[^}]*bottom: 0;[^}]*\}/', $css),
-            'panelnya tidak jadi lembar bawah di layar sempit'
-        );
-
-        // Sentuh: sasarannya diperbesar hanya di perangkat sentuh.
-        self::assertSame(
-            1,
-            preg_match('/@media \(hover: none\) and \(pointer: coarse\) \{[\s\S]*?\.ez-versi-baris \{ padding: 11px 12px; \}/', $css),
+            preg_match('/@media \(hover: none\) and \(pointer: coarse\) \{[\s\S]*?\.ez-versi-baris \{ padding: 10px; \}/', $css),
             'baris versinya tidak diperbesar untuk sentuhan'
-        );
-    }
-
-    /** Bisa ditutup dengan Esc dan dengan menekan di luar panelnya. */
-    public function testBisaDitutupTanpaMencariTombolnya(): void
-    {
-        $skrip = self::baca('views/_partials/generate_scripts.php');
-        $view = self::baca('views/document/generate.php');
-
-        self::assertSame(
-            1,
-            preg_match("/if \(e\.key !== 'Escape'\) return;[\s\S]{0,300}?toggleVersionPanel\(false\)/", $skrip),
-            'Esc tidak menutup panelnya'
-        );
-        self::assertStringContainsString('id="versionBackdrop"', $view, 'tidak ada tirai untuk ditekan');
-        self::assertStringContainsString('onclick="toggleVersionPanel(false)"', $view);
-    }
-
-    /**
-     * Daftarnya disegarkan tiap kali panelnya dibuka.
-     *
-     * Versi bisa bertambah dari tab lain atau dari orang lain. Daftar basi
-     * lebih menyesatkan daripada tidak ada daftar, karena ia terlihat pasti.
-     */
-    public function testDaftarnyaDisegarkanTiapDibuka(): void
-    {
-        $skrip = self::baca('views/_partials/generate_scripts.php');
-
-        self::assertSame(
-            1,
-            preg_match('/function toggleVersionPanel[\s\S]{0,900}?refreshVersionList\(\);/', $skrip),
-            'panelnya menampilkan daftar lama saat dibuka'
         );
     }
 
@@ -274,20 +270,18 @@ final class PanelVersiTest extends TestCase
         foreach (['id', 'en'] as $bahasa) {
             $lang = require dirname(__DIR__, 2) . '/lang/' . $bahasa . '/generate.php';
             foreach ([
-                'version_panel_title', 'version_count', 'version_none', 'version_open_now',
-                'version_complete', 'version_partial', 'version_draft', 'version_hidden',
-                'version_no_slots',
+                'version_count', 'version_open_now', 'version_complete', 'version_partial',
+                'version_draft', 'version_hidden', 'version_no_slots', 'show_hidden_versions',
             ] as $kunci) {
                 self::assertArrayHasKey($kunci, $lang['toolbar'], $bahasa . ': ' . $kunci);
             }
-            self::assertArrayHasKey('version_panel', $lang['title'], $bahasa);
         }
     }
 
     // ── Isinya, dijalankan sungguhan ─────────────────────────────────────
 
-    /** Percabangan lencananya diperiksa di atas DOM tiruan. */
-    public function testIsiPanelnyaDirenderBenar(): void
+    /** Percabangan lencana, batas tinggi, dan ikut-tersembunyinya diperiksa di atas DOM tiruan. */
+    public function testIsiKartunyaDirenderBenar(): void
     {
         $node = self::node();
         if ($node === null) {
@@ -297,21 +291,21 @@ final class PanelVersiTest extends TestCase
         $skrip = self::baca('views/_partials/generate_scripts.php');
         $awal = strpos($skrip, 'function _versiWaktu(teks) {');
         self::assertNotFalse($awal, 'pemformat waktu tidak ketemu');
-        $akhir = strpos($skrip, '/** Buka atau tutup panelnya.', $awal);
+        $akhir = strpos($skrip, "window.addEventListener('resize', positionVersionCard);", $awal);
         self::assertNotFalse($akhir, 'ujung bagian render tidak ketemu');
 
-        $js = tempnam(sys_get_temp_dir(), 'ezdoc-panel-') . '.js';
+        $js = tempnam(sys_get_temp_dir(), 'ezdoc-kartu-') . '.js';
         file_put_contents(
             $js,
             substr($skrip, $awal, $akhir - $awal)
-            . "\nthis.renderVersionPanel = renderVersionPanel;\n"
+            . "\nthis.renderVersionCard = renderVersionCard;\nthis.positionVersionCard = positionVersionCard;\n"
         );
 
         try {
             $keluaran = (string) @shell_exec(sprintf(
                 '%s %s %s 2>&1',
                 escapeshellarg($node),
-                escapeshellarg(dirname(__DIR__) . '/js/panel-versi.js'),
+                escapeshellarg(dirname(__DIR__) . '/js/kartu-versi.js'),
                 escapeshellarg($js)
             ));
         } finally {

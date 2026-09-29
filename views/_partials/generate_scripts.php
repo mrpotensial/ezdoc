@@ -1633,7 +1633,6 @@
                 sel.appendChild(opt);
             });
 
-            renderVersionPanel(data.versions, data.slot_total || 0);
             renderVersionCard(data.versions, data.slot_total || 0);
 
             // Penyaringnya hanya muncul untuk yang memang boleh mengurusnya.
@@ -1649,15 +1648,20 @@
         }
 
 
-        // ── Panel daftar versi ───────────────────────────────────────────
+        // ── Kartu daftar versi ───────────────────────────────────────────
         //
-        // Dilaporkan pemakai: "untuk versi ini user sering bingung". Dropdown
-        // lamanya cuma menyebut nomor versi; yang sebenarnya ditanyakan orang
-        // adalah "yang mana yang sudah lengkap tanda tangannya?". Tiap baris di
-        // sini menjawab tiga hal sekaligus: versi berapa, sudah berapa tanda
-        // tangan dari berapa, dan kapan serta oleh siapa dibuat.
+        // Dilaporkan pemakai berturut-turut: "untuk versi ini user sering
+        // bingung", lalu "sebaiknya list versi langsung tampil saja", lalu
+        // "tampilkan langsung detail aja versinya, tidak perlu klik detail".
+        //
+        // Jadi satu tempat, bukan dua. Dropdown, tombol pemicu, dan panel
+        // terpisah semuanya menuntut satu tindakan sebelum orang tahu ada versi
+        // lain — dan yang tidak tahu, membuat versi baru.
+        //
+        // Tiap baris menjawab tiga hal: versi berapa, sudah berapa tanda tangan
+        // dari berapa, dan kapan serta oleh siapa dibuat.
 
-        /** "26 Sep 09:02" — tanggal singkat yang cukup untuk membedakan versi. */
+        /** "26 Sep 09.02" — tanggal singkat yang cukup untuk membedakan versi. */
         function _versiWaktu(teks) {
             if (!teks) return '';
             // MySQL mengirim "2026-09-26 09:02:11"; Safari lebih suka pakai "T".
@@ -1679,35 +1683,82 @@
             return el;
         }
 
-        function renderVersionPanel(versions, slotTotal) {
-            const wadah = document.getElementById('versionPanelList');
-            if (!wadah) return;
+        /**
+         * Letakkan kartunya menempel pada sidebar, dan batasi tingginya pada
+         * ruang yang benar-benar ada.
+         *
+         * Tinggi sidebar berubah-ubah — ia bisa digulung, dan isinya berbeda
+         * antar template — jadi tidak ada satu angka yang benar terus. Batas
+         * tingginya dihitung dari sisa layar, bukan persentase: persentase
+         * layar tidak tahu ada sidebar setinggi apa di atasnya.
+         */
+        function positionVersionCard() {
+            const kartu = document.getElementById('versionCard');
+            const sidebar = document.getElementById('toolbarPanel');
+            if (!kartu || !sidebar) return;
 
-            wadah.innerHTML = '';
-            const jumlah = document.getElementById('versionPanelCount');
+            // Sidebar digulung berarti orangnya sedang ingin melihat dokumennya.
+            // Kartu yang tetap menggantung di situ melawan maksud itu.
+            const digulung = sidebar.classList.contains('collapsed');
+            const adaVersi = kartu.dataset.adaVersi === '1';
+            if (digulung || !adaVersi) {
+                kartu.setAttribute('hidden', '');
+                return;
+            }
+            kartu.removeAttribute('hidden');
+
+            const sb = sidebar.getBoundingClientRect();
+            const jarak = 8;
+            const tepi = 12;
+
+            // Di layar sempit sidebar menempel ke dasar layar; kartunya naik ke
+            // atasnya. Yang menentukan letak sidebar sungguhan, bukan tebakan
+            // dari lebar jendela — aturannya bisa berubah di CSS tanpa ke sini.
+            const menempelBawah = (window.innerHeight - sb.bottom) < sb.top;
+            let ruang;
+            if (menempelBawah) {
+                ruang = sb.top - jarak - tepi;
+                kartu.style.top = 'auto';
+                kartu.style.bottom = Math.round(window.innerHeight - sb.top + jarak) + 'px';
+            } else {
+                ruang = window.innerHeight - sb.bottom - jarak - tepi;
+                kartu.style.bottom = 'auto';
+                kartu.style.top = Math.round(sb.bottom + jarak) + 'px';
+            }
+
+            // Ruang yang tersisa bisa tinggal sedikit di layar pendek. Dibatasi
+            // di bawah supaya kartunya tidak mengerut jadi garis: satu baris
+            // yang bisa digulung masih memberi tahu ada versi lain.
+            kartu.style.maxHeight = Math.max(Math.round(ruang), 120) + 'px';
+        }
+
+        function renderVersionCard(versions, slotTotal) {
+            const kartu = document.getElementById('versionCard');
+            const wadah = document.getElementById('versionCardList');
+            if (!kartu || !wadah) return;
+
+            // Satu versi berarti tidak ada yang perlu dipilih. Kartu yang
+            // isinya satu baris tanpa alternatif cuma memakan tempat.
+            kartu.dataset.adaVersi = versions.length >= 2 ? '1' : '0';
+
+            const jumlah = document.getElementById('versionCardCount');
             if (jumlah) {
                 jumlah.textContent = t('toolbar.version_count', {n: versions.length}, '{n} versions');
             }
 
-            if (!versions.length) {
-                const kosong = document.createElement('p');
-                kosong.className = 'ez-versi-kosong';
-                kosong.textContent = t('toolbar.version_none', {}, 'No versions yet.');
-                wadah.appendChild(kosong);
-                return;
-            }
+            wadah.innerHTML = '';
+            const total = parseInt(slotTotal || 0, 10);
 
             versions.forEach(v => {
                 const ini = v.version === CURRENT_VERSION;
                 const ttd = parseInt(v.signed_count || 0, 10);
-                const total = parseInt(slotTotal || 0, 10);
 
                 const baris = document.createElement('button');
                 baris.type = 'button';
                 baris.className = 'ez-versi-baris';
                 baris.dataset.version = v.version;
                 baris.dataset.hidden = v.is_hidden ? '1' : '0';
-                if (ini) { baris.setAttribute('aria-current', 'true'); }
+                if (ini) baris.setAttribute('aria-current', 'true');
 
                 const atas = document.createElement('div');
                 atas.className = 'ez-versi-baris-atas';
@@ -1744,6 +1795,7 @@
                 const oleh = (v.created_by_name || '').trim();
                 kapan.textContent = _versiWaktu(v.updated_at) + (oleh ? ' \u00b7 ' + oleh : '');
                 baris.appendChild(kapan);
+                baris.title = kapan.textContent;
 
                 // Yang sedang dibuka tidak bisa diklik: switchVersion() memang
                 // menolaknya, dan tombol yang tidak melakukan apa-apa saat
@@ -1751,91 +1803,9 @@
                 if (ini) {
                     baris.disabled = true;
                 } else {
-                    baris.addEventListener('click', () => {
-                        toggleVersionPanel(false);
-                        switchVersion(v.version);
-                    });
-                }
-
-                wadah.appendChild(baris);
-            });
-        }
-
-
-        // ── Kartu daftar versi ───────────────────────────────────────────
-        //
-        // Diminta pemakai: "user suka asal klik buat versi, jadi sebaiknya list
-        // versi langsung tampil saja kali ya?". Daftarnya kini tidak menunggu
-        // satu klik pun. Isinya sengaja sebaris per versi — nomor, kemajuan
-        // tanda tangan, kapan — dan yang butuh cerita lengkap membuka Detail.
-
-        /** Letakkan kartunya menempel pada sidebar, di bawah atau di atasnya. */
-        function positionVersionCard() {
-            const kartu = document.getElementById('versionCard');
-            const sidebar = document.getElementById('toolbarPanel');
-            if (!kartu || !sidebar || kartu.hasAttribute('hidden')) return;
-
-            const sb = sidebar.getBoundingClientRect();
-            // Di layar sempit sidebar menempel ke dasar layar; kartunya naik ke
-            // atasnya. Yang menentukan letak sidebar sungguhan, bukan tebakan
-            // dari lebar jendela — aturannya bisa berubah di CSS tanpa ke sini.
-            const menempelBawah = (window.innerHeight - sb.bottom) < (sb.top);
-            if (menempelBawah) {
-                kartu.style.top = 'auto';
-                kartu.style.bottom = Math.round(window.innerHeight - sb.top + 8) + 'px';
-            } else {
-                kartu.style.bottom = 'auto';
-                kartu.style.top = Math.round(sb.bottom + 8) + 'px';
-            }
-        }
-
-        function renderVersionCard(versions, slotTotal) {
-            const kartu = document.getElementById('versionCard');
-            const wadah = document.getElementById('versionCardList');
-            if (!kartu || !wadah) return;
-
-            // Satu versi berarti tidak ada yang perlu dipilih. Kartu yang
-            // isinya satu baris tanpa alternatif cuma memakan tempat.
-            if (versions.length < 2) {
-                kartu.setAttribute('hidden', '');
-                return;
-            }
-            kartu.removeAttribute('hidden');
-
-            wadah.innerHTML = '';
-            const total = parseInt(slotTotal || 0, 10);
-
-            versions.forEach(v => {
-                const ini = v.version === CURRENT_VERSION;
-                const baris = document.createElement('button');
-                baris.type = 'button';
-                baris.className = 'ez-versi-kartu-baris';
-                baris.dataset.version = v.version;
-                baris.dataset.hidden = v.is_hidden ? '1' : '0';
-                if (ini) baris.setAttribute('aria-current', 'true');
-
-                const kiri = document.createElement('span');
-                kiri.className = 'ez-versi-kartu-kiri';
-                kiri.textContent = 'v' + v.version
-                    + (total > 0 ? ' \u00b7 ' + (v.signed_count || 0) + '/' + total : '');
-                baris.appendChild(kiri);
-
-                const kanan = document.createElement('span');
-                kanan.className = 'ez-versi-kartu-kanan';
-                kanan.textContent = ini
-                    ? t('toolbar.version_open_now', {}, 'open now')
-                    : _versiWaktu(v.updated_at);
-                baris.appendChild(kanan);
-
-                baris.title = v.is_hidden
-                    ? t('toolbar.version_hidden', {}, 'hidden')
-                    : kiri.textContent + ' \u00b7 ' + kanan.textContent;
-
-                if (ini) {
-                    baris.disabled = true;
-                } else {
                     baris.addEventListener('click', () => switchVersion(v.version));
                 }
+
                 wadah.appendChild(baris);
             });
 
@@ -1847,43 +1817,6 @@
             const _sb = document.getElementById('toolbarPanel');
             if (_sb) new ResizeObserver(positionVersionCard).observe(_sb);
         }
-
-        /** Buka atau tutup panelnya. Tanpa argumen: kebalikan keadaan sekarang. */
-        function toggleVersionPanel(show) {
-            const panel = document.getElementById('versionPanel');
-            const tirai = document.getElementById('versionBackdrop');
-            const pemicu = document.querySelector('.ez-versi-kartu-detail');
-            if (!panel) return;
-
-            const buka = (typeof show === 'boolean') ? show : panel.hasAttribute('hidden');
-            if (buka) {
-                panel.removeAttribute('hidden');
-                if (tirai) tirai.removeAttribute('hidden');
-                if (pemicu) pemicu.setAttribute('aria-expanded', 'true');
-                // Daftarnya disegarkan tiap kali dibuka: versi bisa bertambah
-                // dari tab lain, dan daftar basi lebih menyesatkan daripada
-                // tidak ada daftar.
-                refreshVersionList();
-                const isi = document.getElementById('versionPanelList');
-                if (isi) isi.focus();
-            } else {
-                panel.setAttribute('hidden', '');
-                if (tirai) tirai.setAttribute('hidden', '');
-                if (pemicu) {
-                    pemicu.setAttribute('aria-expanded', 'false');
-                    pemicu.focus();
-                }
-            }
-        }
-
-        // Esc menutupnya, sama seperti dialog lain di halaman ini.
-        document.addEventListener('keydown', function (e) {
-            if (e.key !== 'Escape') return;
-            const panel = document.getElementById('versionPanel');
-            if (panel && !panel.hasAttribute('hidden')) {
-                toggleVersionPanel(false);
-            }
-        });
 
         async function toggleHiddenVersions() {
             SHOW_HIDDEN = !SHOW_HIDDEN;

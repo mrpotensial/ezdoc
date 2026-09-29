@@ -800,82 +800,63 @@
         .toolbar .icon-grid button.wide { grid-column: span 2; }
 
 
-        /* ══ Panel daftar versi ══════════════════════════════════════════
-           Dulu dropdown di sidebar, dan isinya cuma "v2 (current)" — tidak ada
-           yang memberi tahu versi mana yang tanda tangannya sudah lengkap.
-           Panel ini punya ruang untuk itu.
+        /* ══ Kartu daftar versi ══════════════════════════════════════════
+           Satu tempat, bukan dua. Dropdown, tombol pemicu, dan panel terpisah
+           semuanya menuntut satu tindakan sebelum orang tahu ada versi lain —
+           dan yang tidak tahu, membuat versi baru.
 
-           Lebarnya dua perilaku, bukan satu yang dipaksakan:
-             > 1024px  menempel di kiri sidebar, tanpa tirai — dokumen di
-                       sebelahnya tetap terbaca sambil memilih.
-             <= 1024px lembar bawah selebar layar, dengan tirai. Di iPad tegak
-                       sidebar sudah pindah ke pojok bawah dan 320px di
-                       sampingnya tidak muat lagi.
-           Ambang 1024px sengaja sama dengan yang sudah dipakai .toolbar. */
+           Letak dan batas tingginya dihitung JavaScript dari kotak sidebar
+           (positionVersionCard): tinggi sidebar berubah-ubah, dan persentase
+           layar tidak tahu ada sidebar setinggi apa di atasnya. */
         .ez-versi-select { display: none; }
 
-        .ez-versi-tirai {
+        .ez-versi-kartu {
             position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, .45);
-            z-index: 1000;
-        }
-
-        .ez-versi-panel {
-            position: fixed;
-            top: 20px;
-            right: 246px;               /* 20 tepi + 210 sidebar + 16 jarak */
-            width: 320px;
-            max-height: 90vh;
+            right: 20px;
+            width: 260px;
             display: flex;
             flex-direction: column;
             background: #222;
             color: #e5e7eb;
             border-radius: 8px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
-            z-index: 1001;
-            font-size: 12px;
+            padding: 8px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+            z-index: 999;          /* di bawah sidebar */
+            font-size: 11.5px;
             box-sizing: border-box;
         }
-        .ez-versi-panel[hidden] { display: none; }
+        .ez-versi-kartu[hidden] { display: none; }
 
-        .ez-versi-kepala {
+        .ez-versi-kartu-kepala {
             display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 12px;
-            border-bottom: 1px solid #333;
-        }
-        .ez-versi-kepala h2 {
-            flex: 1;
-            margin: 0;
-            font-size: 12px;
-            font-weight: 600;
-            letter-spacing: .02em;
-            text-transform: uppercase;
-            color: #d1d5db;
-        }
-        .ez-versi-jumlah { color: #9ca3af; font-size: 11px; }
-        .ez-versi-tutup {
-            background: transparent;
-            border: 0;
-            color: #9ca3af;
-            font-size: 20px;
-            line-height: 1;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 6px;
+            margin-bottom: 6px;
             padding: 0 2px;
-            cursor: pointer;
         }
-        .ez-versi-tutup:hover { color: #f3f4f6; }
+        #versionCardTitle {
+            font-size: 9.5px;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            color: #9ca3af;
+        }
+        .ez-versi-jumlah { color: #9ca3af; font-size: 10.5px; }
 
-        .ez-versi-isi { overflow-y: auto; padding: 8px; }
-        .ez-versi-isi:focus { outline: none; }
-        .ez-versi-kaki { border-top: 1px solid #333; padding: 7px 10px; }
+        /* Yang menggulung isinya, bukan kartunya: kepala dan kakinya tetap
+           terlihat betapa pun panjang daftarnya. */
+        .ez-versi-kartu-isi { overflow-y: auto; min-height: 0; }
 
+        .ez-versi-kartu-kaki {
+            border-top: 1px solid #333;
+            margin-top: 6px;
+            padding: 6px 2px 0;
+        }
         .ez-versi-tersembunyi-pemicu {
             background: transparent;
             border: 0;
             color: #9ca3af;
-            font-size: 11px;
+            font-size: 10.5px;
             padding: 0;
             cursor: pointer;
             text-decoration: underline;
@@ -888,12 +869,14 @@
             text-align: left;
             background: #2b2b2b;
             border: 1px solid #383838;
+            border-left: 3px solid #383838;
             border-radius: 6px;
-            padding: 8px 10px;
-            margin: 0 0 6px;
+            padding: 6px 8px;
+            margin: 0 0 5px;
             color: inherit;
             cursor: pointer;
             font: inherit;
+            line-height: 1.35;
         }
         .ez-versi-baris:last-child { margin-bottom: 0; }
         .ez-versi-baris:hover { background: #333; }
@@ -901,16 +884,17 @@
         /* Yang sedang dibuka tidak bisa diklik — ia tujuan yang sudah tercapai. */
         .ez-versi-baris[aria-current="true"] {
             border-color: #6366f1;
+            border-left-color: #818cf8;
             background: #2c2a44;
             cursor: default;
         }
         .ez-versi-baris[data-hidden="1"] { opacity: .6; }
 
-        .ez-versi-baris-atas { display: flex; align-items: center; gap: 6px; }
-        .ez-versi-nomor { font-weight: 700; font-size: 13px; color: #f3f4f6; }
+        .ez-versi-baris-atas { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+        .ez-versi-nomor { font-weight: 700; font-size: 12.5px; color: #f3f4f6; }
         .ez-versi-lencana {
-            font-size: 10px;
-            padding: 1px 7px;
+            font-size: 9.5px;
+            padding: 1px 6px;
             border-radius: 999px;
             white-space: nowrap;
         }
@@ -921,108 +905,20 @@
         .ez-versi-lencana.dibuka    { background: #312e81; color: #c7d2fe; }
 
         .ez-versi-ttd { margin: 3px 0 0; color: #d1d5db; }
-        .ez-versi-waktu { margin: 1px 0 0; color: #9ca3af; font-size: 11px; }
-        .ez-versi-kosong { color: #9ca3af; padding: 10px 4px; }
-
-        /* Sentuhan: baris dan tombolnya diperbesar hanya di perangkat sentuh,
-           supaya tetikus tidak ikut kena sasaran raksasa. */
-        @media (hover: none) and (pointer: coarse) {
-            .ez-versi-baris { padding: 11px 12px; }
-            .ez-versi-tutup { font-size: 26px; padding: 0 8px; }
-            .ez-versi-tersembunyi-pemicu { font-size: 13px; padding: 6px 0; }
-        }
-
-
-        /* ══ Kartu daftar versi ══════════════════════════════════════════
-           Selalu tampil, menempel di bawah sidebar (di atasnya kalau sidebar
-           sedang menempel ke dasar layar). Letak tegaknya dihitung JavaScript:
-           tinggi sidebar berubah-ubah — ia bisa digulung, dan isinya berbeda
-           antar template — jadi tidak ada satu angka yang benar terus. */
-        .ez-versi-kartu {
-            position: fixed;
-            right: 20px;
-            width: 210px;
-            max-height: 30vh;
-            display: flex;
-            flex-direction: column;
-            background: #222;
-            color: #e5e7eb;
-            border-radius: 8px;
-            padding: 7px 8px 8px;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
-            z-index: 999;          /* di bawah sidebar, di bawah panel detail */
-            font-size: 11.5px;
-            box-sizing: border-box;
-        }
-        .ez-versi-kartu[hidden] { display: none; }
-
-        .ez-versi-kartu-kepala {
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-            gap: 6px;
-            margin-bottom: 5px;
-        }
-        #versionCardTitle {
-            font-size: 9.5px;
-            letter-spacing: .06em;
-            text-transform: uppercase;
-            color: #9ca3af;
-        }
-        .ez-versi-kartu-detail {
-            background: transparent;
-            border: 0;
-            color: #9ca3af;
-            font-size: 10.5px;
-            padding: 0;
-            cursor: pointer;
-        }
-        .ez-versi-kartu-detail:hover { color: #e5e7eb; }
-
-        .ez-versi-kartu-isi { overflow-y: auto; }
-
-        .ez-versi-kartu-baris {
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-            gap: 6px;
-            width: 100%;
-            text-align: left;
-            background: transparent;
-            border: 0;
-            border-left: 3px solid transparent;
-            border-radius: 4px;
-            padding: 4px 6px;
-            margin: 0;
-            color: #d1d5db;
-            cursor: pointer;
-            font: inherit;
-            line-height: 1.35;
-        }
-        .ez-versi-kartu-baris:hover { background: #2e2e2e; }
-        .ez-versi-kartu-baris:focus-visible { outline: 2px solid #6366f1; outline-offset: -2px; }
-        /* Yang sedang dibuka: ditandai garis di tepi, bukan warna latar penuh —
-           kartunya kecil, dan blok warna di dalamnya terbaca sebagai tombol. */
-        .ez-versi-kartu-baris[aria-current="true"] {
-            border-left-color: #818cf8;
-            background: #2a2840;
-            color: #f3f4f6;
-            cursor: default;
-        }
-        .ez-versi-kartu-baris[data-hidden="1"] { opacity: .55; }
-        .ez-versi-kartu-kiri { white-space: nowrap; font-variant-numeric: tabular-nums; }
-        .ez-versi-kartu-kanan {
+        .ez-versi-waktu {
+            margin: 1px 0 0;
             color: #9ca3af;
             font-size: 10.5px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .ez-versi-kartu-kosong { color: #9ca3af; padding: 2px 6px; }
 
+        /* Sentuhan: barisnya diperbesar hanya di perangkat sentuh, supaya
+           tetikus tidak ikut kena sasaran raksasa. */
         @media (hover: none) and (pointer: coarse) {
-            .ez-versi-kartu-baris { padding: 8px 6px; }
-            .ez-versi-kartu-detail { font-size: 12px; padding: 2px 0; }
+            .ez-versi-baris { padding: 10px; }
+            .ez-versi-tersembunyi-pemicu { font-size: 12.5px; padding: 4px 0; }
         }
 
         @media screen and (max-width: 1024px) {
@@ -1030,22 +926,7 @@
 
             /* Sidebar menempel ke dasar layar di lebar ini, jadi kartunya naik
                ke atasnya — letaknya diatur positionVersionCard(). */
-            .ez-versi-kartu { right: 10px; width: 170px; max-height: 26vh; }
-
-
-            /* iPad tegak dan tablet: sidebar sudah pindah ke pojok bawah, jadi
-               panel di sampingnya tidak muat. Jadi lembar bawah selebar layar. */
-            .ez-versi-panel {
-                top: auto;
-                right: 0;
-                left: 0;
-                bottom: 0;
-                width: auto;
-                max-height: 72vh;
-                border-radius: 12px 12px 0 0;
-            }
-            .ez-versi-isi { padding: 10px; }
-            .ez-versi-kepala { padding: 12px 14px; }
+            .ez-versi-kartu { right: 10px; width: 210px; }
 
             .toolbar button { font-size: 12px; }
         }
@@ -1181,7 +1062,7 @@
             }
             /* Hide screen-only pagination spacers (they exist untuk screen visual). */
             .ezdoc-page-spacer { display: none !important; }
-            .toolbar, .modal, .toast, .ez-versi-kartu, .ez-versi-panel, .ez-versi-tirai { display: none !important; }
+            .toolbar, .modal, .toast, .ez-versi-kartu { display: none !important; }
             .f { border-bottom: none !important; background: transparent !important; }
             .f:empty::before { display: none; }
             .ttd-actions { display: none !important; }

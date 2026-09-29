@@ -6,6 +6,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Changed — daftar versi jadi satu kartu, detailnya langsung terlihat (2026-09-29)**
+
+Diminta pemakai: "tampilkan langsung detail aja versinya, tidak perlu klik
+detail, namun pastikan tinggi card dinamis agar tidak melebihi layar, jika
+versi banyak bisa di scroll, dan jika klik hidden ikut hidden".
+
+Panel terpisah dibuang; kartunya sendiri yang memuat detailnya. Dropdown,
+tombol pemicu, dan panel — ketiganya pernah ada, dan ketiganya menuntut satu
+tindakan sebelum orang tahu ada versi lain.
+
+- **Tiap baris menjawab tiga hal**: versi berapa (dengan lencana lengkap /
+  berjalan / draf / disembunyikan / sedang dibuka), sudah berapa tanda tangan
+  dari berapa, dan kapan serta oleh siapa dibuat.
+- **Tingginya dihitung dari ruang yang benar-benar tersisa** — sisa layar di
+  bawah (atau di atas) sidebar, bukan persentase layar: persentase tidak tahu
+  ada sidebar setinggi apa di atasnya. Yang menggulung isinya, jadi kepala dan
+  kakinya tetap terlihat betapa pun panjang daftarnya. Di layar pendek batasnya
+  tidak pernah kurang dari 120px, supaya kartunya tidak mengerut jadi garis.
+- **Sidebar digulung, kartunya ikut**. Yang menggulung sidebar sedang ingin
+  melihat dokumennya.
+- Muncul hanya kalau versinya lebih dari satu.
+- Penyaring "tampilkan tersembunyi" pindah ke kaki kartu.
+
 **Fixed — versi baru dimulai kosong; sepertiga versi di basis data ikut kosong (2026-09-29)**
 
 Dilaporkan pemakai: "user suka asal klik buat versi". Yang diklik memang
