@@ -6,6 +6,41 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Fixed — nilai field di-escape dua kali; nama berpetik merusak tanda tangan kedua (2026-09-29)**
+
+Dilaporkan pemakai: nama pasien "NIZAR RIFA'I" tampil jadi
+"NIZAR RIFA&amp;amp;#039;I", dan tanda tangan kedua di dokumen itu ditolak dengan
+"Changed: nama_pasien" padahal tidak ada yang mengubahnya.
+
+Satu sebab untuk keduanya. `v()` mengembalikan nilai yang sudah di-escape,
+lalu perender field meng-escape-nya lagi. Yang dikirim formulir kembali ke
+server bukan `RIFA'I` melainkan teks `RIFA&#039;I` — sungguhan, bukan
+tampilan — dan itulah yang tersimpan. Tiap kali dokumennya dibuka lalu
+disimpan, satu lapis bertambah.
+
+Akibat keduanya:
+
+- Yang tercetak di layar memuat entitas mentah. (Cetakan PDF selalu benar:
+  jalur itu memang hanya meng-escape sekali.)
+- Nilai tersimpan tidak lagi sama dengan yang dikirim ulang formulir, jadi
+  penjaga field beku menyimpulkan isi dokumen berubah dan menolak tanda tangan
+  berikutnya. Penjaganya benar; yang diberi tahu salah.
+
+Nama tanpa petik, ampersand, atau tanda kurung sudut tidak pernah terkena —
+`h(h($x))` sama dengan `$x` selama tidak ada huruf yang perlu di-escape. Itu
+sebabnya ini hidup lama tanpa terlihat.
+
+Sekarang kontraknya satu arah: yang masuk perender adalah nilai **mentah**, dan
+perendernya yang meng-escape, tepat sekali. Dijaga
+`tests/UI/NilaiFieldSatuLapisTest.php`, yang membandingkan apa yang akan
+dikirim peramban kembali dengan apa yang tersimpan — atas petik satu, petik
+dua, ampersand, dan tanda kurung sudut.
+
+**Dokumen yang terlanjur tersimpan tidak ikut diperbaiki.** Nilainya tercakup
+tanda tangan yang sudah ada; mengubahnya sekarang akan membuat verifikasi
+melaporkan dokumen itu berubah. Yang perlu dibetulkan diperbaiki lewat versi
+baru, dan namanya diketik ulang sekali di sana.
+
 **Added — kop contoh diatur dari halaman contoh (2026-09-28)**
 
 Diminta pemakai: "maksudku konfigurasi di halaman example, karena tiap consumer

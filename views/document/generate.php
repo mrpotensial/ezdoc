@@ -1306,7 +1306,12 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
     $html = preg_replace_callback('/<span[^>]*class=["\']field-placeholder[^"\']*["\']([^>]*)>\{\{([^}:]+)(?::text)?\}\}<\/span>/', function($m) use ($frozenFields) {
         $attrs = $m[1];
         $name = $m[2];
-        $val = v($name);
+        // MENTAH. Yang meng-escape perendernya, tepat sekali. Nilai yang
+        // sudah di-escape di sini akan di-escape lagi di sana, dan hasilnya
+        // dikirim kembali oleh formulir sebagai teks sungguhan: nama
+        // "RIFA'I" tersimpan jadi "RIFA&#039;I", lalu "RIFA&amp;#039;I",
+        // bertambah satu lapis tiap kali dokumennya dibuka dan disimpan.
+        $val = vRaw($name);
 
         // Parse attributes
         $type = 'text';
@@ -1328,7 +1333,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
 
         // If no value from db/post/get, use resolved default
         if ($val === '' && $default !== '') {
-            $val = h(resolveDefault($default));
+            $val = resolveDefault($default);
         }
 
         // ── Field hitung ──
@@ -1346,7 +1351,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
                 $desimal = (int) $dcm[1];
             }
             $hitung = ['formula' => $rumus, 'decimals' => $desimal];
-            $val = h((string) (\Ezdoc\Format\CalcField::hitung($rumus, $GLOBALS['dbFields'] ?? [], $desimal) ?? ''));
+            $val = (string) (\Ezdoc\Format\CalcField::hitung($rumus, $GLOBALS['dbFields'] ?? [], $desimal) ?? '');
         }
 
         $isFrozen = $frozenFields === null || isset($frozenFields[$name]);
@@ -1357,7 +1362,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
     // Handle bare {{field}} without span wrapper (fallback) - text type
     $html = preg_replace_callback('/\{\{([^}:]+)(?::text)?\}\}/', function($m) use ($frozenFields) {
         $name = $m[1];
-        $val = v($name);
+        $val = vRaw($name);   // mentah — lihat catatan di callback di atas
         $isFrozen = $frozenFields === null || isset($frozenFields[$name]);
 
         return renderFieldInput($name, 'text', $val, '', '', [], $isFrozen);
@@ -1510,13 +1515,11 @@ function renderFieldInputRaw($name, $type, $val, $options, $label, $validation =
 
         case 'radio':
         case 'select':
-            // Nilai tersimpan datang dalam bentuk siap-cetak (sudah di-escape),
-            // sedangkan pilihannya sudah dipulihkan dari entitas. Tanpa
-            // disamakan lebih dulu, pilihan yang memuat < atau > tidak pernah
-            // tercentang: "&gt; 90 derajat" tidak akan pernah sama dengan
-            // "> 90 derajat". Polanya sama dengan yang dipakai kerangka lain —
-            // banding nilai mentah, escape hanya saat mencetak.
-            $valPilihan = html_entity_decode((string) $val, ENT_QUOTES, 'UTF-8');
+            // Dibandingkan mentah lawan mentah: nilai tersimpan memang mentah,
+            // dan pilihannya sudah dipulihkan dari entitas saat atributnya
+            // dibaca. Memulihkan yang sudah mentah justru merusak nilai yang
+            // memang berisi "&amp;".
+            $valPilihan = (string) $val;
             $opts = array_map('trim', explode(',', $options));
             if ($type === 'select') {
                 $html = '<select class="field-select" name="' . $hName . '" data-field="' . $hName . '">';

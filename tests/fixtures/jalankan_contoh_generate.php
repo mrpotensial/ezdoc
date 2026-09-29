@@ -81,9 +81,18 @@ $_GET['template_id'] = $templateId;
 $_SERVER['REQUEST_METHOD'] = 'GET';
 
 // Parameter tambahan, mis. "view=pdf&raw=1&debug=html".
+//
+// Boleh juga "b64:<base64 dari query itu>". Di Windows, escapeshellarg()
+// mengganti tanda persen dengan spasi untuk mencegah pemekaran variabel, jadi
+// nilai ber-persen-encode tidak pernah sampai utuh lewat baris perintah —
+// dan nilai berisi petik atau ampersand justru itu yang perlu diuji.
 if (isset($argv[3]) && $argv[3] !== '') {
+    $mentah = (string) $argv[3];
+    if (strncmp($mentah, 'b64:', 4) === 0) {
+        $mentah = (string) base64_decode(substr($mentah, 4), true);
+    }
     $tambahan = [];
-    parse_str((string) $argv[3], $tambahan);
+    parse_str($mentah, $tambahan);
     foreach ($tambahan as $kunci => $nilai) {
         $_GET[$kunci] = $nilai;
     }
