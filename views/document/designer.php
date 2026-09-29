@@ -1137,7 +1137,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                     <strong><?= h(t('modal.default_format_title', [], 'Default value format:')) ?></strong><br>
                     <code><?= h(t('modal.default_format_text_example', [], 'plain text')) ?></code> — <?= h(t('modal.default_format_text_desc', [], 'used directly as the default value')) ?><br>
                     <code>date:d F Y</code> — <?= h(t('modal.default_format_date_desc', [], "today's date (PHP format)")) ?><br>
-                    <code>$nama_variabel</code> — <?= h(t('modal.default_format_var_desc', [], 'the value of the PHP variable (must be in the whitelist)')) ?>
+                    <code>$nama_variabel</code> — <?= h(t('modal.default_format_var_desc', [], 'the value of the PHP variable (must be in the whitelist)')) ?><br>
+                    <code>get:nama_param</code> — <?= h(t('modal.default_format_get_desc', [], 'the value of that URL parameter — lets several fields fill from one source')) ?>
                 </div>
             </div>
         </div>

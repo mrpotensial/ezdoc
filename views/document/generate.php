@@ -888,8 +888,13 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             return '';
         };
         $namaRaw = $pick($namaField);
-        // Fallback ke data-default-nama kalau field kosong
-        if ($namaRaw === '' && $defaultNama !== '') $namaRaw = $defaultNama;
+        // Fallback ke data-default-nama kalau field kosong.
+        //
+        // Lewat resolveDefault(), bukan dipakai mentah: dengan begitu ia bisa
+        // menyebut sumber — `get:nama_petugas`, `$author_nama` — dan beberapa
+        // slot bisa terisi dari satu sumber tanpa berbagi satu field. Teks
+        // biasa tetap lewat apa adanya.
+        if ($namaRaw === '' && $defaultNama !== '') $namaRaw = resolveDefault($defaultNama);
         $namaValue = h($namaRaw);
 
         $hasImage = strpos($ttdModes, 'image') !== false;

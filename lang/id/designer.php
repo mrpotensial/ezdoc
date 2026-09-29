@@ -85,6 +85,11 @@ return [
     ],
     'toast' => [
         'variable_inserted'       => 'Variabel disisipkan: {tag}',
+        // Satu tanda tangan tidak bisa berdiri di dua tempat: gambarnya
+        // diambil berdasarkan id, jadi id kembar mencetak satu tanda
+        // tangan di dua kotak.
+        'ttd_renamed'             => '{n} tanda tangan tempelan diberi id baru — satu tanda tangan tidak bisa berdiri di dua tempat',
+        'ttd_duplicate_fixed'     => '{n} tanda tangan memakai id yang sama — sudah dinamai ulang, simpan supaya tetap',
         'query_name_required'     => 'Nama query (namespace) wajib diisi',
         'namespace_invalid_chars' => 'Namespace hanya huruf/angka/underscore',
         'sql_empty'               => 'SQL kosong',
@@ -340,6 +345,7 @@ return [
         'default_format_text_desc'    => 'langsung jadi nilai default',
         'default_format_date_desc'    => 'tanggal hari ini (format PHP)',
         'default_format_var_desc'     => 'isi variabel PHP (harus ada di whitelist)',
+        'default_format_get_desc'     => 'isi parameter URL itu — supaya beberapa field bisa terisi dari satu sumber',
         'no_vars_yet'                 => 'Belum ada variabel',
         'field_inspector_title'       => 'Field Inspector & Migration',
         'field_inspector_intro'       => 'Cek penggunaan field di dokumen yang sudah ada, rename field dengan migrasi data, atau hapus orphan data (data yang fieldnya sudah tidak ada di template).',

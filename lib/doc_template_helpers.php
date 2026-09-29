@@ -50,6 +50,29 @@ if (!function_exists('resolveDefault')) {
             return $formatted; // last resort: raw English
         }
 
+        // Parameter URL: get:NAMA
+        //
+        // Ada supaya beberapa slot tanda tangan bisa terisi dari SATU sumber
+        // tanpa berbagi satu field. Berbagi field terlihat hemat, tapi
+        // SignaturePayload::coveredKeysFor() mengeluarkan nama milik slot lain
+        // dari cakupan sebuah tanda tangan — kalau dua slot memakai nama yang
+        // sama, nama itu keluar dari cakupan KEDUANYA, dan yang tercetak di
+        // bawah tanda tangan jadi tidak dilindungi tanda tangan itu.
+        //
+        // Ini tidak melebarkan apa pun yang sudah ada: tiap field memang sudah
+        // bisa diisi lewat URL dengan namanya sendiri (lihat v()). Yang
+        // ditambahkan cuma kemampuan menyebut sumber itu dengan nama lain.
+        // Nilainya tetap di-escape saat dicetak.
+        if (strncmp($default, 'get:', 4) === 0) {
+            $param = substr($default, 4);
+            if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $param) !== 1) {
+                return '';
+            }
+            $nilai = isset($_GET[$param]) ? $_GET[$param] : '';
+
+            return is_string($nilai) ? $nilai : '';
+        }
+
         // Time format: time:FORMAT
         //
         // Dipisah dari `date:` bukan karena kerapian, tapi karena `date:`

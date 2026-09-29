@@ -1874,6 +1874,15 @@
                     const hasMedia = p.querySelector('img, video, iframe, .field-placeholder, .ttd-placeholder, .materai-placeholder, .qr-placeholder, .logo-placeholder');
                     if (!text && !hasMedia) p.remove();
                 });
+                // Salinan tanda tangan mendapat id sendiri sebelum masuk.
+                try {
+                    const diubah = namaiUlangTtdKembar(root, idTtdTerpakai());
+                    if (diubah > 0) {
+                        showToast(t('toast.ttd_renamed', {n: diubah},
+                            '{n} pasted signature(s) got a new id — one signature cannot stand in two places'));
+                    }
+                } catch (e) { console.warn('[ttd] penamaan ulang tempelan gagal:', e); }
+
                 // Also strip Mso classes yang masih ada (defensive)
                 root.querySelectorAll('[class*="Mso"]').forEach(el => {
                     const cleaned = (el.className || '').replace(/\s*Mso\w+\s*/g, ' ').trim();
@@ -2925,6 +2934,17 @@
                     setTimeout(function() {
                         loadPageSettings();
                         scanLogos();
+                        // Template lama bisa sudah membawa id kembar dari
+                        // salin-tempel sebelum penamaan ulang ini ada. Dibereskan
+                        // di sini, sebelum dipindai — kalau tidak, slot yang
+                        // runtuh tidak akan pernah muncul di panel.
+                        try {
+                            const _kembar = namaiUlangTtdKembar(editor.getBody(), new Set());
+                            if (_kembar > 0) {
+                                showToast(t('toast.ttd_duplicate_fixed', {n: _kembar},
+                                    '{n} duplicate signature(s) found and renamed — save to keep the fix'));
+                            }
+                        } catch (e) { console.warn('[ttd] pemeriksaan id kembar gagal:', e); }
                         scanTtdPlaceholders();
                         scanMateraiPlaceholders();
                         scanFieldPlaceholders();
@@ -4711,6 +4731,87 @@
         }
 
         // Scan TTD placeholders from editor content
+        // ── Tanda tangan kembar ──────────────────────────────────────────
+        //
+        // Dilaporkan pemakai: template dengan empat kotak tanda tangan hanya
+        // terbaca dua. Sebabnya dua kotak terakhir hasil salin-tempel, dan
+        // keduanya membawa `data-ttd` yang sama.
+        //
+        // Yang runtuh bukan cuma hitungannya. Gambar tanda tangan diambil
+        // berdasarkan id, jadi satu orang menandatangani sekali dan gambarnya
+        // muncul di dua kotak: di kertas terbaca empat orang menandatangani,
+        // di catatan hanya dua tindakan. Dokumen itu menyatakan lebih dari
+        // yang terjadi.
+        //
+        // Id kembar tidak pernah sah, jadi ia dinamai ulang tanpa bertanya.
+        // Nama penanda tangannya lain cerita: berbagi satu nama BISA disengaja,
+        // jadi yang diubah hanya nama yang memang turunan id lama.
+
+        /** Semua id ttd yang sudah terpakai di editor. */
+        function idTtdTerpakai() {
+            const dipakai = new Set();
+            const editor = tinymce.get('editor');
+            if (!editor) return dipakai;
+            const isi = editor.getContent() || '';
+            const pola = /data-ttd="([^"]+)"/g;
+            let m;
+            while ((m = pola.exec(isi)) !== null) { dipakai.add(m[1]); }
+            return dipakai;
+        }
+
+        function idTtdBaru(dipakai) {
+            let n = 0;
+            let id;
+            do { id = 'ttd_' + Date.now() + (n ? '_' + n : ''); n++; } while (dipakai.has(id));
+            return id;
+        }
+
+        /**
+         * Namai ulang tanda tangan yang idnya sudah terpakai.
+         *
+         * @param root    elemen yang diperiksa (fragmen tempelan, atau badan editor)
+         * @param dipakai Set id yang sudah ada; ikut bertambah
+         * @return jumlah yang dinamai ulang
+         */
+        function namaiUlangTtdKembar(root, dipakai) {
+            if (!root || !root.querySelectorAll) return 0;
+
+            let diubah = 0;
+            Array.prototype.forEach.call(root.querySelectorAll('.ttd-placeholder[data-ttd]'), function (el) {
+                // Elemen bikinan TinyMCE dilewati. Widget contenteditable=false
+                // yang terpilih disalin ke wadah tersembunyi (.mce-offscreen-selection,
+                // bertanda data-mce-bogus) supaya bisa disalin ke papan klip —
+                // salinan itu ada di DOM tapi TIDAK ada di getContent(). Kalau ikut
+                // dihitung, yang asli tampak kembar dan dinamai ulang tanpa sebab.
+                if (el.closest && el.closest('[data-mce-bogus], .mce-offscreen-selection')) return;
+
+                const lama = el.getAttribute('data-ttd');
+                if (!lama) return;
+                if (!dipakai.has(lama)) { dipakai.add(lama); return; }
+
+                const baru = idTtdBaru(dipakai);
+                dipakai.add(baru);
+                el.setAttribute('data-ttd', baru);
+
+                // Nama bawaannya `nama_<id>`. Kalau masih itu, ia ikut; kalau
+                // sudah diganti orang, ia dibiarkan — mungkin memang sengaja
+                // dipakai bersama.
+                const namaLama = el.getAttribute('data-nama-field') || ('nama_' + lama);
+                if (namaLama === 'nama_' + lama) {
+                    const namaBaru = 'nama_' + baru;
+                    el.setAttribute('data-nama-field', namaBaru);
+
+                    const qr = el.getAttribute('data-ttd-qr-data');
+                    if (qr && qr.indexOf(namaLama) !== -1) {
+                        el.setAttribute('data-ttd-qr-data', qr.split(namaLama).join(namaBaru));
+                    }
+                }
+                diubah++;
+            });
+
+            return diubah;
+        }
+
         function scanTtdPlaceholders() {
             const editor = tinymce.get('editor');
             if (!editor) return;

@@ -846,7 +846,9 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
             return '';
         };
         $namaRawPdf = $pickPdf($namaField);
-        if ($namaRawPdf === '' && $defaultNama !== '') $namaRawPdf = $defaultNama;
+        // Lewat resolveDefault() juga — lihat catatan di views/document/generate.php.
+        // Yang tercetak harus sama dengan yang di layar.
+        if ($namaRawPdf === '' && $defaultNama !== '') $namaRawPdf = resolveDefault($defaultNama);
         $namaValue = h($namaRawPdf);
 
         // Determine active mode from saved document data

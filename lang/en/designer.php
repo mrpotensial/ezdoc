@@ -81,6 +81,8 @@ return [
     ],
     'toast' => [
         'variable_inserted' => 'Variable inserted: {tag}',
+        'ttd_renamed' => '{n} pasted signature(s) got a new id — one signature cannot stand in two places',
+        'ttd_duplicate_fixed' => '{n} duplicate signature(s) found and renamed — save to keep the fix',
         'query_name_required' => 'Query name (namespace) is required',
         'namespace_invalid_chars' => 'Namespace can only contain letters/numbers/underscore',
         'sql_empty' => 'SQL is empty',
@@ -339,6 +341,7 @@ return [
         'default_format_text_desc' => 'used directly as the default value',
         'default_format_date_desc' => 'today\'s date (PHP format)',
         'default_format_var_desc' => 'the value of the PHP variable (must be in the whitelist)',
+        'default_format_get_desc' => 'the value of that URL parameter — lets several fields fill from one source',
         'no_vars_yet' => 'No variables yet',
         'field_inspector_title' => 'Field Inspector & Migration',
         'field_inspector_intro' => 'Check field usage in existing documents, rename a field with data migration, or clean up orphan data (data whose field no longer exists in the template).',

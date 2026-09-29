@@ -6,6 +6,52 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Fixed — tanda tangan yang disalin membawa id kembar; empat kotak terbaca dua (2026-09-29)**
+
+Dilaporkan pemakai: sebuah template punya empat kotak tanda tangan, tapi yang
+terdeteksi cuma dua. Sebabnya dua kotak terakhir hasil salin-tempel, dan
+keduanya membawa `data-ttd` yang sama.
+
+Yang runtuh bukan cuma hitungannya. Gambar tanda tangan diambil berdasarkan id,
+jadi satu orang menandatangani sekali dan gambarnya muncul di dua kotak: di
+kertas terbaca dua orang menandatangani, di catatan hanya satu tindakan.
+Dokumen itu menyatakan lebih dari yang terjadi.
+
+- **Saat menempel**, salinan yang idnya sudah terpakai langsung diberi id
+  sendiri (`paste_postprocess`), dengan pesan singkat supaya orangnya tahu.
+- **Saat template dibuka**, yang terlanjur kembar ikut dibereskan sebelum
+  dipindai — kalau tidak, slot yang runtuh tidak akan pernah muncul di panel.
+  Tinggal simpan sekali untuk menetapkannya.
+- **Nama penanda tangannya ikut hanya kalau masih bawaan** (`nama_<id>`).
+  Berbagi satu nama bisa disengaja; id kembar tidak pernah.
+- **Klon bikinan TinyMCE dilewati.** Widget `contenteditable=false` yang
+  terpilih disalin ke wadah tersembunyi (`.mce-offscreen-selection`, bertanda
+  `data-mce-bogus`) supaya bisa masuk papan klip. Terukur di peramban
+  sungguhan: 5 elemen di DOM, 4 di isi dokumen. Tanpa penjaga ini yang asli
+  tampak kembar dan dinamai ulang tanpa sebab.
+
+**Added — nilai bawaan field boleh menyebut satu parameter URL (`get:NAMA`) (2026-09-29)**
+
+Berbagi satu `nama_field` antar slot tanda tangan dulunya dipakai untuk satu
+hal yang masuk akal: mengisi nama di beberapa slot lewat satu parameter URL.
+Tapi caranya justru melemahkan tanda tangannya — `SignaturePayload::coveredKeysFor()`
+mengeluarkan nama milik slot LAIN dari cakupan sebuah tanda tangan, jadi nama
+yang dipakai berdua keluar dari cakupan keduanya, dan yang tercetak di bawah
+tanda tangan tidak lagi dilindungi tanda tangan itu.
+
+`get:NAMA` mengembalikan kemudahannya tanpa menukar apa pun: tiap slot punya
+field sendiri, semuanya terisi dari satu sumber.
+
+- Dipakai di isian **DEFAULT NAMA** sebuah slot, sejajar dengan sumber yang
+  sudah ada (`date:`, `time:`, `$author_nama`).
+- Tidak melebarkan apa pun: tiap field memang sudah bisa diisi lewat URL dengan
+  namanya sendiri. Yang ditambahkan hanya kemampuan menyebut sumber itu dengan
+  nama lain.
+- Nama parameternya wajib berbentuk wajar (`^[A-Za-z_][A-Za-z0-9_]*$`), nilai
+  yang bukan teks (`?nama[]=a&nama[]=b`) ditolak, dan nilainya tetap di-escape
+  saat dicetak.
+- Berlaku sama di layar dan di PDF.
+
 **Changed — kartu versi pindah ke kiri atas, dengan tombol sembunyinya sendiri (2026-09-29)**
 
 Dilaporkan pemakai: "ukurannya berbeda jadi jelek. versi card tampilkan di
