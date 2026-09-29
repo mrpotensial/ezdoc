@@ -129,6 +129,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['_doc_action'])) {
         'request_scan_code'  => 'request_scan_code.php',
         'scan_code_status'   => 'scan_code_status.php',
         'document_history'=> 'document_history.php',
+        // Menggambar saja: spesifikasi dan angka datang dari permintaan, tidak
+        // ada dokumen yang dibaca. Designer memakainya untuk template yang
+        // belum pernah disimpan.
+        'chart_render'    => 'chart_render.php',
         // PDF beku satu siklus. Siklus lama sengaja tetap bisa dibuka: ia
         // jawaban atas "apa yang dilihat penanda tangan pertama".
         'artifact'        => 'artifact.php',

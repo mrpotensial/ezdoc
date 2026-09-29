@@ -57,6 +57,7 @@ require_once EZDOC_LIB . '/view_helpers.php';
 // Setiap deklarasi di dalamnya berpenjaga function_exists, jadi pemuatan
 // oleh view lewat jalur pencariannya sendiri tetap aman.
 require_once EZDOC_LIB . '/doc_template_helpers.php';
+require_once EZDOC_LIB . '/chart_helpers.php';
 require_once EZDOC_LIB . '/pdf_compose.php';
 
 // Auto-run migrations (menggunakan Ezdoc\Migrations\Runner via wrapper)

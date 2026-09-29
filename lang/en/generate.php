@@ -225,6 +225,9 @@ return [
         'qr_filled' => 'QR filled in. Click Save to persist.',
         'identity_required_for_save' => 'NORM & Nopen must be filled in before saving',
     ],
+    'chart' => [
+            'stale' => 'Chart image is out of date — the values are saved',
+    ],
     'modal' => [
         'doc_info' => [
             'title' => 'Document Details',

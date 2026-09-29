@@ -1891,7 +1891,7 @@
             },
             // Single-row toolbar — semua tombol standard + custom ezdoc inserts sebaris.
             // Sliding mode akan tampilkan arrow untuk overflow saat width sempit.
-            toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist | outdent indent | ltr rtl | link table image | removeformat | searchreplace wordcount | code preview fullscreen help | insertfield insertttd insertmaterai insertqr insertlogo insertcond inserttable',
+            toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist | outdent indent | ltr rtl | link table image | removeformat | searchreplace wordcount | code preview fullscreen help | insertfield insertttd insertmaterai insertqr insertlogo insertchart insertcond inserttable',
             toolbar_mode: 'sliding',
             font_size_formats: '8pt 9pt 10pt 11pt 12pt 14pt 16pt 18pt 20pt 24pt 28pt 36pt 48pt',
             font_family_formats: 'Times New Roman=Times New Roman,serif; Arial=arial,helvetica,sans-serif; Calibri=calibri,sans-serif; Courier New=courier new,courier,monospace; Georgia=georgia,serif; Tahoma=tahoma,arial,helvetica,sans-serif; Verdana=verdana,geneva,sans-serif; Helvetica=helvetica,arial,sans-serif',
@@ -2407,6 +2407,17 @@
                 editor.ui.registry.addIcon('ezdoc-cond', '<svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M9.05.435c-.58-.58-1.52-.58-2.1 0L.436 6.95c-.58.58-.58 1.519 0 2.098l6.516 6.516c.58.58 1.519.58 2.098 0l6.516-6.516c.58-.58.58-1.519 0-2.098L9.05.435zM8 4c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995A.905.905 0 0 1 8 4zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>');
                 editor.ui.registry.addIcon('ezdoc-table', '<svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2Zm15 2h-4v3h4V4Zm0 4h-4v3h4V8Zm0 4h-4v3h3a1 1 0 0 0 1-1v-2Zm-5 3v-3H6v3h4Zm-5 0v-3H1v2a1 1 0 0 0 1 1h3Zm-4-4h4V8H1v3Zm0-4h4V4H1v3Zm5 0h4V4H6v3Zm4 1H6v3h4V8Z"/></svg>');
 
+                editor.ui.registry.addIcon('ezdoc-chart', '<svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M0 0h1v15h15v1H0V0Zm14.817 3.113a.5.5 0 0 1 .07.704l-4.5 5.5a.5.5 0 0 1-.74.037L7.06 6.767l-3.656 5.027a.5.5 0 0 1-.808-.588l4-5.5a.5.5 0 0 1 .758-.06l2.609 2.61 4.15-5.073a.5.5 0 0 1 .704-.07Z"/></svg>');
+
+                // Papan grafik. Satu tombol, tanpa menu: letaknya diatur seperti
+                // elemen lain, dan bentuknya diatur di panel kanan.
+                editor.ui.registry.addButton('insertchart', {
+                    text: t('toolbar_insert.chart_label', {}, 'Chart'),
+                    icon: 'ezdoc-chart',
+                    tooltip: t('toolbar_insert.chart_tooltip', {}, 'Insert chart board'),
+                    onAction: function() { insertChart(); }
+                });
+
                 // Logo insert with positioning options
                 editor.ui.registry.addMenuButton('insertlogo', {
                     text: t('toolbar_insert.logo_label', {}, 'Logo'),
@@ -2835,6 +2846,7 @@
                         _scanTimer = null;
                         scanLogos();
                         scanTtdPlaceholders();
+                        scanChartPlaceholders();
                         scanMateraiPlaceholders();
                         scanFieldPlaceholders();
                         scanQrPlaceholders();
@@ -2946,6 +2958,7 @@
                             }
                         } catch (e) { console.warn('[ttd] pemeriksaan id kembar gagal:', e); }
                         scanTtdPlaceholders();
+                        scanChartPlaceholders();
                         scanMateraiPlaceholders();
                         scanFieldPlaceholders();
                         scanQrPlaceholders();
@@ -4893,6 +4906,218 @@
             configTtd = configTtd.filter(t => ttdIds.includes(t.id));
 
             renderTtd();
+        }
+
+        // ===== Papan grafik =====
+        //
+        // Spesifikasinya disimpan di atribut elemennya sendiri, bukan di config
+        // template. Alasannya satu: penanda yang membawa bentuknya sendiri
+        // selamat dari salin-tempel, salin template, dan salin ke versi baru —
+        // tiga jalur yang semuanya hanya memindahkan HTML. Ukurannya kecil
+        // (ratusan byte), jadi tidak ada yang ditukar.
+
+        let configChart = [];
+
+        /** Spesifikasi bawaan sebuah papan baru: satu panel, satu deret. */
+        function defaultChartSpec(nomor) {
+            return {
+                hours: 12,
+                column_width: 40,
+                start_field: 'chart' + nomor + '_start',
+                panels: [{
+                    title: t('chart.default_panel_title', {}, 'Value'),
+                    height: 200,
+                    y: { min: 0, max: 10, step: 1 },
+                    series: [{ field: 'chart' + nomor + '_value', draw: 'point+line', marker: 'circle' }]
+                }]
+            };
+        }
+
+        function escAttr(teks) {
+            return String(teks).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function chartPlaceholderHtml(id, spec, lebar, tinggi) {
+            // Isinya <span>, bukan <div>: sisi server mencocokkan sampai </div>
+            // pertama, jadi penanda yang membungkus div lain akan terpotong.
+            return '<div class="chart-placeholder" data-chart="' + escAttr(id) + '"'
+                + ' data-chart-spec="' + escAttr(JSON.stringify(spec)) + '"'
+                + ' contenteditable="false"'
+                + ' style="display:inline-block;width:' + lebar + 'px;height:' + tinggi + 'px;'
+                + 'border:1px dashed #0891b2;background:#ecfeff;text-align:center;overflow:hidden">'
+                + '<span style="font-size:11px;color:#0e7490;line-height:' + tinggi + 'px">'
+                + escAttr(t('chart.placeholder_label', {}, 'Chart board')) + '</span></div>';
+        }
+
+        async function insertChart() {
+            const editor = tinymce.get('editor');
+            if (!editor) return;
+
+            const nomor = (editor.getContent().match(/class="[^"]*chart-placeholder/g) || []).length + 1;
+            const spec = defaultChartSpec(nomor);
+            const id = 'chart_' + Date.now();
+
+            // Ukurannya diminta ke server, bukan ditebak: yang menghitung tinggi
+            // papan adalah ChartSpec, dan kotak di editor harus seluas cetakannya
+            // supaya tata letaknya bisa dipercaya.
+            const hasil = await chartRenderRequest(spec, {});
+            if (!hasil.ok) { showToast(hasil.message, 'error'); return; }
+
+            editor.insertContent(chartPlaceholderHtml(id, spec, hasil.scale.width, Math.round(hasil.scale.height)) + '&nbsp;');
+            setTimeout(function () { scanChartPlaceholders(); }, 100);
+        }
+
+        /** Menggambar lewat server — perender yang sama dengan yang mencetak. */
+        async function chartRenderRequest(spec, values) {
+            const url = EZDOC_URLS.docAction || '';
+            if (!url) return { ok: false, message: t('chart.no_endpoint', {}, 'Chart renderer endpoint is not configured') };
+
+            const fd = new FormData();
+            fd.append('_doc_action', 'chart_render');
+            fd.append('spec', JSON.stringify(spec));
+            fd.append('values', JSON.stringify(values || {}));
+            try {
+                const resp = await fetch(url, { method: 'POST', body: fd });
+                const data = await resp.json();
+                if (!data.success) return { ok: false, message: data.message || 'gagal' };
+                return { ok: true, svg: data.svg, scale: data.scale, fields: data.fields };
+            } catch (e) {
+                return { ok: false, message: String(e) };
+            }
+        }
+
+        function scanChartPlaceholders() {
+            const editor = tinymce.get('editor');
+            if (!editor) return;
+
+            const ditemukan = [];
+            const isi = editor.getContent();
+            const pola = /<div([^>]*class="[^"]*chart-placeholder[^"]*"[^>]*)>/g;
+            let m;
+            while ((m = pola.exec(isi)) !== null) {
+                const attrs = m[1];
+                const id = (attrs.match(/data-chart="([^"]+)"/) || [])[1];
+                if (!id) continue;
+                const specRaw = (attrs.match(/data-chart-spec="([^"]*)"/) || [])[1] || '';
+                let spec = null;
+                try {
+                    spec = JSON.parse(specRaw.replace(/&quot;/g, '"').replace(/&lt;/g, '<')
+                        .replace(/&gt;/g, '>').replace(/&amp;/g, '&'));
+                } catch (e) { spec = null; }
+                ditemukan.push({ id: id, spec: spec, specRaw: specRaw });
+            }
+
+            configChart = ditemukan;
+            renderCharts();
+        }
+
+        function renderCharts() {
+            const list = document.getElementById('chartList');
+            const empty = document.getElementById('chartEmpty');
+            const badge = document.getElementById('chartCount');
+            if (!list) return;
+
+            if (badge) badge.textContent = configChart.length;
+            if (configChart.length === 0) {
+                list.innerHTML = '';
+                if (empty) empty.style.display = 'block';
+                return;
+            }
+            if (empty) empty.style.display = 'none';
+
+            list.innerHTML = configChart.map(function (c, i) {
+                const spec = c.spec || {};
+                const panels = Array.isArray(spec.panels) ? spec.panels : [];
+                const judul = (panels[0] && panels[0].title) || c.id;
+                const deret = panels.reduce(function (n, p) {
+                    return n + ((p && Array.isArray(p.series)) ? p.series.length : 0);
+                }, 0);
+
+                return '<div class="border border-gray-200 rounded-md mb-2 p-2" data-chart-item="' + escapeHtml(c.id) + '">'
+                    + '<div class="flex justify-between items-center mb-1">'
+                    + '<span class="text-xs font-medium text-gray-700">' + escapeHtml(judul) + '</span>'
+                    + '<span class="text-[10px] text-gray-500">' + panels.length + ' panel &middot; ' + deret + ' deret</span>'
+                    + '</div>'
+                    + '<textarea id="chartSpec_' + i + '" rows="7" spellcheck="false"'
+                    + ' class="w-full rounded border-gray-300 text-[11px] font-mono px-2 py-1">'
+                    + escapeHtml(JSON.stringify(c.spec || {}, null, 2)) + '</textarea>'
+                    + '<div class="flex gap-1 mt-1">'
+                    + '<button type="button" class="flex-1 px-2 py-1 rounded text-[11px] border border-gray-300 hover:bg-gray-50" onclick="previewChart(' + i + ')">'
+                    + escapeHtml(t('chart.preview_button', {}, 'Preview')) + '</button>'
+                    + '<button type="button" class="flex-1 px-2 py-1 rounded text-[11px] border-0 bg-cyan-600 text-white hover:bg-cyan-700" onclick="applyChartSpec(' + i + ')">'
+                    + escapeHtml(t('chart.apply_button', {}, 'Apply')) + '</button>'
+                    + '</div>'
+                    + '<div id="chartMsg_' + i + '" class="text-[11px] mt-1"></div>'
+                    + '<div id="chartPreview_' + i + '" class="mt-1 overflow-auto"></div>'
+                    + '</div>';
+            }).join('');
+        }
+
+        /** Baca spesifikasi dari kotak teksnya — null kalau JSON-nya rusak. */
+        function chartSpecFromBox(i) {
+            const box = document.getElementById('chartSpec_' + i);
+            if (!box) return null;
+            try {
+                return JSON.parse(box.value);
+            } catch (e) {
+                chartMessage(i, t('chart.bad_json', {}, 'The specification is not valid JSON'), true);
+                return null;
+            }
+        }
+
+        function chartMessage(i, teks, salah) {
+            const el = document.getElementById('chartMsg_' + i);
+            if (!el) return;
+            el.textContent = teks || '';
+            el.className = 'text-[11px] mt-1 ' + (salah ? 'text-red-600' : 'text-emerald-700');
+        }
+
+        async function previewChart(i) {
+            const spec = chartSpecFromBox(i);
+            if (!spec) return;
+
+            const hasil = await chartRenderRequest(spec, {});
+            const kotak = document.getElementById('chartPreview_' + i);
+            if (!hasil.ok) {
+                chartMessage(i, hasil.message, true);
+                if (kotak) kotak.innerHTML = '';
+                return;
+            }
+            chartMessage(i, '', false);
+            // Dipratinjau mengecil supaya muat di panel; yang tercetak tetap
+            // seukuran aslinya.
+            if (kotak) {
+                kotak.innerHTML = '<div style="transform:scale(0.45);transform-origin:top left;'
+                    + 'width:' + (hasil.scale.width * 0.45) + 'px;height:' + (hasil.scale.height * 0.45) + 'px">'
+                    + hasil.svg + '</div>';
+            }
+        }
+
+        async function applyChartSpec(i) {
+            const spec = chartSpecFromBox(i);
+            if (!spec) return;
+
+            const hasil = await chartRenderRequest(spec, {});
+            if (!hasil.ok) { chartMessage(i, hasil.message, true); return; }
+
+            const editor = tinymce.get('editor');
+            const id = configChart[i] && configChart[i].id;
+            if (!editor || !id) return;
+
+            const el = editor.getBody().querySelector('.chart-placeholder[data-chart="' + id + '"]');
+            if (!el) { chartMessage(i, t('chart.not_found', {}, 'That chart is no longer in the document'), true); return; }
+
+            el.setAttribute('data-chart-spec', JSON.stringify(spec));
+            el.style.width = hasil.scale.width + 'px';
+            el.style.height = Math.round(hasil.scale.height) + 'px';
+            const label = el.querySelector('span');
+            if (label) label.style.lineHeight = Math.round(hasil.scale.height) + 'px';
+            editor.setDirty(true);
+
+            chartMessage(i, t('chart.applied', {}, 'Applied'), false);
+            previewChart(i);
+            scanChartPlaceholders();
         }
 
         // ===== Materai placeholders =====

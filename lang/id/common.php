@@ -57,6 +57,7 @@ return [
         'days'    => '{n}h lalu',
     ],
     'response' => [
+        'chart_too_big'            => 'Spesifikasi atau angka grafiknya terlalu besar untuk digambar.',
         'contoh_not_found'             => 'Contoh tidak ditemukan',
         'template_name_taken'          => 'Sudah ada template bernama "{nama}" — pilih nama lain.',
         'template_name_required'       => 'Nama template harus diisi',

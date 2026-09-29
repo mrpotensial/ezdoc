@@ -1,0 +1,48 @@
+<div style="text-align:center;margin-bottom:6px;">
+<table style="border:none;width:100%;"><tbody><tr>
+<td style="border:none;width:70px;vertical-align:middle;"><span class="logo-placeholder" data-logo="kop" data-width="68px">[LOGO:kop]</span></td>
+<td style="border:none;text-align:center;vertical-align:middle;">
+<p class="ezdoc-kop-nama" style="margin:0;font-size:16pt;font-weight:bold;letter-spacing:0.5px;">RUMAH SAKIT CONTOH SEJAHTERA</p>
+<p class="ezdoc-kop-alamat" style="margin:0;font-size:9pt;">Jl. Melati No. 12, Kota Contoh 40123 &middot; Telp (021) 555-0100 &middot; rs-contoh.example</p>
+</td>
+<td style="border:none;width:70px;"></td>
+</tr></tbody></table>
+<hr style="border:none;border-top:2px solid #000;margin:6px 0 10px 0;">
+</div>
+
+<p style="text-align:center;font-size:13pt;font-weight:bold;margin:0 0 10px 0;">LEMBAR PEMANTAUAN</p>
+
+<table style="border-collapse:collapse;width:100%;font-size:11pt;margin-bottom:10px;"><tbody>
+<tr>
+<td style="border:none;width:120px;">Nama</td><td style="border:none;width:10px;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Nama pasien">{{nama_pasien}}</span></td>
+<td style="border:none;width:110px;">Mulai dipantau</td><td style="border:none;width:10px;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Mulai dipantau (2026-09-29 08:00)">{{pantau_mulai}}</span></td>
+</tr>
+<tr>
+<td style="border:none;">Nomor rekam medis</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Nomor rekam medis">{{no_rekam_medis}}</span></td>
+<td style="border:none;">Ruang</td><td style="border:none;">:</td>
+<td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Ruang">{{ruang}}</span></td>
+</tr>
+</tbody></table>
+
+<p style="margin:0 0 4px 0;font-size:10pt;color:#444;">Klik di kisi untuk menaruh titik, geser untuk memindahkan, klik ganda untuk menghapus.</p>
+
+<div style="text-align:center;margin-bottom:10px;">
+<div class="chart-placeholder" data-chart="chart_pantau" data-chart-spec="{&quot;hours&quot;:12,&quot;column_width&quot;:44,&quot;start_field&quot;:&quot;pantau_mulai&quot;,&quot;label_every&quot;:1,&quot;panels&quot;:[{&quot;title&quot;:&quot;Denyut jantung (x/menit)&quot;,&quot;height&quot;:120,&quot;y&quot;:{&quot;min&quot;:100,&quot;max&quot;:180,&quot;step&quot;:10},&quot;series&quot;:[{&quot;field&quot;:&quot;pantau_djj&quot;,&quot;title&quot;:&quot;DJJ&quot;,&quot;draw&quot;:&quot;point+line&quot;,&quot;marker&quot;:&quot;dot&quot;,&quot;color&quot;:&quot;#1a5fb4&quot;}]},{&quot;title&quot;:&quot;Pembukaan &amp; penurunan&quot;,&quot;height&quot;:200,&quot;y&quot;:{&quot;min&quot;:0,&quot;max&quot;:10,&quot;step&quot;:1},&quot;references&quot;:[{&quot;from&quot;:[0,4],&quot;to&quot;:[6,10],&quot;style&quot;:&quot;solid&quot;,&quot;label&quot;:&quot;waspada&quot;,&quot;color&quot;:&quot;#111111&quot;},{&quot;from&quot;:[4,4],&quot;to&quot;:[10,10],&quot;style&quot;:&quot;dashed&quot;,&quot;label&quot;:&quot;bertindak&quot;,&quot;color&quot;:&quot;#111111&quot;}],&quot;series&quot;:[{&quot;field&quot;:&quot;pantau_pembukaan&quot;,&quot;title&quot;:&quot;Pembukaan&quot;,&quot;draw&quot;:&quot;point+line&quot;,&quot;marker&quot;:&quot;circle&quot;,&quot;color&quot;:&quot;#cc0000&quot;},{&quot;field&quot;:&quot;pantau_penurunan&quot;,&quot;title&quot;:&quot;Penurunan&quot;,&quot;draw&quot;:&quot;point+line&quot;,&quot;marker&quot;:&quot;cross&quot;,&quot;color&quot;:&quot;#0c6b3f&quot;}]}]}" contenteditable="false" style="display:inline-block;width:604px;height:378px;border:1px dashed #0891b2;background:#ecfeff;text-align:center;overflow:hidden"><span style="font-size:11px;color:#0e7490;line-height:378px">Papan grafik</span></div>
+</div>
+
+<p style="margin:10px 0 0 0;font-size:11pt;">Catatan: <span class="field-placeholder" data-type="text" data-label="Catatan">{{catatan}}</span></p>
+
+<table style="border:none;width:100%;margin-top:26px;"><tbody><tr>
+<td style="border:none;width:50%;"></td>
+<td style="border:none;width:50%;text-align:center;vertical-align:top;">
+<p style="margin:0 0 4px 0;"><span class="ezdoc-kop-kota">Kota Contoh</span>, <span class="field-placeholder" data-type="date" data-label="Tanggal" data-default="date:d F Y">{{tanggal_surat}}</span></p>
+<div class="ttd-placeholder" data-ttd="pemantau" data-label="Yang memantau," data-nama-field="nama_pemantau" data-ttd-modes="image" contenteditable="false">
+<div style="font-size:12pt;margin-bottom:5px;">Yang memantau,</div>
+<div style="width:100px;height:50px;border:1px dashed #10b981;background:#ecfdf5;margin:0 auto;"></div>
+<div style="font-size:11pt;margin-top:3px;">(..................)</div>
+</div>
+</td>
+</tr></tbody></table>

@@ -80,7 +80,7 @@ $__helperCandidates = [
     __DIR__ . '/../../../lib/',           // consumer/lib/ (one level up from ezdoc/)
     __DIR__ . '/../../../../lib/',        // deeper consumer layout
 ];
-foreach (['doc_meta_helpers.php', 'doc_template_helpers.php', 'doc_verify_helpers.php'] as $__helperFile) {
+foreach (['doc_meta_helpers.php', 'doc_template_helpers.php', 'doc_verify_helpers.php', 'chart_helpers.php'] as $__helperFile) {
     foreach ($__helperCandidates as $__dir) {
         $__full = $__dir . $__helperFile;
         if (is_file($__full)) {
@@ -822,6 +822,13 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
         }
         return '<span class="logo-empty">[' . h($logoName) . ']</span>';
     }, $html);
+
+    // Papan grafik: SVG yang digambar server, plus isian tersembunyi per deret.
+    //
+    // Digambar di sini, bukan di peramban, karena perender yang sama juga yang
+    // mencetak dan yang membekukan. Lapisan pegangan di peramban cuma menaruh
+    // titik tarik di atas gambar ini — lihat lib/chart_helpers.php.
+    $html = ezdoc_chart_render_screen($html, 'vRaw');
 
     // Position offset correction for floating elements (to match generator/logo)
     // Based on user testing: logo is accurate reference, QR and TTD should match logo
@@ -2866,6 +2873,15 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
             return url + sep + 'data=' + encodeURIComponent(data);
         };
     </script>
+    <style>
+        /* Pegangan papan grafik — hanya di layar, tidak pernah ikut tercetak.
+           Bulat samar yang menebal saat disentuh: cukup terlihat untuk dicari,
+           cukup sepi untuk tidak menutupi titik yang digambar di bawahnya. */
+        .ez-chart-handle { background: rgba(8,145,178,.14); border: 1px solid rgba(8,145,178,.45); }
+        .ez-chart-handle:hover { background: rgba(8,145,178,.30); }
+        .ez-chart-layer { user-select: none; }
+        @media print { .ez-chart-layer { display: none !important; } }
+    </style>
     <?php include __DIR__ . '/../_partials/generate_scripts.php'; ?>
 
     <!-- Screen pagination — visual multi-paper cards + JS spacer at boundary.

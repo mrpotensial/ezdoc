@@ -37,6 +37,7 @@
  */
 
 require_once __DIR__ . '/view_helpers.php';
+require_once __DIR__ . '/chart_helpers.php';
 
 /**
  * @param array{
@@ -777,6 +778,16 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
     // Bawaannya dokumen yang sedang dirender. Pemanggil HTTP tetap mengirimkan
     // miliknya sendiri supaya perilakunya hari ini tidak bergeser sedikit pun.
     $verifyDocId = (int) ($permintaan['verify_doc_id'] ?? $doc_id);
+
+    // Papan grafik — gambar yang sama dengan yang dilihat orang di layar,
+    // dibungkus <img> karena Dompdf mengabaikan <svg> yang ditulis langsung.
+    $html = ezdoc_chart_render_pdf($html, static function (string $name) use ($dbFields, $nilaiPermintaan) {
+        if (isset($nilaiPermintaan[$name]) && $nilaiPermintaan[$name] !== '') {
+            return (string) $nilaiPermintaan[$name];
+        }
+
+        return isset($dbFields[$name]) ? (string) $dbFields[$name] : '';
+    });
 
     // Position offset corrections to match generator/logo (same as HTML rendering)
     // Set to 0 = no adjustment (logo is reference)

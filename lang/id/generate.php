@@ -250,6 +250,9 @@ return [
         'qr_filled'                => 'QR terisi. Klik Simpan untuk persist.',
         'identity_required_for_save' => 'NORM & Nopen wajib diisi dulu untuk save',
     ],
+    'chart' => [
+            'stale'               => 'Gambar grafiknya belum terbarui — angkanya sudah tersimpan',
+    ],
     'modal' => [
         'doc_info' => [
             'title'                 => 'Detail Dokumen',

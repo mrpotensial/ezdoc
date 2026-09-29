@@ -38,6 +38,7 @@ return [
         'days'    => '{n}d ago',
     ],
     'response' => [
+        'chart_too_big' => 'Chart specification or values are too large to draw.',
         'contoh_not_found'             => 'Example not found',
         'template_name_taken'          => 'A template named "{nama}" already exists — choose another name.',
         'template_name_required'       => 'Template name is required',

@@ -170,6 +170,9 @@ $ezdocUrls = [
     'verifyPreview'   => $urlVerifyPreview,
     'print'           => $urlPrint,
     'edit'            => $urlEditPattern,
+    // Perender papan grafik. Endpoint yang sama dipakai halaman dokumen;
+    // designer memanggilnya untuk template yang belum pernah disimpan.
+    'docAction'       => (string) $config->get('urls.actions.document.doc_action', ''),
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -685,6 +688,23 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 </div>
 
                 <!-- Materai Panel (Collapsible) -->
+                <!-- Papan grafik -->
+                <div class="border-b border-gray-200" data-ez-section="chart" x-data="{ open: false }">
+                    <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
+                        <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-graph-up"></i><?= h(t('chart.panel_title', [], 'Chart')) ?> <span id="chartCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>
+                        <i class="bi bi-chevron-down collapse-icon text-gray-400 text-xs"></i>
+                    </div>
+                    <div x-show="open" x-collapse>
+                        <div class="p-2 pt-0">
+                            <div id="chartList"></div>
+                            <div data-ez-bulk id="chartEmpty" class="text-center text-gray-500 text-xs py-2">
+                                <?= h(t('chart.empty_hint', [], 'No chart yet.')) ?><br>
+                                <span class="text-xs"><?= h(t('chart.empty_detail', [], 'Toolbar → Chart. Every series is an ordinary document field.')) ?></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="border-b border-gray-200" data-ez-section="materai" x-data="{ open: false }">
                     <div class="panel-header cursor-pointer hover:bg-gray-50 flex justify-between items-center px-3 py-2 select-none" :class="{'is-collapsed': !open}" @click="open = !open" role="button">
                         <h6 class="mb-0 text-xs font-medium text-gray-700 flex items-center gap-1.5"><i class="bi bi-stamp"></i><?= h(t('materai.panel_title', [], 'Stamp Duty')) ?> <span id="materaiCount" class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">0</span></h6>

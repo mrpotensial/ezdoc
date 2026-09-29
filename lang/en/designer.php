@@ -369,7 +369,22 @@ return [
         'status_orphan' => 'Orphan',
         'used_in_docs_count' => '{used} / {total} doc(s)',
     ],
+        'chart' => [
+            'panel_title' => 'Chart',
+            'empty_hint' => 'No chart yet.',
+            'empty_detail' => 'Toolbar → Chart. Every series is an ordinary document field.',
+            'placeholder_label' => 'Chart board',
+            'default_panel_title' => 'Value',
+            'preview_button' => 'Preview',
+            'apply_button' => 'Apply',
+            'applied' => 'Applied',
+            'bad_json' => 'The specification is not valid JSON',
+            'not_found' => 'That chart is no longer in the document',
+            'no_endpoint' => 'Chart renderer endpoint is not configured',
+        ],
     'toolbar_insert' => [
+        'chart_label' => 'Chart',
+        'chart_tooltip' => 'Insert chart board',
         'field_type_calc' => 'Calculated (formula)',
         'formula_prompt'  => "Formula (names of other fields):
 Example: score_a + score_b + score_c",

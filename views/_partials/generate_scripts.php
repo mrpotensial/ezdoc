@@ -1590,6 +1590,406 @@
             return (window.EZDOC_AUDIT_DETAIL && hasId) ? `${name} (#${id})` : String(name);
         }
 
+
+        // ===== Papan grafik: diisi di atas lembarnya sendiri =====
+        //
+        // Yang tampil di sini adalah lembar cetaknya, dan grafiknya diisi di
+        // tempatnya. Satu halaman, tanpa tabel isian di samping.
+        //
+        // Pembagian kerjanya tegas, dan itu yang menjaga apa yang dilihat sama
+        // dengan apa yang tercetak:
+        //
+        //   server  → menggambar SVG, dan menyerahkan SKALA yang dipakainya
+        //   peramban→ menaruh pegangan di atas gambar itu memakai skala yang
+        //             sama, dan mengubah klik jadi angka
+        //
+        // Peramban tidak pernah menggambar grafiknya. Dua perender selalu
+        // berpisah diam-diam, lalu yang ditandatangani orang berbeda dari yang
+        // tercetak.
+
+        /** Pembulatan waktu saat menaruh titik, dalam menit. */
+        const EZ_CHART_SNAP_MENIT = 15;
+
+        function ezChartWaktuKeTeks(ms) {
+            const d = new Date(ms);
+            const p = (n) => String(n).padStart(2, '0');
+            return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+                + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+        }
+
+        function ezChartTeksKeWaktu(teks) {
+            const m = String(teks || '').match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+            if (!m) return null;
+            return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], 0, 0).getTime();
+        }
+
+        function ezChartBulatkanWaktu(ms) {
+            const langkah = EZ_CHART_SNAP_MENIT * 60000;
+            return Math.round(ms / langkah) * langkah;
+        }
+
+        function ezChartInit() {
+            document.querySelectorAll('.ez-chart').forEach(ezChartSiapkan);
+        }
+
+        function ezChartSiapkan(root) {
+            if (root.dataset.ezChartSiap === '1') return;
+            root.dataset.ezChartSiap = '1';
+
+            let spec, scale;
+            try {
+                spec = JSON.parse(root.dataset.chartSpec || '{}');
+                scale = JSON.parse(root.dataset.chartScale || '{}');
+            } catch (e) { return; }
+            if (!spec.panels || !scale.panels) return;
+
+            // Dokumen yang sudah dikunci cuma dibaca. Penjaga sebenarnya ada di
+            // server; ini supaya pegangannya tidak muncul dan menggoda.
+            const terkunci = (typeof editMode !== 'undefined' && !editMode)
+                || document.getElementById('mainForm') === null;
+
+            const lapisan = document.createElement('div');
+            lapisan.className = 'ez-chart-layer';
+            lapisan.style.cssText = 'position:absolute;left:0;top:0;width:' + scale.width + 'px;height:'
+                + scale.height + 'px;' + (terkunci ? 'pointer-events:none' : '');
+            root.appendChild(lapisan);
+
+            const keadaan = {
+                root: root,
+                spec: spec,
+                scale: scale,
+                lapisan: lapisan,
+                terkunci: terkunci,
+                // Deret yang sedang aktif di tiap panel — yang menerima titik
+                // baru saat kisinya diklik.
+                aktif: spec.panels.map(function () { return 0; }),
+                nilai: {},
+                tunda: null
+            };
+
+            root.querySelectorAll('[data-chart-series]').forEach(function (input) {
+                keadaan.nilai[input.dataset.chartSeries] = ezChartBaca(input.value);
+            });
+
+            ezChartGambarPegangan(keadaan);
+            ezChartPasangKlik(keadaan);
+            root._ezChart = keadaan;
+        }
+
+        function ezChartBaca(teks) {
+            try {
+                const a = JSON.parse(teks || '[]');
+                return Array.isArray(a) ? a : [];
+            } catch (e) { return []; }
+        }
+
+        /** Tempat sebuah waktu, memakai skala dari server. */
+        function ezChartX(scale, waktuTeks) {
+            const mulai = ezChartTeksKeWaktu(scale.start);
+            const t = ezChartTeksKeWaktu(waktuTeks);
+            if (mulai === null || t === null) return null;
+            const jam = (t - mulai) / 3600000;
+            if (jam < 0 || jam > scale.hours) return null;
+            return scale.left + (jam * scale.column_width);
+        }
+
+        function ezChartY(panel, nilai) {
+            const n = parseFloat(nilai);
+            if (!isFinite(n) || n < panel.y_min || n > panel.y_max) return null;
+            return panel.top + (((panel.y_max - n) / (panel.y_max - panel.y_min)) * panel.height);
+        }
+
+        /** Kebalikannya: tempat di layar jadi angka. */
+        function ezChartDariTempat(keadaan, px, py) {
+            const scale = keadaan.scale;
+            const iPanel = ezChartPanelDi(scale, py);
+            if (iPanel === null) return null;
+            const panel = scale.panels[iPanel];
+
+            const jam = (px - scale.left) / scale.column_width;
+            if (jam < 0 || jam > scale.hours) return null;
+
+            const langkah = panel.y_step || 1;
+            let nilai = panel.y_max - (((py - panel.top) / panel.height) * (panel.y_max - panel.y_min));
+            nilai = Math.round(nilai / langkah) * langkah;
+            nilai = Math.min(panel.y_max, Math.max(panel.y_min, nilai));
+            // Dibulatkan lagi: 0.1 + 0.2 tidak pernah 0.3, dan angka seperti
+            // 6.800000000000001 ikut tersimpan ke dokumen kalau dibiarkan.
+            nilai = Math.round(nilai * 100) / 100;
+
+            let mulai = ezChartTeksKeWaktu(scale.start);
+            if (mulai === null) {
+                // Papan yang belum punya awal sumbu: titik pertama diletakkan
+                // pada jam SEKARANG, dan sumbunya mundur sebanyak jarak titik
+                // itu dari kiri. Yang mengisi menaruh bacaan "di sini, sekarang".
+                mulai = ezChartBulatkanWaktu(Date.now()) - (jam * 3600000);
+            }
+
+            return {
+                panel: iPanel,
+                x: ezChartWaktuKeTeks(ezChartBulatkanWaktu(mulai + (jam * 3600000))),
+                y: nilai
+            };
+        }
+
+        function ezChartPanelDi(scale, py) {
+            for (let i = 0; i < scale.panels.length; i++) {
+                const p = scale.panels[i];
+                if (py >= p.top && py <= p.top + p.height) return i;
+            }
+            return null;
+        }
+
+        function ezChartGambarPegangan(keadaan) {
+            const lapisan = keadaan.lapisan;
+            lapisan.innerHTML = '';
+            if (keadaan.terkunci) return;
+
+            keadaan.spec.panels.forEach(function (panel, iPanel) {
+                const skalaPanel = keadaan.scale.panels[iPanel];
+                if (!skalaPanel) return;
+
+                // Panel berisi lebih dari satu deret perlu diberi tahu yang mana
+                // yang sedang diisi. Tanpa ini, klik di panel pembukaan selalu
+                // jatuh ke deret pertama, dan yang kedua cuma bisa diisi dengan
+                // cara lain — yang tidak ada.
+                if ((panel.series || []).length > 1) {
+                    const pilih = document.createElement('div');
+                    pilih.className = 'ez-chart-legend';
+                    pilih.style.cssText = 'position:absolute;left:' + (keadaan.scale.left + 4) + 'px;top:'
+                        + (skalaPanel.top + 3) + 'px;display:flex;gap:4px';
+                    panel.series.forEach(function (deret, iDeret) {
+                        const tombol = document.createElement('button');
+                        tombol.type = 'button';
+                        tombol.textContent = deret.title || deret.field;
+                        const aktif = (keadaan.aktif[iPanel] || 0) === iDeret;
+                        tombol.style.cssText = 'font-size:10px;line-height:1;padding:2px 5px;border-radius:9px;'
+                            + 'cursor:pointer;border:1px solid ' + (deret.color || '#666') + ';'
+                            + (aktif ? 'background:' + (deret.color || '#666') + ';color:#fff'
+                                     : 'background:#fff;color:' + (deret.color || '#666'));
+                        tombol.addEventListener('click', function (ev) {
+                            ev.stopPropagation();
+                            keadaan.aktif[iPanel] = iDeret;
+                            ezChartGambarPegangan(keadaan);
+                        });
+                        pilih.appendChild(tombol);
+                    });
+                    lapisan.appendChild(pilih);
+                }
+
+                (panel.series || []).forEach(function (deret, iDeret) {
+                    const titik = keadaan.nilai[deret.field] || [];
+                    titik.forEach(function (t, iTitik) {
+                        const x = ezChartX(keadaan.scale, t.x);
+                        const y = ezChartY(skalaPanel, t.y);
+                        if (x === null || y === null) return;
+
+                        const pegangan = document.createElement('div');
+                        pegangan.className = 'ez-chart-handle';
+                        pegangan.style.cssText = 'position:absolute;left:' + (x - 7) + 'px;top:' + (y - 7)
+                            + 'px;width:14px;height:14px;border-radius:50%;cursor:grab';
+                        pegangan.title = t.x + ' — ' + t.y;
+                        pegangan.dataset.field = deret.field;
+                        pegangan.dataset.index = String(iTitik);
+                        pegangan.dataset.panel = String(iPanel);
+                        pegangan.dataset.series = String(iDeret);
+                        lapisan.appendChild(pegangan);
+                    });
+                });
+            });
+        }
+
+        function ezChartPasangKlik(keadaan) {
+            if (keadaan.terkunci) return;
+            const lapisan = keadaan.lapisan;
+
+            let geser = null;
+
+            lapisan.addEventListener('mousedown', function (ev) {
+                const pegangan = ev.target.closest('.ez-chart-handle');
+                if (!pegangan) return;
+                ev.preventDefault();
+                geser = { pegangan: pegangan, pindah: false };
+                pegangan.style.cursor = 'grabbing';
+            });
+
+            document.addEventListener('mousemove', function (ev) {
+                if (!geser) return;
+                geser.pindah = true;
+                const kotak = lapisan.getBoundingClientRect();
+                // Bergerak seketika, jauh sebelum server menjawab. Yang
+                // dipindahkan cuma pegangannya; gambarnya menyusul.
+                geser.pegangan.style.left = (ev.clientX - kotak.left - 7) + 'px';
+                geser.pegangan.style.top = (ev.clientY - kotak.top - 7) + 'px';
+            });
+
+            document.addEventListener('mouseup', function (ev) {
+                if (!geser) return;
+                const pegangan = geser.pegangan;
+                const berpindah = geser.pindah;
+                geser = null;
+                pegangan.style.cursor = 'grab';
+                if (!berpindah) return;
+
+                const kotak = lapisan.getBoundingClientRect();
+                const baru = ezChartDariTempat(keadaan, ev.clientX - kotak.left, ev.clientY - kotak.top);
+                const field = pegangan.dataset.field;
+                const i = parseInt(pegangan.dataset.index, 10);
+                if (!baru || !keadaan.nilai[field] || !keadaan.nilai[field][i]) {
+                    ezChartGambarUlang(keadaan);
+                    return;
+                }
+                keadaan.nilai[field][i] = { x: baru.x, y: baru.y };
+                ezChartSimpan(keadaan);
+            });
+
+            lapisan.addEventListener('dblclick', function (ev) {
+                const pegangan = ev.target.closest('.ez-chart-handle');
+                if (!pegangan) return;
+                ev.preventDefault();
+                const field = pegangan.dataset.field;
+                const i = parseInt(pegangan.dataset.index, 10);
+                if (!keadaan.nilai[field]) return;
+                keadaan.nilai[field].splice(i, 1);
+                ezChartSimpan(keadaan);
+            });
+
+            lapisan.addEventListener('click', function (ev) {
+                if (ev.target.closest('.ez-chart-handle')) return;
+                const kotak = lapisan.getBoundingClientRect();
+                const px = ev.clientX - kotak.left;
+                const py = ev.clientY - kotak.top;
+                const baru = ezChartDariTempat(keadaan, px, py);
+                if (!baru) return;
+
+                const panel = keadaan.spec.panels[baru.panel];
+                if (!panel || !panel.series || panel.series.length === 0) return;
+                const deret = panel.series[keadaan.aktif[baru.panel] || 0];
+                if (!deret) return;
+
+                const field = deret.field;
+                keadaan.nilai[field] = keadaan.nilai[field] || [];
+                // Satu waktu satu nilai — yang sama ditimpa, bukan ditumpuk.
+                const adaDi = keadaan.nilai[field].findIndex(function (t) { return t.x === baru.x; });
+                if (adaDi >= 0) {
+                    keadaan.nilai[field][adaDi] = { x: baru.x, y: baru.y };
+                } else {
+                    keadaan.nilai[field].push({ x: baru.x, y: baru.y });
+                }
+                ezChartSimpan(keadaan);
+            });
+        }
+
+        /**
+         * Tulis nilainya SEKARANG, lalu minta gambar baru.
+         *
+         * Urutannya penting. Versi pertama menulis isian tersembunyi hanya
+         * setelah server menjawab — dan saat jawabannya tidak datang (jaringan
+         * putus, endpoint salah alamat), titik yang barusan diletakkan orang
+         * hilang tanpa jejak: gambarnya tidak berubah, isiannya tidak berubah,
+         * tidak ada pesan apa pun. Ditemukan saat mengklik di peramban
+         * sungguhan.
+         *
+         * Sekarang yang lokal ditulis lebih dulu dalam bentuk yang sama dengan
+         * bentuk baku server — urut menurut waktu, satu nilai per waktu — lalu
+         * ditimpa jawaban server begitu datang. Yang gagal terkirim tetap
+         * tersimpan saat dokumennya disimpan.
+         */
+        function ezChartSimpan(keadaan) {
+            Object.keys(keadaan.nilai).forEach(function (field) {
+                keadaan.nilai[field] = ezChartRapikan(keadaan.nilai[field]);
+                const input = keadaan.root.querySelector('[data-chart-series="' + field + '"]');
+                if (input) input.value = JSON.stringify(keadaan.nilai[field]);
+            });
+            ezChartGambarPegangan(keadaan);
+            if (typeof markDirty === 'function') markDirty();
+
+            if (keadaan.tunda) clearTimeout(keadaan.tunda);
+            keadaan.tunda = setTimeout(function () {
+                keadaan.tunda = null;
+                ezChartGambarUlang(keadaan);
+            }, 250);
+        }
+
+        /** Urut menurut waktu, satu nilai per waktu — aturan yang sama dengan server. */
+        function ezChartRapikan(titik) {
+            const peta = {};
+            (titik || []).forEach(function (t) {
+                if (t && t.x) peta[t.x] = t.y;
+            });
+
+            return Object.keys(peta).sort().map(function (x) {
+                return { x: x, y: peta[x] };
+            });
+        }
+
+        /** Satu baris keterangan di bawah papan — kosong berarti tidak ada. */
+        function ezChartKabari(keadaan, teks) {
+            let el = keadaan.root.querySelector('.ez-chart-note');
+            if (!el) {
+                el = document.createElement('div');
+                el.className = 'ez-chart-note';
+                el.style.cssText = 'position:absolute;left:0;bottom:-16px;font-size:10px;color:#b45309;line-height:1.2';
+                keadaan.root.appendChild(el);
+            }
+            el.textContent = teks || '';
+        }
+
+        async function ezChartGambarUlang(keadaan) {
+            const url = _ezdocEndpoint('docAction');
+            if (!url) return;
+
+            const kirim = {};
+            Object.keys(keadaan.nilai).forEach(function (f) {
+                kirim[f] = JSON.stringify(keadaan.nilai[f]);
+            });
+            // Field jam mulai bukan deret; nilainya dibaca dari isian biasa di
+            // dokumen supaya sumbunya ikut berubah saat orang mengisinya.
+            if (keadaan.spec.start_field) {
+                const isian = document.querySelector('[name="' + keadaan.spec.start_field + '"]');
+                if (isian && isian.value) kirim[keadaan.spec.start_field] = isian.value;
+            }
+
+            const fd = new FormData();
+            fd.append('_doc_action', 'chart_render');
+            fd.append('spec', JSON.stringify(keadaan.spec));
+            fd.append('values', JSON.stringify(kirim));
+
+            try {
+                const resp = await fetch(url, { method: 'POST', body: fd });
+                const data = await resp.json();
+                if (!data.success) return;
+
+                const svgLama = keadaan.root.querySelector('svg');
+                if (svgLama) svgLama.outerHTML = data.svg;
+                keadaan.scale = data.scale;
+                keadaan.root.dataset.chartScale = JSON.stringify(data.scale);
+
+                // Bentuk baku dari server yang disimpan, bukan yang disusun
+                // peramban: satu bentuk untuk satu isi, apa pun urutan
+                // mengetiknya.
+                Object.keys(data.values || {}).forEach(function (field) {
+                    const input = keadaan.root.querySelector('[data-chart-series="' + field + '"]');
+                    if (input) input.value = data.values[field];
+                    keadaan.nilai[field] = ezChartBaca(data.values[field]);
+                });
+
+                ezChartGambarPegangan(keadaan);
+                ezChartKabari(keadaan, '');
+                if (typeof markDirty === 'function') markDirty();
+            } catch (e) {
+                // Angkanya sudah tersimpan di isian; yang tertinggal gambarnya.
+                // Dikatakan, bukan didiamkan: orang yang melihat titiknya tidak
+                // bergeser akan mengklik lagi, dan mengisi dua kali.
+                console.warn('[grafik] gagal menggambar ulang:', e);
+                ezChartKabari(keadaan, t('chart.stale', {}, 'Chart image is out of date — the values are saved'));
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            try { ezChartInit(); } catch (e) { console.warn('[grafik] gagal disiapkan:', e); }
+        });
+
         // ===== Document versioning =====
         const CURRENT_DOC_ID = <?= (int)$doc_id ?>;
         const CURRENT_VERSION = <?= (int)$param_version ?>;

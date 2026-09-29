@@ -6,6 +6,49 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — papan grafik yang diisi di atas lembar cetaknya (2026-09-29)**
+
+Diminta pemakai: "apa bisa buat grafik yang bisa di isi juga ya?", lalu
+diperjelas — "yang tampil di generate itu tampilan cetak partografnya, dan bisa
+diisi langsung, jadi generate tetap 1 halaman".
+
+Rancangannya di `docs/260929-grafik-terisi.md`. Yang dikerjakan di sini fase
+0–3: perender, elemen designer, penyimpanan nilai, dan lapisan pengisiannya.
+
+- **Papan, bukan grafik tunggal.** Satu elemen memuat beberapa panel bertumpuk
+  yang berbagi satu sumbu X, karena lembar pemantauan hidup dari kesejajaran
+  vertikalnya. Grafik biasa adalah papan dengan satu panel — kasus sederhana
+  adalah kasus khususnya, bukan tambahan.
+- **Satu perender untuk tiga tempat**: halaman dokumen, PDF cetak, dan PDF beku
+  saat tanda tangan masuk. Peramban tidak pernah menggambar grafiknya; ia hanya
+  menaruh pegangan di atas gambar server, memakai skala yang dikirim bersamanya.
+  Dua perender selalu berpisah diam-diam, lalu yang ditandatangani orang
+  berbeda dari yang tercetak.
+- **Diisi di tempatnya.** Klik di kisi menaruh titik, geser memindahkan, klik
+  ganda menghapus. Panel berisi beberapa deret punya pilihan deret aktif.
+- **Angkanya field dokumen biasa**, tersimpan sebagai JSON di `field_values`.
+  Karena itu grafik tidak butuh mekanisme sendiri untuk apa pun: pembekuan
+  sesudah tanda tangan, penyalinan ke versi baru, dan cakupan tanda tangan
+  sudah berlaku untuknya.
+- **`x` menyimpan tanggal sekaligus jam.** Pemantauan bisa melewati tengah
+  malam; menyimpan "08:00" saja memaksa setiap pembaca menebak harinya.
+- **Titik di luar sumbu tidak digambar**, dan garisnya putus di situ — bukan
+  digeser ke tepi. Nilai di tepi terbaca sebagai pengukuran yang sah, dan
+  dokumen yang ditandatangani lalu memuat angka yang tidak pernah diukur.
+- Contoh baru: `contoh/lembar-pemantauan/`.
+
+Dua batasan Dompdf diuji lebih dulu, bukan diduga (`docs/260929-grafik-terisi.md`
+§2): `<svg>` yang ditulis langsung **diabaikan** — karena itu jalur cetak
+membungkusnya dalam `<img>` data URI; dan `<pattern>` **gagal diam-diam** jadi
+hitam pekat, jadi arsiran nanti harus disusun dari garis.
+
+Ditemukan saat mengklik di peramban sungguhan: nilai yang baru diletakkan
+hilang tanpa jejak kalau perendernya tak terjangkau, karena isian hanya ditulis
+sesudah server menjawab. Sekarang ditulis lebih dulu dalam bentuk baku yang
+sama, dan gambar yang tertinggal dikatakan, bukan didiamkan.
+
+Belum ada: panel batang, panel simbol, dan spesifikasi partograf (fase 4).
+
 **Added — pilihan "versi baru dimulai kosong" bisa ditutup lewat setelan (2026-09-29)**
 
 Diminta pemakai: "apa bisa opsi salin kosong itu diatur via config? jadi pesan

@@ -373,7 +373,22 @@ return [
         'status_orphan'               => 'Orphan',
         'used_in_docs_count'          => '{used} / {total} dok',
     ],
+        'chart' => [
+            'panel_title'         => 'Grafik',
+            'empty_hint'          => 'Belum ada grafik.',
+            'empty_detail'        => 'Toolbar → Grafik. Tiap deret adalah field dokumen biasa.',
+            'placeholder_label'   => 'Papan grafik',
+            'default_panel_title' => 'Nilai',
+            'preview_button'      => 'Pratinjau',
+            'apply_button'        => 'Terapkan',
+            'applied'             => 'Diterapkan',
+            'bad_json'            => 'Spesifikasinya bukan JSON yang sah',
+            'not_found'           => 'Grafik itu sudah tidak ada di dokumen',
+            'no_endpoint'         => 'Alamat perender grafik belum diatur',
+        ],
     'toolbar_insert' => [
+        'chart_label'              => 'Grafik',
+        'chart_tooltip'            => 'Sisipkan papan grafik',
         'field_type_calc' => 'Hitung (rumus)',
         'formula_prompt'  => "Rumus (nama field lain):
 Contoh: skor_a + skor_b + skor_c",
