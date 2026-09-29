@@ -181,6 +181,47 @@ final class SvgChartRendererTest extends TestCase
     }
 
     /**
+     * Titik yang berurutan benar-benar dihubungkan garis.
+     *
+     * Ditemukan uji mutasi: melumpuhkan penyusun garisnya tidak membuat satu
+     * pun uji gagal. Yang diperiksa selama ini cuma garis yang PUTUS — dan
+     * "tidak ada garis sama sekali" juga memenuhi syarat itu.
+     */
+    public function testConsecutivePointsAreJoinedByALine(): void
+    {
+        $svg = (new SvgChartRenderer())->render(self::spec(), self::values());
+
+        self::assertSame(1, substr_count($svg, '<path'), 'dua titik berurutan tidak dihubungkan');
+        self::assertStringContainsString('d="M144 116 L224 76"', $svg, 'garisnya tidak melewati kedua titik');
+    }
+
+    /**
+     * Label jam dihitung dari awal sumbu, bukan dari jam dinding.
+     *
+     * Ditemukan uji mutasi: mengganti sumber waktunya dengan `new
+     * DateTimeImmutable()` tidak membuat satu pun uji gagal, karena satu-satunya
+     * uji yang menyentuh label memakai papan kosong — yang label jamnya memang
+     * tidak digambar.
+     */
+    public function testHourLabelsCountFromTheStartOfTheAxis(): void
+    {
+        $svg = (new SvgChartRenderer())->render(self::spec(), self::values());
+
+        self::assertStringContainsString('>08:00<', $svg, 'kolom pertama bukan jam mulai');
+        self::assertStringContainsString('>12:00<', $svg, 'kolom ke-4 bukan empat jam sesudahnya');
+
+        // Kolom ke-16 jatuh di tengah malam. Sekaligus membuktikan pergantian
+        // hari tidak perlu ditambal: awal sumbunya membawa tanggal.
+        self::assertStringContainsString('>00:00<', $svg, 'kolom terakhir tidak melewati tengah malam');
+
+        self::assertSame(
+            17,
+            preg_match_all('/>\d{2}:\d{2}</', $svg),
+            'jumlah label jam tidak sebanyak kolomnya'
+        );
+    }
+
+    /**
      * Keluarannya XML yang sah.
      *
      * php-svg-lib mem-parse-nya sebagai XML; satu tag yang tidak tertutup
