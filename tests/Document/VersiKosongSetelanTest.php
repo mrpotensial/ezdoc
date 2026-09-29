@@ -89,6 +89,14 @@ final class VersiKosongSetelanTest extends TestCase
         self::assertTrue($jawaban['success'], 'dokumen pertama ikut tertutup');
         self::assertSame(1, $keadaan['version']);
         self::assertSame('{}', $keadaan['isi']);
+
+        // Dan tidak ada yang dialihkan — tidak ada yang bisa dialihkan. Catatan
+        // yang bilang "diminta kosong, dialihkan" padahal tidak ada sumbernya
+        // menggambarkan kejadian yang tidak pernah terjadi.
+        $meta = json_decode($keadaan['metadata'], true);
+        self::assertIsArray($meta);
+        self::assertFalse($meta['blank_redirected'], 'dokumen pertama tercatat sebagai pengalihan');
+        self::assertSame(0, $meta['source_version']);
     }
 
     /** Permintaan salin yang jelas tidak ikut dialihkan ke versi lain. */
