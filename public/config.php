@@ -63,9 +63,10 @@ return [
     'letterhead.city'    => 'Kubu Raya',
     'letterhead.logo'    => dirname(__DIR__, 2) . '/uploads/LOGO RSIA ANUGRAH.png',
 
-    'app.locale' => 'en',
-    // Isi dokumen tetap berbahasa Indonesia walau layar diuji dalam bahasa
-    // Inggris: tanggal "22 Agustus 2026", angka "1.500" — di dokumen, di
-    // cetakan, dan di arsip PDF bekunya.
+    'app.locale' => 'id',
+    // Ditulis terpisah, bukan dibiarkan ikut layar: kalau suatu hari layarnya
+    // dipindah ke bahasa lain, isi dokumen tetap berbahasa Indonesia — tanggal
+    // "22 Agustus 2026", angka "1.500" — di dokumen, di cetakan, dan di arsip
+    // PDF bekunya, yang tidak bisa diperbarui lagi setelah ditandatangani.
     'document.locale' => 'id',
 ];
