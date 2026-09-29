@@ -61,8 +61,8 @@ Halaman input partograf lama **tidak memakai chart sama sekali**:
 
 | Halaman | ApexCharts | Tabel |
 |---|---|---|
-| 11 halaman input (`_pembukaan`, `_kontraksi`, `_nadi`, …) | 0 | 1 masing-masing |
-| `form_partograf_cetak.php` | 4 | 10 |
+| 11 halaman input (`_pembukaan`, `_kontraksi`, `_nadi`, …) | 0 | 1 masing-masing | selesai |
+| `form_partograf_cetak.php` | 4 | 10 | belum |
 
 Dan di halaman cetak itu pun **hanya 3 panel yang benar-benar grafik**: DJJ,
 pembukaan serviks, nadi. Sisanya — kontraksi, air ketuban, penyusupan, urine,
@@ -271,16 +271,29 @@ bisa berubah tidak menutupi apa pun.
 
 ## 8. Urutan pengerjaan
 
-| Fase | Hasil yang bisa dipakai |
-|---|---|
+Fase 0–3 **sudah dikerjakan** 29 Sep 2026 (commit 46bb6fb, 8652df1). Fase 4
+belum.
+
+| Fase | Hasil yang bisa dipakai | |
+|---|---|---|
 | 0 | Bentuk `ChartSpec` + `SvgChartRenderer` (panel garis, kisi, sumbu, garis acuan) + ujinya |
-| 1 | Elemen papan di designer + panel pengaturnya. Grafik tampil di dokumen dan di PDF |
-| 2 | Jenis field **deret** + penyimpanan nilainya. Grafik sudah terisi, walau belum interaktif |
-| 3 | Lapisan pegangan: klik, geser, hapus, ketik angka persis — di atas lembarnya sendiri |
+| 1 | Elemen papan di designer + panel pengaturnya. Grafik tampil di dokumen dan di PDF | selesai |
+| 2 | Jenis field **deret** + penyimpanan nilainya. Grafik sudah terisi, walau belum interaktif | selesai |
+| 3 | Lapisan pegangan: klik, geser, hapus, ketik angka persis — di atas lembarnya sendiri | selesai |
 | 4 | Panel simbol, batang, teks + spesifikasi partograf + contoh di `contoh/` |
 
 Fase 2 sudah menghasilkan dokumen yang utuh dan tercetak benar. Fase 3
 membuatnya enak dipakai. Fase 4 membuatnya partograf.
+
+Dua hal ditemukan saat mengerjakannya, keduanya kegagalan senyap:
+
+1. **Nilai hilang kalau perendernya tak terjangkau.** Isian tersembunyi semula
+   ditulis hanya sesudah server menjawab. Sekarang ditulis lebih dulu dalam
+   bentuk baku yang sama, dan gambar yang tertinggal dikatakan.
+2. **Nilai grafik tidak ikut tersimpan.** Daftar field yang disimpan disusun
+   dari penanda `{{...}}`, nama field tanda tangan, dan `data-qr` — deret
+   grafik bukan satu pun dari ketiganya. Seluruh fitur tampak bekerja sampai
+   titik terakhir, lalu angkanya hilang.
 
 ## 9. Yang tidak dikerjakan
 
