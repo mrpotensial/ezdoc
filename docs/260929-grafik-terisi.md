@@ -61,8 +61,8 @@ Halaman input partograf lama **tidak memakai chart sama sekali**:
 
 | Halaman | ApexCharts | Tabel |
 |---|---|---|
-| 11 halaman input (`_pembukaan`, `_kontraksi`, `_nadi`, …) | 0 | 1 masing-masing | selesai |
-| `form_partograf_cetak.php` | 4 | 10 | belum |
+| 11 halaman input (`_pembukaan`, `_kontraksi`, `_nadi`, …) | 0 | 1 masing-masing |
+| `form_partograf_cetak.php` | 4 | 10 |
 
 Dan di halaman cetak itu pun **hanya 3 panel yang benar-benar grafik**: DJJ,
 pembukaan serviks, nadi. Sisanya — kontraksi, air ketuban, penyusupan, urine,
@@ -165,13 +165,14 @@ JS   →  lapisan pegangan transparan DI ATAS SVG, memakai skala yang sama
 - SVG-nya dari server — perender yang sama persis dengan yang mencetak.
 - **JS tidak menggambar grafik.** JS hanya menaruh pegangan tak terlihat, dan
   mengubah klik menjadi nilai memakai skala yang dikirim server.
-- Klik di kisi → titik baru. Geser → nilainya berubah. Klik titik → hapus.
-  Klik lama / klik kanan → kotak kecil untuk mengetik angka persis (DJJ 144
-  lebih cepat diketik daripada digeser).
+- Klik di kisi → titik baru. Geser → nilainya berubah. Klik ganda → hapus.
+  Panel berisi beberapa deret punya pilihan deret aktif di pojoknya.
 - Supaya terasa hidup: pegangan bergerak **seketika** saat digeser (lokal),
-  lalu ~300 ms setelah tangan berhenti, SVG baru diminta ke server dan
+  lalu 250 ms setelah tangan berhenti, SVG baru diminta ke server dan
   menggantikan yang lama. Jeda itu tidak terasa, dan yang dilihat orang sudah
   benar sejak detik pertama.
+- Belum ada: mengetik angka persis lewat kotak kecil (DJJ 144 lebih cepat
+  diketik daripada digeser). Sementara ini nilainya dibulatkan ke langkah sumbu.
 - Pegangan hanya ada di layar. SVG-nya sendiri tidak mengandungnya, jadi yang
   tercetak bersih tanpa perlakuan khusus.
 
@@ -276,11 +277,11 @@ belum.
 
 | Fase | Hasil yang bisa dipakai | |
 |---|---|---|
-| 0 | Bentuk `ChartSpec` + `SvgChartRenderer` (panel garis, kisi, sumbu, garis acuan) + ujinya |
+| 0 | Bentuk `ChartSpec` + `SvgChartRenderer` (panel garis, kisi, sumbu, garis acuan) + ujinya | selesai |
 | 1 | Elemen papan di designer + panel pengaturnya. Grafik tampil di dokumen dan di PDF | selesai |
 | 2 | Jenis field **deret** + penyimpanan nilainya. Grafik sudah terisi, walau belum interaktif | selesai |
 | 3 | Lapisan pegangan: klik, geser, hapus, ketik angka persis — di atas lembarnya sendiri | selesai |
-| 4 | Panel simbol, batang, teks + spesifikasi partograf + contoh di `contoh/` |
+| 4 | Panel simbol, batang, teks + spesifikasi partograf + contoh di `contoh/` | belum |
 
 Fase 2 sudah menghasilkan dokumen yang utuh dan tercetak benar. Fase 3
 membuatnya enak dipakai. Fase 4 membuatnya partograf.
