@@ -70,6 +70,7 @@ return [
         'doc_info_id_edit'      => 'ID: {id} (Edit)',
     ],
     'title' => [
+        'toggle_version_card'   => 'Tampilkan atau sembunyikan daftar versi',
         'restore_version'        => 'Kembalikan versi ini ke daftar',
         'toggle_hidden_versions' => 'Tampilkan atau sembunyikan versi yang disingkirkan dari daftar',
         'hide_version'        => 'Sembunyikan versi ini dari daftar — tetap bisa dibuka dan bisa dikembalikan',

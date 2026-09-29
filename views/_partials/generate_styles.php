@@ -805,15 +805,22 @@
            semuanya menuntut satu tindakan sebelum orang tahu ada versi lain —
            dan yang tidak tahu, membuat versi baru.
 
-           Letak dan batas tingginya dihitung JavaScript dari kotak sidebar
-           (positionVersionCard): tinggi sidebar berubah-ubah, dan persentase
-           layar tidak tahu ada sidebar setinggi apa di atasnya. */
+           Di KIRI atas, bukan menempel di bawah sidebar. Dua kotak melayang
+           bertumpuk di sudut yang sama dengan lebar berbeda terbaca sebagai
+           salah gambar — dilaporkan pemakai: "ukurannya berbeda jadi jelek".
+           Sekarang pembagiannya jelas: daftar versi di kiri, aksi di kanan.
+
+           Karena tidak lagi menempel pada apa pun, tingginya cukup diurus CSS:
+           setinggi layar dikurangi tepi. Tidak ada lagi yang perlu dihitung
+           ulang saat jendela berubah. */
         .ez-versi-select { display: none; }
 
         .ez-versi-kartu {
             position: fixed;
-            right: 20px;
+            top: 20px;
+            left: 20px;
             width: 260px;
+            max-height: calc(100vh - 40px);
             display: flex;
             flex-direction: column;
             background: #222;
@@ -842,6 +849,27 @@
             color: #9ca3af;
         }
         .ez-versi-jumlah { color: #9ca3af; font-size: 10.5px; }
+
+        /* Tombol sembunyi milik kartu ini sendiri, terpisah dari milik sidebar.
+           Dilaporkan pemakai: "tombol hidenya pisah aja" — dua kotak dengan
+           satu tombol bersama berarti menyembunyikan yang satu menyembunyikan
+           yang lain, dan itu bukan yang diminta. */
+        .ez-versi-sembunyi {
+            background: transparent;
+            border: 0;
+            color: #9ca3af;
+            font-size: 10.5px;
+            line-height: 1;
+            padding: 2px 4px;
+            cursor: pointer;
+        }
+        .ez-versi-sembunyi:hover { color: #f3f4f6; }
+        .ez-versi-kartu.collapsed { width: auto; }
+        .ez-versi-kartu.collapsed .ez-versi-kartu-isi,
+        .ez-versi-kartu.collapsed .ez-versi-kartu-kaki,
+        .ez-versi-kartu.collapsed #versionCardTitle,
+        .ez-versi-kartu.collapsed .ez-versi-jumlah { display: none; }
+        .ez-versi-kartu.collapsed .ez-versi-kartu-kepala { margin-bottom: 0; }
 
         /* Yang menggulung isinya, bukan kartunya: kepala dan kakinya tetap
            terlihat betapa pun panjang daftarnya. */
@@ -926,7 +954,7 @@
 
             /* Sidebar menempel ke dasar layar di lebar ini, jadi kartunya naik
                ke atasnya — letaknya diatur positionVersionCard(). */
-            .ez-versi-kartu { right: 10px; width: 210px; }
+            .ez-versi-kartu { top: 10px; left: 10px; width: 210px; max-height: calc(100vh - 20px); }
 
             .toolbar button { font-size: 12px; }
         }

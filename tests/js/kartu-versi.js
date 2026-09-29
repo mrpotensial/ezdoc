@@ -26,7 +26,16 @@ const buatEl = (tag) => {
     atribut: {},
     anak: [],
     style: {},
-    classList: { _isi: [], contains(k) { return this._isi.indexOf(k) !== -1; } },
+    classList: {
+        _isi: [],
+        contains(k) { return this._isi.indexOf(k) !== -1; },
+        toggle(k) {
+            const i = this._isi.indexOf(k);
+            if (i === -1) { this._isi.push(k); return true; }
+            this._isi.splice(i, 1);
+            return false;
+        },
+    },
     appendChild(c) { this.anak.push(c); return c; },
     setAttribute(k, v) { this.atribut[k] = String(v); },
     getAttribute(k) { return Object.prototype.hasOwnProperty.call(this.atribut, k) ? this.atribut[k] : null; },
@@ -55,9 +64,10 @@ const teks = (el) => (el.textContent || '') + el.anak.map(teks).join(' ');
 const kartu = buatEl('aside');
 const isi = buatEl('div');
 const jumlah = buatEl('span');
-const sidebar = buatEl('div');
+const tombolSembunyi = buatEl('button');
 kartu.setAttribute('hidden', '');
-sidebar._kotak = { top: 20, bottom: 380, left: 1030, right: 1240, width: 210, height: 360 };
+
+const penyimpan = {};
 
 const ctx = {
     console,
@@ -74,13 +84,17 @@ const ctx = {
             if (id === 'versionCard') return kartu;
             if (id === 'versionCardList') return isi;
             if (id === 'versionCardCount') return jumlah;
-            if (id === 'toolbarPanel') return sidebar;
+            if (id === 'btnVersionCardToggle') return tombolSembunyi;
             return null;
         },
         createElement: buatEl,
     },
 };
 ctx.window = { innerHeight: 900, addEventListener() {} };
+ctx.localStorage = {
+    getItem(k) { return Object.prototype.hasOwnProperty.call(penyimpan, k) ? penyimpan[k] : null; },
+    setItem(k, v) { penyimpan[k] = String(v); },
+};
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(process.argv[2], 'utf8'), ctx, { filename: 'kartu.js' });
 
@@ -121,31 +135,15 @@ if (!teks(v1).includes('dr. Andi')) gagal('nama pembuat tidak tampil');
 v1._klik();
 if (ctx._pindah !== 1) gagal('klik tidak pindah versi, dapat ' + ctx._pindah);
 
-// ── Tingginya dibatasi ruang yang ada, bukan persentase layar ────────────
-// Sidebar berakhir di 380 dari layar setinggi 900, jadi sisanya 900-380-8-12.
-if (kartu.style.maxHeight !== '500px') gagal('batas tinggi kartu: ' + kartu.style.maxHeight);
-if (kartu.style.top !== '388px') gagal('letak kartu: ' + kartu.style.top);
+// ── Tombol sembunyi milik kartunya sendiri ──────────────────────────────
+ctx.toggleVersionCard();
+if (!kartu.classList.contains('collapsed')) gagal('kartunya tidak tergulung saat tombolnya ditekan');
+if (penyimpan['ezdoc_versi_collapsed'] !== '1') gagal('keadaan tergulung tidak diingat');
+if (tombolSembunyi.getAttribute('aria-expanded') !== 'false') gagal('aria-expanded tidak ikut');
 
-// Layar pendek: tetap disisakan cukup untuk satu baris yang bisa digulung.
-ctx.window.innerHeight = 420;
-ctx.positionVersionCard();
-if (kartu.style.maxHeight !== '120px') gagal('di layar pendek batasnya: ' + kartu.style.maxHeight);
-ctx.window.innerHeight = 900;
-
-// ── Sidebar menempel ke dasar layar: kartunya naik ──────────────────────
-sidebar._kotak = { top: 600, bottom: 880, left: 1030, right: 1240, width: 210, height: 280 };
-ctx.positionVersionCard();
-if (kartu.style.top !== 'auto') gagal('kartunya tidak naik ke atas sidebar');
-if (kartu.style.bottom !== '308px') gagal('jarak dari dasar layar: ' + kartu.style.bottom);
-sidebar._kotak = { top: 20, bottom: 380, left: 1030, right: 1240, width: 210, height: 360 };
-
-// ── Sidebar digulung: kartunya ikut ─────────────────────────────────────
-sidebar.classList._isi = ['collapsed'];
-ctx.positionVersionCard();
-if (!kartu.hasAttribute('hidden')) gagal('sidebar digulung tapi kartunya masih tampil');
-sidebar.classList._isi = [];
-ctx.positionVersionCard();
-if (kartu.hasAttribute('hidden')) gagal('sidebar dibuka lagi tapi kartunya tidak kembali');
+ctx.toggleVersionCard();
+if (kartu.classList.contains('collapsed')) gagal('kartunya tidak terbuka lagi');
+if (penyimpan['ezdoc_versi_collapsed'] !== '0') gagal('keadaan terbuka tidak diingat');
 
 // ── Satu versi: tidak ada yang perlu dipilih ────────────────────────────
 ctx.renderVersionCard([{ version: 1, signed_count: 0, is_hidden: 0, updated_at: '2026-09-21 09:01:00', created_by_name: '' }], 3);

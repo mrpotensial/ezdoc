@@ -6,6 +6,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Changed — kartu versi pindah ke kiri atas, dengan tombol sembunyinya sendiri (2026-09-29)**
+
+Dilaporkan pemakai: "ukurannya berbeda jadi jelek. versi card tampilkan di
+paling kiri atas aja, jadi panel card kiri atas list versi, kanan atas aksi",
+lalu "dan tombol hidenya pisah aja".
+
+Dua kotak melayang bertumpuk di sudut yang sama dengan lebar berbeda memang
+terbaca sebagai salah gambar. Sekarang pembagiannya jelas: **daftar versi di
+kiri, aksi di kanan.**
+
+- Karena tidak lagi menempel pada sidebar, tingginya cukup diurus CSS
+  (`max-height: calc(100vh - 40px)`). Seluruh perhitungan letak di JavaScript
+  — termasuk pendengar resize dan ResizeObserver — ikut hilang.
+- **Tombol sembunyinya sendiri.** Sebelumnya kartunya ikut tersembunyi saat
+  sidebar digulung; itu yang diminta mula-mula, lalu diperbaiki setelah
+  dilihat. Keadaan tergulungnya diingat peramban, sama seperti sidebar, dan
+  saat tergulung yang tersisa hanya pegangan kecil.
+
 **Changed — daftar versi jadi satu kartu, detailnya langsung terlihat (2026-09-29)**
 
 Diminta pemakai: "tampilkan langsung detail aja versinya, tidak perlu klik

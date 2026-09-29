@@ -2099,6 +2099,12 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
             <div class="ez-versi-kartu-kepala">
                 <span id="versionCardTitle"><?= h(t('toolbar.version_label', [], 'Version')) ?></span>
                 <span class="ez-versi-jumlah" id="versionCardCount"></span>
+                <?php // Tombol sembunyi milik kartu ini sendiri. Sidebar punya
+                // tombolnya sendiri; menggabungkan keduanya berarti
+                // menyembunyikan yang satu ikut menyembunyikan yang lain. ?>
+                <button type="button" id="btnVersionCardToggle" class="ez-versi-sembunyi"
+                        onclick="toggleVersionCard()" aria-expanded="true" aria-controls="versionCardList"
+                        title="<?= h(t('title.toggle_version_card', [], 'Show or hide the version list')) ?>">&minus; <?= h(t('toolbar.hide_label', [], 'Hide')) ?></button>
             </div>
             <div class="ez-versi-kartu-isi" id="versionCardList"></div>
             <?php

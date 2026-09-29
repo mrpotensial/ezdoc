@@ -1684,53 +1684,50 @@
         }
 
         /**
-         * Letakkan kartunya menempel pada sidebar, dan batasi tingginya pada
-         * ruang yang benar-benar ada.
+         * Kartunya tampil atau tidak.
          *
-         * Tinggi sidebar berubah-ubah — ia bisa digulung, dan isinya berbeda
-         * antar template — jadi tidak ada satu angka yang benar terus. Batas
-         * tingginya dihitung dari sisa layar, bukan persentase: persentase
-         * layar tidak tahu ada sidebar setinggi apa di atasnya.
+         * Tidak ada lagi yang perlu dihitung: sejak ia pindah ke kiri atas,
+         * letaknya tetap dan tingginya diurus CSS. Yang tersisa satu syarat —
+         * satu versi berarti tidak ada yang perlu dipilih.
          */
-        function positionVersionCard() {
+        function updateVersionCard() {
             const kartu = document.getElementById('versionCard');
-            const sidebar = document.getElementById('toolbarPanel');
-            if (!kartu || !sidebar) return;
+            if (!kartu) return;
 
-            // Sidebar digulung berarti orangnya sedang ingin melihat dokumennya.
-            // Kartu yang tetap menggantung di situ melawan maksud itu.
-            const digulung = sidebar.classList.contains('collapsed');
-            const adaVersi = kartu.dataset.adaVersi === '1';
-            if (digulung || !adaVersi) {
-                kartu.setAttribute('hidden', '');
-                return;
-            }
-            kartu.removeAttribute('hidden');
-
-            const sb = sidebar.getBoundingClientRect();
-            const jarak = 8;
-            const tepi = 12;
-
-            // Di layar sempit sidebar menempel ke dasar layar; kartunya naik ke
-            // atasnya. Yang menentukan letak sidebar sungguhan, bukan tebakan
-            // dari lebar jendela — aturannya bisa berubah di CSS tanpa ke sini.
-            const menempelBawah = (window.innerHeight - sb.bottom) < sb.top;
-            let ruang;
-            if (menempelBawah) {
-                ruang = sb.top - jarak - tepi;
-                kartu.style.top = 'auto';
-                kartu.style.bottom = Math.round(window.innerHeight - sb.top + jarak) + 'px';
+            if (kartu.dataset.adaVersi === '1') {
+                kartu.removeAttribute('hidden');
             } else {
-                ruang = window.innerHeight - sb.bottom - jarak - tepi;
-                kartu.style.bottom = 'auto';
-                kartu.style.top = Math.round(sb.bottom + jarak) + 'px';
+                kartu.setAttribute('hidden', '');
             }
-
-            // Ruang yang tersisa bisa tinggal sedikit di layar pendek. Dibatasi
-            // di bawah supaya kartunya tidak mengerut jadi garis: satu baris
-            // yang bisa digulung masih memberi tahu ada versi lain.
-            kartu.style.maxHeight = Math.max(Math.round(ruang), 120) + 'px';
         }
+
+        /**
+         * Gulung atau buka kartunya. Tombolnya sendiri, bukan milik sidebar.
+         *
+         * Keadaannya diingat peramban, sama seperti sidebar: yang sudah
+         * menggulungnya sekali tidak sedang meminta ia kembali tiap halaman.
+         */
+        function toggleVersionCard() {
+            const kartu = document.getElementById('versionCard');
+            const tombol = document.getElementById('btnVersionCardToggle');
+            if (!kartu) return;
+
+            const tergulung = kartu.classList.toggle('collapsed');
+            if (tombol) {
+                tombol.innerHTML = tergulung
+                    ? '&#9776;'
+                    : '&minus; ' + t('toolbar.hide_label', {}, 'Hide');
+                tombol.setAttribute('aria-expanded', tergulung ? 'false' : 'true');
+            }
+            try { localStorage.setItem('ezdoc_versi_collapsed', tergulung ? '1' : '0'); } catch (e) {}
+        }
+
+        // Keadaan terakhirnya dipakai lagi saat halaman dibuka.
+        (function () {
+            let simpan = null;
+            try { simpan = localStorage.getItem('ezdoc_versi_collapsed'); } catch (e) {}
+            if (simpan === '1') { toggleVersionCard(); }
+        })();
 
         function renderVersionCard(versions, slotTotal) {
             const kartu = document.getElementById('versionCard');
@@ -1809,13 +1806,7 @@
                 wadah.appendChild(baris);
             });
 
-            positionVersionCard();
-        }
-
-        window.addEventListener('resize', positionVersionCard);
-        if (typeof ResizeObserver === 'function') {
-            const _sb = document.getElementById('toolbarPanel');
-            if (_sb) new ResizeObserver(positionVersionCard).observe(_sb);
+            updateVersionCard();
         }
 
         async function toggleHiddenVersions() {
@@ -2227,8 +2218,6 @@
             btn.innerHTML = isCollapsed ? '&#9776;' : '&minus; ' + t('toolbar.hide_label', {}, 'Hide');
             btn.title = isCollapsed ? t('title.show_toolbar', {}, 'Show Toolbar') : t('title.hide_toolbar', {}, 'Hide Toolbar');
             try { localStorage.setItem('surat_toolbar_collapsed', isCollapsed ? '1' : '0'); } catch (e) {}
-            // Kartunya menempel pada sidebar, jadi ia ikut bergeser.
-            positionVersionCard();
         }
 
         // Apply saved toolbar state on load (default: collapsed on narrow screens)

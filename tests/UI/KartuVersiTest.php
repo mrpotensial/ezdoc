@@ -182,64 +182,93 @@ final class KartuVersiTest extends TestCase
     }
 
     /**
-     * Tingginya dihitung dari ruang yang tersisa, bukan dari persentase layar.
+     * Kartunya di kiri atas, aksinya di kanan.
      *
-     * Diminta pemakai: "pastikan tinggi card dinamis agar tidak melebihi layar,
-     * jika versi banyak bisa di scroll". Persentase layar tidak tahu ada
-     * sidebar setinggi apa di atasnya — dan sidebar itulah yang berubah-ubah.
+     * Dilaporkan pemakai: "ukurannya berbeda jadi jelek. versi card tampilkan
+     * di paling kiri atas aja". Dua kotak melayang bertumpuk di sudut yang
+     * sama dengan lebar berbeda terbaca sebagai salah gambar.
      */
-    public function testTingginyaDihitungDariRuangYangTersisa(): void
+    public function testKartunyaDiKiriAtas(): void
     {
-        $skrip = self::baca('views/_partials/generate_scripts.php');
         $css = self::baca('views/_partials/generate_styles.php');
 
-        self::assertStringContainsString('kartu.style.maxHeight', $skrip, 'tinggi kartunya tidak pernah dibatasi');
         self::assertSame(
             1,
-            preg_match('/Math\.max\(Math\.round\(ruang\), 120\)/', $skrip),
-            'di layar pendek kartunya bisa mengerut jadi garis'
+            preg_match('/\.ez-versi-kartu \{[^}]*top: 20px;[^}]*left: 20px;/s', $css),
+            'kartunya tidak di kiri atas'
         );
+        self::assertSame(
+            0,
+            preg_match('/\.ez-versi-kartu \{[^}]*right:/s', $css),
+            'kartunya masih terikat ke tepi kanan'
+        );
+    }
 
-        // Yang menggulung isinya, bukan kartunya: kepala dan kakinya tetap terlihat.
+    /**
+     * Tingginya dibatasi layar, dan daftarnya yang menggulung.
+     *
+     * Diminta pemakai: "pastikan tinggi card dinamis agar tidak melebihi
+     * layar, jika versi banyak bisa di scroll". Sejak kartunya berdiri
+     * sendiri, batas itu cukup ditulis di CSS — tidak ada lagi tinggi sidebar
+     * yang perlu dikurangi, jadi tidak ada yang perlu dihitung ulang tiap kali
+     * jendela berubah.
+     */
+    public function testTingginyaTidakMelebihiLayar(): void
+    {
+        $css = self::baca('views/_partials/generate_styles.php');
+        $skrip = self::baca('views/_partials/generate_scripts.php');
+
+        self::assertSame(
+            1,
+            preg_match('/\.ez-versi-kartu \{[^}]*max-height: calc\(100vh - 40px\);/s', $css),
+            'tinggi kartunya tidak dibatasi layar'
+        );
         self::assertSame(
             1,
             preg_match('/\.ez-versi-kartu-isi \{ overflow-y: auto; min-height: 0; \}/', $css),
             'daftarnya tidak bisa digulung'
         );
-        self::assertSame(
-            0,
-            preg_match('/\.ez-versi-kartu \{[^}]*max-height/s', $css),
-            'tingginya dipaku di CSS, jadi perhitungannya tidak berlaku'
-        );
+
+        // Tidak ada sisa perhitungan JavaScript yang dulu dipakai.
+        self::assertStringNotContainsString('positionVersionCard', $skrip, 'perhitungan letak lama masih ada');
+        self::assertStringNotContainsString('kartu.style.maxHeight', $skrip, 'tingginya masih disetel dari skrip');
     }
 
     /**
-     * Sidebar digulung, kartunya ikut.
+     * Kartunya punya tombol sembunyi sendiri.
      *
-     * Diminta pemakai: "jika klik hidden ikut hidden". Yang menggulung sidebar
-     * sedang ingin melihat dokumennya; kartu yang tetap menggantung di situ
-     * melawan maksud itu.
+     * Diminta pemakai: "dan tombol hidenya pisah aja". Satu tombol bersama
+     * berarti menyembunyikan yang satu menyembunyikan yang lain — dan sidebar
+     * sudah punya tombolnya sendiri.
      */
-    public function testKartunyaIkutTersembunyiSaatSidebarDigulung(): void
+    public function testKartunyaPunyaTombolSembunyiSendiri(): void
     {
+        $view = self::baca('views/document/generate.php');
         $skrip = self::baca('views/_partials/generate_scripts.php');
+        $css = self::baca('views/_partials/generate_styles.php');
+
+        self::assertStringContainsString('id="btnVersionCardToggle"', $view, 'kartunya tidak punya tombol sembunyi');
+        self::assertStringContainsString('onclick="toggleVersionCard()"', $view);
+        self::assertStringContainsString('function toggleVersionCard(', $skrip);
+
+        // Keadaannya diingat, sama seperti sidebar.
+        self::assertStringContainsString("localStorage.setItem('ezdoc_versi_collapsed'", $skrip, 'keadaan tergulungnya tidak diingat');
+        self::assertStringContainsString("localStorage.getItem('ezdoc_versi_collapsed')", $skrip, 'keadaan tergulungnya tidak dipakai lagi');
+
+        // Dan tidak lagi ikut tombol sembunyi milik sidebar.
+        self::assertSame(
+            0,
+            preg_match("/function toggleToolbar\(\)[\s\S]{0,700}?(updateVersionCard|toggleVersionCard)\(\)/", $skrip),
+            'kartunya masih ikut tombol sembunyi sidebar'
+        );
 
         self::assertSame(
             1,
-            preg_match("/sidebar\.classList\.contains\('collapsed'\)/", $skrip),
-            'kartunya tidak tahu sidebar sedang digulung'
-        );
-        self::assertSame(
-            1,
-            preg_match('/function toggleToolbar\(\)[\s\S]{0,700}?positionVersionCard\(\);/', $skrip),
-            'kartunya tidak ikut saat sidebar digulung'
-        );
-        self::assertSame(
-            1,
-            preg_match("/window\.addEventListener\('resize', positionVersionCard\)/", $skrip),
-            'kartunya tidak ikut saat jendela diubah ukurannya'
+            preg_match('/\.ez-versi-kartu\.collapsed \.ez-versi-kartu-isi,/', $css),
+            'tergulungnya tidak menyembunyikan daftarnya'
         );
     }
+
 
     /**
      * Dua lebar, dan sasaran sentuh yang lebih besar hanya di layar sentuh.
@@ -254,7 +283,7 @@ final class KartuVersiTest extends TestCase
         self::assertSame(1, preg_match('/\.ez-versi-kartu \{[^}]*width: 260px;/s', $css), 'lebar bawaannya berubah');
         self::assertSame(
             1,
-            preg_match('/@media screen and \(max-width: 1024px\) \{[\s\S]*?\.ez-versi-kartu \{ right: 10px; width: 210px; \}/', $css),
+            preg_match('/@media screen and \(max-width: 1024px\) \{[\s\S]*?\.ez-versi-kartu \{ top: 10px; left: 10px; width: 210px; max-height: calc\(100vh - 20px\); \}/', $css),
             'kartunya tidak menyempit di layar sempit'
         );
         self::assertSame(
@@ -291,14 +320,14 @@ final class KartuVersiTest extends TestCase
         $skrip = self::baca('views/_partials/generate_scripts.php');
         $awal = strpos($skrip, 'function _versiWaktu(teks) {');
         self::assertNotFalse($awal, 'pemformat waktu tidak ketemu');
-        $akhir = strpos($skrip, "window.addEventListener('resize', positionVersionCard);", $awal);
+        $akhir = strpos($skrip, 'async function toggleHiddenVersions(', $awal);
         self::assertNotFalse($akhir, 'ujung bagian render tidak ketemu');
 
         $js = tempnam(sys_get_temp_dir(), 'ezdoc-kartu-') . '.js';
         file_put_contents(
             $js,
             substr($skrip, $awal, $akhir - $awal)
-            . "\nthis.renderVersionCard = renderVersionCard;\nthis.positionVersionCard = positionVersionCard;\n"
+            . "\nthis.renderVersionCard = renderVersionCard;\nthis.toggleVersionCard = toggleVersionCard;\n"
         );
 
         try {

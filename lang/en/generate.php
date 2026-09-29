@@ -53,6 +53,7 @@ return [
         'doc_info_id_edit' => 'ID: {id} (Edit)',
     ],
     'title' => [
+        'toggle_version_card' => 'Show or hide the version list',
         'restore_version' => 'Bring this version back into the list',
         'toggle_hidden_versions' => 'Show or hide versions that were hidden from the list',
         'hide_version' => 'Hide this version from the list — it stays openable and can be restored',
