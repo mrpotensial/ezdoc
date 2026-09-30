@@ -403,6 +403,140 @@ final class PengaturChartTest extends TestCase
         );
     }
 
+    // ── Baris jam dan data contoh ────────────────────────────────────────
+
+    /**
+     * Baris jam bisa diatur per panel, dan di dasar papan.
+     *
+     * Lembar partograf lama menaruh jamnya tepat di bawah pembukaan serviks.
+     * Tanpa dua saklar ini, satu-satunya jalan ke sana adalah mengetik JSON.
+     */
+    public function testTheHourRowCanBePlacedPerPanel(): void
+    {
+        $skrip = self::skrip();
+
+        self::assertSame(
+            1,
+            preg_match("/fSelect\('time_axis', t\('chart\.time_axis'/", $skrip),
+            'letak baris jam di dasar papan tidak bisa diatur'
+        );
+        self::assertSame(
+            1,
+            preg_match("/fCheck\(sel \+ '\.time_axis', t\('chart\.panel_time_axis'/", $skrip),
+            'panel tidak punya saklar baris jamnya sendiri'
+        );
+        self::assertSame(
+            1,
+            preg_match("/CHART_BARIS_JAM = \[\['bottom',[^\]]*\], \['none',/", $skrip),
+            'pilihannya bukan bottom/none'
+        );
+    }
+
+    /** Dan baris ringkasnya menyebutkan panel mana yang memuatnya. */
+    public function testTheSummaryRowMentionsTheHourRow(): void
+    {
+        self::assertSame(
+            2,
+            preg_match_all("/p\.time_axis \? ' (?:&middot;|\xc2\xb7) ' \+/", self::skrip()),
+            'baris ringkas tidak menyebut baris jam di kedua tempat penulisannya'
+        );
+    }
+
+    /**
+     * Data contoh mati kecuali diminta.
+     *
+     * Angka karangan yang tampil sendiri pernah dikira data sungguhan. Yang
+     * membuka penyunting harus melihat papannya kosong lebih dulu.
+     */
+    public function testSampleDataIsOffUntilAsked(): void
+    {
+        $skrip = self::skrip();
+
+        self::assertSame(1, preg_match('/contoh: false,/', $skrip), 'bawaannya bukan mati');
+        self::assertSame(
+            1,
+            preg_match('/if \(saklar\) saklar\.checked = false;/', $skrip),
+            'saklarnya tidak dikembalikan ke mati saat papan lain dibuka'
+        );
+        self::assertStringContainsString(
+            'id="chartEditorSample"',
+            self::halaman(),
+            'kotak centang data contohnya tidak ada di halaman'
+        );
+        self::assertSame(
+            0,
+            preg_match('/id="chartEditorSample"[^>]*checked/', self::halaman()),
+            'kotak centangnya sudah tercentang di markup'
+        );
+    }
+
+    /** Angkanya cuma untuk pratinjau — Terapkan tetap mengirim papan tanpa nilai. */
+    public function testSampleValuesNeverLeaveThePreview(): void
+    {
+        $skrip = self::skrip();
+
+        self::assertSame(
+            1,
+            preg_match(
+                '/chartEditor\.contoh \? chartContohNilai\(chartEditor\.spec\) : \{\}/',
+                $skrip
+            ),
+            'pratinjau tidak memakai angka contoh'
+        );
+        self::assertSame(
+            1,
+            preg_match(
+                '/async function terapkanChartEditor\(\)[\s\S]{0,1200}?chartRenderRequest\(chartEditor\.spec, \{\}\)/',
+                $skrip
+            ),
+            'Terapkan ikut mengirim angka contoh — angka karangan bisa ikut tersimpan'
+        );
+    }
+
+    /**
+     * Angkanya sama di tiap gambar ulang.
+     *
+     * `Math.random()` membuat gambarnya berubah pada tiap ketikan, dan
+     * pratinjau yang bergoyang sendiri menyembunyikan akibat dari perubahan
+     * yang sedang dicoba.
+     */
+    public function testSampleValuesAreStableAcrossRedraws(): void
+    {
+        $skrip = self::skrip();
+
+        self::assertSame(
+            1,
+            preg_match('/const acak = chartAcak\(d\.field\);/', $skrip),
+            'semainya bukan nama field'
+        );
+        self::assertSame(
+            1,
+            preg_match('/function chartContohNilai\(spec\) \{([\s\S]*?)\n        \}\n/', $skrip, $badan),
+            'pembangkitnya tidak ditemukan'
+        );
+        self::assertStringNotContainsString(
+            'Math.random',
+            $badan[1],
+            'angkanya dibangkitkan acak murni — pratinjaunya akan bergoyang tiap ketikan'
+        );
+    }
+
+    /**
+     * Data contoh ikut mengisi field jam mulai.
+     *
+     * Tanpa jam mulai, perender tidak menulis satu angka jam pun — dan
+     * pratinjau contoh yang tidak memperlihatkan baris jam justru menyembunyikan
+     * pengaturan yang baru saja ditambahkan.
+     */
+    public function testSampleDataFillsTheStartField(): void
+    {
+        self::assertSame(
+            1,
+            preg_match('/if \(spec\.start_field\) nilai\[spec\.start_field\] = MULAI;/', self::skrip()),
+            'field jam mulai tidak ikut diisi contoh'
+        );
+    }
+
     /** Semua kalimatnya ada di kedua bahasa. */
     public function testEveryLabelExistsInBothLanguages(): void
     {

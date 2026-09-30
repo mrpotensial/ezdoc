@@ -5039,6 +5039,7 @@
         const CHART_LEGENDA = [['', 'Tidak ada'], ['above', 'Di atas'], ['below', 'Di bawah'], ['left', 'Di kiri']];
         const CHART_GAYA = [['solid', 'Utuh'], ['dashed', 'Putus-putus']];
         const CHART_JUDUL = [['left', 'Mendatar di kiri'], ['rotated', 'Berdiri']];
+        const CHART_BARIS_JAM = [['bottom', 'Di dasar papan'], ['none', 'Tidak ada']];
 
         /**
          * Panel siap pakai per jenis.
@@ -5188,6 +5189,8 @@
                 + fNum('panel_gap', t('chart.panel_gap', {}, 'Panel gap'), spec.panel_gap == null ? 14 : spec.panel_gap)
                 + fNum('label_every', t('chart.label_every', {}, 'Label every'), spec.label_every == null ? 1 : spec.label_every)
                 + fText('start_field', t('chart.start_field', {}, 'Start-time field'), spec.start_field, 'list="chartFieldSaran"')
+                + fSelect('time_axis', t('chart.time_axis', {}, 'Hour row'),
+                    spec.time_axis === false ? 'none' : (spec.time_axis || 'bottom'), CHART_BARIS_JAM)
                 + '</div></div>';
 
             const panels = Array.isArray(spec.panels) ? spec.panels : [];
@@ -5228,7 +5231,9 @@
                 + escapeHtml(p.title || t('chart.untitled_panel', {}, 'Untitled panel')) + '</span>'
                 + '<span class="block text-[10px] text-gray-500">' + escapeHtml(namaJenis) + ' &middot; '
                 + Math.round(p.height == null ? 0 : p.height) + 'px &middot; ' + deret + ' '
-                + escapeHtml(t('chart.series_word', {}, 'series')) + '</span></span>'
+                + escapeHtml(t('chart.series_word', {}, 'series'))
+                + (p.time_axis ? ' &middot; ' + escapeHtml(t('chart.time_axis_short', {}, 'hour row')) : '')
+                + '</span></span>'
                 + '<span class="flex gap-1 items-center" data-no-toggle="1">'
                 + (i > 0 ? fTombol('panel-up', sel, '↑') : '')
                 + (i < total - 1 ? fTombol('panel-down', sel, '↓') : '')
@@ -5267,10 +5272,11 @@
                     + '</div>';
             }
 
-            html += '<div class="grid grid-cols-3 gap-2 mt-2">'
+            html += '<div class="grid grid-cols-4 gap-2 mt-2">'
                 + fSelect(sel + '.legend', t('chart.legend', {}, 'Legend'), p.legend === true ? 'above' : (p.legend || ''), CHART_LEGENDA)
                 + fSelect(sel + '.title_align', t('chart.title_align', {}, 'Title placement'), p.title_align || (isSel ? 'left' : 'rotated'), CHART_JUDUL)
                 + fCheck(sel + '.grid', t('chart.grid', {}, 'Grid'), p.grid !== false)
+                + fCheck(sel + '.time_axis', t('chart.panel_time_axis', {}, 'Hour row below'), !!p.time_axis)
                 + '</div>';
 
             const deret = Array.isArray(p.series) ? p.series : [];
@@ -5448,7 +5454,8 @@
             if (rincian) {
                 rincian.textContent = namaJenis + ' · ' + Math.round(p.height == null ? 0 : p.height)
                     + 'px · ' + (Array.isArray(p.series) ? p.series.length : 0) + ' '
-                    + t('chart.series_word', {}, 'series');
+                    + t('chart.series_word', {}, 'series')
+                    + (p.time_axis ? ' · ' + t('chart.time_axis_short', {}, 'hour row') : '');
             }
         }
 
@@ -5595,6 +5602,125 @@
             });
         }
 
+        // ── Angka contoh untuk pratinjau ───────────────────────
+
+        /**
+         * Papan kosong tidak memperlihatkan akibat dari pilihan yang dibuat.
+         *
+         * Sumbu Y yang terlalu sempit, baris simbol yang berimpit, dua deret
+         * berwarna sama — semuanya baru kelihatan begitu ada yang tergambar di
+         * dalamnya. Saklarnya mati kecuali diminta: angka karangan yang tampil
+         * sendiri pernah dikira data sungguhan.
+         *
+         * Angkanya tidak pernah ikut tersimpan. Ia dikirim ke perender sebagai
+         * nilai sementara, dan tombol Terapkan tetap mengirim papan tanpa
+         * nilai.
+         */
+        function chartContohNilai(spec) {
+            const MULAI = '2026-01-01 08:00';
+            const nilai = {};
+            if (spec.start_field) nilai[spec.start_field] = MULAI;
+
+            const jam = Math.max(1, Number(spec.hours) || 16);
+            const panels = Array.isArray(spec.panels) ? spec.panels : [];
+
+            panels.forEach(function (p) {
+                const isSel = p.type === 'symbol' || p.type === 'text';
+                const tingkat = Object.keys(p.levels || {});
+                const y = p.y || {};
+                const min = Number(y.min == null ? 0 : y.min);
+                const max = Number(y.max == null ? 10 : y.max);
+                const langkah = (isSel || p.type === 'bar') ? 1 : 2;
+
+                (Array.isArray(p.series) ? p.series : []).forEach(function (d) {
+                    if (!d.field) return;
+                    const acak = chartAcak(d.field);
+                    const titik = [];
+                    let v = min + ((max - min) * (0.25 + acak() * 0.4));
+
+                    for (let h = 0; h <= jam; h += langkah) {
+                        // Bukan tiap kolom terisi. Lembar sungguhan berlubang,
+                        // dan papan yang penuh rata menyembunyikan justru yang
+                        // paling sering salah: jarak antar pengukuran.
+                        if (acak() < 0.25) continue;
+
+                        let isi;
+                        if (isSel) {
+                            isi = chartContohSel(p.type, acak);
+                        } else if (tingkat.length > 0) {
+                            isi = Number(tingkat[Math.floor(acak() * tingkat.length)]);
+                        } else {
+                            v += (acak() - 0.42) * (max - min) * 0.2;
+                            v = Math.min(max, Math.max(min, v));
+                            isi = Math.round(v * 10) / 10;
+                        }
+                        titik.push({ x: chartJamKe(MULAI, h), y: isi });
+                    }
+
+                    nilai[d.field] = JSON.stringify(titik);
+                });
+            });
+
+            return nilai;
+        }
+
+        /** Isi sel contoh: tanda pendek untuk baris simbol, angka untuk teks. */
+        function chartContohSel(jenis, acak) {
+            const pilihan = jenis === 'symbol'
+                ? ['+', '\u2212', '\u2713', '\u25cb']
+                : ['5', '10', '20', '30'];
+
+            return pilihan[Math.floor(acak() * pilihan.length)];
+        }
+
+        /** 'YYYY-MM-DD HH:MM' sekian jam sesudah waktu mulai. */
+        function chartJamKe(mulai, jam) {
+            const t = new Date(mulai.replace(' ', 'T') + ':00');
+            t.setTime(t.getTime() + (jam * 3600000));
+            const dua = function (n) { return (n < 10 ? '0' : '') + n; };
+
+            return t.getFullYear() + '-' + dua(t.getMonth() + 1) + '-' + dua(t.getDate())
+                + ' ' + dua(t.getHours()) + ':' + dua(t.getMinutes());
+        }
+
+        /**
+         * Pembangkit acak bersemai (mulberry32).
+         *
+         * Semainya nama field, jadi satu field selalu memberi rangkaian yang
+         * sama. `Math.random()` akan mengubah gambarnya tiap ketikan, dan
+         * pratinjau yang bergoyang sendiri lebih mengganggu daripada menolong.
+         */
+        function chartAcak(kunci) {
+            let h = 2166136261;
+            for (let i = 0; i < kunci.length; i++) {
+                h ^= kunci.charCodeAt(i);
+                h = Math.imul(h, 16777619);
+            }
+            let a = h >>> 0;
+
+            return function () {
+                a = (a + 0x6D2B79F5) >>> 0;
+                let t = a;
+                t = Math.imul(t ^ (t >>> 15), t | 1);
+                t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        /** Saklar data contoh. Dipasang sekali; keadaannya milik tiap papan. */
+        function chartEditorPasangContoh() {
+            const saklar = document.getElementById('chartEditorSample');
+            if (!saklar || saklar._ezPasang) return;
+            saklar._ezPasang = true;
+
+            saklar.addEventListener('change', function () {
+                if (!chartEditor) return;
+                chartEditor.contoh = saklar.checked;
+                chartEditorPratinjau();
+            });
+        }
+
         // ── Pratinjau hidup ──────────────────────────────────────────────
         function chartEditorPratinjauTunda() {
             if (!chartEditor) return;
@@ -5608,7 +5734,10 @@
             const galat = document.getElementById('chartEditorError');
             const ukuran = document.getElementById('chartEditorSize');
 
-            const hasil = await chartRenderRequest(chartEditor.spec, {});
+            const hasil = await chartRenderRequest(
+                chartEditor.spec,
+                chartEditor.contoh ? chartContohNilai(chartEditor.spec) : {}
+            );
             if (!hasil.ok) {
                 // Pesannya menyebut panel keberapa. Kartunya dibuka dan ditandai
                 // supaya tidak ada yang perlu menghitung panel untuk
@@ -5711,13 +5840,17 @@
                 scale: null,
                 skala: 1,
                 tunda: null,
+                contoh: false,
             };
+            const saklar = document.getElementById('chartEditorSample');
+            if (saklar) saklar.checked = false;
             const nama = document.getElementById('chartEditorName');
             if (nama) nama.textContent = c.id;
 
             renderChartEditorForm();
             chartEditorPasangListener();
             chartEditorPasangPratinjauKlik();
+            chartEditorPasangContoh();
             chartEditorJsonSegar();
             chartEditorTab('form');
             openAppModal('chartEditor');

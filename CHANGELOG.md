@@ -6,6 +6,42 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — baris jam boleh berdiri di bawah panel mana pun (2026-09-30)**
+
+Diminta pemakai: "misal aku ingin seperti partograf lama kan posisi waktunya
+ada di bawah pembukaan serviks". Barisnya sebelumnya terpaku di dasar papan,
+jadi pada partograf tiga belas baris memisahkan angka jam dari titik yang
+ditandainya — dan yang membacanya menyusuri kolom dengan jari.
+
+- Tiap panel punya saklar **Baris jam di bawah**. Ruang di bawahnya ikut
+  dilebarkan, jadi angkanya tidak jatuh di atas kisi panel berikutnya.
+- Papan punya pilihan **Baris jam**: `Di dasar papan` (bawaan) atau
+  `Tidak ada`. Keduanya berdiri sendiri — boleh di dua tempat sekaligus,
+  boleh cuma di tengah.
+- Tinggi papan ikut berubah, jadi kalimat "muat di halaman" tetap benar.
+  Dasar tanpa baris jam juga tidak lagi menyisakan ruang untuk baris yang
+  tidak ada.
+- Baris ringkas panel menyebutkan panel mana yang memuatnya.
+
+Papan lama tergambar byte demi byte seperti sebelumnya: tanpa kunci
+`time_axis`, bawaannya tetap di dasar. Itu dijaga uji, bukan cuma ditulis di
+sini — papan yang sudah ditandatangani harus bisa dibangun ulang persis.
+
+**Added — data contoh di pratinjau designer (2026-09-30)**
+
+Papan kosong tidak memperlihatkan akibat dari pilihan yang sedang dibuat:
+sumbu Y yang terlalu sempit, baris simbol yang berimpit, dua deret berwarna
+sama. Semuanya baru kelihatan setelah ada yang tergambar di dalamnya.
+
+Saklar **Data contoh** di atas pratinjau mengisi tiap deret dengan angka
+karangan. **Mati kecuali diminta**, dan mati lagi tiap papan dibuka — angka
+karangan yang tampil sendiri pernah dikira data sungguhan.
+
+Angkanya dibangkitkan dari nama fieldnya (mulberry32 bersemai), bukan
+`Math.random()`: pratinjau yang berubah sendiri tiap ketikan menyembunyikan
+justru perubahan yang sedang dicoba. Ia juga tidak pernah ikut tersimpan —
+tombol Terapkan tetap mengirim papan tanpa nilai.
+
 **Changed — formulir papan grafik jadi daftar yang bisa dilipat (2026-09-30)**
 
 Formulirnya dipakai sebentar, lalu: "apa bisa dibuat lebih mudah lagi ya cara

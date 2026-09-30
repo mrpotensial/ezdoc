@@ -30,6 +30,18 @@ final class Geometry
     /** Ruang bawah untuk label jam. */
     public const BOTTOM = 28.0;
 
+    /**
+     * Ruang bawah kalau tidak ada baris jam di dasar papan.
+     *
+     * Barisnya bisa dipindah ke bawah panel mana pun (lembar partograf lama
+     * menaruhnya tepat di bawah pembukaan serviks). Kalau dasarnya jadi
+     * kosong, 28 satuan itu cuma ruang putih yang ikut tercetak.
+     */
+    public const BOTTOM_BARE = 8.0;
+
+    /** Tinggi satu baris jam. */
+    public const HOUR_ROW = 14.0;
+
     /** Jarak antar panel yang bertumpuk. */
     public const PANEL_GAP = 14.0;
 

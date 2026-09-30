@@ -272,7 +272,7 @@ bisa berubah tidak menutupi apa pun.
 
 ## 8. Urutan pengerjaan
 
-Fase 0–3 dikerjakan 29 Sep 2026 (commit 46bb6fb, 8652df1), fase 4–5 30 Sep
+Fase 0–3 dikerjakan 29 Sep 2026 (commit 46bb6fb, 8652df1), fase 4–6 30 Sep
 2026. Semuanya **sudah dikerjakan**.
 
 | Fase | Hasil yang bisa dipakai | |
@@ -283,13 +283,16 @@ Fase 0–3 dikerjakan 29 Sep 2026 (commit 46bb6fb, 8652df1), fase 4–5 30 Sep
 | 3 | Lapisan pegangan: klik, geser, hapus, ketik angka persis — di atas lembarnya sendiri | selesai |
 | 4 | Panel simbol, batang, teks + spesifikasi partograf + contoh di `contoh/` | selesai |
 | 5 | Papan diatur lewat formulir (bukan JSON), dilipat jadi satu baris per panel | selesai |
+| 6 | Baris jam per panel + data contoh di pratinjau designer | selesai |
 
 Fase 2 sudah menghasilkan dokumen yang utuh dan tercetak benar. Fase 3
 membuatnya enak diisi. Fase 4 membuatnya partograf. Fase 5 membuatnya bisa
 dirancang tanpa mengetik JSON — tidak direncanakan, diminta setelah partograf
-tiga belas panel pertama disusun dengan tangan.
+tiga belas panel pertama disusun dengan tangan. Fase 6 melepas dua anggapan
+yang ternyata tidak berlaku: bahwa baris jam selalu di dasar papan, dan bahwa
+papan kosong cukup untuk merancang.
 
-Empat hal ditemukan saat mengerjakannya, semuanya kegagalan senyap:
+Lima hal ditemukan saat mengerjakannya, semuanya kegagalan senyap:
 
 1. **Nilai hilang kalau perendernya tak terjangkau.** Isian tersembunyi semula
    ditulis hanya sesudah server menjawab. Sekarang ditulis lebih dulu dalam
@@ -304,6 +307,11 @@ Empat hal ditemukan saat mengerjakannya, semuanya kegagalan senyap:
    kalimat "muat di halaman" atau "lebih lebar dari halaman".
 4. **Panel baru lahir kosong.** "Tambah panel" menghasilkan panel tanpa nama
    field, dan server menolaknya. Sekarang tiap jenis punya bawaannya sendiri.
+
+5. **Baris jam terpaku di dasar papan.** Lembar partograf lama menaruhnya di
+   bawah pembukaan serviks; ditiru ke bawah, tiga belas baris memisahkan angka
+   jam dari titik yang ditandainya. Sekarang tiap panel punya saklarnya
+   sendiri, dan ruang di bawahnya ikut dihitung.
 
 ## 9. Yang tidak dikerjakan
 

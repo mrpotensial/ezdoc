@@ -1197,7 +1197,11 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 <div class="w-[58%] border-r border-gray-200 overflow-y-auto p-3" id="chartEditorForm"></div>
                 <div class="w-[42%] flex flex-col min-h-0">
                     <div class="px-3 py-1.5 text-[11px] text-gray-500 border-b border-gray-200 flex items-center justify-between">
-                        <span><?= h(t('chart.preview_label', [], 'Live preview')) ?></span>
+                        <label class="flex items-center gap-1.5 cursor-pointer select-none"
+                               title="<?= h(t('chart.sample_hint', [], 'Made-up numbers, shown here only — never saved')) ?>">
+                            <input type="checkbox" id="chartEditorSample" class="rounded border-gray-300">
+                            <?= h(t('chart.sample_data', [], 'Sample data')) ?>
+                        </label>
                         <span id="chartEditorSize" class="tabular-nums"></span>
                     </div>
                     <div class="flex-1 overflow-auto p-3 bg-gray-50" id="chartEditorPreview"></div>

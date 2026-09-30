@@ -93,6 +93,18 @@ final class ChartSpec
      */
     public const LEGENDS = ['above', 'below', 'left'];
 
+    /**
+     * Letak baris jam di papan.
+     *
+     *   bottom — di dasar papan, di bawah panel terakhir
+     *   none   — tidak ada di dasar; panel yang memintanya yang memuatnya
+     *
+     * Tiap panel punya saklarnya sendiri (`time_axis`). Keduanya berdiri
+     * sendiri: lembar partograf lama menaruh jamnya tepat di bawah pembukaan
+     * serviks DAN tidak mengulanginya di dasar, tapi lembar lain mengulang.
+     */
+    public const TIME_AXES = ['bottom', 'none'];
+
     /** @var int */
     private $width;
 
@@ -107,6 +119,9 @@ final class ChartSpec
 
     /** @var int */
     private $labelEvery;
+
+    /** @var string Salah satu dari self::TIME_AXES. */
+    private $timeAxis;
 
     /** @var float Lebar kolom label di kiri kisi. */
     private $left;
@@ -126,6 +141,7 @@ final class ChartSpec
         float $columnWidth,
         string $startField,
         int $labelEvery,
+        string $timeAxis,
         float $left,
         float $panelGap,
         array $panels
@@ -137,6 +153,7 @@ final class ChartSpec
         $this->columnWidth = $columnWidth;
         $this->startField = $startField;
         $this->labelEvery = $labelEvery;
+        $this->timeAxis = $timeAxis;
         $this->panels = $panels;
     }
 
@@ -150,6 +167,7 @@ final class ChartSpec
         $hours = self::readInt($spec, 'hours', 16, 1, 48);
         $columnWidth = self::readFloat($spec, 'column_width', 40.0, 4.0, 400.0);
         $labelEvery = self::readInt($spec, 'label_every', 1, 1, 24);
+        $timeAxis = self::readTimeAxis($spec);
 
         // Kolom label kiri. Bisa diatur karena lembar sungguhan memuat nama
         // baris yang panjang — "Obat dan Cairan IV" tidak muat di 64.
@@ -183,7 +201,17 @@ final class ChartSpec
         $defaultWidth = (int) round($left + ($hours * $columnWidth) + Geometry::RIGHT);
         $width = self::readInt($spec, 'width', $defaultWidth, 120, 4000);
 
-        return new self($width, $hours, $columnWidth, $startField, $labelEvery, $left, $panelGap, $panels);
+        return new self(
+            $width,
+            $hours,
+            $columnWidth,
+            $startField,
+            $labelEvery,
+            $timeAxis,
+            $left,
+            $panelGap,
+            $panels
+        );
     }
 
     /**
@@ -224,6 +252,21 @@ final class ChartSpec
         return $this->labelEvery;
     }
 
+    /** Letak baris jam di dasar papan: 'bottom' atau 'none'. */
+    public function timeAxis(): string
+    {
+        return $this->timeAxis;
+    }
+
+    /** Ruang di bawah panel terakhir, ikut ada-tidaknya baris jam di situ. */
+    public function bottomSpace(): float
+    {
+        $last = $this->panels[count($this->panels) - 1] ?? null;
+        $ada = $this->timeAxis === 'bottom' || ($last !== null && $last['time_axis']);
+
+        return $ada ? Geometry::BOTTOM : Geometry::BOTTOM_BARE;
+    }
+
     public function left(): float
     {
         return $this->left;
@@ -257,7 +300,15 @@ final class ChartSpec
         $perlu = $panel['legend'] === 'above'
             || ($sebelumnya !== null && $sebelumnya['legend'] === 'below');
 
-        return $perlu ? max($this->panelGap, 12.0) : $this->panelGap;
+        $gap = $perlu ? max($this->panelGap, 12.0) : $this->panelGap;
+
+        // Panel sebelumnya yang memuat baris jam menulisnya di ruang ini.
+        // Tanpa tambahan itu, angka jamnya jatuh di atas kisi panel ini.
+        if ($sebelumnya !== null && $sebelumnya['time_axis']) {
+            $gap += Geometry::HOUR_ROW;
+        }
+
+        return $gap;
     }
 
     /** @return array<int,array<string,mixed>> */
@@ -280,7 +331,7 @@ final class ChartSpec
             $height += (float) $panel['height'] + ($i === 0 ? 0.0 : $this->gapBefore($i));
         }
 
-        return $height + Geometry::BOTTOM;
+        return $height + $this->bottomSpace();
     }
 
     /**
@@ -409,6 +460,9 @@ final class ChartSpec
             'y_max' => $max,
             'y_step' => $step,
             'y_axis' => !$isCell && (!isset($panel['y_axis']) || (bool) $panel['y_axis']),
+            // Baris jam di bawah panel ini. Mati kecuali diminta: papan yang
+            // mengulang jamnya di tiap panel terbaca sebagai kisi, bukan data.
+            'time_axis' => isset($panel['time_axis']) && (bool) $panel['time_axis'],
             'grid' => !isset($panel['grid']) || (bool) $panel['grid'],
             'sub_columns' => self::readInt($panel, 'sub_columns', 1, 1, 12),
             'legend' => self::readLegend($panel, $position),
@@ -541,6 +595,31 @@ final class ChartSpec
      *
      * @throws ValidationException
      */
+    /**
+     * @param array<string,mixed> $spec
+     *
+     * @throws ValidationException
+     */
+    private static function readTimeAxis(array $spec): string
+    {
+        if (!isset($spec['time_axis']) || $spec['time_axis'] === true || $spec['time_axis'] === '') {
+            return 'bottom';
+        }
+        if ($spec['time_axis'] === false) {
+            return 'none';
+        }
+
+        $axis = (string) $spec['time_axis'];
+        if (!in_array($axis, self::TIME_AXES, true)) {
+            throw new ValidationException(
+                "Letak baris jam '{$axis}' tidak dikenal (pilihannya "
+                . implode(', ', self::TIME_AXES) . ').'
+            );
+        }
+
+        return $axis;
+    }
+
     private static function readLegend(array $panel, int $position): ?string
     {
         if (!isset($panel['legend']) || $panel['legend'] === false || $panel['legend'] === '') {

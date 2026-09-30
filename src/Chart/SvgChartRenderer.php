@@ -107,7 +107,9 @@ final class SvgChartRenderer
             $svg .= $this->panel($spec, $scale, $values, $i, $panel);
         }
 
-        $svg .= $this->hourLabels($spec, $scale);
+        if ($spec->timeAxis() === 'bottom') {
+            $svg .= $this->hourRow($spec, $scale, $spec->height() - Geometry::BOTTOM + 12);
+        }
         $svg .= '</svg>';
 
         return $svg;
@@ -179,6 +181,12 @@ final class SvgChartRenderer
         $verticals = $panel['verticals'];
         foreach ($verticals as $vertical) {
             $out .= $this->vertical($scale, $values, $vertical, $top, $bottom);
+        }
+
+        // Baris jam milik panel ini ditulis di ruang antar panel, yang sudah
+        // dilebarkan {@see ChartSpec::gapBefore()} sebanyak satu baris.
+        if ((bool) $panel['time_axis']) {
+            $out .= $this->hourRow($spec, $scale, $bottom + 11);
         }
 
         return $out;
@@ -707,13 +715,20 @@ final class SvgChartRenderer
             . '" r="3.2" fill="#ffffff" stroke="' . $color . '" stroke-width="1.4"/>';
     }
 
-    private function hourLabels(ChartSpec $spec, Scale $scale): string
+    /**
+     * Satu baris angka jam pada ketinggian tertentu.
+     *
+     * Ketinggiannya diminta pemanggil, bukan dihitung di sini: barisnya bisa
+     * berdiri di dasar papan atau tepat di bawah satu panel, dan lembar
+     * partograf lama memakai yang kedua — jam ditulis di bawah pembukaan
+     * serviks, tempat orang benar-benar membacanya.
+     */
+    private function hourRow(ChartSpec $spec, Scale $scale, float $y): string
     {
         if (!$scale->hasStart()) {
             return '';
         }
 
-        $y = $spec->height() - Geometry::BOTTOM + 12;
         $out = '';
         for ($column = 0; $column <= $spec->hours(); $column += $spec->labelEvery()) {
             $out .= '<text x="' . self::num($scale->xFromHour((float) $column)) . '" y="' . self::num($y)
