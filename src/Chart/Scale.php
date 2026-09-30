@@ -146,6 +146,27 @@ final class Scale
     }
 
     /**
+     * Tempat tegak dasar bidang terisi di sebuah panel.
+     *
+     * Nol kalau nol ada di dalam jangkauan sumbunya; kalau tidak, tepi yang
+     * paling dekat dengan nol. Bidang cairan masuk terisi dari 0 ke atas;
+     * bidang suhu 35–40 terisi dari 35, bukan dari nol yang letaknya jauh di
+     * luar panel.
+     */
+    public function baselineY(int $panelIndex): ?float
+    {
+        $panels = $this->spec->panels();
+        if (!isset($panels[$panelIndex])) {
+            return null;
+        }
+
+        $min = (float) $panels[$panelIndex]['y_min'];
+        $max = (float) $panels[$panelIndex]['y_max'];
+
+        return $this->y($panelIndex, max($min, min($max, 0.0)));
+    }
+
+    /**
      * Label jam pada kolom ke-n. Kosong kalau awal sumbunya belum diketahui.
      *
      * Kosong, bukan jam hari ini. Perender harus menghasilkan gambar yang sama

@@ -5034,7 +5034,11 @@
             ['circle', 'Lingkaran'], ['dot', 'Titik'], ['cross', 'Silang'], ['square', 'Kotak'],
             ['diamond', 'Wajik'], ['triangle-up', 'Segitiga naik'], ['triangle-down', 'Segitiga turun'],
         ];
-        const CHART_GAMBAR = [['point+line', 'Titik + garis'], ['point', 'Titik saja'], ['line', 'Garis saja']];
+        const CHART_GAMBAR = [
+            ['point+line', 'Titik + garis'], ['point', 'Titik saja'], ['line', 'Garis saja'],
+            ['point+step', 'Titik + tangga'], ['step', 'Tangga saja'],
+            ['point+area', 'Titik + arsiran'], ['area', 'Arsiran saja'],
+        ];
         const CHART_ISIAN = [['solid', 'Penuh'], ['hatch', 'Arsir'], ['dots', 'Titik-titik'], ['empty', 'Kosong']];
         const CHART_LEGENDA = [['', 'Tidak ada'], ['above', 'Di atas'], ['below', 'Di bawah'], ['left', 'Di kiri']];
         const CHART_GAYA = [['solid', 'Utuh'], ['dashed', 'Putus-putus']];

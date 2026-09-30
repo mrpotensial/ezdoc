@@ -537,6 +537,26 @@ final class PengaturChartTest extends TestCase
         );
     }
 
+    /**
+     * Tangga dan arsiran bisa dipilih di penyunting.
+     *
+     * Perender menerimanya sejak fase 2, tapi cara gambar yang cuma bisa
+     * diminta dengan mengetik JSON sama saja dengan tidak ada — dan formulir
+     * ini justru dibuat supaya JSON tidak perlu diketik.
+     */
+    public function testTheNewDrawModesAreOfferedInTheForm(): void
+    {
+        $skrip = self::skrip();
+
+        foreach (['point+step', 'step', 'point+area', 'area'] as $draw) {
+            self::assertSame(
+                1,
+                preg_match("/\['" . preg_quote($draw, '/') . "', '/", $skrip),
+                'cara gambar ' . $draw . ' tidak ditawarkan formulirnya'
+            );
+        }
+    }
+
     /** Semua kalimatnya ada di kedua bahasa. */
     public function testEveryLabelExistsInBothLanguages(): void
     {

@@ -517,6 +517,59 @@ final class SvgChartRenderer
     }
 
     /**
+     * Titik-titik sebuah tangga, dari titik-titik biasa.
+     *
+     * Bentuknya *step-after*: nilai berlaku dari waktunya sampai waktu
+     * berikutnya, lalu berubah tegak lurus. Tiap pasangan (a, b) jadi tiga
+     * simpul: a, sudut di (x-b, y-a), lalu b.
+     *
+     * Bukan *step-before* dan bukan tangga yang berubah di tengah. Yang
+     * digambar lembar pemantauan adalah "20 tetes/menit **sejak** pukul 08",
+     * dan perubahannya terjadi pada saat yang dicatat — bukan sebelumnya,
+     * bukan separuh jalan.
+     *
+     * @param array<int,array{0:float,1:float}> $segment
+     * @return array<int,array{0:float,1:float}>
+     */
+    private static function stepPoints(array $segment): array
+    {
+        $keluar = [];
+        foreach ($segment as $i => $xy) {
+            if ($i > 0) {
+                $keluar[] = [$xy[0], $segment[$i - 1][1]];
+            }
+            $keluar[] = $xy;
+        }
+
+        return $keluar;
+    }
+
+    /**
+     * Bidang terisi di bawah sebuah segmen garis.
+     *
+     * `fill-opacity` dipakai sungguhan, bukan warna muda yang dihitung
+     * sendiri: diuji langsung pada Dompdf 3.1.5 + php-svg-lib 30 Sep 2026 dan
+     * hasilnya persis sesuai hitungan — `#cc0000` pada 0,25 di atas putih
+     * terbaca `(242, 191, 191)`. Lihat `docs/260930-grafik-jenis-baru.md` §3.
+     *
+     * @param array<int,array{0:float,1:float}> $segment
+     */
+    private function areaShape(array $segment, float $baseline, string $color): string
+    {
+        // Tanpa penjaga "kurang dari dua titik": segmen dikumpulkan pemanggil
+        // dan yang berisi satu titik tidak pernah sampai ke sini. Penjaga yang
+        // tidak bisa dijangkau siapa pun tidak bisa diuji, dan yang tidak bisa
+        // diuji akan salah tanpa ketahuan begitu keadaannya berubah.
+        $d = 'M' . self::num($segment[0][0]) . ' ' . self::num($baseline) . ' ';
+        foreach ($segment as $xy) {
+            $d .= 'L' . self::num($xy[0]) . ' ' . self::num($xy[1]) . ' ';
+        }
+        $d .= 'L' . self::num($segment[count($segment) - 1][0]) . ' ' . self::num($baseline) . ' Z';
+
+        return '<path d="' . $d . '" fill="' . $color . '" fill-opacity="0.22" stroke="none"/>';
+    }
+
+    /**
      * Garis tegak penanda waktu, dengan kotak jamnya di bawah.
      *
      * @param array<string,mixed> $values
@@ -656,17 +709,36 @@ final class SvgChartRenderer
 
         $out = '';
 
-        if ($draw === 'point+line' || $draw === 'line') {
+        $tangga = $draw === 'step' || $draw === 'point+step';
+        $bidang = $draw === 'area' || $draw === 'point+area';
+        $bergaris = $bidang || $tangga || $draw === 'point+line' || $draw === 'line';
+
+        if ($bidang) {
+            // Bidang digambar LEBIH DULU supaya garis dan titiknya tetap di
+            // atas. Digambar sesudahnya, bidang setengah tembus akan
+            // memudarkan garisnya sendiri.
+            $dasar = $scale->baselineY($index);
+            if ($dasar !== null) {
+                foreach ($segments as $segment) {
+                    $out .= $this->areaShape($segment, $dasar, $color);
+                }
+            }
+        }
+
+        if ($bergaris) {
             foreach ($segments as $segment) {
+                $titik = $tangga ? self::stepPoints($segment) : $segment;
+
                 $d = '';
-                foreach ($segment as $i => $xy) {
+                foreach ($titik as $i => $xy) {
                     $d .= ($i === 0 ? 'M' : 'L') . self::num($xy[0]) . ' ' . self::num($xy[1]) . ' ';
                 }
                 $out .= '<path d="' . rtrim($d) . '" fill="none" stroke="' . $color . '" stroke-width="1.4"/>';
             }
         }
 
-        if ($draw === 'point+line' || $draw === 'point') {
+        if ($draw === 'point+line' || $draw === 'point'
+            || $draw === 'point+step' || $draw === 'point+area') {
             foreach ($placed as $xy) {
                 $out .= $this->marker((string) $series['marker'], $xy[0], $xy[1], $color);
             }

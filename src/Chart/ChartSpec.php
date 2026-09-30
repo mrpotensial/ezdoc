@@ -75,7 +75,27 @@ final class ChartSpec
     /** Jenis yang isinya satu baris sel, bukan bidang bersumbu Y. */
     public const CELL_TYPES = ['symbol', 'text'];
 
-    public const DRAWS = ['point+line', 'point', 'line'];
+    /**
+     * Cara sebuah deret digambar.
+     *
+     *   point+line — titik dihubungkan garis lurus (bawaan)
+     *   point      — titik saja
+     *   line       — garis saja
+     *   point+step — **tangga**: nilai bertahan sampai diubah
+     *   step       — tangga tanpa titik
+     *   point+area — garis dengan bidang terisi sampai dasar
+     *   area       — bidang terisi tanpa titik
+     *
+     * Tangga bukan hiasan. Untuk tetes/menit, dosis, dan aliran oksigen,
+     * garis lurus menggambarkan perubahan bertahap yang tidak pernah terjadi:
+     * yang sebenarnya 20 sampai pukul 10, lalu 40. Dokumennya lalu
+     * memperlihatkan nilai yang tidak pernah disetel siapa pun.
+     */
+    public const DRAWS = [
+        'point+line', 'point', 'line',
+        'point+step', 'step',
+        'point+area', 'area',
+    ];
 
     public const MARKERS = ['circle', 'cross', 'square', 'dot', 'diamond', 'triangle-up', 'triangle-down'];
 
