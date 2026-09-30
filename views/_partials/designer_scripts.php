@@ -2896,6 +2896,15 @@
                                 id = el.getAttribute('data-ttd') || '';
                                 if (id) { type = 'ttd'; break; }
                             }
+                            if (el.classList.contains('chart-placeholder')) {
+                                // Papan grafik tampil sebagai kotak seukuran
+                                // cetakannya — besar, dan tanpa ini kelihatan
+                                // seperti gambar mati. Naluri pertama orang
+                                // mengkliknya; kliknya harus membuka
+                                // pengaturannya, sama seperti elemen lain.
+                                id = el.getAttribute('data-chart') || '';
+                                if (id) { type = 'chart'; break; }
+                            }
                             if (el.classList.contains('materai-placeholder')) {
                                 id = el.getAttribute('data-materai') || '';
                                 if (id) { type = 'materai'; break; }
@@ -4532,6 +4541,7 @@
             const SEKSI = {
                 field: 'field', ttd: 'ttd', materai: 'materai',
                 logo: 'logo', qr: 'qr', cond: 'cond', marker: 'marker',
+                chart: 'chart',
             };
 
             function terapkan() {
@@ -4676,6 +4686,7 @@
                 logo:    'logoList',
                 qr:      'qrList',
                 cond:    'condList',
+                chart:   'chartList',
             };
             const listId = PANEL_MAP[type];
             if (!listId) return;
@@ -5034,7 +5045,9 @@
                     return n + ((p && Array.isArray(p.series)) ? p.series.length : 0);
                 }, 0);
 
-                return '<div class="border border-gray-200 rounded-md mb-2 p-2" data-chart-item="' + escapeHtml(c.id) + '">'
+                return '<div class="border border-gray-200 rounded-md mb-2 p-2"'
+                    + ' data-chart-item="' + escapeHtml(c.id) + '"'
+                    + ' data-focus-target="chart:' + escapeHtml(c.id) + '">'
                     + '<div class="flex justify-between items-center mb-1">'
                     + '<span class="text-xs font-medium text-gray-700">' + escapeHtml(judul) + '</span>'
                     + '<span class="text-[10px] text-gray-500">' + panels.length + ' panel &middot; ' + deret + ' deret</span>'
