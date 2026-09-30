@@ -123,28 +123,11 @@ final class SvgChartRenderer
     {
         $top = $scale->top($index);
         $bottom = $top + (float) $panel['height'];
-        $left = Geometry::LEFT;
+        $left = $spec->left();
         $right = $scale->xFromHour((float) $spec->hours());
+        $type = (string) $panel['type'];
 
-        $out = '';
-
-        if ((bool) $panel['grid']) {
-            $out .= '<g stroke="' . self::GRID_COLOR . '" stroke-width="0.5">';
-            for ($column = 0; $column <= $spec->hours(); $column++) {
-                $x = $scale->xFromHour((float) $column);
-                $out .= '<line x1="' . self::num($x) . '" y1="' . self::num($top)
-                    . '" x2="' . self::num($x) . '" y2="' . self::num($bottom) . '"/>';
-            }
-            foreach ($this->ticks($panel) as $value) {
-                $y = $scale->y($index, $value);
-                if ($y === null) {
-                    continue;
-                }
-                $out .= '<line x1="' . self::num($left) . '" y1="' . self::num($y)
-                    . '" x2="' . self::num($right) . '" y2="' . self::num($y) . '"/>';
-            }
-            $out .= '</g>';
-        }
+        $out = $this->grid($spec, $scale, $index, $panel, $top, $bottom, $left, $right);
 
         // Bingkai panel digambar terpisah dari kisinya, dengan garis lebih
         // tegas: batas sumbu harus terbaca sebagai batas, bukan sebagai salah
@@ -153,22 +136,22 @@ final class SvgChartRenderer
             . '" width="' . self::num($right - $left) . '" height="' . self::num($bottom - $top)
             . '" fill="none" stroke="' . self::AXIS_COLOR . '" stroke-width="1"/>';
 
-        foreach ($this->ticks($panel) as $value) {
-            $y = $scale->y($index, $value);
-            if ($y === null) {
-                continue;
+        if ((bool) $panel['y_axis']) {
+            foreach ($this->ticks($panel) as $value) {
+                $y = $scale->y($index, $value);
+                if ($y === null) {
+                    continue;
+                }
+                $out .= '<text x="' . self::num($left - 6) . '" y="' . self::num($y + 3)
+                    . '" font-family="' . self::FONT . '" font-size="8" fill="' . self::TEXT_COLOR
+                    . '" text-anchor="end">' . self::text(self::num($value)) . '</text>';
             }
-            $out .= '<text x="' . self::num($left - 6) . '" y="' . self::num($y + 3)
-                . '" font-family="' . self::FONT . '" font-size="8" fill="' . self::TEXT_COLOR
-                . '" text-anchor="end">' . self::text(self::num($value)) . '</text>';
         }
 
-        $title = (string) $panel['title'];
-        if ($title !== '') {
-            $middle = $top + (((float) $panel['height']) / 2);
-            $out .= '<g transform="translate(' . self::num($left - 40) . ' ' . self::num($middle) . ') rotate(-90)">'
-                . '<text x="0" y="0" font-family="' . self::FONT . '" font-size="9" fill="' . self::TEXT_COLOR
-                . '" text-anchor="middle">' . self::text($title) . '</text></g>';
+        $out .= $this->title($panel, $left, $top, $bottom);
+
+        if ((bool) $panel['legend']) {
+            $out .= $this->legend($panel, $left, $top);
         }
 
         /** @var array<int,array<string,mixed>> $references */
@@ -177,14 +160,327 @@ final class SvgChartRenderer
             $out .= $this->reference($scale, $index, $reference);
         }
 
-        /** @var array<int,array<string,mixed>> $series */
-        $series = $panel['series'];
-        foreach ($series as $one) {
-            $name = (string) $one['field'];
-            $out .= $this->series($scale, $index, $one, SeriesValues::parse($values[$name] ?? null));
+        if ($type === 'bar') {
+            $out .= $this->bars($spec, $scale, $values, $index, $panel, $bottom);
+        } elseif (in_array($type, ChartSpec::CELL_TYPES, true)) {
+            $out .= $this->cells($spec, $scale, $values, $panel, $top, $bottom, $type);
+        } else {
+            /** @var array<int,array<string,mixed>> $series */
+            $series = $panel['series'];
+            foreach ($series as $one) {
+                $name = (string) $one['field'];
+                $out .= $this->series($scale, $index, $one, SeriesValues::parse($values[$name] ?? null));
+            }
+        }
+
+        // Garis tegak digambar paling akhir supaya terlihat di atas isinya —
+        // ia penanda waktu, bukan salah satu pengukuran.
+        /** @var array<int,array<string,mixed>> $verticals */
+        $verticals = $panel['verticals'];
+        foreach ($verticals as $vertical) {
+            $out .= $this->vertical($scale, $values, $vertical, $top, $bottom);
         }
 
         return $out;
+    }
+
+    /**
+     * Kisi panel, termasuk garis halus di antara jam kalau diminta.
+     *
+     * @param array<string,mixed> $panel
+     */
+    private function grid(
+        ChartSpec $spec,
+        Scale $scale,
+        int $index,
+        array $panel,
+        float $top,
+        float $bottom,
+        float $left,
+        float $right
+    ): string {
+        if (!(bool) $panel['grid']) {
+            return '';
+        }
+
+        $out = '<g stroke="' . self::GRID_COLOR . '" stroke-width="0.5">';
+
+        $sub = (int) $panel['sub_columns'];
+        $total = $spec->hours() * $sub;
+        for ($i = 0; $i <= $total; $i++) {
+            $x = $scale->xFromHour($i / $sub);
+            $out .= '<line x1="' . self::num($x) . '" y1="' . self::num($top)
+                . '" x2="' . self::num($x) . '" y2="' . self::num($bottom) . '"/>';
+        }
+
+        if ((bool) $panel['y_axis']) {
+            foreach ($this->ticks($panel) as $value) {
+                $y = $scale->y($index, $value);
+                if ($y === null) {
+                    continue;
+                }
+                $out .= '<line x1="' . self::num($left) . '" y1="' . self::num($y)
+                    . '" x2="' . self::num($right) . '" y2="' . self::num($y) . '"/>';
+            }
+        }
+
+        return $out . '</g>';
+    }
+
+    /**
+     * Judul panel — mendatar di kolom kiri, atau berdiri.
+     *
+     * Baris setinggi 22 tidak bisa memuat tulisan berdiri, dan panel setinggi
+     * 200 tidak bisa memuat "Obat dan Cairan IV" mendatar di kolom selebar itu.
+     * Karena itu letaknya mengikuti tingginya, bukan satu aturan untuk semua.
+     *
+     * @param array<string,mixed> $panel
+     */
+    private function title(array $panel, float $left, float $top, float $bottom): string
+    {
+        $title = (string) $panel['title'];
+        if ($title === '') {
+            return '';
+        }
+
+        $middle = $top + (($bottom - $top) / 2);
+
+        if ((string) $panel['title_align'] === 'left') {
+            return '<text x="' . self::num($left - 6) . '" y="' . self::num($middle + 3)
+                . '" font-family="' . self::FONT . '" font-size="8" fill="' . self::TEXT_COLOR
+                . '" text-anchor="end">' . self::text($title) . '</text>';
+        }
+
+        return '<g transform="translate(' . self::num($left - 40) . ' ' . self::num($middle) . ') rotate(-90)">'
+            . '<text x="0" y="0" font-family="' . self::FONT . '" font-size="9" fill="' . self::TEXT_COLOR
+            . '" text-anchor="middle">' . self::text($title) . '</text></g>';
+    }
+
+    /**
+     * Legenda satu baris di atas panel: tanda tiap deret, lalu garis acuannya.
+     *
+     * @param array<string,mixed> $panel
+     */
+    private function legend(array $panel, float $left, float $top): string
+    {
+        $x = $left + 6;
+        $y = $top - 4;
+        $out = '';
+
+        /** @var array<int,array<string,mixed>> $series */
+        $series = $panel['series'];
+        foreach ($series as $one) {
+            $label = (string) ($one['title'] !== '' ? $one['title'] : $one['field']);
+            $out .= $this->marker((string) $one['marker'], $x + 4, $y - 3, self::attr((string) $one['color']));
+            $out .= '<text x="' . self::num($x + 11) . '" y="' . self::num($y)
+                . '" font-family="' . self::FONT . '" font-size="8" fill="' . self::TEXT_COLOR
+                . '">' . self::text($label) . '</text>';
+            $x += 18 + (strlen($label) * 4.6);
+        }
+
+        /** @var array<int,array<string,mixed>> $references */
+        $references = $panel['references'];
+        foreach ($references as $reference) {
+            $label = (string) $reference['label'];
+            if ($label === '') {
+                continue;
+            }
+            $dash = $reference['style'] === 'dashed' ? ' stroke-dasharray="4 2"' : '';
+            $out .= '<line x1="' . self::num($x) . '" y1="' . self::num($y - 3)
+                . '" x2="' . self::num($x + 14) . '" y2="' . self::num($y - 3)
+                . '" stroke="' . self::attr((string) $reference['color']) . '" stroke-width="1.4"' . $dash . '/>';
+            $out .= '<text x="' . self::num($x + 18) . '" y="' . self::num($y)
+                . '" font-family="' . self::FONT . '" font-size="8" fill="' . self::TEXT_COLOR
+                . '">' . self::text($label) . '</text>';
+            $x += 24 + (strlen($label) * 4.6);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Batang per kolom — tingginya dari deret pertama, isiannya dari kedua.
+     *
+     * @param array<string,mixed> $values
+     * @param array<string,mixed> $panel
+     */
+    private function bars(
+        ChartSpec $spec,
+        Scale $scale,
+        array $values,
+        int $index,
+        array $panel,
+        float $bottom
+    ): string {
+        /** @var array<int,array<string,mixed>> $series */
+        $series = $panel['series'];
+        if ($series === []) {
+            return '';
+        }
+
+        $heightField = (string) $series[0]['field'];
+        $points = SeriesValues::parse($values[$heightField] ?? null);
+
+        $styleByTime = [];
+        if (isset($series[1])) {
+            foreach (SeriesValues::parse($values[(string) $series[1]['field']] ?? null) as $point) {
+                $styleByTime[$point['x']] = (string) $point['y'];
+            }
+        }
+
+        /** @var array<string,string> $levels */
+        $levels = $panel['levels'];
+        $color = self::attr((string) $series[0]['color']);
+        $width = $spec->columnWidth() * 0.6;
+        $out = '';
+
+        foreach ($points as $point) {
+            $x = $scale->x($point['x']);
+            $y = $scale->y($index, $point['y']);
+            if ($x === null || $y === null) {
+                continue;
+            }
+
+            // Nilainya milik KOLOM yang dimulai pada jam itu, bukan titik di
+            // garisnya — batang yang berdiri di atas garis jam terbaca sebagai
+            // milik dua kolom sekaligus.
+            $barX = $x + (($spec->columnWidth() - $width) / 2);
+            $fill = $levels[$styleByTime[$point['x']] ?? ''] ?? 'solid';
+            $out .= $this->barShape($barX, $y, $width, $bottom - $y, $fill, $color);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Satu batang, dengan isian yang diminta.
+     *
+     * Arsiran digambar sebagai kumpulan `<line>`, bukan `<pattern>`: pattern
+     * tergambar hitam pekat di Dompdf, dan gagalnya tidak terlihat — kotaknya
+     * tetap muncul, cuma ketiga tingkat jadi sama.
+     */
+    private function barShape(float $x, float $y, float $width, float $height, string $fill, string $color): string
+    {
+        if ($height <= 0) {
+            return '';
+        }
+
+        $rect = '<rect x="' . self::num($x) . '" y="' . self::num($y)
+            . '" width="' . self::num($width) . '" height="' . self::num($height)
+            . '" fill="' . ($fill === 'solid' ? $color : 'none')
+            . '" stroke="' . $color . '" stroke-width="0.8"/>';
+
+        if ($fill === 'hatch') {
+            $isi = '<g stroke="' . $color . '" stroke-width="0.8">';
+
+            // Garis miring 45°, dipotong sendiri di dalam kotaknya supaya tidak
+            // butuh clip-path — dukungannya tidak dijamin php-svg-lib.
+            //
+            // Tiap garis memenuhi u + v = c dalam koordinat lokal kotak (u ke
+            // kanan, v ke bawah). Ujungnya didapat dengan memotong c ke
+            // [0,lebar] dan [0,tinggi], bukan dengan menebak — versi pertama
+            // menebak, dan arsirnya menyebar seperti kipas dari satu sudut.
+            for ($c = 4.0; $c < $width + $height; $c += 4.0) {
+                $u1 = max(0.0, $c - $height);
+                $u2 = min($width, $c);
+                if ($u2 <= $u1) {
+                    continue;
+                }
+                $isi .= '<line x1="' . self::num($x + $u1) . '" y1="' . self::num($y + ($c - $u1))
+                    . '" x2="' . self::num($x + $u2) . '" y2="' . self::num($y + ($c - $u2)) . '"/>';
+            }
+
+            return $rect . $isi . '</g>';
+        }
+
+        if ($fill === 'dots') {
+            $isi = '<g fill="' . $color . '">';
+            for ($dy = 3.0; $dy < $height; $dy += 4.0) {
+                for ($dx = 3.0; $dx < $width; $dx += 4.0) {
+                    $isi .= '<circle cx="' . self::num($x + $dx) . '" cy="' . self::num($y + $dy) . '" r="0.7"/>';
+                }
+            }
+
+            return $rect . $isi . '</g>';
+        }
+
+        return $rect;
+    }
+
+    /**
+     * Baris sel berisi huruf atau teks pendek, satu per kolom.
+     *
+     * @param array<string,mixed> $values
+     * @param array<string,mixed> $panel
+     */
+    private function cells(
+        ChartSpec $spec,
+        Scale $scale,
+        array $values,
+        array $panel,
+        float $top,
+        float $bottom,
+        string $type
+    ): string {
+        /** @var array<int,array<string,mixed>> $series */
+        $series = $panel['series'];
+        $middle = $top + (($bottom - $top) / 2) + 3;
+        $size = $type === 'symbol' ? 9 : 7;
+        $out = '';
+
+        foreach ($series as $one) {
+            $color = self::attr((string) $one['color']);
+            foreach (SeriesValues::parse($values[(string) $one['field']] ?? null) as $point) {
+                $x = $scale->x($point['x']);
+                if ($x === null) {
+                    continue;
+                }
+                $out .= '<text x="' . self::num($x + ($spec->columnWidth() / 2)) . '" y="' . self::num($middle)
+                    . '" font-family="' . self::FONT . '" font-size="' . $size . '" fill="' . $color
+                    . '" text-anchor="middle">' . self::text((string) $point['y']) . '</text>';
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Garis tegak penanda waktu, dengan kotak jamnya di bawah.
+     *
+     * @param array<string,mixed> $values
+     * @param array<string,mixed> $vertical
+     */
+    private function vertical(Scale $scale, array $values, array $vertical, float $top, float $bottom): string
+    {
+        $raw = $values[(string) $vertical['at_field']] ?? null;
+        if (!is_scalar($raw)) {
+            return '';
+        }
+        $time = SeriesValues::normaliseTime((string) $raw);
+        if ($time === null) {
+            return '';
+        }
+        $x = $scale->x($time);
+        if ($x === null) {
+            return '';
+        }
+
+        $color = self::attr((string) $vertical['color']);
+        $out = '<line x1="' . self::num($x) . '" y1="' . self::num($top)
+            . '" x2="' . self::num($x) . '" y2="' . self::num($bottom)
+            . '" stroke="' . $color . '" stroke-width="1"/>';
+
+        if (!(bool) $vertical['label']) {
+            return $out;
+        }
+
+        $jam = substr($time, 11, 5);
+
+        return $out . '<rect x="' . self::num($x - 15) . '" y="' . self::num($bottom - 9)
+            . '" width="30" height="10" fill="' . $color . '"/>'
+            . '<text x="' . self::num($x) . '" y="' . self::num($bottom - 1.5)
+            . '" font-family="' . self::FONT . '" font-size="7" fill="#ffffff" text-anchor="middle">'
+            . self::text($jam) . '</text>';
     }
 
     /**
@@ -222,12 +518,28 @@ final class SvgChartRenderer
         }
 
         $dash = $reference['style'] === 'dashed' ? ' stroke-dasharray="5 3"' : '';
+        $x1 = $scale->xFromHour((float) $reference['x1']);
+        $x2 = $scale->xFromHour((float) $reference['x2']);
 
-        return '<line x1="' . self::num($scale->xFromHour((float) $reference['x1']))
-            . '" y1="' . self::num($y1)
-            . '" x2="' . self::num($scale->xFromHour((float) $reference['x2']))
-            . '" y2="' . self::num($y2)
+        $out = '<line x1="' . self::num($x1) . '" y1="' . self::num($y1)
+            . '" x2="' . self::num($x2) . '" y2="' . self::num($y2)
             . '" stroke="' . self::attr((string) $reference['color']) . '" stroke-width="1.2"' . $dash . '/>';
+
+        $label = (string) $reference['label'];
+        if (!(bool) $reference['label_on_line'] || $label === '') {
+            return $out;
+        }
+
+        // Ditulis MIRING mengikuti garisnya, seperti "WASPADA" di lembar
+        // aslinya. Sudutnya dihitung dari garis itu sendiri, bukan ditebak:
+        // garis acuan boleh selandai atau securam apa pun.
+        $sudut = rad2deg(atan2($y2 - $y1, $x2 - $x1));
+
+        return $out . '<g transform="translate(' . self::num(($x1 + $x2) / 2) . ' '
+            . self::num((($y1 + $y2) / 2) - 3) . ') rotate(' . self::num($sudut) . ')">'
+            . '<text x="0" y="0" font-family="' . self::FONT . '" font-size="9" font-weight="bold" fill="'
+            . self::attr((string) $reference['color']) . '" text-anchor="middle" letter-spacing="2">'
+            . self::text($label) . '</text></g>';
     }
 
     /**
@@ -241,13 +553,18 @@ final class SvgChartRenderer
 
         /** @var array<int,array{0:float,1:float}> $placed */
         $placed = [];
+        /** @var array<int,array{0:float,1:float}> $labelled Tempat titik, menurut urutan aslinya. */
+        $labelled = [];
         /** @var array<int,array<int,array{0:float,1:float}>> $segments */
         $segments = [];
         $current = [];
 
-        foreach ($points as $point) {
+        foreach ($points as $i => $point) {
             $x = $scale->x($point['x']);
             $y = $scale->y($index, $point['y']);
+            if ($x !== null && $y !== null) {
+                $labelled[$i] = [$x, $y];
+            }
             if ($x === null || $y === null) {
                 // Titik yang tidak tergambar memutus garisnya, bukan
                 // dilompati: garis lurus yang melewati pengukuran yang hilang
@@ -283,6 +600,20 @@ final class SvgChartRenderer
             }
         }
 
+        // Angka di sebelah titiknya, kalau diminta. Di lembar pemantauan
+        // sungguhan nilainya ditulis: 140 dan 148 terlalu dekat untuk
+        // dibedakan dari tingginya saja.
+        if ((bool) $series['labels']) {
+            foreach ($points as $i => $point) {
+                if (!isset($labelled[$i])) {
+                    continue;
+                }
+                $out .= '<text x="' . self::num($labelled[$i][0]) . '" y="' . self::num($labelled[$i][1] - 6)
+                    . '" font-family="' . self::FONT . '" font-size="7" fill="' . $color
+                    . '" text-anchor="middle">' . self::text((string) $point['y']) . '</text>';
+            }
+        }
+
         return $out;
     }
 
@@ -295,6 +626,15 @@ final class SvgChartRenderer
         if ($marker === 'square') {
             return '<rect x="' . self::num($x - 3) . '" y="' . self::num($y - 3)
                 . '" width="6" height="6" fill="none" stroke="' . $color . '" stroke-width="1.4"/>';
+        }
+
+        if ($marker === 'triangle-up' || $marker === 'triangle-down') {
+            $arah = $marker === 'triangle-up' ? -1 : 1;
+            $titik = self::num($x) . ' ' . self::num($y + (4 * $arah)) . ' '
+                . self::num($x - 3.5) . ' ' . self::num($y - (3 * $arah)) . ' '
+                . self::num($x + 3.5) . ' ' . self::num($y - (3 * $arah));
+
+            return '<polygon points="' . $titik . '" fill="' . $color . '"/>';
         }
 
         if ($marker === 'cross') {

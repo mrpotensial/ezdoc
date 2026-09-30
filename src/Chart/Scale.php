@@ -45,8 +45,11 @@ final class Scale
 
         $top = Geometry::TOP;
         foreach ($spec->panels() as $i => $panel) {
+            if ($i > 0) {
+                $top += $spec->gapBefore($i);
+            }
             $this->tops[$i] = $top;
-            $top += (float) $panel['height'] + Geometry::PANEL_GAP;
+            $top += (float) $panel['height'];
         }
     }
 
@@ -80,7 +83,7 @@ final class Scale
     /** Tempat mendatar sebuah jam ke-n sejak awal sumbu. */
     public function xFromHour(float $hour): float
     {
-        return Geometry::LEFT + ($hour * $this->spec->columnWidth());
+        return $this->spec->left() + ($hour * $this->spec->columnWidth());
     }
 
     /**
@@ -173,6 +176,7 @@ final class Scale
         $panels = [];
         foreach ($this->spec->panels() as $i => $panel) {
             $panels[] = [
+                'type' => (string) $panel['type'],
                 'top' => $this->tops[$i],
                 'height' => (float) $panel['height'],
                 'y_min' => (float) $panel['y_min'],
@@ -182,7 +186,7 @@ final class Scale
         }
 
         return [
-            'left' => Geometry::LEFT,
+            'left' => $this->spec->left(),
             'column_width' => $this->spec->columnWidth(),
             'hours' => $this->spec->hours(),
             'start' => $this->start === null ? null : $this->start->format(SeriesValues::TIME_FORMAT),

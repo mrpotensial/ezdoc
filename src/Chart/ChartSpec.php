@@ -58,14 +58,31 @@ use Ezdoc\Exceptions\ValidationException;
  */
 final class ChartSpec
 {
-    /** Satu-satunya jenis panel yang sudah ada. Sisanya menyusul. */
-    public const TYPES = ['line'];
+    /**
+     * Jenis panel.
+     *
+     *   line   — titik dan garis di atas sumbu Y berangka
+     *   bar    — batang per kolom, tingginya dari deret pertama
+     *   symbol — satu baris sel; isinya huruf atau angka pendek per kolom
+     *   text   — sama seperti symbol, untuk teks yang lebih panjang
+     *
+     * `symbol` dan `text` digambar jalur yang sama; yang membedakan cuma
+     * ukuran hurufnya. Dua nama dipertahankan karena penulis spesifikasi
+     * memikirkan keduanya sebagai hal berbeda — "U/J/M/K" bukan "Tidak ada".
+     */
+    public const TYPES = ['line', 'bar', 'symbol', 'text'];
+
+    /** Jenis yang isinya satu baris sel, bukan bidang bersumbu Y. */
+    public const CELL_TYPES = ['symbol', 'text'];
 
     public const DRAWS = ['point+line', 'point', 'line'];
 
-    public const MARKERS = ['circle', 'cross', 'square', 'dot'];
+    public const MARKERS = ['circle', 'cross', 'square', 'dot', 'triangle-up', 'triangle-down'];
 
     public const STYLES = ['solid', 'dashed'];
+
+    /** Cara isian batang digambar. Lihat catatan `<pattern>` di perender. */
+    public const FILLS = ['solid', 'hatch', 'dots', 'empty'];
 
     /** @var int */
     private $width;
@@ -82,6 +99,12 @@ final class ChartSpec
     /** @var int */
     private $labelEvery;
 
+    /** @var float Lebar kolom label di kiri kisi. */
+    private $left;
+
+    /** @var float Jarak bawaan antar panel bertumpuk. */
+    private $panelGap;
+
     /** @var array<int,array<string,mixed>> */
     private $panels;
 
@@ -94,8 +117,12 @@ final class ChartSpec
         float $columnWidth,
         string $startField,
         int $labelEvery,
+        float $left,
+        float $panelGap,
         array $panels
     ) {
+        $this->left = $left;
+        $this->panelGap = $panelGap;
         $this->width = $width;
         $this->hours = $hours;
         $this->columnWidth = $columnWidth;
@@ -114,6 +141,15 @@ final class ChartSpec
         $hours = self::readInt($spec, 'hours', 16, 1, 48);
         $columnWidth = self::readFloat($spec, 'column_width', 40.0, 4.0, 400.0);
         $labelEvery = self::readInt($spec, 'label_every', 1, 1, 24);
+
+        // Kolom label kiri. Bisa diatur karena lembar sungguhan memuat nama
+        // baris yang panjang — "Obat dan Cairan IV" tidak muat di 64.
+        $left = self::readFloat($spec, 'left', Geometry::LEFT, 24.0, 400.0);
+
+        // Jarak antar panel. Lembar pemantauan sungguhan menempelkan barisnya
+        // rapat — tiga belas panel berjarak 14 memakan seperempat halaman
+        // untuk ruang kosong.
+        $panelGap = self::readFloat($spec, 'panel_gap', Geometry::PANEL_GAP, 0.0, 80.0);
 
         $startField = isset($spec['start_field']) ? (string) $spec['start_field'] : '';
         if ($startField !== '' && preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $startField) !== 1) {
@@ -135,10 +171,10 @@ final class ChartSpec
 
         // Lebar bawaan mengikuti isinya, supaya spesifikasi terkecil pun
         // menghasilkan papan yang pas — bukan papan lebar dengan kisi menggantung.
-        $defaultWidth = (int) round(Geometry::LEFT + ($hours * $columnWidth) + Geometry::RIGHT);
+        $defaultWidth = (int) round($left + ($hours * $columnWidth) + Geometry::RIGHT);
         $width = self::readInt($spec, 'width', $defaultWidth, 120, 4000);
 
-        return new self($width, $hours, $columnWidth, $startField, $labelEvery, $panels);
+        return new self($width, $hours, $columnWidth, $startField, $labelEvery, $left, $panelGap, $panels);
     }
 
     /**
@@ -179,6 +215,35 @@ final class ChartSpec
         return $this->labelEvery;
     }
 
+    public function left(): float
+    {
+        return $this->left;
+    }
+
+    public function panelGap(): float
+    {
+        return $this->panelGap;
+    }
+
+    /**
+     * Jarak sebelum panel ke-n.
+     *
+     * Panel berlegenda butuh ruang lebih: legendanya ditulis DI ATAS panel,
+     * dan dengan jarak rapat ia akan menimpa panel di atasnya.
+     */
+    public function gapBefore(int $index): float
+    {
+        $panel = $this->panels[$index] ?? null;
+        if ($panel === null) {
+            return $this->panelGap;
+        }
+        if ($panel['gap_before'] !== null) {
+            return (float) $panel['gap_before'];
+        }
+
+        return (bool) $panel['legend'] ? max($this->panelGap, 12.0) : $this->panelGap;
+    }
+
     /** @return array<int,array<string,mixed>> */
     public function panels(): array
     {
@@ -195,11 +260,11 @@ final class ChartSpec
     public function height(): float
     {
         $height = Geometry::TOP;
-        foreach ($this->panels as $panel) {
-            $height += (float) $panel['height'] + Geometry::PANEL_GAP;
+        foreach ($this->panels as $i => $panel) {
+            $height += (float) $panel['height'] + ($i === 0 ? 0.0 : $this->gapBefore($i));
         }
 
-        return $height - Geometry::PANEL_GAP + Geometry::BOTTOM;
+        return $height + Geometry::BOTTOM;
     }
 
     /**
@@ -221,6 +286,11 @@ final class ChartSpec
             $series = $panel['series'];
             foreach ($series as $one) {
                 $names[] = (string) $one['field'];
+            }
+            /** @var array<int,array<string,mixed>> $verticals */
+            $verticals = $panel['verticals'];
+            foreach ($verticals as $one) {
+                $names[] = (string) $one['at_field'];
             }
         }
 
@@ -244,9 +314,11 @@ final class ChartSpec
             );
         }
 
+        $isCell = in_array($type, self::CELL_TYPES, true);
+
         $y = isset($panel['y']) && is_array($panel['y']) ? $panel['y'] : [];
         $min = self::readFloat($y, 'min', 0.0, -100000.0, 100000.0);
-        $max = self::readFloat($y, 'max', 10.0, -100000.0, 100000.0);
+        $max = self::readFloat($y, 'max', $isCell ? 1.0 : 10.0, -100000.0, 100000.0);
         if ($max <= $min) {
             throw new ValidationException("Panel ke-{$position}: sumbu Y max harus di atas min.");
         }
@@ -279,14 +351,50 @@ final class ChartSpec
             $references[] = self::readReference($one, $position, $i + 1);
         }
 
+        $verticals = [];
+        $rawVerticals = isset($panel['verticals']) && is_array($panel['verticals']) ? $panel['verticals'] : [];
+        foreach (array_values($rawVerticals) as $i => $one) {
+            if (!is_array($one)) {
+                throw new ValidationException("Panel ke-{$position}, garis tegak ke-" . ($i + 1) . ' bukan objek.');
+            }
+            $verticals[] = self::readVertical($one, $position, $i + 1);
+        }
+
+        $levels = [];
+        $rawLevels = isset($panel['levels']) && is_array($panel['levels']) ? $panel['levels'] : [];
+        foreach ($rawLevels as $value => $fill) {
+            if (!in_array((string) $fill, self::FILLS, true)) {
+                throw new ValidationException(
+                    "Panel ke-{$position}: isian batang '" . (string) $fill . "' tidak dikenal."
+                );
+            }
+            $levels[(string) $value] = (string) $fill;
+        }
+
+        // Baris sel setinggi 200 adalah salah ketik, bukan pilihan. Bawaannya
+        // dibedakan supaya spesifikasi terkecil pun menghasilkan baris, bukan
+        // bidang kosong setinggi sepuluh sentimeter.
+        $defaultHeight = $isCell ? 22.0 : 200.0;
+
         return [
             'type' => $type,
             'title' => isset($panel['title']) ? (string) $panel['title'] : '',
-            'height' => self::readFloat($panel, 'height', 200.0, 30.0, 2000.0),
+            // Judul panel tipis ditulis mendatar di kolom kiri; panel tinggi
+            // memakai tulisan berdiri karena mendatar tidak akan muat.
+            'title_align' => self::readTitleAlign($panel, $isCell, $defaultHeight, $position),
+            'height' => self::readFloat($panel, 'height', $defaultHeight, 12.0, 2000.0),
             'y_min' => $min,
             'y_max' => $max,
             'y_step' => $step,
+            'y_axis' => !$isCell && (!isset($panel['y_axis']) || (bool) $panel['y_axis']),
             'grid' => !isset($panel['grid']) || (bool) $panel['grid'],
+            'sub_columns' => self::readInt($panel, 'sub_columns', 1, 1, 12),
+            'legend' => isset($panel['legend']) && (bool) $panel['legend'],
+            'gap_before' => isset($panel['gap_before']) && $panel['gap_before'] !== ''
+                ? self::readFloat($panel, 'gap_before', 0.0, 0.0, 200.0)
+                : null,
+            'levels' => $levels,
+            'verticals' => $verticals,
             'references' => $references,
             'series' => $series,
         ];
@@ -326,6 +434,10 @@ final class ChartSpec
             'title' => isset($series['title']) ? (string) $series['title'] : '',
             'draw' => $draw,
             'marker' => $marker,
+            // Angka di sebelah titiknya. Di lembar pemantauan sungguhan nilainya
+            // ditulis, bukan cuma dititikkan — 140 dan 148 terlalu dekat untuk
+            // dibedakan dari tingginya saja.
+            'labels' => isset($series['labels']) && (bool) $series['labels'],
             'color' => self::readColor($series, 'color', '#cc0000', $panelPosition, $position),
         ];
     }
@@ -360,8 +472,64 @@ final class ChartSpec
             'y2' => (float) $to[1],
             'style' => $style,
             'label' => isset($reference['label']) ? (string) $reference['label'] : '',
+            // Nama yang ditulis MIRING mengikuti garisnya, seperti "WASPADA"
+            // di lembar aslinya. Tanpa ini namanya cuma ada di legenda, dan
+            // garis mana yang mana harus ditebak.
+            'label_on_line' => isset($reference['label_on_line']) && (bool) $reference['label_on_line'],
             'color' => self::readColor($reference, 'color', '#333333', $panelPosition, $position),
         ];
+    }
+
+    /**
+     * Garis tegak pada satu waktu — "sekarang", atau saat apa pun yang ditandai.
+     *
+     * Waktunya datang dari sebuah field, bukan dari jam dinding: yang ditandai
+     * harus ikut tersimpan bersama dokumennya, dan harus sama tiap kali
+     * dokumen itu digambar ulang.
+     *
+     * @param array<string,mixed> $vertical
+     * @return array<string,mixed>
+     *
+     * @throws ValidationException
+     */
+    private static function readVertical(array $vertical, int $panelPosition, int $position): array
+    {
+        $field = isset($vertical['at_field']) ? (string) $vertical['at_field'] : '';
+        if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $field) !== 1) {
+            throw new ValidationException(
+                "Panel ke-{$panelPosition}, garis tegak ke-{$position}: nama field tidak sah ('{$field}')."
+            );
+        }
+
+        return [
+            'at_field' => $field,
+            'label' => !isset($vertical['label']) || (bool) $vertical['label'],
+            'color' => self::readColor($vertical, 'color', '#cc0000', $panelPosition, $position),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $panel
+     *
+     * @throws ValidationException
+     */
+    private static function readTitleAlign(array $panel, bool $isCell, float $defaultHeight, int $position): string
+    {
+        $height = self::readFloat($panel, 'height', $defaultHeight, 12.0, 2000.0);
+        $default = ($isCell || $height < 60) ? 'left' : 'rotated';
+
+        if (!isset($panel['title_align']) || $panel['title_align'] === '') {
+            return $default;
+        }
+
+        $align = (string) $panel['title_align'];
+        if (!in_array($align, ['left', 'rotated'], true)) {
+            throw new ValidationException(
+                "Panel ke-{$position}: letak judul '{$align}' tidak dikenal (pilihannya left atau rotated)."
+            );
+        }
+
+        return $align;
     }
 
     // ── Pembaca nilai yang memberi tahu, bukan diam ───────────────────────

@@ -120,8 +120,8 @@ final class ChartSpecTest extends TestCase
                 ['panels' => [['series' => [['field' => '2 nilai']]]]],
                 'nama field tidak sah',
             ],
-            'jenis panel belum ada' => [
-                ['panels' => [['type' => 'bar', 'series' => [['field' => 'a']]]]],
+            'jenis panel tidak dikenal' => [
+                ['panels' => [['type' => 'pai', 'series' => [['field' => 'a']]]]],
                 'berjenis',
             ],
             'sumbu y terbalik' => [

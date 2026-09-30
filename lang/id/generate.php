@@ -251,6 +251,7 @@ return [
         'identity_required_for_save' => 'NORM & Nopen wajib diisi dulu untuk save',
     ],
     'chart' => [
+            'ask_cell'            => 'Isi kolom ini',
             'stale'               => 'Gambar grafiknya belum terbarui — angkanya sudah tersimpan',
     ],
     'modal' => [

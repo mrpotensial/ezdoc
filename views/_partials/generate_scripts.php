@@ -1693,7 +1693,16 @@
             return scale.left + (jam * scale.column_width);
         }
 
+        function ezChartSel(panel) {
+            return panel && (panel.type === 'symbol' || panel.type === 'text');
+        }
+
         function ezChartY(panel, nilai) {
+            // Baris sel tidak punya sumbu Y: isinya huruf, dan tempatnya selalu
+            // di tengah barisnya. Memaksakan angka ke situ membuat pegangan
+            // pengukuran yang sudah ada tidak pernah muncul.
+            if (ezChartSel(panel)) return panel.top + (panel.height / 2);
+
             const n = parseFloat(nilai);
             if (!isFinite(n) || n < panel.y_min || n > panel.y_max) return null;
             return panel.top + (((panel.y_max - n) / (panel.y_max - panel.y_min)) * panel.height);
@@ -1708,6 +1717,12 @@
 
             const jam = (px - scale.left) / scale.column_width;
             if (jam < 0 || jam > scale.hours) return null;
+
+            // Baris sel diisi huruf. Klik di situ menanyakan isinya; menaruh
+            // angka hasil hitungan sumbu akan mengisi "Air Ketuban" dengan 0,4.
+            if (ezChartSel(panel)) {
+                return { panel: iPanel, x: ezChartWaktuKolom(scale, jam), y: null, tanya: true };
+            }
 
             const langkah = panel.y_step || 1;
             let nilai = panel.y_max - (((py - panel.top) / panel.height) * (panel.y_max - panel.y_min));
@@ -1730,6 +1745,14 @@
                 x: ezChartWaktuKeTeks(ezChartBulatkanWaktu(mulai + (jam * 3600000))),
                 y: nilai
             };
+        }
+
+        /** Jam awal kolom yang diklik — isi sel selalu milik satu kolom penuh. */
+        function ezChartWaktuKolom(scale, jam) {
+            let mulai = ezChartTeksKeWaktu(scale.start);
+            if (mulai === null) mulai = ezChartBulatkanWaktu(Date.now()) - (jam * 3600000);
+
+            return ezChartWaktuKeTeks(mulai + (Math.floor(jam) * 3600000));
         }
 
         function ezChartPanelDi(scale, py) {
@@ -1780,9 +1803,12 @@
                 (panel.series || []).forEach(function (deret, iDeret) {
                     const titik = keadaan.nilai[deret.field] || [];
                     titik.forEach(function (t, iTitik) {
-                        const x = ezChartX(keadaan.scale, t.x);
+                        let x = ezChartX(keadaan.scale, t.x);
                         const y = ezChartY(skalaPanel, t.y);
                         if (x === null || y === null) return;
+                        // Isi sel milik KOLOM yang dimulai pada jam itu, bukan
+                        // garis jamnya — sama dengan cara server menggambarnya.
+                        if (ezChartSel(skalaPanel)) x += keadaan.scale.column_width / 2;
 
                         const pegangan = document.createElement('div');
                         pegangan.className = 'ez-chart-handle';
@@ -1835,6 +1861,10 @@
                 const baru = ezChartDariTempat(keadaan, ev.clientX - kotak.left, ev.clientY - kotak.top);
                 const field = pegangan.dataset.field;
                 const i = parseInt(pegangan.dataset.index, 10);
+                if (baru && baru.tanya) {
+                    // Isi sel digeser ke kolom lain, isinya ikut apa adanya.
+                    baru.y = keadaan.nilai[field][i].y;
+                }
                 if (!baru || !keadaan.nilai[field] || !keadaan.nilai[field][i]) {
                     ezChartGambarUlang(keadaan);
                     return;
@@ -1868,6 +1898,24 @@
                 if (!deret) return;
 
                 const field = deret.field;
+                if (baru.tanya) {
+                    const adaSebelumnya = (keadaan.nilai[field] || [])
+                        .filter(function (t) { return t.x === baru.x; })[0];
+                    const jawab = window.prompt(
+                        t('chart.ask_cell', {}, 'Value for this column'),
+                        adaSebelumnya ? String(adaSebelumnya.y) : ''
+                    );
+                    if (jawab === null) return;
+                    baru.y = jawab.trim();
+                    if (baru.y === '') {
+                        // Dikosongkan berarti dihapus, bukan disimpan sebagai
+                        // sel kosong yang tidak bisa dibedakan dari belum diisi.
+                        keadaan.nilai[field] = (keadaan.nilai[field] || [])
+                            .filter(function (t) { return t.x !== baru.x; });
+                        ezChartSimpan(keadaan);
+                        return;
+                    }
+                }
                 keadaan.nilai[field] = keadaan.nilai[field] || [];
                 // Satu waktu satu nilai — yang sama ditimpa, bukan ditumpuk.
                 const adaDi = keadaan.nilai[field].findIndex(function (t) { return t.x === baru.x; });

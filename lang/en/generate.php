@@ -226,6 +226,7 @@ return [
         'identity_required_for_save' => 'NORM & Nopen must be filled in before saving',
     ],
     'chart' => [
+            'ask_cell' => 'Value for this column',
             'stale' => 'Chart image is out of date — the values are saved',
     ],
     'modal' => [

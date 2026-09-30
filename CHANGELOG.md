@@ -6,6 +6,43 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — partograf utuh: panel batang, simbol, dan teks (2026-09-29)**
+
+Pemakai mengirim hasil cetak `form_partograf_cetak.php` yang sesungguhnya, lalu
+bertanya "memang belum lengkap kah grafiknya?". Dari sepuluh baris di lembar
+itu, dua yang bisa digambar. Sekarang semuanya.
+
+Fase 4 dari `docs/260929-grafik-terisi.md`. Tidak ada rancangan yang berubah —
+semuanya jenis panel dan tanda baru di dalam bentuk papan yang sudah ada.
+
+- **Panel `bar`** dengan tiga tingkat isian: `solid`, `hatch`, `dots`. Arsirnya
+  disusun dari `<line>`, bukan `<pattern>` — pattern tergambar hitam pekat di
+  Dompdf dan gagalnya tidak terlihat, jadi ketiga tingkat kontraksi akan
+  tercetak sama.
+- **Panel `symbol` dan `text`** — satu baris sel, isinya huruf atau teks pendek
+  per kolom. Air ketuban, penyusupan, oksitosin, obat, suhu, urine.
+- **Tanda `triangle-up` dan `triangle-down`** untuk tekanan darah.
+- **Angka di sebelah titik** (`labels: true`) — 140 dan 148 terlalu dekat untuk
+  dibedakan dari tingginya saja.
+- **Nama garis acuan ditulis miring mengikuti garisnya** (`label_on_line`).
+  Sudutnya dihitung dari garis itu sendiri, jadi mengubah kemiringannya tidak
+  membuat tulisannya meleset.
+- **Garis tegak penanda waktu** (`verticals`), waktunya dari sebuah field —
+  bukan dari jam dinding, karena yang ditandai harus ikut tersimpan.
+- **Legenda satu baris** di atas panel.
+- **`left`, `panel_gap`, `gap_before`, `sub_columns`** — tiga belas panel
+  berjarak 14 memakan seperempat halaman untuk ruang kosong, dan "Obat dan
+  Cairan IV" tidak muat di kolom label selebar 64.
+- Di halaman dokumen, **baris sel diisi lewat pertanyaan singkat**, bukan
+  dengan menaruh angka hasil hitungan sumbu: mengklik "Air Ketuban" tidak boleh
+  mengisinya dengan 0,4.
+- Contoh baru: `contoh/partograf/` — 13 panel, satu halaman A4.
+
+Satu cacat ditemukan saat melihat hasil cetaknya: arsiran batang menyebar
+seperti kipas dari satu sudut, bukan garis 45° sejajar. Tergambar, terlihat
+"berarsir", dan salah. Ujung tiap garis sekarang dihitung dari `u + v = c`,
+bukan ditebak.
+
 **Added — papan grafik yang diisi di atas lembar cetaknya (2026-09-29)**
 
 Diminta pemakai: "apa bisa buat grafik yang bisa di isi juga ya?", lalu
