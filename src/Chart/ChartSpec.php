@@ -123,6 +123,9 @@ final class ChartSpec
     /** @var string Salah satu dari self::TIME_AXES. */
     private $timeAxis;
 
+    /** @var XAxis Sumbu mendatar, belum berawal. */
+    private $axis;
+
     /** @var float Lebar kolom label di kiri kisi. */
     private $left;
 
@@ -142,6 +145,7 @@ final class ChartSpec
         string $startField,
         int $labelEvery,
         string $timeAxis,
+        XAxis $axis,
         float $left,
         float $panelGap,
         array $panels
@@ -154,6 +158,7 @@ final class ChartSpec
         $this->startField = $startField;
         $this->labelEvery = $labelEvery;
         $this->timeAxis = $timeAxis;
+        $this->axis = $axis;
         $this->panels = $panels;
     }
 
@@ -164,7 +169,14 @@ final class ChartSpec
      */
     public static function fromArray(array $spec): self
     {
-        $hours = self::readInt($spec, 'hours', 16, 1, 48);
+        $axis = self::readAxis($spec);
+
+        // `hours` namanya menyesatkan begitu satuannya bukan jam, tapi ia ada
+        // di tiap papan yang sudah tersimpan. `columns` dibaca duluan; `hours`
+        // tetap jadi cadangan selamanya.
+        $x = isset($spec['x']) && is_array($spec['x']) ? $spec['x'] : [];
+        $kolomMentah = $x['columns'] ?? $spec['columns'] ?? $spec['hours'] ?? null;
+        $hours = self::readInt(['columns' => $kolomMentah], 'columns', 16, 1, self::maxColumns($axis));
         $columnWidth = self::readFloat($spec, 'column_width', 40.0, 4.0, 400.0);
         $labelEvery = self::readInt($spec, 'label_every', 1, 1, 24);
         $timeAxis = self::readTimeAxis($spec);
@@ -208,6 +220,7 @@ final class ChartSpec
             $startField,
             $labelEvery,
             $timeAxis,
+            $axis,
             $left,
             $panelGap,
             $panels
@@ -252,19 +265,65 @@ final class ChartSpec
         return $this->labelEvery;
     }
 
+    /** Sumbu mendatar papan ini, belum berawal. */
+    public function axis(): XAxis
+    {
+        return $this->axis;
+    }
+
+    /**
+     * Salinan papan ini dengan sumbu mendatar yang lain.
+     *
+     * Satu-satunya jalan memakai sumbu selain waktu, dan sengaja lewat kode,
+     * bukan lewat spesifikasi: bentuk sumbu berangka belum diputuskan, dan
+     * spesifikasi tersimpan yang telanjur memakainya akan mengikat keputusan
+     * itu. Dipakai {@see \Ezdoc\Tests\Chart\PapanSumbuNilaiTest} untuk
+     * membuktikan {@see XAxis} benar-benar muat untuk yang bukan waktu.
+     */
+    public function withAxis(XAxis $axis): self
+    {
+        $salinan = clone $this;
+        $salinan->axis = $axis;
+
+        return $salinan;
+    }
+
+    /**
+     * Jumlah kolom di sumbu mendatar.
+     *
+     * {@see self::hours()} nama lamanya, dari masa satu kolom selalu satu jam.
+     */
+    public function columns(): int
+    {
+        return $this->hours;
+    }
+
     /** Letak baris jam di dasar papan: 'bottom' atau 'none'. */
     public function timeAxis(): string
     {
         return $this->timeAxis;
     }
 
-    /** Ruang di bawah panel terakhir, ikut ada-tidaknya baris jam di situ. */
+    /**
+     * Ruang di bawah panel terakhir, ikut ada-tidaknya baris jam di situ.
+     *
+     * Kalau panel terakhir memuat barisnya SENDIRI dan dasar papan juga, ada
+     * DUA baris — dan tanpa ruang tambahan keduanya jatuh berdekatan lalu
+     * saling menimpa. Ketahuannya waktu membaca hasil cetak papan rantai
+     * dingin: tanggalnya terbaca kabur, seolah gambarnya buram, padahal dua
+     * baris angka tertulis tujuh piksel berjauhan.
+     */
     public function bottomSpace(): float
     {
         $last = $this->panels[count($this->panels) - 1] ?? null;
-        $ada = $this->timeAxis === 'bottom' || ($last !== null && $last['time_axis']);
+        $barisPanel = $last !== null && $last['time_axis'];
+        $barisDasar = $this->timeAxis === 'bottom';
 
-        return $ada ? Geometry::BOTTOM : Geometry::BOTTOM_BARE;
+        if ($barisPanel && $barisDasar) {
+            return Geometry::BOTTOM + Geometry::HOUR_ROW;
+        }
+
+        return ($barisPanel || $barisDasar) ? Geometry::BOTTOM : Geometry::BOTTOM_BARE;
     }
 
     public function left(): float
@@ -595,6 +654,58 @@ final class ChartSpec
      *
      * @throws ValidationException
      */
+    /**
+     * Batas atas jumlah kolom, ikut satuan sumbunya.
+     *
+     * Satu angka untuk semua satuan pasti salah di salah satu ujungnya: 48
+     * masuk akal untuk jam dan menyesakkan untuk hari, sedangkan 400 masuk
+     * akal untuk hari dan tidak berarti apa-apa untuk jam. Batas ini bukan
+     * penjaga lebar halaman — itu tugas ringkasan "muat di halaman" — cuma
+     * penangkal spesifikasi yang jelas salah ketik.
+     */
+    private static function maxColumns(XAxis $axis): int
+    {
+        if ($axis instanceof TimeAxis) {
+            $batas = ['hour' => 168, 'day' => 400, 'month' => 240];
+
+            return $batas[$axis->unit()] ?? 168;
+        }
+
+        return 400;
+    }
+
+    /**
+     * Sumbu mendatar papan ini, belum berawal.
+     *
+     * Bentuk barunya `{"x": {"kind": "time", "unit": "day"}}`. Bentuk lama
+     * tanpa kunci `x` sama saja dengan sumbu jam — dan tiap papan yang sudah
+     * tersimpan berbentuk begitu.
+     *
+     * Hanya `time` yang terdaftar. {@see ValueAxis} ada dan diuji, tapi tidak
+     * bisa diminta dari spesifikasi: bentuk sumbu berangka belum diputuskan,
+     * dan spesifikasi yang telanjur memakainya akan mengikat keputusan itu.
+     *
+     * @param array<string,mixed> $spec
+     *
+     * @throws ValidationException
+     */
+    private static function readAxis(array $spec): XAxis
+    {
+        $x = isset($spec['x']) && is_array($spec['x']) ? $spec['x'] : [];
+
+        $kind = isset($x['kind']) ? (string) $x['kind'] : 'time';
+        if ($kind !== 'time') {
+            throw new ValidationException(
+                "Jenis sumbu X '{$kind}' belum didukung (yang ada: time)."
+            );
+        }
+
+        $unit = (string) ($x['unit'] ?? $spec['unit'] ?? 'hour');
+        $format = (string) ($x['label_format'] ?? $spec['label_format'] ?? '');
+
+        return TimeAxis::create($unit, $format);
+    }
+
     /**
      * @param array<string,mixed> $spec
      *

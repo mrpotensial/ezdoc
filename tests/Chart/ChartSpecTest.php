@@ -141,8 +141,21 @@ final class ChartSpecTest extends TestCase
                 'dua angka',
             ],
             'jam di luar jangkauan' => [
-                ['hours' => 99] + ['panels' => [['series' => [['field' => 'a']]]]],
+                ['hours' => 999] + ['panels' => [['series' => [['field' => 'a']]]]],
                 'jangkauan',
+            ],
+            'hari di luar jangkauan' => [
+                ['x' => ['unit' => 'day'], 'columns' => 999]
+                    + ['panels' => [['series' => [['field' => 'a']]]]],
+                'jangkauan',
+            ],
+            'jenis sumbu belum ada' => [
+                ['x' => ['kind' => 'kategori']] + ['panels' => [['series' => [['field' => 'a']]]]],
+                'belum didukung',
+            ],
+            'satuan sumbu tidak dikenal' => [
+                ['x' => ['unit' => 'minggu']] + ['panels' => [['series' => [['field' => 'a']]]]],
+                'tidak dikenal',
             ],
             'jam bukan angka' => [
                 ['hours' => 'enam belas'] + ['panels' => [['series' => [['field' => 'a']]]]],

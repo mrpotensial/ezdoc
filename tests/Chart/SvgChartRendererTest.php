@@ -341,4 +341,29 @@ final class SvgChartRendererTest extends TestCase
         self::assertSame(0, preg_match('/\d\.\d{3,}/', $svg), 'ada angka dengan lebih dari dua desimal');
         self::assertSame(0, preg_match('/="-0"/', $svg), 'ada nol bertanda minus');
     }
+
+    /**
+     * Tidak ada spasi sesudah koma di nama font.
+     *
+     * php-svg-lib tidak membaca daftar berkoma yang berspasi dan jatuh ke
+     * huruf berkait. Selama berbulan-bulan label grafik tercetak berkait
+     * sementara di layar tak berkait, dan tidak ada yang curiga: gambarnya
+     * muncul, cuma rupanya berbeda di tempat yang jarang dibandingkan
+     * berdampingan.
+     *
+     * Diuji enam ejaan pada Dompdf 3.1.5 + php-svg-lib, 30 Sep 2026 — lihat
+     * `docs/260930-grafik-jenis-baru.md` §3. Yang dijaga di sini keluarannya,
+     * bukan tetapannya: nama tetapan boleh berubah, syaratnya tidak.
+     */
+    public function testFontNamesCarryNoSpaceAfterTheComma(): void
+    {
+        $svg = (new SvgChartRenderer())->render(self::spec(), self::values());
+
+        self::assertGreaterThan(0, substr_count($svg, 'font-family='), 'tidak ada teks sama sekali');
+        self::assertSame(
+            0,
+            preg_match_all('/font-family="[^"]*,\s/', $svg),
+            'ada spasi sesudah koma — label grafiknya akan tercetak berkait'
+        );
+    }
 }

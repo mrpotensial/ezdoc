@@ -5040,6 +5040,7 @@
         const CHART_GAYA = [['solid', 'Utuh'], ['dashed', 'Putus-putus']];
         const CHART_JUDUL = [['left', 'Mendatar di kiri'], ['rotated', 'Berdiri']];
         const CHART_BARIS_JAM = [['bottom', 'Di dasar papan'], ['none', 'Tidak ada']];
+        const CHART_SATUAN = [['hour', 'Jam'], ['day', 'Hari'], ['month', 'Bulan']];
 
         /**
          * Panel siap pakai per jenis.
@@ -5183,7 +5184,8 @@
                 + '<div class="border border-gray-200 rounded-md p-2 mb-3">'
                 + '<div class="text-xs font-medium text-gray-700 mb-2">' + escapeHtml(t('chart.board_section', {}, 'Board')) + '</div>'
                 + '<div class="grid grid-cols-3 gap-2">'
-                + fNum('hours', t('chart.hours', {}, 'Hours'), spec.hours == null ? 16 : spec.hours)
+                + fNum('columns', t('chart.columns', {}, 'Columns'), spec.columns == null ? 16 : spec.columns)
+                + fSelect('x.unit', t('chart.unit', {}, 'Column unit'), chartSatuan(spec), CHART_SATUAN)
                 + fNum('column_width', t('chart.column_width', {}, 'Column width'), spec.column_width == null ? 40 : spec.column_width)
                 + fNum('left', t('chart.left', {}, 'Left column'), spec.left == null ? 64 : spec.left)
                 + fNum('panel_gap', t('chart.panel_gap', {}, 'Panel gap'), spec.panel_gap == null ? 14 : spec.panel_gap)
@@ -5209,6 +5211,28 @@
 
             wadah.innerHTML = html;
             wadah.scrollTop = gulir;
+        }
+
+        /** Satuan kolom papan ini. Bentuk lama tanpa `x` berarti jam. */
+        function chartSatuan(spec) {
+            return (spec.x && spec.x.unit) || spec.unit || 'hour';
+        }
+
+        /**
+         * `hours` jadi `columns` begitu papannya dibuka.
+         *
+         * Namanya menyesatkan begitu satuannya bukan jam, tapi ia ada di tiap
+         * papan yang sudah tersimpan. Yang dibaca server tetap keduanya
+         * selamanya; yang dipindah cuma yang lewat penyunting, sekali, supaya
+         * tab JSON tidak memperlihatkan dua kunci untuk satu hal.
+         */
+        function chartPindahKunciLama(spec) {
+            if (spec.hours != null && spec.columns == null) {
+                spec.columns = spec.hours;
+            }
+            delete spec.hours;
+
+            return spec;
         }
 
         /** Satu baris ringkas; isinya baru tampil kalau baris itu yang dibuka. */
@@ -5621,7 +5645,8 @@
             const nilai = {};
             if (spec.start_field) nilai[spec.start_field] = MULAI;
 
-            const jam = Math.max(1, Number(spec.hours) || 16);
+            const jam = Math.max(1, Number(spec.columns == null ? spec.hours : spec.columns) || 16);
+            const satuan = chartSatuan(spec);
             const panels = Array.isArray(spec.panels) ? spec.panels : [];
 
             panels.forEach(function (p) {
@@ -5654,7 +5679,7 @@
                             v = Math.min(max, Math.max(min, v));
                             isi = Math.round(v * 10) / 10;
                         }
-                        titik.push({ x: chartJamKe(MULAI, h), y: isi });
+                        titik.push({ x: chartJamKe(MULAI, h, satuan), y: isi });
                     }
 
                     nilai[d.field] = JSON.stringify(titik);
@@ -5673,14 +5698,23 @@
             return pilihan[Math.floor(acak() * pilihan.length)];
         }
 
-        /** 'YYYY-MM-DD HH:MM' sekian jam sesudah waktu mulai. */
-        function chartJamKe(mulai, jam) {
+        /** 'YYYY-MM-DD HH:MM' sekian kolom sesudah waktu mulai. */
+        function chartJamKe(mulai, kolom, satuan) {
             const t = new Date(mulai.replace(' ', 'T') + ':00');
-            t.setTime(t.getTime() + (jam * 3600000));
+            let hasil;
+
+            if (satuan === 'day') {
+                hasil = new Date(t.getFullYear(), t.getMonth(), t.getDate() + kolom, 0, 0, 0, 0);
+            } else if (satuan === 'month') {
+                hasil = new Date(t.getFullYear(), t.getMonth() + kolom, 1, 0, 0, 0, 0);
+            } else {
+                hasil = new Date(t.getTime() + (kolom * 3600000));
+            }
+
             const dua = function (n) { return (n < 10 ? '0' : '') + n; };
 
-            return t.getFullYear() + '-' + dua(t.getMonth() + 1) + '-' + dua(t.getDate())
-                + ' ' + dua(t.getHours()) + ':' + dua(t.getMinutes());
+            return hasil.getFullYear() + '-' + dua(hasil.getMonth() + 1) + '-' + dua(hasil.getDate())
+                + ' ' + dua(hasil.getHours()) + ':' + dua(hasil.getMinutes());
         }
 
         /**
@@ -5830,7 +5864,7 @@
             const c = configChart[i];
             if (!c) return;
 
-            const spec = JSON.parse(JSON.stringify(c.spec || {}));
+            const spec = chartPindahKunciLama(JSON.parse(JSON.stringify(c.spec || {})));
             chartEditor = {
                 id: c.id,
                 spec: spec,

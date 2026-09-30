@@ -6,6 +6,65 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — sumbu X boleh berjam, berhari, atau berbulan (2026-09-30)**
+
+Satu kolom tidak lagi selalu satu jam. Kunci papan `x`:
+
+```json
+"x": {"kind": "time", "unit": "day"}, "columns": 7
+```
+
+- `unit`: `hour` (bawaan), `day`, `month`.
+- `columns` menggantikan `hours` sebagai nama. **`hours` tetap dibaca
+  selamanya** — membuangnya akan mematikan tiap papan yang sudah tersimpan.
+- `label_format` mengatur tulisan di bawah kolom (bawaan `H:i`, `d/m`,
+  `m/Y`). Angka, bukan nama bulan: nama bulan menuntut locale, dan dua server
+  berlocale beda lalu menghasilkan PDF beda untuk dokumen yang sama.
+- Awal sumbu hari dibulatkan ke tengah malam, awal sumbu bulan ke tanggal 1.
+  Tanpa itu papan yang dimulai 31 Januari tidak punya "satu bulan berikutnya".
+  Sumbu jam tidak dibulatkan — papan yang dimulai 08.30 sudah dipakai.
+
+Bulan **tidak** dihitung dari detik: Februari 28 hari, Januari 31, dan
+keduanya satu bulan. Hari juga tidak, karena hari di zona ber-DST panjangnya
+23 atau 25 jam. Perhitungan yang sama berjalan di PHP dan di peramban, dan
+kesamaannya diuji di dua zona waktu sekaligus — di zona tanpa DST rumus yang
+salah kebetulan benar.
+
+Papan lama tergambar **byte demi byte sama**. Dibandingkan langsung terhadap
+keluaran sebelum perubahan, bukan didalilkan.
+
+**Changed — sumbu X jadi titik sambung, bukan anggapan (2026-09-30)**
+
+Di balik layar, dan alasan sebenarnya pekerjaan ini didahulukan. `SeriesValues`
+dulu memanggil `normaliseTime()` langsung dan dengan itu memutuskan sendiri
+bahwa tiap nilai `x` adalah waktu. Keputusan itu sekarang milik `XAxis`.
+
+Selama anggapan itu tertanam di penyimpanan nilai, grafik sebar bukan
+penambahan melainkan pembongkaran — dan yang dibongkar adalah bentuk nilai
+yang ikut di-hash tanda tangan.
+
+`ValueAxis` sudah ada tapi **tidak bisa diminta dari spesifikasi**: ia ada
+untuk membuktikan antarmukanya benar-benar muat untuk yang bukan waktu, lewat
+satu uji yang menggambar papan dua panel sungguhan ujung ke ujung.
+
+**Fixed — label grafik tercetak berkait (2026-09-30)**
+
+Perender memakai `font-family="Helvetica, Arial, sans-serif"` di setiap teks.
+php-svg-lib tidak membaca daftar berkoma yang **berspasi** dan jatuh ke huruf
+berkait. Akibatnya seluruh label grafik tercetak berkait sementara di layar
+tak berkait — satu perender, dua rupa, dan tidak ada yang curiga karena
+gambarnya tetap muncul.
+
+Ditemukan saat menguji hal lain. Diuji enam ejaan; spasi sesudah komanya yang
+mematikan. Yang dijaga uji keluarannya, bukan tetapannya.
+
+**Fixed — dua baris jam di dasar papan saling menimpa (2026-09-30)**
+
+Panel terakhir yang memuat baris jamnya sendiri, ditambah baris di dasar,
+menghasilkan dua baris angka tujuh piksel berjauhan. Di layar terbaca sebagai
+gambar yang buram, bukan sebagai dua baris. Ketahuan dari membaca hasil cetak,
+bukan dari uji.
+
 **Added — baris jam boleh berdiri di bawah panel mana pun (2026-09-30)**
 
 Diminta pemakai: "misal aku ingin seperti partograf lama kan posisi waktunya

@@ -49,7 +49,17 @@ final class SvgChartRenderer
 
     private const TEXT_COLOR = '#333333';
 
-    private const FONT = 'Helvetica, Arial, sans-serif';
+    /**
+     * Nama font TANPA spasi sesudah koma. Itu syarat, bukan gaya penulisan.
+     *
+     * php-svg-lib tidak membaca daftar berkoma yang berspasi, lalu jatuh ke
+     * huruf berkait — diuji enam ejaan, 30 Sep 2026, lihat
+     * `docs/260930-grafik-jenis-baru.md` §3. Akibatnya label grafik tercetak
+     * berkait sementara di layar tak berkait: satu perender, dua rupa.
+     *
+     * Rantai cadangannya dipertahankan untuk peramban; cuma spasinya dibuang.
+     */
+    private const FONT = 'Helvetica,Arial,sans-serif';
 
     /**
      * Skala papan ini untuk sekumpulan nilai.
@@ -62,11 +72,12 @@ final class SvgChartRenderer
      */
     public function scale(ChartSpec $spec, array $values): Scale
     {
+        $axis = $spec->axis();
         $start = null;
 
         $field = $spec->startField();
         if ($field !== '' && isset($values[$field]) && is_scalar($values[$field])) {
-            $start = SeriesValues::normaliseTime((string) $values[$field]);
+            $start = $axis->normalise((string) $values[$field]);
         }
 
         if ($start === null) {
@@ -79,10 +90,10 @@ final class SvgChartRenderer
                 $series = $panel['series'];
                 foreach ($series as $one) {
                     $name = (string) $one['field'];
-                    $all[] = SeriesValues::parse($values[$name] ?? null);
+                    $all[] = SeriesValues::parse($values[$name] ?? null, $axis);
                 }
             }
-            $start = SeriesValues::earliest($all);
+            $start = SeriesValues::earliest($all, $axis);
         }
 
         return Scale::create($spec, $start);
@@ -108,7 +119,7 @@ final class SvgChartRenderer
         }
 
         if ($spec->timeAxis() === 'bottom') {
-            $svg .= $this->hourRow($spec, $scale, $spec->height() - Geometry::BOTTOM + 12);
+            $svg .= $this->columnRow($spec, $scale, $spec->height() - Geometry::BOTTOM + 12);
         }
         $svg .= '</svg>';
 
@@ -126,7 +137,7 @@ final class SvgChartRenderer
         $top = $scale->top($index);
         $bottom = $top + (float) $panel['height'];
         $left = $spec->left();
-        $right = $scale->xFromHour((float) $spec->hours());
+        $right = $scale->xFromColumn((float) $spec->columns());
         $type = (string) $panel['type'];
 
         $out = $this->grid($spec, $scale, $index, $panel, $top, $bottom, $left, $right);
@@ -171,7 +182,12 @@ final class SvgChartRenderer
             $series = $panel['series'];
             foreach ($series as $one) {
                 $name = (string) $one['field'];
-                $out .= $this->series($scale, $index, $one, SeriesValues::parse($values[$name] ?? null));
+                $out .= $this->series(
+                    $scale,
+                    $index,
+                    $one,
+                    SeriesValues::parse($values[$name] ?? null, $scale->axis())
+                );
             }
         }
 
@@ -186,7 +202,7 @@ final class SvgChartRenderer
         // Baris jam milik panel ini ditulis di ruang antar panel, yang sudah
         // dilebarkan {@see ChartSpec::gapBefore()} sebanyak satu baris.
         if ((bool) $panel['time_axis']) {
-            $out .= $this->hourRow($spec, $scale, $bottom + 11);
+            $out .= $this->columnRow($spec, $scale, $bottom + 11);
         }
 
         return $out;
@@ -214,9 +230,9 @@ final class SvgChartRenderer
         $out = '<g stroke="' . self::GRID_COLOR . '" stroke-width="0.5">';
 
         $sub = (int) $panel['sub_columns'];
-        $total = $spec->hours() * $sub;
+        $total = $spec->columns() * $sub;
         for ($i = 0; $i <= $total; $i++) {
-            $x = $scale->xFromHour($i / $sub);
+            $x = $scale->xFromColumn($i / $sub);
             $out .= '<line x1="' . self::num($x) . '" y1="' . self::num($top)
                 . '" x2="' . self::num($x) . '" y2="' . self::num($bottom) . '"/>';
         }
@@ -374,11 +390,11 @@ final class SvgChartRenderer
         }
 
         $heightField = (string) $series[0]['field'];
-        $points = SeriesValues::parse($values[$heightField] ?? null);
+        $points = SeriesValues::parse($values[$heightField] ?? null, $scale->axis());
 
         $styleByTime = [];
         if (isset($series[1])) {
-            foreach (SeriesValues::parse($values[(string) $series[1]['field']] ?? null) as $point) {
+            foreach (SeriesValues::parse($values[(string) $series[1]['field']] ?? null, $scale->axis()) as $point) {
                 $styleByTime[$point['x']] = (string) $point['y'];
             }
         }
@@ -486,7 +502,7 @@ final class SvgChartRenderer
 
         foreach ($series as $one) {
             $color = self::attr((string) $one['color']);
-            foreach (SeriesValues::parse($values[(string) $one['field']] ?? null) as $point) {
+            foreach (SeriesValues::parse($values[(string) $one['field']] ?? null, $scale->axis()) as $point) {
                 $x = $scale->x($point['x']);
                 if ($x === null) {
                     continue;
@@ -512,7 +528,7 @@ final class SvgChartRenderer
         if (!is_scalar($raw)) {
             return '';
         }
-        $time = SeriesValues::normaliseTime((string) $raw);
+        $time = $scale->axis()->normalise((string) $raw);
         if ($time === null) {
             return '';
         }
@@ -574,8 +590,8 @@ final class SvgChartRenderer
         }
 
         $dash = $reference['style'] === 'dashed' ? ' stroke-dasharray="5 3"' : '';
-        $x1 = $scale->xFromHour((float) $reference['x1']);
-        $x2 = $scale->xFromHour((float) $reference['x2']);
+        $x1 = $scale->xFromColumn((float) $reference['x1']);
+        $x2 = $scale->xFromColumn((float) $reference['x2']);
 
         $out = '<line x1="' . self::num($x1) . '" y1="' . self::num($y1)
             . '" x2="' . self::num($x2) . '" y2="' . self::num($y2)
@@ -723,17 +739,17 @@ final class SvgChartRenderer
      * partograf lama memakai yang kedua — jam ditulis di bawah pembukaan
      * serviks, tempat orang benar-benar membacanya.
      */
-    private function hourRow(ChartSpec $spec, Scale $scale, float $y): string
+    private function columnRow(ChartSpec $spec, Scale $scale, float $y): string
     {
         if (!$scale->hasStart()) {
             return '';
         }
 
         $out = '';
-        for ($column = 0; $column <= $spec->hours(); $column += $spec->labelEvery()) {
-            $out .= '<text x="' . self::num($scale->xFromHour((float) $column)) . '" y="' . self::num($y)
+        for ($column = 0; $column <= $spec->columns(); $column += $spec->labelEvery()) {
+            $out .= '<text x="' . self::num($scale->xFromColumn((float) $column)) . '" y="' . self::num($y)
                 . '" font-family="' . self::FONT . '" font-size="8" fill="' . self::TEXT_COLOR
-                . '" text-anchor="middle">' . self::text($scale->hourLabel($column)) . '</text>';
+                . '" text-anchor="middle">' . self::text($scale->columnLabel($column)) . '</text>';
         }
 
         return $out;

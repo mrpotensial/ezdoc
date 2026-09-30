@@ -185,7 +185,7 @@ if (!function_exists('ezdoc_chart_render_screen')) {
                     $name = (string) $one['field'];
                     $inputs .= '<input type="hidden" name="' . ezdoc_chart_esc($name)
                         . '" data-chart-series="' . ezdoc_chart_esc($name)
-                        . '" value="' . ezdoc_chart_esc(SeriesValues::toJson($values[$name] ?? null)) . '">';
+                        . '" value="' . ezdoc_chart_esc(SeriesValues::toJson($values[$name] ?? null, $spec->axis())) . '">';
                 }
             }
 

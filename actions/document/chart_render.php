@@ -83,7 +83,7 @@ foreach ($spec->panels() as $panel) {
     $series = $panel['series'];
     foreach ($series as $one) {
         $name = (string) $one['field'];
-        $canonical[$name] = SeriesValues::toJson($values[$name] ?? null);
+        $canonical[$name] = SeriesValues::toJson($values[$name] ?? null, $spec->axis());
     }
 }
 

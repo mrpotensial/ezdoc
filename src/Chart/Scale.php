@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Ezdoc\Chart;
 
-use DateTimeImmutable;
-
 /**
  * Pengubah antara angka dan tempatnya di gambar.
  *
@@ -32,16 +30,16 @@ final class Scale
     /** @var ChartSpec */
     private $spec;
 
-    /** @var DateTimeImmutable|null */
-    private $start;
+    /** @var XAxis Sumbu mendatar, sudah berawal kalau awalnya diketahui. */
+    private $axis;
 
     /** @var array<int,float> Puncak tiap panel, searah urutannya di spesifikasi. */
     private $tops = [];
 
-    private function __construct(ChartSpec $spec, ?DateTimeImmutable $start)
+    private function __construct(ChartSpec $spec, XAxis $axis)
     {
         $this->spec = $spec;
-        $this->start = $start;
+        $this->axis = $axis;
 
         $top = Geometry::TOP;
         foreach ($spec->panels() as $i => $panel) {
@@ -54,25 +52,22 @@ final class Scale
     }
 
     /**
-     * @param string|null $start waktu awal sumbu, bentuk {@see SeriesValues::TIME_FORMAT}
+     * @param string|null $start awal sumbu, dalam bentuk yang dimengerti sumbunya
      */
     public static function create(ChartSpec $spec, ?string $start): self
     {
-        $time = null;
-        if ($start !== null) {
-            $normalised = SeriesValues::normaliseTime($start);
-            if ($normalised !== null) {
-                $parsed = DateTimeImmutable::createFromFormat('!' . SeriesValues::TIME_FORMAT, $normalised);
-                $time = $parsed === false ? null : $parsed;
-            }
-        }
+        return new self($spec, $spec->axis()->withOrigin($start));
+    }
 
-        return new self($spec, $time);
+    /** Sumbu mendatar papan ini, beserta awalnya. */
+    public function axis(): XAxis
+    {
+        return $this->axis;
     }
 
     public function hasStart(): bool
     {
-        return $this->start !== null;
+        return $this->axis->hasOrigin();
     }
 
     public function top(int $panelIndex): float
@@ -80,10 +75,22 @@ final class Scale
         return $this->tops[$panelIndex] ?? Geometry::TOP;
     }
 
-    /** Tempat mendatar sebuah jam ke-n sejak awal sumbu. */
+    /**
+     * Tempat mendatar kolom ke-n sejak awal sumbu.
+     *
+     * Perkalian piksel tetap di sini, bukan di sumbu: satu kolom selalu
+     * selebar `column_width`, apa pun artinya kolom itu. Sumbu cuma menjawab
+     * "nilai ini ada di kolom keberapa".
+     */
+    public function xFromColumn(float $column): float
+    {
+        return $this->spec->left() + ($column * $this->spec->columnWidth());
+    }
+
+    /** @deprecated Pakai {@see self::xFromColumn()} — namanya dari masa satu kolom selalu satu jam. */
     public function xFromHour(float $hour): float
     {
-        return $this->spec->left() + ($hour * $this->spec->columnWidth());
+        return $this->xFromColumn($hour);
     }
 
     /**
@@ -91,32 +98,26 @@ final class Scale
      */
     public function x(string $time): ?float
     {
-        $hour = $this->hour($time);
-        if ($hour === null || $hour < 0.0 || $hour > (float) $this->spec->hours()) {
+        $column = $this->column($time);
+        if ($column === null || $column < 0.0 || $column > (float) $this->spec->columns()) {
             return null;
         }
 
-        return $this->xFromHour($hour);
+        return $this->xFromColumn($column);
     }
 
     /**
-     * Jarak sebuah waktu dari awal sumbu, dalam jam — null kalau tak terbaca.
+     * Jarak sebuah nilai X dari awal sumbu, dalam kolom — null kalau tak terbaca.
      */
+    public function column(string $x): ?float
+    {
+        return $this->axis->column($x);
+    }
+
+    /** @deprecated Pakai {@see self::column()} — namanya dari masa satu kolom selalu satu jam. */
     public function hour(string $time): ?float
     {
-        if ($this->start === null) {
-            return null;
-        }
-        $normalised = SeriesValues::normaliseTime($time);
-        if ($normalised === null) {
-            return null;
-        }
-        $parsed = DateTimeImmutable::createFromFormat('!' . SeriesValues::TIME_FORMAT, $normalised);
-        if ($parsed === false) {
-            return null;
-        }
-
-        return ($parsed->getTimestamp() - $this->start->getTimestamp()) / 3600.0;
+        return $this->column($time);
     }
 
     /**
@@ -152,13 +153,15 @@ final class Scale
      * dokumen yang sama menghasilkan dua gambar berbeda, dan tanda tangannya
      * tidak lagi bisa dibuktikan ulang.
      */
+    public function columnLabel(int $column): string
+    {
+        return $this->axis->label($column);
+    }
+
+    /** @deprecated Pakai {@see self::columnLabel()}. */
     public function hourLabel(int $column): string
     {
-        if ($this->start === null) {
-            return '';
-        }
-
-        return $this->start->modify('+' . $column . ' hour')->format('H:i');
+        return $this->columnLabel($column);
     }
 
     /**
@@ -188,8 +191,10 @@ final class Scale
         return [
             'left' => $this->spec->left(),
             'column_width' => $this->spec->columnWidth(),
-            'hours' => $this->spec->hours(),
-            'start' => $this->start === null ? null : $this->start->format(SeriesValues::TIME_FORMAT),
+            'hours' => $this->spec->columns(),
+            'columns' => $this->spec->columns(),
+            'axis' => $this->axis->export(),
+            'start' => $this->axis->origin(),
             'width' => $this->spec->width(),
             'height' => $this->spec->height(),
             'panels' => $panels,

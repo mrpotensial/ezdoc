@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ezdoc\Tests\Chart;
 
+use Ezdoc\Chart\TimeAxis;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -53,20 +54,119 @@ final class KoordinatPerambanTest extends TestCase
             . "\nthis.ezChartX = ezChartX;\nthis.ezChartY = ezChartY;\n"
             . "this.ezChartDariTempat = ezChartDariTempat;\nthis.ezChartRapikan = ezChartRapikan;\n"
             . "this.ezChartWaktuKeTeks = ezChartWaktuKeTeks;\n"
+            . "this.ezChartTeksKeWaktu = ezChartTeksKeWaktu;\n"
+            . "this.ezChartKolomDariWaktu = ezChartKolomDariWaktu;\n"
+            . "this.ezChartWaktuKolom = ezChartWaktuKolom;\n"
         );
 
         try {
-            $keluaran = (string) @shell_exec(sprintf(
-                '%s %s %s 2>&1',
-                escapeshellarg($node),
-                escapeshellarg(dirname(__DIR__) . '/js/chart-koordinat.js'),
-                escapeshellarg($js)
-            ));
+            // Dua zona, sengaja. Di zona tanpa DST — UTC maupun Asia/Jakarta —
+            // rumus "selisih detik dibagi 86400" kebetulan benar, jadi uji yang
+            // cuma berjalan di situ tidak membedakan rumus yang benar dari yang
+            // kebetulan benar. Europe/London punya hari 23 dan 25 jam.
+            foreach (['UTC', 'Europe/London'] as $zona) {
+                $keluaran = self::jalankanDiZona($node, $js, $zona);
+
+                self::assertStringContainsString('LULUS', $keluaran, $zona . ': ' . $keluaran);
+                self::assertStringContainsString('kasus satuan diperiksa', $keluaran, $zona . ': ' . $keluaran);
+            }
         } finally {
             @unlink($js);
         }
+    }
 
-        self::assertStringContainsString('LULUS', $keluaran, $keluaran);
+    /**
+     * Jalankan pembanding di satu zona waktu, dua-duanya.
+     *
+     * Zonanya disetel untuk PHP (yang menghitung angka harapan) dan diwariskan
+     * ke Node lewat `TZ` (yang menghitung ulang). Kalau cuma salah satunya
+     * yang bergeser, yang gagal bukan rumusnya melainkan ujinya — dan itu
+     * kegagalan yang membingungkan.
+     */
+    private static function jalankanDiZona(string $node, string $js, string $zona): string
+    {
+        $semulaPhp = date_default_timezone_get();
+        $semulaTz = getenv('TZ');
+
+        date_default_timezone_set($zona);
+        putenv('TZ=' . $zona);
+
+        $kasus = tempnam(sys_get_temp_dir(), 'ezdoc-satuan-') . '.json';
+        file_put_contents($kasus, json_encode(self::kasusSatuan()));
+
+        try {
+            return (string) @shell_exec(sprintf(
+                '%s %s %s %s 2>&1',
+                escapeshellarg($node),
+                escapeshellarg(dirname(__DIR__) . '/js/chart-koordinat.js'),
+                escapeshellarg($js),
+                escapeshellarg($kasus)
+            ));
+        } finally {
+            @unlink($kasus);
+            date_default_timezone_set($semulaPhp);
+            putenv($semulaTz === false ? 'TZ' : 'TZ=' . $semulaTz);
+        }
+    }
+
+    /**
+     * Daftar kasus satuan, dihitung sisi PHP.
+     *
+     * Tanggalnya dipilih justru yang paling sering meruntuhkan rumus naif:
+     * akhir bulan, Februari 28 hari, Februari kabisat, pergantian tahun, dan
+     * tengah bulan yang panjang bulannya berbeda-beda.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private static function kasusSatuan(): array
+    {
+        $awal = [
+            'hour' => '2026-09-29 08:00',
+            // Awal sumbu harinya sengaja sebelum pergantian DST musim semi,
+            // supaya sebagian kasus menyeberanginya.
+            'day' => '2026-03-28 00:00',
+            'month' => '2026-01-01 00:00',
+        ];
+        $waktu = [
+            'hour' => [
+                '2026-09-29 08:00', '2026-09-29 08:30', '2026-09-29 15:00',
+                '2026-09-30 02:00', '2026-09-29 07:00',
+            ],
+            'day' => [
+                '2026-09-28 00:00', '2026-09-28 12:00', '2026-09-30 00:00',
+                '2026-10-01 00:00', '2026-10-31 18:00', '2026-11-01 00:00',
+                '2026-09-26 00:00',
+                // Melewati kedua pergantian DST Eropa 2026: maju 29 Maret
+                // (hari 23 jam), mundur 25 Oktober (hari 25 jam).
+                '2026-03-29 12:00', '2026-03-30 00:00',
+                '2026-10-25 12:00', '2026-10-26 00:00',
+            ],
+            'month' => [
+                '2026-01-01 00:00', '2026-01-15 00:00', '2026-02-01 00:00',
+                '2026-02-15 00:00', '2026-02-28 12:00', '2026-03-01 00:00',
+                '2026-12-31 23:00', '2027-01-01 00:00', '2028-02-15 00:00',
+                '2025-12-01 00:00',
+            ],
+        ];
+
+        $kasus = [];
+        foreach ($waktu as $unit => $daftar) {
+            /** @var TimeAxis $axis */
+            $axis = TimeAxis::create($unit)->withOrigin($awal[$unit]);
+            foreach ($daftar as $t) {
+                $kolom = $axis->column($t);
+                self::assertNotNull($kolom, $unit . ' ' . $t);
+
+                $kasus[] = [
+                    'unit' => $unit,
+                    'origin' => $axis->origin(),
+                    'waktu' => $t,
+                    'kolom' => $kolom,
+                ];
+            }
+        }
+
+        return $kasus;
     }
 
     /**

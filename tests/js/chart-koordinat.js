@@ -42,7 +42,8 @@ const ctx = {
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(process.argv[2], 'utf8'), ctx, { filename: 'chart.js' });
 
-for (const nama of ['ezChartX', 'ezChartY', 'ezChartDariTempat', 'ezChartRapikan', 'ezChartWaktuKeTeks']) {
+for (const nama of ['ezChartX', 'ezChartY', 'ezChartDariTempat', 'ezChartRapikan',
+    'ezChartWaktuKeTeks', 'ezChartKolomDariWaktu', 'ezChartWaktuKolom']) {
     if (typeof ctx[nama] !== 'function') gagal(nama + ' tidak terbentuk');
 }
 
@@ -94,5 +95,40 @@ const rapi = ctx.ezChartRapikan([
 if (rapi.length !== 2) gagal('waktu kembar tidak ditimpa: ' + rapi.length);
 if (rapi[0].x !== '2026-09-29 08:00') gagal('tidak diurutkan menurut waktu');
 if (rapi[1].y !== 7) gagal('yang menang bukan yang terakhir diketik');
+
+// ── Satuan hari dan bulan: angkanya datang dari PHP ──────────────────────
+//
+// Daftarnya TIDAK ditulis di sini. Ia dihitung `TimeAxis` di PHP lalu
+// diserahkan lewat argumen, dan di sini dihitung ulang dengan rumus JS.
+// Dua daftar yang sama-sama ditulis tangan cuma membuktikan bahwa yang
+// menulisnya konsisten; yang perlu dibuktikan kedua rumusnya sepakat.
+if (process.argv[3]) {
+    const kasus = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+    let diperiksa = 0;
+
+    for (const k of kasus) {
+        const s = { left: 64, column_width: 40, hours: 400, start: k.origin,
+            axis: { kind: 'time', unit: k.unit }, panels: [] };
+
+        const kolom = ctx.ezChartKolomDariWaktu(s, ctx.ezChartTeksKeWaktu(k.waktu));
+        if (kolom === null) gagal(k.unit + ' ' + k.waktu + ': tidak terbaca');
+        if (Math.abs(kolom - k.kolom) > 1e-9) {
+            gagal(k.unit + ' ' + k.origin + ' → ' + k.waktu
+                + ': JS ' + kolom + ', PHP ' + k.kolom);
+        }
+
+        // Dan arah sebaliknya: kolom ke-n jatuh di waktu yang sama.
+        if (k.awalKolom) {
+            const balik = ctx.ezChartWaktuKolom(s, k.kolom);
+            if (balik !== k.awalKolom) {
+                gagal(k.unit + ' kolom ' + k.kolom + ': JS ' + balik + ', PHP ' + k.awalKolom);
+            }
+        }
+        diperiksa++;
+    }
+
+    if (diperiksa < 20) gagal('kasusnya cuma ' + diperiksa + ' — daftarnya tidak sampai');
+    console.log('kasus satuan diperiksa: ' + diperiksa);
+}
 
 console.log('LULUS');

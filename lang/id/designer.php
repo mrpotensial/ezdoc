@@ -389,6 +389,8 @@ return [
             'open_editor'         => 'Atur…',
             'board_section'       => 'Papan',
             'hours'               => 'Jumlah jam',
+            'columns'             => 'Jumlah kolom',
+            'unit'                => 'Satuan kolom',
             'column_width'        => 'Lebar kolom',
             'left'                => 'Kolom kiri',
             'panel_gap'           => 'Jarak panel',

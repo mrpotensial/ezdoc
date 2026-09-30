@@ -1,6 +1,6 @@
 # Jenis grafik baru, satuan sumbu baru, dan contoh di luar rumah sakit
 
-> Status: **fase 0 selesai (§3), fase 1–9 belum dikerjakan.**
+> Status: **fase 0 dan 1 selesai (§3, §5), fase 2–9 belum dikerjakan.**
 > Ditulis 30 Sep 2026 sesudah papan grafik terisi (lihat [260929-grafik-terisi.md](260929-grafik-terisi.md))
 > dipakai untuk partograf, lalu diminta dipakai untuk yang lain.
 
@@ -154,9 +154,20 @@ Perbaikannya satu tetapan: `SvgChartRenderer::FONT` jadi
 `'Helvetica,Arial,sans-serif'` — rantai cadangannya tetap utuh untuk peramban,
 cuma spasinya dibuang.
 
-**Belum diperbaiki.** Mengubahnya mengubah byte SVG **tiap** papan, dan
-partograf sudah jalan di `ezdoc_v3`. Keputusannya milik pemilik dokumen, bukan
-milik yang menemukannya. Berkas ujinya: `scratchpad/fase0_font.php`.
+**Sudah diperbaiki** atas keputusan pemilik dokumen, 30 Sep 2026. Yang
+dijaga uji keluarannya, bukan tetapannya: tidak boleh ada spasi sesudah koma
+di `font-family` mana pun yang tergambar. Partograf contoh dibandingkan byte
+demi byte terhadap keluaran sebelum perubahan — selain nama fontnya, **tidak
+satu piksel pun bergeser**.
+
+Berkas ujinya: `scratchpad/fase0_font.php`.
+
+### Satu batasan yang ikut ketahuan
+
+Huruf bawaan Dompdf tidak punya lambang seperti ✓ dan ✗; keduanya tercetak
+sebagai `?`. Contoh partograf tidak terpengaruh (isinya ASCII semua), tapi
+contoh di §7 yang memakai centang harus memilih: lambang ASCII, atau huruf
+yang memuatnya ikut dibenamkan. Diputuskan di fase 9.
 
 ---
 
@@ -328,8 +339,36 @@ terbaca sebagai bug, cuma sebagai "grafiknya agak meleset".
 
 Penjagaannya sudah ada polanya: `tests/Chart/KoordinatPerambanTest.php`
 menjalankan `tests/js/chart-koordinat.js` dengan Node dan membandingkan
-hasilnya dengan PHP. Daftar tanggalnya diperluas: akhir bulan, tahun kabisat,
-29 Februari, pergantian tahun.
+hasilnya dengan PHP.
+
+**Dikerjakan 30 Sep 2026, dan dua hal berubah dari rencana:**
+
+1. **Daftar angka harapannya tidak ditulis tangan.** Ia dihitung `TimeAxis` di
+   PHP lalu diserahkan ke Node, yang menghitung ulang dengan rumus JS. Dua
+   daftar yang sama-sama ditulis tangan cuma membuktikan penulisnya
+   konsisten; yang perlu dibuktikan kedua rumusnya sepakat.
+2. **Ujinya berjalan di dua zona waktu**, UTC dan Europe/London. Uji mutasi
+   menunjukkan kenapa: di zona tanpa DST, "selisih detik dibagi 86400"
+   **kebetulan benar**, jadi uji yang cuma berjalan di situ tidak membedakan
+   rumus yang benar dari rumus yang kebetulan benar. Tiga mutasi lolos justru
+   karena itu, di kedua bahasa.
+
+### Awal sumbu hari dan bulan dibulatkan
+
+Tidak direncanakan; ketahuan saat menulis sisi peramban. Papan bulanan yang
+dimulai 31 Januari membuat "satu bulan berikutnya" tidak punya jawaban — 31
+Februari tidak ada — sementara labelnya tetap berbunyi "02/2026". Angka dan
+tulisan menunjuk bulan yang berbeda.
+
+Jadi awal sumbu **hari** dibulatkan ke tengah malam dan awal sumbu **bulan**
+ke tanggal 1. Sumbu **jam** tidak: papan yang dimulai 08.30 sudah dipakai, dan
+kolomnya memang 09.30.
+
+Pembulatan itu juga membuat satu potong kode jadi berlebihan. Label bulan
+semula menghitung tahun dan bulannya sendiri supaya `modify('+n month')` tidak
+meluap; sesudah awalnya selalu tanggal 1, luapannya tidak mungkin terjadi, dan
+kode itu dibuang. Uji mutasi yang menunjukkannya: mencabut cabang khusus itu
+tidak membuat satu uji pun gagal.
 
 ### Label kolom
 
@@ -540,7 +579,7 @@ tetap berguna.
 | Fase | Hasil | Berat |
 |---|---|---|
 | 0 | ~~Tiga jawaban Dompdf di §3~~ | **selesai 30 Sep** |
-| 1 | Titik sambung sumbu X + `TimeAxis` (`hour`/`day`/`month`) + kesamaan PHP↔JS | **besar** |
+| 1 | ~~Titik sambung sumbu X + `TimeAxis` + kesamaan PHP↔JS~~ | **selesai 30 Sep** |
 | 2 | `draw`: `step`, `area` | kecil |
 | 3 | Kunci panel `bands` (sel berwarna + pita latar) | sedang |
 | 4 | `stacked` pada panel `bar` (gambar saja, isian diketik) | kecil |
@@ -627,8 +666,10 @@ membalikkannya tahu apa yang harus dibantah.
 
 ### Yang masih benar-benar terbuka
 
-- **Apakah label grafik yang berkait diperbaiki sekarang** (§3, temuan
-  keempat). Perbaikannya satu tetapan, tapi ia mengubah byte tiap papan yang
-  sudah ada. Menunggu keputusan pemilik dokumen.
+- **Lambang ✓ dan ✗ tercetak `?`** (§3). Contoh mana yang boleh memakainya,
+  dan apakah huruf yang memuatnya dibenamkan — diputuskan di fase 9.
 - **Apakah satu kunci `bands` untuk dua bacaan terasa wajar di penyunting.**
   Ketahuannya di fase 9, saat contoh nomor 2 dan 5 dibuat bersebelahan.
+- **Apakah `x.kind` kelak memuat `columns` juga.** Sekarang `columns` dibaca
+  dari `x`, dari akar papan, dan dari `hours` lama — tiga tempat untuk satu
+  angka. Ketiganya dibaca selamanya, tapi penyunting hanya menulis satu.

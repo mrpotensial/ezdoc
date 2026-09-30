@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Ezdoc\Chart;
 
-use DateTimeImmutable;
-
 /**
  * Angka satu deret: daftar titik (waktu, nilai) yang tersimpan di dokumen.
  *
@@ -33,7 +31,16 @@ use DateTimeImmutable;
  *    pengetikannya — kalau tidak, "dokumen ini bisa dibangun ulang dari
  *    nilainya" tidak bisa dibuktikan.
  *
- * Nilai `y` boleh angka (panel garis) atau teks pendek (panel simbol, nanti).
+ * Nilai `y` boleh angka (panel garis) atau teks pendek (panel simbol).
+ *
+ * ## `x` tidak lagi selalu waktu
+ *
+ * Sampai 30 Sep 2026 kelas ini memanggil `normaliseTime()` langsung, dan
+ * dengan itu memutuskan sendiri bahwa tiap nilai `x` adalah waktu. Keputusan
+ * itu sekarang milik {@see XAxis}, yang diserahkan pemanggil. Alasannya bukan
+ * kerapian: selama anggapan itu tertanam **di sini**, grafik sebar menuntut
+ * pembongkaran penyimpanan nilai — dan penyimpanan nilai inilah yang ikut
+ * di-hash tanda tangan. Lihat `docs/260930-grafik-jenis-baru.md` §5.
  *
  * PHP 7.4+ compatible.
  */
@@ -58,10 +65,13 @@ final class SeriesValues
      * tengah tidak boleh membuat seluruh lembar berhenti tergambar.
      *
      * @param mixed $raw
+     * @param XAxis|null $axis sumbu yang membakukan `x`; null berarti sumbu jam
      * @return array<int,array{x:string,y:float|int|string}>
      */
-    public static function parse($raw): array
+    public static function parse($raw, ?XAxis $axis = null): array
     {
+        $axis = $axis ?? TimeAxis::create();
+
         if (is_string($raw)) {
             $raw = json_decode($raw, true);
         }
@@ -69,14 +79,14 @@ final class SeriesValues
             return [];
         }
 
-        $byTime = [];
+        $byX = [];
         foreach ($raw as $point) {
             if (!is_array($point) || !isset($point['x'])) {
                 continue;
             }
 
-            $time = self::normaliseTime((string) $point['x']);
-            if ($time === null) {
+            $x = $axis->normalise((string) $point['x']);
+            if ($x === null) {
                 continue;
             }
 
@@ -86,14 +96,18 @@ final class SeriesValues
             }
 
             // Yang terakhir menang — lihat keputusan (3) di docblock kelas.
-            $byTime[$time] = $value;
+            $byX[$x] = $value;
         }
 
-        ksort($byTime, SORT_STRING);
+        // Urutannya ditentukan sumbu, bukan abjad: pada sumbu berangka,
+        // "10" datang sesudah "9", sedangkan abjad menaruhnya sebelum.
+        uksort($byX, static function ($a, $b) use ($axis): int {
+            return $axis->compare((string) $a, (string) $b);
+        });
 
         $points = [];
-        foreach ($byTime as $time => $value) {
-            $points[] = ['x' => (string) $time, 'y' => $value];
+        foreach ($byX as $x => $value) {
+            $points[] = ['x' => (string) $x, 'y' => $value];
         }
 
         return $points;
@@ -108,9 +122,9 @@ final class SeriesValues
      *
      * @param mixed $raw
      */
-    public static function toJson($raw): string
+    public static function toJson($raw, ?XAxis $axis = null): string
     {
-        $json = json_encode(self::parse($raw), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $json = json_encode(self::parse($raw, $axis), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         return $json === false ? '[]' : $json;
     }
@@ -120,15 +134,17 @@ final class SeriesValues
      *
      * @param array<int,array<int,array{x:string,y:float|int|string}>> $seriesList
      */
-    public static function earliest(array $seriesList): ?string
+    public static function earliest(array $seriesList, ?XAxis $axis = null): ?string
     {
+        $axis = $axis ?? TimeAxis::create();
+
         $earliest = null;
         foreach ($seriesList as $points) {
             if ($points === []) {
                 continue;
             }
             $first = $points[0]['x'];
-            if ($earliest === null || strcmp($first, $earliest) < 0) {
+            if ($earliest === null || $axis->compare($first, $earliest) < 0) {
                 $earliest = $first;
             }
         }
@@ -139,28 +155,14 @@ final class SeriesValues
     /**
      * Waktu yang bisa dibaca, dalam satu bentuk baku — atau null.
      *
-     * Diterima juga bentuk yang keluar dari isian `datetime-local` peramban
-     * ("2026-09-29T08:00") dan yang membawa detik. Ketiganya ditulis kembali
-     * tanpa detik: detik tidak pernah berarti di lembar pemantauan, dan
-     * membiarkannya membuat dua catatan pada menit yang sama tidak saling
-     * menimpa — padahal orangnya bermaksud mengoreksi.
+     * @deprecated Pakai {@see TimeAxis::normalise()}. Dipertahankan sebagai
+     *             cangkang karena berkas diunggah satu per satu: kalau yang
+     *             memanggilnya mendarat lebih dulu daripada yang memuatnya,
+     *             permintaan yang lewat di sela itu mati.
      */
     public static function normaliseTime(string $raw): ?string
     {
-        $raw = trim($raw);
-        if ($raw === '') {
-            return null;
-        }
-        $raw = str_replace('T', ' ', $raw);
-
-        foreach ([self::TIME_FORMAT, 'Y-m-d H:i:s'] as $format) {
-            $time = DateTimeImmutable::createFromFormat('!' . $format, $raw);
-            if ($time !== false && $time->format($format) === $raw) {
-                return $time->format(self::TIME_FORMAT);
-            }
-        }
-
-        return null;
+        return TimeAxis::create()->normalise($raw);
     }
 
     /**

@@ -1628,6 +1628,76 @@
             return Math.round(ms / langkah) * langkah;
         }
 
+        // ── Satuan kolom: jam, hari, atau bulan ─────────────────────────
+        //
+        // Hitungan di bawah ini WAJIB memberi angka yang sama persis dengan
+        // `TimeAxis` di PHP. Bukan "kira-kira sama": selisih setengah kolom
+        // tidak pernah terbaca sebagai bug, cuma sebagai "grafiknya agak
+        // meleset". Kesamaannya dijaga `tests/Chart/KoordinatPerambanTest.php`,
+        // yang menjalankan berkas ini dengan Node dan membandingkan hasilnya
+        // dengan PHP pada tanggal-tanggal yang paling sering meruntuhkan rumus
+        // naif: akhir bulan, Februari, tahun kabisat, pergantian tahun.
+
+        function ezChartSatuan(scale) {
+            return (scale && scale.axis && scale.axis.unit) || 'hour';
+        }
+
+        /** Detik sejak tengah malam — bukan dari timestamp, supaya DST tidak ikut. */
+        function ezChartDetikHari(d) {
+            return (d.getHours() * 3600) + (d.getMinutes() * 60) + d.getSeconds();
+        }
+
+        function ezChartHariDalamBulan(d) {
+            return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+        }
+
+        /** Kedudukan sebuah saat di dalam bulannya, 0 sampai hampir 1. */
+        function ezChartTempatDalamBulan(d) {
+            return ((d.getDate() - 1) + (ezChartDetikHari(d) / 86400)) / ezChartHariDalamBulan(d);
+        }
+
+        /** Jarak sebuah waktu dari awal sumbu, dalam kolom. */
+        function ezChartKolomDariWaktu(scale, ms) {
+            const mulai = ezChartTeksKeWaktu(scale.start);
+            if (mulai === null) return null;
+
+            const satuan = ezChartSatuan(scale);
+            if (satuan === 'hour') return (ms - mulai) / 3600000;
+
+            const a = new Date(mulai);
+            const b = new Date(ms);
+
+            if (satuan === 'day') {
+                // Dibulatkan: hari ber-DST panjangnya 23 atau 25 jam, dan
+                // pembagian lurus menghasilkan 0,958 hari.
+                const a0 = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+                const b0 = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+                const hari = Math.round((b0 - a0) / 86400000);
+                return hari + ((ezChartDetikHari(b) - ezChartDetikHari(a)) / 86400);
+            }
+
+            const bulan = ((b.getFullYear() - a.getFullYear()) * 12) + (b.getMonth() - a.getMonth());
+            return bulan + (ezChartTempatDalamBulan(b) - ezChartTempatDalamBulan(a));
+        }
+
+        /** Waktu awal kolom ke-n. Kebalikan dari yang di atas, dibulatkan ke bawah. */
+        function ezChartWaktuDariKolom(scale, mulai, kolom) {
+            const n = Math.floor(kolom);
+            const satuan = ezChartSatuan(scale);
+            if (satuan === 'hour') return mulai + (n * 3600000);
+
+            const d = new Date(mulai);
+            if (satuan === 'day') {
+                return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n,
+                    d.getHours(), d.getMinutes(), 0, 0).getTime();
+            }
+
+            // Tanggalnya 1, bukan tanggal awal sumbu: awal sumbu bulan memang
+            // sudah dibulatkan ke tanggal 1 di PHP, dan menambah bulan pada
+            // tanggal 31 meluap ke bulan berikutnya.
+            return new Date(d.getFullYear(), d.getMonth() + n, 1, 0, 0, 0, 0).getTime();
+        }
+
         function ezChartInit() {
             document.querySelectorAll('.ez-chart').forEach(ezChartSiapkan);
         }
@@ -1685,12 +1755,11 @@
 
         /** Tempat sebuah waktu, memakai skala dari server. */
         function ezChartX(scale, waktuTeks) {
-            const mulai = ezChartTeksKeWaktu(scale.start);
             const t = ezChartTeksKeWaktu(waktuTeks);
-            if (mulai === null || t === null) return null;
-            const jam = (t - mulai) / 3600000;
-            if (jam < 0 || jam > scale.hours) return null;
-            return scale.left + (jam * scale.column_width);
+            if (t === null) return null;
+            const kolom = ezChartKolomDariWaktu(scale, t);
+            if (kolom === null || kolom < 0 || kolom > scale.hours) return null;
+            return scale.left + (kolom * scale.column_width);
         }
 
         function ezChartSel(panel) {
@@ -1717,6 +1786,7 @@
 
             const jam = (px - scale.left) / scale.column_width;
             if (jam < 0 || jam > scale.hours) return null;
+            const satuan = ezChartSatuan(scale);
 
             // Baris sel diisi huruf. Klik di situ menanyakan isinya; menaruh
             // angka hasil hitungan sumbu akan mengisi "Air Ketuban" dengan 0,4.
@@ -1735,24 +1805,41 @@
             let mulai = ezChartTeksKeWaktu(scale.start);
             if (mulai === null) {
                 // Papan yang belum punya awal sumbu: titik pertama diletakkan
-                // pada jam SEKARANG, dan sumbunya mundur sebanyak jarak titik
-                // itu dari kiri. Yang mengisi menaruh bacaan "di sini, sekarang".
-                mulai = ezChartBulatkanWaktu(Date.now()) - (jam * 3600000);
+                // pada SEKARANG, dan sumbunya mundur sebanyak jarak titik itu
+                // dari kiri. Yang mengisi menaruh bacaan "di sini, sekarang".
+                mulai = ezChartMundur(scale, ezChartBulatkanWaktu(Date.now()), jam);
             }
 
-            return {
-                panel: iPanel,
-                x: ezChartWaktuKeTeks(ezChartBulatkanWaktu(mulai + (jam * 3600000))),
-                y: nilai
-            };
+            // Pada sumbu jam titiknya boleh jatuh di tengah kolom — pukul
+            // 08.30 adalah bacaan yang sah. Pada sumbu hari dan bulan tidak:
+            // satu kolom satu hari, dan "setengah hari" bukan tanggal.
+            const tepat = satuan === 'hour'
+                ? ezChartBulatkanWaktu(mulai + (jam * 3600000))
+                : ezChartWaktuDariKolom({ axis: { unit: satuan }, start: scale.start }, mulai, jam);
+
+            return { panel: iPanel, x: ezChartWaktuKeTeks(tepat), y: nilai };
         }
 
         /** Jam awal kolom yang diklik — isi sel selalu milik satu kolom penuh. */
         function ezChartWaktuKolom(scale, jam) {
             let mulai = ezChartTeksKeWaktu(scale.start);
-            if (mulai === null) mulai = ezChartBulatkanWaktu(Date.now()) - (jam * 3600000);
+            if (mulai === null) mulai = ezChartMundur(scale, ezChartBulatkanWaktu(Date.now()), jam);
 
-            return ezChartWaktuKeTeks(mulai + (Math.floor(jam) * 3600000));
+            return ezChartWaktuKeTeks(ezChartWaktuDariKolom(scale, mulai, jam));
+        }
+
+        /** Awal sumbu andai kolom ke-n jatuh pada waktu tertentu. */
+        function ezChartMundur(scale, ms, kolom) {
+            const satuan = ezChartSatuan(scale);
+            if (satuan === 'hour') return ms - (kolom * 3600000);
+
+            const d = new Date(ms);
+            const n = Math.floor(kolom);
+            if (satuan === 'day') {
+                return new Date(d.getFullYear(), d.getMonth(), d.getDate() - n, 0, 0, 0, 0).getTime();
+            }
+
+            return new Date(d.getFullYear(), d.getMonth() - n, 1, 0, 0, 0, 0).getTime();
         }
 
         function ezChartPanelDi(scale, py) {

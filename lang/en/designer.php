@@ -385,6 +385,8 @@ return [
             'open_editor' => 'Settings…',
             'board_section' => 'Board',
             'hours' => 'Hours',
+            'columns' => 'Columns',
+            'unit' => 'Column unit',
             'column_width' => 'Column width',
             'left' => 'Left column',
             'panel_gap' => 'Panel gap',

@@ -69,7 +69,13 @@ final class BarisJamTest extends TestCase
             $m
         );
 
-        return array_map('floatval', array_unique($m[1]));
+        // array_unique mempertahankan kuncinya; tanpa array_values, $baris[1]
+        // pada papan berbaris dua tidak ada — dan ujinya gagal karena alat
+        // ukurnya, bukan karena gambarnya.
+        $y = array_values(array_unique(array_map('floatval', $m[1])));
+        sort($y);
+
+        return $y;
     }
 
     // ── Letaknya ─────────────────────────────────────────────────────────
@@ -174,6 +180,40 @@ final class BarisJamTest extends TestCase
         $baris = self::barisJam($svg);
         self::assertCount(1, $baris);
         self::assertLessThan($spec->height(), $baris[0], 'angkanya jatuh di luar papan');
+    }
+
+    /**
+     * Dua baris di dasar papan tidak saling menimpa.
+     *
+     * Panel terakhir yang memuat barisnya sendiri, ditambah baris di dasar,
+     * menghasilkan dua baris angka. Tanpa ruang tambahan keduanya jatuh tujuh
+     * piksel berjauhan dan saling menimpa — di layar terbaca sebagai gambar
+     * yang buram, bukan sebagai dua baris. Ketahuan waktu membaca hasil cetak
+     * papan rantai dingin, bukan dari uji.
+     */
+    public function testTwoRowsAtTheBottomDoNotCollide(): void
+    {
+        $spec = ChartSpec::fromArray([
+            'hours' => 4,
+            'start_field' => 'start_time',
+            'panels' => [
+                ['height' => 100, 'y' => ['min' => 0, 'max' => 10, 'step' => 5],
+                    'series' => [['field' => 'a']]],
+                ['type' => 'text', 'height' => 18, 'time_axis' => true,
+                    'series' => [['field' => 'b']]],
+            ],
+        ]);
+
+        $svg = (new SvgChartRenderer())->render($spec, self::values());
+        $baris = self::barisJam($svg);
+
+        self::assertCount(2, $baris, 'barisnya tidak dua');
+        self::assertGreaterThanOrEqual(
+            Geometry::HOUR_ROW,
+            $baris[1] - $baris[0],
+            'dua baris angka tertulis berdekatan — di kertas keduanya saling menimpa'
+        );
+        self::assertLessThan($spec->height(), $baris[1], 'baris kedua jatuh di luar papan');
     }
 
     // ── Papan lama ───────────────────────────────────────────────────────
