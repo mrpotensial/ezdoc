@@ -5029,6 +5029,7 @@
 
         const CHART_JENIS = [
             ['line', 'Garis'], ['bar', 'Batang'], ['symbol', 'Simbol'], ['text', 'Teks'],
+            ['timeline', 'Timeline'],
         ];
         const CHART_TANDA = [
             ['circle', 'Lingkaran'], ['dot', 'Titik'], ['cross', 'Silang'], ['square', 'Kotak'],
@@ -5083,6 +5084,15 @@
                 return {
                     type: 'text', title: '', height: 16,
                     series: [{ field: '', title: '', color: '#111111' }],
+                };
+            },
+            timeline: function () {
+                return {
+                    type: 'timeline', title: '', height: 48,
+                    series: [
+                        { field: '', title: 'Jalur 1', color: '#1d4ed8' },
+                        { field: '', title: 'Jalur 2', color: '#16a34a' },
+                    ],
                 };
             },
         };
@@ -5284,7 +5294,8 @@
         function renderChartPanelBody(p, i) {
             const jenis = p.type || 'line';
             const sel = 'panels.' + i;
-            const isSel = jenis === 'symbol' || jenis === 'text';
+            const isSel = jenis === 'symbol' || jenis === 'text' || jenis === 'timeline';
+            const isJalur = jenis === 'timeline';
 
             let html = '<div class="grid grid-cols-3 gap-2">'
                 + fSelect(sel + '.type', t('chart.panel_type', {}, 'Type'), jenis, CHART_JENIS)
@@ -5693,6 +5704,7 @@
 
             panels.forEach(function (p) {
                 const isSel = p.type === 'symbol' || p.type === 'text';
+                const isJalur = p.type === 'timeline';
                 const tingkat = Object.keys(p.levels || {});
                 const pita = Array.isArray(p.bands) ? p.bands : [];
                 const y = p.y || {};
@@ -5703,6 +5715,15 @@
                 (Array.isArray(p.series) ? p.series : []).forEach(function (d) {
                     if (!d.field) return;
                     const acak = chartAcak(d.field);
+
+                    // Jalur diisi RENTANG, bukan titik. Contoh berupa titik di
+                    // panel timeline tidak menggambar apa pun — dan papan yang
+                    // kosong saat data contoh menyala terbaca sebagai rusak.
+                    if (isJalur) {
+                        nilai[d.field] = JSON.stringify(chartContohRentang(MULAI, jam, satuan, acak));
+                        return;
+                    }
+
                     const titik = [];
                     let v = min + ((max - min) * (0.25 + acak() * 0.4));
 
@@ -5739,6 +5760,34 @@
             });
 
             return nilai;
+        }
+
+        /**
+         * Rentang contoh untuk satu jalur timeline.
+         *
+         * Satu di antaranya sengaja dibiarkan terbuka: keadaan itu yang paling
+         * mudah terlewat saat merancang, dan paling sering dipakai saat
+         * mengisi — infus yang masih jalan.
+         */
+        function chartContohRentang(mulai, kolom, satuan, acak) {
+            const keluar = [];
+            let h = Math.floor(acak() * 2);
+
+            while (h < kolom - 1) {
+                const panjang = 1 + Math.floor(acak() * 3);
+                const terbuka = (h + panjang) >= kolom && acak() < 0.6;
+
+                keluar.push({
+                    x: chartJamKe(mulai, h, satuan),
+                    x2: terbuka ? false : chartJamKe(mulai, Math.min(h + panjang, kolom), satuan),
+                    y: 'Contoh ' + (keluar.length + 1),
+                });
+
+                if (terbuka) break;
+                h += panjang + 1 + Math.floor(acak() * 2);
+            }
+
+            return keluar;
         }
 
         /** Isi sel contoh: tanda pendek untuk baris simbol, angka untuk teks. */

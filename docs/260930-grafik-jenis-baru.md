@@ -1,6 +1,6 @@
 # Jenis grafik baru, satuan sumbu baru, dan contoh di luar rumah sakit
 
-> Status: **fase 0–4 selesai, fase 5–9 belum dikerjakan.**
+> Status: **fase 0–5 selesai, fase 6–9 belum dikerjakan.**
 > Ditulis 30 Sep 2026 sesudah papan grafik terisi (lihat [260929-grafik-terisi.md](260929-grafik-terisi.md))
 > dipakai untuk partograf, lalu diminta dipakai untuk yang lain.
 
@@ -217,8 +217,17 @@ jenis panel, nilai yang sama berubah arti begitu spesifikasinya diubah — dan
 spesifikasi bisa diubah sesudah dokumennya ditandatangani. Yang tersimpan
 harus menjelaskan dirinya sendiri, tanpa membaca spesifikasi.
 
-Satu parser, satu penulis, satu bentuk tersimpan. `SeriesValues` bertambah
-kira-kira 35 baris.
+Satu parser, satu penulis, satu bentuk tersimpan.
+
+**Dikerjakan 30 Sep 2026**, dan satu hal ditambahkan yang tidak ada di
+rancangan: **batas panjang label rentang dilonggarkan** dari 16 ke 48 huruf.
+Enam belas masuk akal untuk baris sel — "U", "J", "+" — tapi label rentang
+adalah nama obat, dan "Ceftriaxone 1 gram" sudah delapan belas. Batas yang
+ketat membuangnya **diam-diam**: rentangnya tetap tergambar, cuma tanpa nama.
+
+Ketahuannya lewat uji mutasi, dan bukan pada kodenya: satu uji di berkas lain
+memakai label 17 huruf dan lulus karena labelnya dibuang — bukan karena yang
+diuji bekerja.
 
 ### Rentang yang melewati tepi sumbu
 
@@ -621,7 +630,7 @@ tetap berguna.
 | 2 | ~~`draw`: `step`, `area`~~ | **selesai 30 Sep** |
 | 3 | ~~Kunci panel `bands` (sel berwarna + pita latar)~~ | **selesai 30 Sep** |
 | 4 | ~~`stacked` pada panel `bar`~~ | **selesai 30 Sep** |
-| 5 | `x2` di `SeriesValues` + panel `timeline` (gambar) | sedang |
+| 5 | ~~`x2` di `SeriesValues` + panel `timeline` (gambar)~~ | **selesai 30 Sep** |
 | 6 | Isian timeline di peramban | **besar** |
 | 7 | `references.points` | kecil |
 | 8 | Isian semuanya di penyunting designer | sedang |

@@ -61,16 +61,20 @@ final class ChartSpec
     /**
      * Jenis panel.
      *
-     *   line   — titik dan garis di atas sumbu Y berangka
-     *   bar    — batang per kolom, tingginya dari deret pertama
-     *   symbol — satu baris sel; isinya huruf atau angka pendek per kolom
-     *   text   — sama seperti symbol, untuk teks yang lebih panjang
+     *   line     — titik dan garis di atas sumbu Y berangka
+     *   bar      — batang per kolom, tingginya dari deret pertama
+     *   symbol   — satu baris sel; isinya huruf atau angka pendek per kolom
+     *   text     — sama seperti symbol, untuk teks yang lebih panjang
+     *   timeline — tiap deret satu jalur; nilainya RENTANG, bukan titik
      *
      * `symbol` dan `text` digambar jalur yang sama; yang membedakan cuma
      * ukuran hurufnya. Dua nama dipertahankan karena penulis spesifikasi
      * memikirkan keduanya sebagai hal berbeda — "U/J/M/K" bukan "Tidak ada".
      */
-    public const TYPES = ['line', 'bar', 'symbol', 'text'];
+    public const TYPES = ['line', 'bar', 'symbol', 'text', 'timeline'];
+
+    /** Jenis yang isinya rentang, bukan pengukuran. */
+    public const RANGE_TYPES = ['timeline'];
 
     /** Jenis yang isinya satu baris sel, bukan bidang bersumbu Y. */
     public const CELL_TYPES = ['symbol', 'text'];
@@ -461,6 +465,7 @@ final class ChartSpec
         }
 
         $isCell = in_array($type, self::CELL_TYPES, true);
+        $isJalur = in_array($type, self::RANGE_TYPES, true);
 
         $y = isset($panel['y']) && is_array($panel['y']) ? $panel['y'] : [];
         $min = self::readFloat($y, 'min', 0.0, -100000.0, 100000.0);
@@ -526,19 +531,21 @@ final class ChartSpec
         // Baris sel setinggi 200 adalah salah ketik, bukan pilihan. Bawaannya
         // dibedakan supaya spesifikasi terkecil pun menghasilkan baris, bukan
         // bidang kosong setinggi sepuluh sentimeter.
-        $defaultHeight = $isCell ? 22.0 : 200.0;
+        // Timeline setinggi 200 adalah dua jalur yang sangat gemuk; setinggi
+        // 22 tidak muat labelnya. Bawaannya di antara keduanya.
+        $defaultHeight = $isCell ? 22.0 : ($isJalur ? 48.0 : 200.0);
 
         return [
             'type' => $type,
             'title' => isset($panel['title']) ? (string) $panel['title'] : '',
             // Judul panel tipis ditulis mendatar di kolom kiri; panel tinggi
             // memakai tulisan berdiri karena mendatar tidak akan muat.
-            'title_align' => self::readTitleAlign($panel, $isCell, $defaultHeight, $position),
+            'title_align' => self::readTitleAlign($panel, $isCell, $isJalur, $defaultHeight, $position),
             'height' => self::readFloat($panel, 'height', $defaultHeight, 12.0, 2000.0),
             'y_min' => $min,
             'y_max' => $max,
             'y_step' => $step,
-            'y_axis' => !$isCell && (!isset($panel['y_axis']) || (bool) $panel['y_axis']),
+            'y_axis' => !$isCell && !$isJalur && (!isset($panel['y_axis']) || (bool) $panel['y_axis']),
             // Baris jam di bawah panel ini. Mati kecuali diminta: papan yang
             // mengulang jamnya di tiap panel terbaca sebagai kisi, bukan data.
             'time_axis' => isset($panel['time_axis']) && (bool) $panel['time_axis'],
@@ -903,10 +910,20 @@ final class ChartSpec
      *
      * @throws ValidationException
      */
-    private static function readTitleAlign(array $panel, bool $isCell, float $defaultHeight, int $position): string
-    {
+    private static function readTitleAlign(
+        array $panel,
+        bool $isCell,
+        bool $isJalur,
+        float $defaultHeight,
+        int $position
+    ): string {
         $height = self::readFloat($panel, 'height', $defaultHeight, 12.0, 2000.0);
-        $default = ($isCell || $height < 60) ? 'left' : 'rotated';
+
+        // Panel timeline SELALU berjudul berdiri, berapa pun tingginya: kolom
+        // kiri bagian dalam sudah dipakai nama jalur, dan judul mendatar akan
+        // tertulis menimpanya. Ketahuan dari membaca hasil cetak — di layar
+        // keduanya sama-sama hitam dan terbaca sebagai satu kata acak.
+        $default = $isJalur ? 'rotated' : (($isCell || $height < 60) ? 'left' : 'rotated');
 
         if (!isset($panel['title_align']) || $panel['title_align'] === '') {
             return $default;

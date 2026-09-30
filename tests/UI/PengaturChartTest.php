@@ -631,6 +631,49 @@ final class PengaturChartTest extends TestCase
         );
     }
 
+    /**
+     * Jenis timeline ada di penyunting, lengkap dengan bawaan dan contohnya.
+     *
+     * Jenis panel yang cuma bisa diminta dengan mengetik JSON sama saja dengan
+     * tidak ada — dan formulir ini justru dibuat supaya JSON tidak perlu
+     * diketik.
+     */
+    public function testTheTimelineTypeIsOfferedInTheForm(): void
+    {
+        $skrip = self::skrip();
+
+        self::assertSame(1, preg_match("/\['timeline', '/", $skrip), 'jenis timeline tidak ditawarkan');
+        self::assertSame(1, preg_match('/timeline: function \(\) \{/', $skrip), 'tidak ada panel bawaan timeline');
+        self::assertSame(
+            1,
+            preg_match("/type: 'timeline'[\s\S]{0,200}?title: 'Jalur 1'/", $skrip),
+            'panel timeline baru lahir tanpa jalur bernama'
+        );
+    }
+
+    /**
+     * Data contoh mengisi jalur dengan RENTANG, bukan titik.
+     *
+     * Titik di panel timeline tidak menggambar apa pun. Papan yang tetap
+     * kosong saat data contoh menyala terbaca sebagai rusak — padahal
+     * contohnya yang salah bentuk.
+     */
+    public function testSampleDataFillsTimelineLanesWithRanges(): void
+    {
+        $skrip = self::skrip();
+
+        self::assertSame(
+            1,
+            preg_match('/if \(isJalur\) \{\s*nilai\[d\.field\] = JSON\.stringify\(chartContohRentang\(/', $skrip),
+            'jalur diisi titik, bukan rentang'
+        );
+        self::assertSame(
+            1,
+            preg_match('/x2: terbuka \? false :/', $skrip),
+            'contohnya tidak pernah memperlihatkan rentang terbuka'
+        );
+    }
+
     /** Semua kalimatnya ada di kedua bahasa. */
     public function testEveryLabelExistsInBothLanguages(): void
     {

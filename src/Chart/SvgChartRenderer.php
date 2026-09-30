@@ -90,6 +90,9 @@ final class SvgChartRenderer
                 $series = $panel['series'];
                 foreach ($series as $one) {
                     $name = (string) $one['field'];
+                    // Rentang TIDAK disaring di sini: awal sebuah rentang
+                    // adalah waktu yang sah untuk memulai sumbu, sama seperti
+                    // pengukuran. Yang disaring cuma saat menggambar.
                     $all[] = SeriesValues::parse($values[$name] ?? null, $axis);
                 }
             }
@@ -179,6 +182,8 @@ final class SvgChartRenderer
 
         if ($type === 'bar') {
             $out .= $this->bars($spec, $scale, $values, $index, $panel, $bottom);
+        } elseif (in_array($type, ChartSpec::RANGE_TYPES, true)) {
+            $out .= $this->timeline($spec, $scale, $values, $panel, $top, $bottom, $left, $right);
         } elseif (in_array($type, ChartSpec::CELL_TYPES, true)) {
             $out .= $this->cells($spec, $scale, $values, $panel, $top, $bottom, $type);
         } else {
@@ -190,7 +195,7 @@ final class SvgChartRenderer
                     $scale,
                     $index,
                     $one,
-                    SeriesValues::parse($values[$name] ?? null, $scale->axis())
+                    SeriesValues::onlyPoints(SeriesValues::parse($values[$name] ?? null, $scale->axis()))
                 );
             }
         }
@@ -398,11 +403,13 @@ final class SvgChartRenderer
         }
 
         $heightField = (string) $series[0]['field'];
-        $points = SeriesValues::parse($values[$heightField] ?? null, $scale->axis());
+        $points = SeriesValues::onlyPoints(SeriesValues::parse($values[$heightField] ?? null, $scale->axis()));
 
         $styleByTime = [];
         if (isset($series[1])) {
-            foreach (SeriesValues::parse($values[(string) $series[1]['field']] ?? null, $scale->axis()) as $point) {
+            foreach (SeriesValues::onlyPoints(
+                SeriesValues::parse($values[(string) $series[1]['field']] ?? null, $scale->axis())
+            ) as $point) {
                 $styleByTime[$point['x']] = (string) $point['y'];
             }
         }
@@ -430,6 +437,224 @@ final class SvgChartRenderer
         }
 
         return $out;
+    }
+
+    /**
+     * Timeline: tiap deret satu jalur, nilainya rentang.
+     *
+     * Untuk jadwal obat, waktu infus, jam operasi mesin. Nama deret jadi label
+     * jalur di kolom kiri.
+     *
+     * ## Rentang yang melewati tepi DIPOTONG, dan potongannya ditandai
+     *
+     * Aturan "nilai di luar sumbu tidak digambar" sengaja tidak berlaku di
+     * sini. Titik di luar sumbu hampir selalu salah ketik — DJJ 1440, bukan
+     * 144 — dan menggambarnya di tepi membuat angka yang tidak pernah diukur
+     * masuk ke dokumen yang ditandatangani.
+     *
+     * Rentang yang mulai sebelum lembar ini dibuka adalah keadaan yang LAZIM:
+     * infus memang sudah jalan sejak semalam. Membuangnya menghilangkan obat
+     * yang benar-benar diberikan. Jadi ia dipotong di tepi, dan ujung yang
+     * terpotong diberi takik — supaya "mulai lebih awal" terbaca berbeda dari
+     * "mulai tepat di sini".
+     *
+     * @param array<string,mixed> $values
+     * @param array<string,mixed> $panel
+     */
+    private function timeline(
+        ChartSpec $spec,
+        Scale $scale,
+        array $values,
+        array $panel,
+        float $top,
+        float $bottom,
+        float $left,
+        float $right
+    ): string {
+        /** @var array<int,array<string,mixed>> $series */
+        $series = $panel['series'];
+        if ($series === []) {
+            return '';
+        }
+
+        $tinggiJalur = ($bottom - $top) / count($series);
+        $out = '';
+
+        foreach ($series as $i => $one) {
+            $jalurAtas = $top + ($i * $tinggiJalur);
+            $rentang = SeriesValues::onlyRanges(
+                SeriesValues::parse($values[(string) $one['field']] ?? null, $scale->axis())
+            );
+
+            $out .= $this->laneLabel((string) $one['title'], $left, $jalurAtas, $tinggiJalur);
+            $out .= $this->laneBars($spec, $scale, $one, $rentang, $jalurAtas, $tinggiJalur, $left, $right);
+        }
+
+        return $out;
+    }
+
+    /** Nama jalur di kolom kiri. Kosong kalau deretnya tidak diberi nama. */
+    private function laneLabel(string $title, float $left, float $atas, float $tinggi): string
+    {
+        if ($title === '') {
+            return '';
+        }
+
+        return '<text x="' . self::num($left - 6) . '" y="' . self::num($atas + ($tinggi / 2) + 2.5)
+            . '" font-family="' . self::FONT . '" font-size="7" fill="' . self::TEXT_COLOR
+            . '" text-anchor="end">' . self::text($title) . '</text>';
+    }
+
+    /**
+     * Batang-batang sebuah jalur, disusun supaya tidak pernah bertindihan.
+     *
+     * Rentang yang bertumpang tindih ditaruh di baris bawahnya (pengepakan
+     * jalur yang lazim di diagram Gantt), dan tinggi jalurnya dibagi rata di
+     * antara baris yang terpakai. Menyembunyikan yang bertindih akan
+     * menghilangkan obat kedua tanpa jejak.
+     *
+     * @param array<string,mixed> $series
+     * @param array<int,array<string,mixed>> $ranges
+     */
+    private function laneBars(
+        ChartSpec $spec,
+        Scale $scale,
+        array $series,
+        array $ranges,
+        float $atas,
+        float $tinggi,
+        float $left,
+        float $right
+    ): string {
+        $terpakai = [];
+        $baris = [];
+
+        foreach ($ranges as $r) {
+            $x1 = self::rangeEdge($scale, $spec, (string) $r['x'], $left, $right);
+            $x2 = $r['x2'] === false
+                ? $right
+                : self::rangeEdge($scale, $spec, (string) $r['x2'], $left, $right);
+
+            if ($x2 <= $x1) {
+                // Seluruhnya di luar sumbu, di sisi yang sama: rentang ini
+                // tidak menyentuh lembar ini sama sekali.
+                continue;
+            }
+
+            $n = 0;
+            while (isset($terpakai[$n]) && $terpakai[$n] > $x1 + 0.01) {
+                $n++;
+            }
+            $terpakai[$n] = $x2;
+            $baris[] = [$n, $x1, $x2, $r];
+        }
+
+        if ($baris === []) {
+            return '';
+        }
+
+        $jumlahBaris = count($terpakai);
+        $tinggiBaris = $tinggi / $jumlahBaris;
+        $warna = self::attr((string) $series['color']);
+        $out = '';
+
+        foreach ($baris as [$n, $x1, $x2, $r]) {
+            $y = $atas + ($n * $tinggiBaris) + 2.0;
+            $h = max(4.0, $tinggiBaris - 4.0);
+
+            $out .= '<rect x="' . self::num($x1) . '" y="' . self::num($y)
+                . '" width="' . self::num($x2 - $x1) . '" height="' . self::num($h)
+                . '" rx="2" fill="' . $warna . '" fill-opacity="0.25" stroke="' . $warna
+                . '" stroke-width="0.8"/>';
+
+            // Takik HANYA di ujung yang benar-benar terpotong.
+            //
+            // Bukan "menyentuh tepi": rentang yang mulai tepat pada jam awal
+            // lembar tidak terpotong, ia memang mulai di situ. Menandainya
+            // juga akan membuat takik kehilangan artinya — kalau hampir semua
+            // batang bertakik, takik tidak lagi memberitahu apa pun.
+            if ($scale->x((string) $r['x']) === null) {
+                $out .= self::notch($x1, $y, $h, $warna, true);
+            }
+            if ($r['x2'] === false || $scale->x((string) $r['x2']) === null) {
+                $out .= self::notch($x2, $y, $h, $warna, false);
+            }
+
+            $label = (string) $r['y'];
+            if ($label !== '') {
+                $out .= $this->rangeLabel($label, $x1, $x2, $y, $h, $warna);
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Tempat mendatar sebuah ujung rentang, dipotong pada tepi sumbu.
+     *
+     * {@see Scale::x()} menolak nilai di luar sumbu — benar untuk pengukuran,
+     * tidak untuk rentang. Yang di luar dipotong ke tepi yang terdekat.
+     */
+    private static function rangeEdge(Scale $scale, ChartSpec $spec, string $x, float $left, float $right): float
+    {
+        $tepat = $scale->x($x);
+        if ($tepat !== null) {
+            return $tepat;
+        }
+
+        $kolom = $scale->column($x);
+        if ($kolom === null) {
+            return $left;
+        }
+
+        return $kolom < 0.0 ? $left : $right;
+    }
+
+    /** Takik segitiga kecil di ujung rentang yang terpotong. */
+    private static function notch(float $x, float $y, float $h, string $color, bool $kiri): string
+    {
+        $arah = $kiri ? 1.0 : -1.0;
+        $tengah = $y + ($h / 2);
+
+        return '<path d="M' . self::num($x) . ' ' . self::num($tengah)
+            . ' L' . self::num($x + (4.0 * $arah)) . ' ' . self::num($y + 1.0)
+            . ' L' . self::num($x + (4.0 * $arah)) . ' ' . self::num($y + $h - 1.0)
+            . ' Z" fill="' . $color . '" stroke="none"/>';
+    }
+
+    /**
+     * Label di dalam batang rentang, dipotong kalau tidak muat.
+     *
+     * Dipotong, bukan dikecilkan hurufnya: satu papan dengan tujuh ukuran
+     * huruf lebih sulit dibaca daripada satu label terpotong. Lebarnya
+     * ditaksir dari jumlah huruf — php-svg-lib tidak menyediakan pengukur
+     * huruf, dan menaksir terlalu lebar lebih aman daripada meluber.
+     */
+    private function rangeLabel(
+        string $label,
+        float $x1,
+        float $x2,
+        float $y,
+        float $h,
+        string $color
+    ): string {
+        $ruang = ($x2 - $x1) - 6.0;
+        if ($ruang < 10.0 || $h < 7.0) {
+            return '';
+        }
+
+        $perHuruf = 3.6;
+        $muat = (int) floor($ruang / $perHuruf);
+        if ($muat < 1) {
+            return '';
+        }
+        if (mb_strlen($label) > $muat) {
+            $label = $muat <= 1 ? '…' : (mb_substr($label, 0, $muat - 1) . '…');
+        }
+
+        return '<text x="' . self::num($x1 + 3.0) . '" y="' . self::num($y + ($h / 2) + 2.2)
+            . '" font-family="' . self::FONT . '" font-size="6.5" fill="' . $color
+            . '">' . self::text($label) . '</text>';
     }
 
     /**
@@ -464,7 +689,9 @@ final class SvgChartRenderer
         // kolom mengikuti yang pertama kali terlihat.
         $perX = [];
         foreach ($series as $i => $one) {
-            foreach (SeriesValues::parse($values[(string) $one['field']] ?? null, $scale->axis()) as $point) {
+            foreach (SeriesValues::onlyPoints(
+                SeriesValues::parse($values[(string) $one['field']] ?? null, $scale->axis())
+            ) as $point) {
                 if (!is_numeric($point['y'])) {
                     continue;
                 }
@@ -633,7 +860,9 @@ final class SvgChartRenderer
 
         foreach ($series as $one) {
             $color = self::attr((string) $one['color']);
-            foreach (SeriesValues::parse($values[(string) $one['field']] ?? null, $scale->axis()) as $point) {
+            foreach (SeriesValues::onlyPoints(
+                SeriesValues::parse($values[(string) $one['field']] ?? null, $scale->axis())
+            ) as $point) {
                 $x = $scale->x($point['x']);
                 if ($x === null) {
                     continue;
@@ -780,7 +1009,9 @@ final class SvgChartRenderer
         $kanan = $scale->xFromColumn((float) $spec->columns());
 
         foreach ($series as $one) {
-            foreach (SeriesValues::parse($values[(string) $one['field']] ?? null, $scale->axis()) as $point) {
+            foreach (SeriesValues::onlyPoints(
+                SeriesValues::parse($values[(string) $one['field']] ?? null, $scale->axis())
+            ) as $point) {
                 $x = $scale->x($point['x']);
                 $band = self::bandFor($bands, $point['y']);
                 if ($x === null || $band === null) {

@@ -6,6 +6,53 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — rentang nilai (`x2`) dan panel `timeline` (2026-09-30)**
+
+Jadwal obat dan waktu infus bukan titik. Bentuk nilai bertambah satu kunci
+pilihan, **tanpa bentuk penyimpanan kedua** — dua bentuk berarti dua pembaca,
+dua penulis, dan dua jalur pembekuan yang bisa berpisah diam-diam:
+
+| `x2` | Artinya |
+|---|---|
+| tidak ada | titik, persis seperti sebelumnya |
+| `false` | **rentang terbuka**: sudah mulai, belum selesai |
+| waktu sah | rentang tertutup |
+| selain itu | seluruh rentangnya dibuang |
+
+`false` dipilih, bukan "`x2` dikosongkan pada panel timeline": kalau artinya
+bergantung jenis panel, nilai yang sama berubah arti begitu spesifikasinya
+diubah — dan spesifikasi bisa diubah sesudah dokumennya ditandatangani.
+
+Rentang terbuka bukan kemewahan. Infus yang masih jalan **tidak punya** jam
+selesai; tanpa keadaan itu yang mengisi cuma punya dua pilihan, tidak
+menulisnya atau mengarang jam selesai.
+
+**Panel `timeline`**: tiap deret satu jalur, nama deret jadi label jalurnya.
+
+- Rentang yang bertindih di satu jalur ditaruh di baris terpisah, bukan
+  disembunyikan dan bukan ditimpa.
+- Rentang yang melewati tepi sumbu **dipotong, dan ujungnya ditandai takik**.
+  Aturan "nilai di luar sumbu tidak digambar" sengaja tidak berlaku: titik di
+  luar sumbu hampir selalu salah ketik, sedangkan infus yang mulai sebelum
+  lembar ini dibuka adalah keadaan yang lazim. Takiknya cuma di ujung yang
+  BENAR-BENAR terpotong — kalau hampir semua batang bertakik, takik tidak
+  lagi memberitahu apa pun.
+- Label dipotong kalau tidak muat, bukan dikecilkan hurufnya. Batang yang
+  terlalu pendek tidak diberi label sama sekali: huruf di dalamnya meluber ke
+  jalur sebelah, dan yang terbaca di situ jadi milik jalur yang salah.
+- Judul panel timeline selalu berdiri di tepi luar — kolom kiri bagian dalam
+  sudah dipakai nama jalur.
+
+Batas panjang label rentang **48 huruf**, bukan 16 seperti isi sel: labelnya
+nama obat, dan "Ceftriaxone 1 gram" sudah delapan belas.
+
+Panel yang menggambar pengukuran mengabaikan rentang — rentang bukan
+pengukuran, dan menggambarnya sebagai titik di jam mulainya mengarang bacaan
+yang tidak pernah diambil. Tapi awal sebuah rentang tetap boleh membuka sumbu.
+
+Jenisnya bisa dipilih di penyunting papan, dan data contoh mengisi jalurnya
+dengan rentang — termasuk satu yang terbuka.
+
 **Added — batang bertumpuk (2026-09-30)**
 
 Kunci panel `stacked` pada panel `bar`: tiap deret jadi satu potongan,

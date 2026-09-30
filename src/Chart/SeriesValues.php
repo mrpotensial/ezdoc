@@ -33,6 +33,31 @@ namespace Ezdoc\Chart;
  *
  * Nilai `y` boleh angka (panel garis) atau teks pendek (panel simbol).
  *
+ * ## Rentang: kunci `x2` yang boleh tidak ada
+ *
+ * Jadwal obat dan waktu infus bukan titik. Bentuk penyimpanan kedua khusus
+ * untuk itu ditolak — dua bentuk berarti dua pembaca, dua penulis, dan dua
+ * jalur pembekuan yang bisa berpisah diam-diam. Yang dipilih satu kunci
+ * tambahan:
+ *
+ *   tidak ada  → titik, persis seperti sebelumnya
+ *   `false`    → rentang TERBUKA: sudah mulai, belum selesai
+ *   waktu sah  → rentang tertutup
+ *   selain itu → seluruh rentangnya dibuang
+ *
+ * Yang terakhir dibuang, bukan diturunkan jadi titik: rentang yang berakhir
+ * sebelum mulai adalah salah isi, dan menggambarkannya sebagai titik
+ * menyembunyikan kesalahan itu.
+ *
+ * `false` dipilih, bukan "`x2` dikosongkan pada panel timeline". Kalau artinya
+ * bergantung jenis panel, nilai yang sama berubah arti begitu spesifikasinya
+ * diubah — dan spesifikasi bisa diubah sesudah dokumennya ditandatangani.
+ * Yang tersimpan harus menjelaskan dirinya sendiri.
+ *
+ * Infus yang masih jalan **tidak punya** jam selesai. Tanpa keadaan terbuka,
+ * yang mengisi cuma punya dua pilihan: tidak menulisnya, atau mengarang jam
+ * selesai — dan yang kedua persis kegagalan yang dijaga seluruh berkas ini.
+ *
  * ## `x` tidak lagi selalu waktu
  *
  * Sampai 30 Sep 2026 kelas ini memanggil `normaliseTime()` langsung, dan
@@ -51,6 +76,16 @@ final class SeriesValues
 
     /** Teks `y` lebih panjang dari ini bukan simbol, melainkan salah isi. */
     public const MAX_LABEL = 16;
+
+    /**
+     * Batas yang sama untuk label RENTANG, dan sengaja jauh lebih longgar.
+     *
+     * Enam belas huruf masuk akal untuk baris sel — "U", "J", "+", "20/30".
+     * Untuk rentang, labelnya nama obat: "Ceftriaxone 1 gram" sudah delapan
+     * belas. Batas yang ketat di situ membuang catatan yang benar, dan
+     * membuangnya diam-diam.
+     */
+    public const MAX_RANGE_LABEL = 48;
 
     private function __construct()
     {
@@ -79,7 +114,7 @@ final class SeriesValues
             return [];
         }
 
-        $byX = [];
+        $byKey = [];
         foreach ($raw as $point) {
             if (!is_array($point) || !isset($point['x'])) {
                 continue;
@@ -90,27 +125,57 @@ final class SeriesValues
                 continue;
             }
 
-            $value = self::normaliseValue($point['y'] ?? null);
+            $punyaX2 = array_key_exists('x2', $point);
+            $x2 = null;
+            if ($punyaX2) {
+                if ($point['x2'] === false) {
+                    $x2 = false;
+                } else {
+                    $x2 = is_scalar($point['x2']) ? $axis->normalise((string) $point['x2']) : null;
+                    if ($x2 === null || $axis->compare($x2, $x) <= 0) {
+                        // Rentang yang berakhir sebelum mulai dibuang utuh,
+                        // bukan diturunkan jadi titik.
+                        continue;
+                    }
+                }
+            }
+
+            $value = self::normaliseValue(
+                $point['y'] ?? null,
+                $punyaX2 ? self::MAX_RANGE_LABEL : self::MAX_LABEL
+            );
             if ($value === null) {
-                continue;
+                // Rentang boleh tanpa label; titik tanpa nilai tidak
+                // menggambarkan pengukuran apa pun.
+                if (!$punyaX2) {
+                    continue;
+                }
+                $value = '';
             }
 
             // Yang terakhir menang — lihat keputusan (3) di docblock kelas.
-            $byX[$x] = $value;
+            // Kuncinya `x` dan `x2` sekaligus: dua rentang yang mulai bersamaan
+            // tapi berakhir berbeda adalah dua rentang.
+            $kunci = $punyaX2 ? ($x . '|' . ($x2 === false ? '~' : $x2)) : $x;
+            $byKey[$kunci] = $punyaX2
+                ? ['x' => $x, 'x2' => $x2, 'y' => $value]
+                : ['x' => $x, 'y' => $value];
         }
 
         // Urutannya ditentukan sumbu, bukan abjad: pada sumbu berangka,
         // "10" datang sesudah "9", sedangkan abjad menaruhnya sebelum.
-        uksort($byX, static function ($a, $b) use ($axis): int {
-            return $axis->compare((string) $a, (string) $b);
+        // Rentang terbuka diurutkan paling belakang di antara yang sama
+        // awalnya — ia yang paling panjang.
+        usort($byKey, static function (array $a, array $b) use ($axis): int {
+            $urut = $axis->compare($a['x'], $b['x']);
+            if ($urut !== 0) {
+                return $urut;
+            }
+
+            return self::rankEnd($a) <=> self::rankEnd($b);
         });
 
-        $points = [];
-        foreach ($byX as $x => $value) {
-            $points[] = ['x' => (string) $x, 'y' => $value];
-        }
-
-        return $points;
+        return array_values($byKey);
     }
 
     /**
@@ -152,6 +217,52 @@ final class SeriesValues
         return $earliest;
     }
 
+    /** Apakah sebuah titik hasil {@see self::parse()} adalah rentang. */
+    public static function isRange(array $point): bool
+    {
+        return array_key_exists('x2', $point);
+    }
+
+    /**
+     * Cuma titik — rentang disaring keluar.
+     *
+     * Dipakai panel yang menggambar pengukuran. Rentang bukan pengukuran, dan
+     * menggambarnya sebagai titik di jam mulainya mengarang bacaan yang tidak
+     * pernah diambil.
+     *
+     * @param array<int,array<string,mixed>> $points
+     * @return array<int,array<string,mixed>>
+     */
+    public static function onlyPoints(array $points): array
+    {
+        return array_values(array_filter($points, static function (array $p): bool {
+            return !self::isRange($p);
+        }));
+    }
+
+    /**
+     * Cuma rentang.
+     *
+     * @param array<int,array<string,mixed>> $points
+     * @return array<int,array<string,mixed>>
+     */
+    public static function onlyRanges(array $points): array
+    {
+        return array_values(array_filter($points, static function (array $p): bool {
+            return self::isRange($p);
+        }));
+    }
+
+    /** Urutan ujung sebuah titik: titik dulu, lalu rentang, lalu yang terbuka. */
+    private static function rankEnd(array $point): int
+    {
+        if (!self::isRange($point)) {
+            return 0;
+        }
+
+        return $point['x2'] === false ? 2 : 1;
+    }
+
     /**
      * Waktu yang bisa dibaca, dalam satu bentuk baku — atau null.
      *
@@ -176,8 +287,10 @@ final class SeriesValues
      * @param mixed $raw
      * @return float|int|string|null
      */
-    public static function normaliseValue($raw)
+    public static function normaliseValue($raw, ?int $maxLabel = null)
     {
+        $maxLabel = $maxLabel ?? self::MAX_LABEL;
+
         if (is_bool($raw) || $raw === null) {
             return null;
         }
@@ -197,7 +310,7 @@ final class SeriesValues
 
         if (is_string($raw)) {
             $label = trim($raw);
-            if ($label === '' || mb_strlen($label) > self::MAX_LABEL) {
+            if ($label === '' || mb_strlen($label) > $maxLabel) {
                 return null;
             }
 
