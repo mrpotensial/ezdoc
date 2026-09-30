@@ -1918,6 +1918,18 @@
             // Prevent cleanup of styles and classes
             valid_children: '+body[style|div|span],+div[style|div|span|p]',
             content_style: `
+                /* Pegangan ubah-ukuran papan grafik. Ia elemen bertanda
+                   data-mce-bogus="all", jadi TinyMCE tidak pernah ikut
+                   menyimpannya ke template — cara yang sama dipakai TinyMCE
+                   sendiri untuk perkakas di dalam isi. */
+                .ez-chart-grip {
+                    position: absolute; right: -4px; bottom: -4px;
+                    width: 14px; height: 14px; border-radius: 3px;
+                    background: #0891b2; border: 2px solid #fff;
+                    cursor: nwse-resize; z-index: 5;
+                }
+                .chart-placeholder { position: relative; }
+
                 /* Global box-sizing — MATCH generate.php's "* { box-sizing: border-box }".
                    Without this, td/th/p default to content-box in editor iframe,
                    causing width+padding calculation diff → table column widths
@@ -4955,7 +4967,7 @@
             return '<div class="chart-placeholder" data-chart="' + escAttr(id) + '"'
                 + ' data-chart-spec="' + escAttr(JSON.stringify(spec)) + '"'
                 + ' contenteditable="false"'
-                + ' style="display:inline-block;width:' + lebar + 'px;height:' + tinggi + 'px;'
+                + ' style="position:relative;display:inline-block;width:' + lebar + 'px;height:' + tinggi + 'px;'
                 + 'border:1px dashed #0891b2;background:#ecfeff;text-align:center;overflow:hidden">'
                 + '<span style="font-size:11px;color:#0e7490;line-height:' + tinggi + 'px">'
                 + escAttr(t('chart.placeholder_label', {}, 'Chart board')) + '</span></div>';
@@ -4998,6 +5010,150 @@
             }
         }
 
+        /**
+         * Pasang pegangan ubah-ukuran di tiap papan grafik.
+         *
+         * Papan bawaan terlalu kecil untuk diisi dengan nyaman, dan satu-satunya
+         * cara melebarkannya adalah menyunting JSON. Sekarang sudutnya tinggal
+         * diseret.
+         *
+         * Pegangannya bertanda `data-mce-bogus="all"` — TinyMCE tidak pernah
+         * menyimpan elemen bertanda itu ke isi dokumen. Tanpa tanda itu,
+         * pegangannya ikut tersimpan ke template dan muncul di hasil cetak.
+         */
+        function pasangChartGrip() {
+            const editor = tinymce.get('editor');
+            if (!editor || !editor.getBody()) return;
+
+            editor.getBody().querySelectorAll('.chart-placeholder').forEach(function (el) {
+                el.style.position = 'relative';
+                if (el.querySelector('.ez-chart-grip')) return;
+
+                const grip = editor.getDoc().createElement('div');
+                grip.className = 'ez-chart-grip';
+                grip.setAttribute('data-mce-bogus', 'all');
+                grip.setAttribute('contenteditable', 'false');
+                el.appendChild(grip);
+            });
+        }
+
+        /** Seret sudut: ukurannya berubah seketika, spesifikasinya menyusul. */
+        function siapkanChartResize() {
+            const editor = tinymce.get('editor');
+            if (!editor || editor._ezChartResize) return;
+            editor._ezChartResize = true;
+
+            const doc = editor.getDoc();
+            let seret = null;
+
+            // Fase tangkap, bukan gelembung. TinyMCE juga mendengarkan mousedown
+            // di dokumen yang sama untuk memilih elemen contenteditable=false,
+            // dan penanganannya berhenti di situ — pendengar gelembung tidak
+            // pernah kebagian.
+            doc.addEventListener('mousedown', function (ev) {
+                const grip = ev.target && ev.target.closest ? ev.target.closest('.ez-chart-grip') : null;
+                if (!grip) return;
+                const papan = grip.parentElement;
+                if (!papan) return;
+
+                ev.preventDefault();
+                ev.stopPropagation();
+                const kotak = papan.getBoundingClientRect();
+                seret = { papan: papan, x: ev.clientX, y: ev.clientY, lebar: kotak.width, tinggi: kotak.height };
+            }, true);
+
+            doc.addEventListener('mousemove', function (ev) {
+                if (!seret) return;
+                // Batas bawah supaya papannya tidak bisa diseret jadi segaris
+                // dan hilang dari pandangan.
+                const lebar = Math.max(180, seret.lebar + (ev.clientX - seret.x));
+                const tinggi = Math.max(80, seret.tinggi + (ev.clientY - seret.y));
+                seret.papan.style.width = Math.round(lebar) + 'px';
+                seret.papan.style.height = Math.round(tinggi) + 'px';
+            }, true);
+
+            const selesai = function () {
+                if (!seret) return;
+                const papan = seret.papan;
+                const lebar = parseFloat(papan.style.width) || seret.lebar;
+                const tinggi = parseFloat(papan.style.height) || seret.tinggi;
+                seret = null;
+                chartResizeSelesai(papan, lebar, tinggi);
+            };
+
+            doc.addEventListener('mouseup', selesai, true);
+
+            // TANPA `mouseleave`. Di fase tangkap, `mouseleave` milik SETIAP
+            // elemen yang ditinggalkan pointer ikut lewat dokumen — termasuk
+            // pegangan yang baru saja ditekan. Seretannya dibatalkan pada
+            // gerakan pertama, sebelum sempat mengubah apa pun, dan dari luar
+            // itu terlihat seperti pegangannya mati.
+            //
+            // Pointer yang keluar jendela sudah ditangani `mouseup`: tombol
+            // yang dilepas di luar tetap sampai ke dokumen ini.
+        }
+
+        /**
+         * Ukuran baru diterjemahkan jadi spesifikasi, lalu ditanyakan ke server.
+         *
+         * Lebar jadi lebar kolom; tinggi dibagi rata ke semua panel menurut
+         * perbandingannya. Sisa ukuran di luar kisi — kolom label kiri, ruang
+         * label jam di bawah, jarak antar panel — dihitung dari jawaban server,
+         * bukan ditiru di sini: angkanya milik ChartSpec, dan dua salinan angka
+         * yang sama akan berpisah.
+         */
+        async function chartResizeSelesai(papan, lebarBaru, tinggiBaru) {
+            const spec = bacaChartSpec(papan);
+            if (!spec) return;
+
+            const awal = await chartRenderRequest(spec, {});
+            if (!awal.ok) { showToast(awal.message, 'error'); return; }
+
+            const jam = awal.scale.hours || 1;
+            const sisaLebar = awal.scale.width - (jam * awal.scale.column_width);
+            const jumlahTinggi = (awal.scale.panels || []).reduce(function (n, p) { return n + p.height; }, 0);
+            const sisaTinggi = awal.scale.height - jumlahTinggi;
+
+            spec.column_width = Math.round(Math.max(6, (lebarBaru - sisaLebar) / jam) * 10) / 10;
+            delete spec.width; // lebarnya mengikuti isinya lagi
+
+            const rasio = jumlahTinggi > 0 ? Math.max(0.2, (tinggiBaru - sisaTinggi) / jumlahTinggi) : 1;
+            (spec.panels || []).forEach(function (p, i) {
+                const lama = awal.scale.panels[i] ? awal.scale.panels[i].height : 0;
+                if (lama > 0) p.height = Math.max(12, Math.round(lama * rasio));
+            });
+
+            const hasil = await chartRenderRequest(spec, {});
+            if (!hasil.ok) { showToast(hasil.message, 'error'); return; }
+
+            papan.setAttribute('data-chart-spec', JSON.stringify(spec));
+            terapkanUkuranChart(papan, hasil.scale);
+            editorKotor();
+            scanChartPlaceholders();
+        }
+
+        /** Baca spesifikasi dari atribut penanda — null kalau rusak. */
+        function bacaChartSpec(papan) {
+            try {
+                return JSON.parse(papan.getAttribute('data-chart-spec') || '{}');
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function terapkanUkuranChart(papan, scale) {
+            const tinggi = Math.round(scale.height);
+            papan.style.width = scale.width + 'px';
+            papan.style.height = tinggi + 'px';
+            const label = papan.querySelector('span');
+            if (label) label.style.lineHeight = tinggi + 'px';
+        }
+
+        function editorKotor() {
+            const editor = tinymce.get('editor');
+            if (editor) editor.setDirty(true);
+        }
+
         function scanChartPlaceholders() {
             const editor = tinymce.get('editor');
             if (!editor) return;
@@ -5021,6 +5177,11 @@
 
             configChart = ditemukan;
             renderCharts();
+
+            // Dipasang sesudah pemindaian, bukan sebelumnya: pemindaian membaca
+            // getContent(), dan pegangannya memang tidak ada di situ.
+            pasangChartGrip();
+            siapkanChartResize();
         }
 
         function renderCharts() {
@@ -5122,10 +5283,7 @@
             if (!el) { chartMessage(i, t('chart.not_found', {}, 'That chart is no longer in the document'), true); return; }
 
             el.setAttribute('data-chart-spec', JSON.stringify(spec));
-            el.style.width = hasil.scale.width + 'px';
-            el.style.height = Math.round(hasil.scale.height) + 'px';
-            const label = el.querySelector('span');
-            if (label) label.style.lineHeight = Math.round(hasil.scale.height) + 'px';
+            terapkanUkuranChart(el, hasil.scale);
             editor.setDirty(true);
 
             chartMessage(i, t('chart.applied', {}, 'Applied'), false);

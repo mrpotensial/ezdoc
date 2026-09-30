@@ -6,6 +6,48 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — papan grafik bisa diubah ukurannya dengan menyeret sudutnya (2026-09-30)**
+
+Diminta pemakai saat mencoba partografnya: "di designer belum bisa resize area
+grafik, jadi susah mengisinya karena default area grafik terlalu kecil".
+
+Sudut kanan bawah papan sekarang punya pegangan. Lebar seretan jadi lebar
+kolom, tinggi dibagi rata ke semua panel menurut perbandingannya, lalu
+spesifikasinya ditulis balik — bukan cuma gaya kotaknya, yang akan kembali ke
+ukuran lama begitu dokumennya dibuka lagi.
+
+- Pegangannya bertanda `data-mce-bogus="all"`, jadi TinyMCE tidak pernah ikut
+  menyimpannya ke template. Tanpa tanda itu ia muncul di hasil cetak.
+- Sisa ukuran di luar kisi — kolom label kiri, ruang label jam, jarak antar
+  panel — dihitung dari jawaban server, bukan ditiru di peramban.
+
+Satu jebakan yang butuh menelusuri jejak event untuk ditemukan: pendengar
+`mouseleave` di fase tangkap menangkap `mouseleave` milik **setiap** elemen
+yang ditinggalkan pointer, termasuk pegangan yang baru ditekan. Seretannya
+dibatalkan pada gerakan pertama, dan dari luar itu terlihat seperti
+pegangannya mati.
+
+**Added — legenda bisa di atas, di bawah, atau di kolom kiri (2026-09-30)**
+
+Diminta pemakai: "apakah tidak bisa tampilkan legenda juga? seperti referensi".
+Ketiga letak itu ada di satu lembar yang sama.
+
+- `legend: "above" | "below" | "left"`. `true` tetap berarti "di atas".
+- Legenda kiri menggambar **contoh isian yang sebenarnya** — kotak berarsir
+  yang sama persis dengan batangnya, bukan sekadar warna. Kotak berwarna tidak
+  menjelaskan apa pun ketika ketiganya hitam.
+- Tingkat isian boleh membawa namanya sendiri:
+  `"levels": {"1": {"fill": "dots", "label": "< 20"}}`.
+- Panel **sesudah** legenda bawah ikut diberi ruang. Ini yang terlewat mula-mula:
+  ruang hanya dipesan untuk legenda atas, jadi legenda bawah menimpa baris di
+  bawahnya.
+- Judul panel menyingkir ke atas kalau legendanya juga menempati kolom kiri.
+- Tanda **wajik** (`diamond`), seperti di lembar aslinya.
+
+Contoh `contoh/partograf/` ikut diisi sebanyak lembar aslinya — 15 titik DJJ,
+15 titik nadi, delapan batang kontraksi — supaya bentuknya terlihat pada data
+yang sungguhan, bukan pada satu titik.
+
 **Added — partograf utuh: panel batang, simbol, dan teks (2026-09-29)**
 
 Pemakai mengirim hasil cetak `form_partograf_cetak.php` yang sesungguhnya, lalu

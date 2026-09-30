@@ -77,12 +77,21 @@ final class ChartSpec
 
     public const DRAWS = ['point+line', 'point', 'line'];
 
-    public const MARKERS = ['circle', 'cross', 'square', 'dot', 'triangle-up', 'triangle-down'];
+    public const MARKERS = ['circle', 'cross', 'square', 'dot', 'diamond', 'triangle-up', 'triangle-down'];
 
     public const STYLES = ['solid', 'dashed'];
 
     /** Cara isian batang digambar. Lihat catatan `<pattern>` di perender. */
     public const FILLS = ['solid', 'hatch', 'dots', 'empty'];
+
+    /**
+     * Letak legenda.
+     *
+     *   above — sebaris di atas panel (pembukaan serviks)
+     *   below — sebaris di bawah panel (nadi & tekanan darah)
+     *   left  — bertumpuk di kolom label kiri (keterangan isian kontraksi)
+     */
+    public const LEGENDS = ['above', 'below', 'left'];
 
     /** @var int */
     private $width;
@@ -241,7 +250,14 @@ final class ChartSpec
             return (float) $panel['gap_before'];
         }
 
-        return (bool) $panel['legend'] ? max($this->panelGap, 12.0) : $this->panelGap;
+        // Ruang lebih perlu di dua keadaan: legenda panel ini di ATAS, atau
+        // legenda panel SEBELUMNYA di bawah — keduanya ditulis di ruang antar
+        // panel, dan tanpa ruang itu mereka menimpa barisnya.
+        $sebelumnya = $this->panels[$index - 1] ?? null;
+        $perlu = $panel['legend'] === 'above'
+            || ($sebelumnya !== null && $sebelumnya['legend'] === 'below');
+
+        return $perlu ? max($this->panelGap, 12.0) : $this->panelGap;
     }
 
     /** @return array<int,array<string,mixed>> */
@@ -360,15 +376,21 @@ final class ChartSpec
             $verticals[] = self::readVertical($one, $position, $i + 1);
         }
 
+        // Tiap tingkat boleh berupa nama isian saja, atau objek dengan namanya
+        // sendiri. Yang kedua dipakai legenda kiri: "< 20", "20-40", "> 40".
         $levels = [];
         $rawLevels = isset($panel['levels']) && is_array($panel['levels']) ? $panel['levels'] : [];
-        foreach ($rawLevels as $value => $fill) {
-            if (!in_array((string) $fill, self::FILLS, true)) {
+        foreach ($rawLevels as $value => $level) {
+            $fill = is_array($level) ? (string) ($level['fill'] ?? '') : (string) $level;
+            if (!in_array($fill, self::FILLS, true)) {
                 throw new ValidationException(
-                    "Panel ke-{$position}: isian batang '" . (string) $fill . "' tidak dikenal."
+                    "Panel ke-{$position}: isian batang '{$fill}' tidak dikenal."
                 );
             }
-            $levels[(string) $value] = (string) $fill;
+            $levels[(string) $value] = [
+                'fill' => $fill,
+                'label' => is_array($level) ? (string) ($level['label'] ?? '') : '',
+            ];
         }
 
         // Baris sel setinggi 200 adalah salah ketik, bukan pilihan. Bawaannya
@@ -389,7 +411,7 @@ final class ChartSpec
             'y_axis' => !$isCell && (!isset($panel['y_axis']) || (bool) $panel['y_axis']),
             'grid' => !isset($panel['grid']) || (bool) $panel['grid'],
             'sub_columns' => self::readInt($panel, 'sub_columns', 1, 1, 12),
-            'legend' => isset($panel['legend']) && (bool) $panel['legend'],
+            'legend' => self::readLegend($panel, $position),
             'gap_before' => isset($panel['gap_before']) && $panel['gap_before'] !== ''
                 ? self::readFloat($panel, 'gap_before', 0.0, 0.0, 200.0)
                 : null,
@@ -506,6 +528,37 @@ final class ChartSpec
             'label' => !isset($vertical['label']) || (bool) $vertical['label'],
             'color' => self::readColor($vertical, 'color', '#cc0000', $panelPosition, $position),
         ];
+    }
+
+    /**
+     * Letak legenda — atau null kalau panel ini tidak berlegenda.
+     *
+     * `true` diterima dan berarti "di atas": itu satu-satunya letak yang ada
+     * saat legenda pertama dibuat, dan spesifikasi yang sudah ditulis dengan
+     * `true` tidak boleh mendadak kehilangan legendanya.
+     *
+     * @param array<string,mixed> $panel
+     *
+     * @throws ValidationException
+     */
+    private static function readLegend(array $panel, int $position): ?string
+    {
+        if (!isset($panel['legend']) || $panel['legend'] === false || $panel['legend'] === '') {
+            return null;
+        }
+        if ($panel['legend'] === true) {
+            return 'above';
+        }
+
+        $legend = (string) $panel['legend'];
+        if (!in_array($legend, self::LEGENDS, true)) {
+            throw new ValidationException(
+                "Panel ke-{$position}: letak legenda '{$legend}' tidak dikenal (pilihannya "
+                . implode(', ', self::LEGENDS) . ').'
+            );
+        }
+
+        return $legend;
     }
 
     /**

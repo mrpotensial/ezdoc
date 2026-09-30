@@ -150,8 +150,8 @@ final class SvgChartRenderer
 
         $out .= $this->title($panel, $left, $top, $bottom);
 
-        if ((bool) $panel['legend']) {
-            $out .= $this->legend($panel, $left, $top);
+        if ($panel['legend'] !== null) {
+            $out .= $this->legend($panel, $left, $top, $bottom, (string) $panel['legend']);
         }
 
         /** @var array<int,array<string,mixed>> $references */
@@ -243,7 +243,11 @@ final class SvgChartRenderer
             return '';
         }
 
-        $middle = $top + (($bottom - $top) / 2);
+        // Judul biasanya di tengah tinggi panel. Kecuali kalau legendanya juga
+        // menempati kolom kiri — keduanya di tengah berarti keduanya bertumpuk.
+        $middle = $panel['legend'] === 'left'
+            ? $top + 6
+            : $top + (($bottom - $top) / 2);
 
         if ((string) $panel['title_align'] === 'left') {
             return '<text x="' . self::num($left - 6) . '" y="' . self::num($middle + 3)
@@ -261,10 +265,14 @@ final class SvgChartRenderer
      *
      * @param array<string,mixed> $panel
      */
-    private function legend(array $panel, float $left, float $top): string
+    private function legend(array $panel, float $left, float $top, float $bottom, string $where): string
     {
+        if ($where === 'left') {
+            return $this->legendLeft($panel, $left, $top);
+        }
+
         $x = $left + 6;
-        $y = $top - 4;
+        $y = $where === 'below' ? $bottom + 9 : $top - 4;
         $out = '';
 
         /** @var array<int,array<string,mixed>> $series */
@@ -293,6 +301,45 @@ final class SvgChartRenderer
                 . '" font-family="' . self::FONT . '" font-size="8" fill="' . self::TEXT_COLOR
                 . '">' . self::text($label) . '</text>';
             $x += 24 + (strlen($label) * 4.6);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Legenda di kolom kiri: contoh isian batang beserta namanya.
+     *
+     * Bentuknya meniru keterangan di lembar aslinya — kotak kecil berisi
+     * arsiran yang sama persis dengan yang dipakai batangnya, bukan sekadar
+     * warna. Kotak berwarna tidak menjelaskan apa pun ketika ketiganya hitam.
+     *
+     * @param array<string,mixed> $panel
+     */
+    private function legendLeft(array $panel, float $left, float $top): string
+    {
+        /** @var array<string,array<string,string>> $levels */
+        $levels = $panel['levels'];
+        if ($levels === []) {
+            return '';
+        }
+
+        /** @var array<int,array<string,mixed>> $series */
+        $series = $panel['series'];
+        $color = $series === [] ? '#111111' : self::attr((string) $series[0]['color']);
+
+        $x = $left - 46;
+        $y = $top + 14;
+        $out = '';
+
+        foreach ($levels as $level) {
+            $out .= $this->barShape($x, $y, 12.0, 9.0, (string) $level['fill'], $color);
+            $label = (string) $level['label'];
+            if ($label !== '') {
+                $out .= '<text x="' . self::num($x + 16) . '" y="' . self::num($y + 7)
+                    . '" font-family="' . self::FONT . '" font-size="6" fill="' . self::TEXT_COLOR
+                    . '">' . self::text($label) . '</text>';
+            }
+            $y += 12;
         }
 
         return $out;
@@ -328,7 +375,7 @@ final class SvgChartRenderer
             }
         }
 
-        /** @var array<string,string> $levels */
+        /** @var array<string,array<string,string>> $levels */
         $levels = $panel['levels'];
         $color = self::attr((string) $series[0]['color']);
         $width = $spec->columnWidth() * 0.6;
@@ -345,7 +392,8 @@ final class SvgChartRenderer
             // garisnya — batang yang berdiri di atas garis jam terbaca sebagai
             // milik dua kolom sekaligus.
             $barX = $x + (($spec->columnWidth() - $width) / 2);
-            $fill = $levels[$styleByTime[$point['x']] ?? ''] ?? 'solid';
+            $level = $levels[$styleByTime[$point['x']] ?? ''] ?? null;
+            $fill = $level === null ? 'solid' : (string) $level['fill'];
             $out .= $this->barShape($barX, $y, $width, $bottom - $y, $fill, $color);
         }
 
@@ -621,6 +669,15 @@ final class SvgChartRenderer
     {
         if ($marker === 'dot') {
             return '<circle cx="' . self::num($x) . '" cy="' . self::num($y) . '" r="2" fill="' . $color . '"/>';
+        }
+
+        if ($marker === 'diamond') {
+            $titik = self::num($x) . ' ' . self::num($y - 4) . ' '
+                . self::num($x + 4) . ' ' . self::num($y) . ' '
+                . self::num($x) . ' ' . self::num($y + 4) . ' '
+                . self::num($x - 4) . ' ' . self::num($y);
+
+            return '<polygon points="' . $titik . '" fill="' . $color . '"/>';
         }
 
         if ($marker === 'square') {
