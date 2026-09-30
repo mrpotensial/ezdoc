@@ -161,6 +161,17 @@ final class PanelLainTest extends TestCase
         );
         self::assertGreaterThan(3, count($m), 'arsirnya hampir tidak bergaris');
 
+        // Kotak batangnya, untuk memastikan arsirnya tidak keluar darinya.
+        self::assertSame(
+            1,
+            preg_match('/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"[^>]*stroke-width="0\.8"/', $svg, $kotak),
+            'batangnya tidak ketemu'
+        );
+        $kiri = (float) $kotak[1];
+        $atas = (float) $kotak[2];
+        $kanan = $kiri + (float) $kotak[3];
+        $bawah = $atas + (float) $kotak[4];
+
         foreach ($m as $garis) {
             $dx = (float) $garis[3] - (float) $garis[1];
             $dy = (float) $garis[4] - (float) $garis[2];
@@ -170,6 +181,16 @@ final class PanelLainTest extends TestCase
                 0.01,
                 'garis arsirnya tidak 45 derajat — menyebar seperti kipas'
             );
+
+            // Dan tetap DI DALAM batangnya. Garis 45° yang ujungnya tidak
+            // dipotong tetap 45°, tapi menjulur keluar kotaknya — miring benar,
+            // tempat salah, dan di atas kertas itu terlihat seperti coretan.
+            foreach ([[1, 2], [3, 4]] as $ujung) {
+                self::assertGreaterThanOrEqual($kiri - 0.01, (float) $garis[$ujung[0]], 'arsirnya keluar ke kiri');
+                self::assertLessThanOrEqual($kanan + 0.01, (float) $garis[$ujung[0]], 'arsirnya keluar ke kanan');
+                self::assertGreaterThanOrEqual($atas - 0.01, (float) $garis[$ujung[1]], 'arsirnya keluar ke atas');
+                self::assertLessThanOrEqual($bawah + 0.01, (float) $garis[$ujung[1]], 'arsirnya keluar ke bawah');
+            }
         }
     }
 
