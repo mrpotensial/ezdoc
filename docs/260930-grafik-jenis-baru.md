@@ -1,6 +1,6 @@
 # Jenis grafik baru, satuan sumbu baru, dan contoh di luar rumah sakit
 
-> Status: **fase 0, 1, dan 2 selesai, fase 3–9 belum dikerjakan.**
+> Status: **fase 0–3 selesai, fase 4–9 belum dikerjakan.**
 > Ditulis 30 Sep 2026 sesudah papan grafik terisi (lihat [260929-grafik-terisi.md](260929-grafik-terisi.md))
 > dipakai untuk partograf, lalu diminta dipakai untuk yang lain.
 
@@ -479,9 +479,23 @@ melukisnya yang ikut bentuk panelnya:
 Satu kunci, dua bacaan yang sama-sama jelas, dan dua contoh di §7 (MEOWS dan
 rantai dingin) memakai kunci yang sama.
 
+**Dikerjakan 30 Sep 2026.** Dua hal ketahuan sesudah gambarnya dibaca,
+bukan sesudah ujinya hijau:
+
+1. **Latar sel menjulur ke luar kisi.** Papan 12 kolom punya 12 sel; batas
+   ke-13 cuma garis penutup. Nilai yang jatuh tepat di situ tidak punya kolom
+   di sebelah kanannya, dan latarnya terlukis di luar papan. Sekarang
+   dipotong pada tepi kisi.
+2. **Kecerahan harus dihitung berbobot, bukan dirata-rata.** Keduanya memberi
+   jawaban sama untuk hampir semua warna — dan berbeda pada biru. `#1d4ed8`
+   rata-ratanya terang (tinta hitam), padahal bagi mata ia gelap (tinta
+   putih). Uji mutasi yang menunjukkan kedua rumus itu tidak terbedakan
+   sampai ada pita biru yang diuji.
+
 Selebihnya:
 
-- `to` boleh tidak ada, berarti sampai tak hingga.
+- `to` boleh tidak ada, berarti sampai tak hingga. Pita tak berujung dipotong
+  pada tepi panelnya, bukan menjulur ke panel di atasnya.
 - Pita yang bertumpang tindih ditolak saat validasi — "nilai 4 warnanya apa"
   tidak boleh punya dua jawaban.
 - Kunci `axis` (`left`/`right`) disediakan sejak awal walau sumbu Y kedua
@@ -591,7 +605,7 @@ tetap berguna.
 | 0 | ~~Tiga jawaban Dompdf di §3~~ | **selesai 30 Sep** |
 | 1 | ~~Titik sambung sumbu X + `TimeAxis` + kesamaan PHP↔JS~~ | **selesai 30 Sep** |
 | 2 | ~~`draw`: `step`, `area`~~ | **selesai 30 Sep** |
-| 3 | Kunci panel `bands` (sel berwarna + pita latar) | sedang |
+| 3 | ~~Kunci panel `bands` (sel berwarna + pita latar)~~ | **selesai 30 Sep** |
 | 4 | `stacked` pada panel `bar` (gambar saja, isian diketik) | kecil |
 | 5 | `x2` di `SeriesValues` + panel `timeline` (gambar) | sedang |
 | 6 | Isian timeline di peramban | **besar** |
@@ -679,7 +693,9 @@ membalikkannya tahu apa yang harus dibantah.
 - **Lambang ✓ dan ✗ tercetak `?`** (§3). Contoh mana yang boleh memakainya,
   dan apakah huruf yang memuatnya dibenamkan — diputuskan di fase 9.
 - **Apakah satu kunci `bands` untuk dua bacaan terasa wajar di penyunting.**
-  Ketahuannya di fase 9, saat contoh nomor 2 dan 5 dibuat bersebelahan.
+  Di gambar sudah terjawab: dua bacaannya dicetak berdampingan dalam satu
+  papan dan keduanya terbaca sebagaimana mestinya. Di formulir belum —
+  ketahuannya di fase 9, saat contoh nomor 2 dan 5 dibuat bersebelahan.
 - **Apakah `x.kind` kelak memuat `columns` juga.** Sekarang `columns` dibaca
   dari `x`, dari akar papan, dan dari `hours` lama — tiga tempat untuk satu
   angka. Ketiganya dibaca selamanya, tapi penyunting hanya menulis satu.

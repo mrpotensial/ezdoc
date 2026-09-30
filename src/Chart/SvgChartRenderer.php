@@ -140,7 +140,11 @@ final class SvgChartRenderer
         $right = $scale->xFromColumn((float) $spec->columns());
         $type = (string) $panel['type'];
 
-        $out = $this->grid($spec, $scale, $index, $panel, $top, $bottom, $left, $right);
+        // Pita nilai dilukis PALING BELAKANG, sebelum kisi: ia latar, bukan
+        // isi. Dilukis sesudah kisi, ia menutupi garis-garis yang justru
+        // dipakai membaca angkanya.
+        $out = $this->bands($spec, $scale, $values, $index, $panel, $top, $bottom, $left, $right);
+        $out .= $this->grid($spec, $scale, $index, $panel, $top, $bottom, $left, $right);
 
         // Bingkai panel digambar terpisah dari kisinya, dengan garis lebih
         // tegas: batas sumbu harus terbaca sebagai batas, bukan sebagai salah
@@ -500,6 +504,9 @@ final class SvgChartRenderer
         $size = $type === 'symbol' ? 9 : 7;
         $out = '';
 
+        /** @var array<int,array<string,mixed>> $bands */
+        $bands = $panel['bands'];
+
         foreach ($series as $one) {
             $color = self::attr((string) $one['color']);
             foreach (SeriesValues::parse($values[(string) $one['field']] ?? null, $scale->axis()) as $point) {
@@ -507,13 +514,217 @@ final class SvgChartRenderer
                 if ($x === null) {
                     continue;
                 }
+
+                // Sel yang duduk di atas pita memakai warna teks yang dipilih
+                // untuk pita itu, bukan warna deretnya. Angka hitam di atas
+                // merah tua tidak terbaca, dan yang menyetel warna pitanya
+                // tidak bisa diharapkan menghitung kecerahannya sendiri.
+                $tinta = $color;
+                $band = $bands === [] ? null : self::bandFor($bands, $point['y']);
+                if ($band !== null) {
+                    $tinta = self::inkOn((string) $band['color']);
+                }
+
                 $out .= '<text x="' . self::num($x + ($spec->columnWidth() / 2)) . '" y="' . self::num($middle)
-                    . '" font-family="' . self::FONT . '" font-size="' . $size . '" fill="' . $color
+                    . '" font-family="' . self::FONT . '" font-size="' . $size . '" fill="' . $tinta
                     . '" text-anchor="middle">' . self::text((string) $point['y']) . '</text>';
             }
         }
 
         return $out;
+    }
+
+    /**
+     * Pita nilai: satu aturan, dua bacaan.
+     *
+     * Di baris sel ia mewarnai latar tiap SEL menurut nilai sel itu — yang
+     * dicari pembacanya baris merah, bukan angkanya. Di panel bersumbu Y ia
+     * melukis pita MENDATAR di latar panel, untuk batas normal yang berlaku
+     * sepanjang lembar.
+     *
+     * @param array<string,mixed> $values
+     * @param array<string,mixed> $panel
+     */
+    private function bands(
+        ChartSpec $spec,
+        Scale $scale,
+        array $values,
+        int $index,
+        array $panel,
+        float $top,
+        float $bottom,
+        float $left,
+        float $right
+    ): string {
+        /** @var array<int,array<string,mixed>> $bands */
+        $bands = $panel['bands'];
+        if ($bands === []) {
+            return '';
+        }
+
+        if (in_array((string) $panel['type'], ChartSpec::CELL_TYPES, true)) {
+            return $this->bandCells($spec, $scale, $values, $panel, $top, $bottom, $bands);
+        }
+
+        return $this->bandStripes($scale, $index, $bands, $top, $bottom, $left, $right);
+    }
+
+    /**
+     * Pita mendatar di latar panel bersumbu Y.
+     *
+     * Dipotong pada tepi panel: pita "6 ke atas" pada sumbu yang berhenti di
+     * 10 terlukis sampai 10, bukan menjulur ke panel di atasnya.
+     *
+     * @param array<int,array<string,mixed>> $bands
+     */
+    private function bandStripes(
+        Scale $scale,
+        int $index,
+        array $bands,
+        float $top,
+        float $bottom,
+        float $left,
+        float $right
+    ): string {
+        $out = '';
+        foreach ($bands as $band) {
+            $atas = self::edgeY($scale, $index, $band['to'], $top, $bottom);
+            $bawah = self::edgeY($scale, $index, $band['from'], $top, $bottom);
+            if ($bawah - $atas <= 0.0) {
+                continue;
+            }
+
+            $out .= '<rect x="' . self::num($left) . '" y="' . self::num($atas)
+                . '" width="' . self::num($right - $left) . '" height="' . self::num($bawah - $atas)
+                . '" fill="' . self::attr((string) $band['color']) . '" stroke="none"/>';
+        }
+
+        return $out;
+    }
+
+    /**
+     * Tempat tegak sebuah tepi pita, dipotong pada tepi panelnya.
+     *
+     * `null` berarti tak hingga: tepi atas untuk `to`, tepi bawah untuk
+     * `from`. {@see Scale::y()} sengaja menolak nilai di luar sumbu — itu
+     * benar untuk pengukuran, tapi pita memang boleh melewatinya, dan yang
+     * melewatinya dipotong, bukan dibuang.
+     *
+     * @param float|null $value
+     */
+    private static function edgeY(Scale $scale, int $index, $value, float $top, float $bottom): float
+    {
+        if ($value === null) {
+            return $top;
+        }
+
+        $y = $scale->y($index, $value);
+        if ($y !== null) {
+            return $y;
+        }
+
+        // Di luar sumbu: ke tepi mana, ditentukan arahnya.
+        $tengah = $scale->y($index, 0.0);
+
+        return ((float) $value) > 0.0 && $tengah !== null ? $top : $bottom;
+    }
+
+    /**
+     * Latar tiap sel, menurut nilai sel itu.
+     *
+     * @param array<string,mixed> $values
+     * @param array<string,mixed> $panel
+     * @param array<int,array<string,mixed>> $bands
+     */
+    private function bandCells(
+        ChartSpec $spec,
+        Scale $scale,
+        array $values,
+        array $panel,
+        float $top,
+        float $bottom,
+        array $bands
+    ): string {
+        /** @var array<int,array<string,mixed>> $series */
+        $series = $panel['series'];
+        $out = '';
+
+        // Tepi kanan kisi. Nilai yang jatuh TEPAT di batas penutup tidak punya
+        // kolom di sebelah kanannya: papan 12 kolom punya 12 sel, dan batas
+        // ke-13 cuma garis penutup. Tanpa potongan ini latarnya terlukis di
+        // luar papan, menimpa apa pun yang ada di sebelahnya di halaman.
+        $kanan = $scale->xFromColumn((float) $spec->columns());
+
+        foreach ($series as $one) {
+            foreach (SeriesValues::parse($values[(string) $one['field']] ?? null, $scale->axis()) as $point) {
+                $x = $scale->x($point['x']);
+                $band = self::bandFor($bands, $point['y']);
+                if ($x === null || $band === null) {
+                    continue;
+                }
+
+                $lebar = min($x + $spec->columnWidth(), $kanan) - $x;
+                if ($lebar <= 0.0) {
+                    continue;
+                }
+
+                $out .= '<rect x="' . self::num($x) . '" y="' . self::num($top)
+                    . '" width="' . self::num($lebar) . '" height="' . self::num($bottom - $top)
+                    . '" fill="' . self::attr((string) $band['color']) . '" stroke="none"/>';
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Pita yang memuat sebuah nilai, atau null.
+     *
+     * Nilai bukan angka — "✓", "U", "positif" — tidak masuk pita mana pun.
+     * Itu bukan kekurangan: pita menyatakan jangkauan angka, dan memaksakan
+     * huruf ke dalamnya berarti menebak urutannya.
+     *
+     * @param array<int,array<string,mixed>> $bands
+     * @param float|int|string $value
+     * @return array<string,mixed>|null
+     */
+    private static function bandFor(array $bands, $value): ?array
+    {
+        if (!is_numeric($value)) {
+            return null;
+        }
+        $angka = (float) $value;
+
+        foreach ($bands as $band) {
+            $ke = $band['to'];
+            if ($angka >= (float) $band['from'] && ($ke === null || $angka <= (float) $ke)) {
+                return $band;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Hitam atau putih, mana yang terbaca di atas warna ini.
+     *
+     * Luminansi relatif menurut rumus WCAG 2.x; ambang 0,179 adalah titik
+     * silang antara kontras hitam dan kontras putih. Dihitung, bukan disetel:
+     * yang menyetel warna pitanya tidak bisa diharapkan menghitung
+     * kecerahannya sendiri, dan angka hitam di atas merah tua tidak terbaca
+     * oleh siapa pun.
+     */
+    private static function inkOn(string $hex): string
+    {
+        $kanal = [];
+        foreach ([1, 3, 5] as $awal) {
+            $c = ((float) hexdec(substr($hex, $awal, 2))) / 255.0;
+            $kanal[] = $c <= 0.03928 ? $c / 12.92 : pow(($c + 0.055) / 1.055, 2.4);
+        }
+
+        $luminansi = (0.2126 * $kanal[0]) + (0.7152 * $kanal[1]) + (0.0722 * $kanal[2]);
+
+        return $luminansi > 0.179 ? '#111111' : '#ffffff';
     }
 
     /**

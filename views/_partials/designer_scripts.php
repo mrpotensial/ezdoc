@@ -5260,6 +5260,8 @@
                 + '<span class="block text-[10px] text-gray-500">' + escapeHtml(namaJenis) + ' &middot; '
                 + Math.round(p.height == null ? 0 : p.height) + 'px &middot; ' + deret + ' '
                 + escapeHtml(t('chart.series_word', {}, 'series'))
+                + (Array.isArray(p.bands) && p.bands.length
+                    ? ' &middot; ' + p.bands.length + ' ' + escapeHtml(t('chart.bands_word', {}, 'bands')) : '')
                 + (p.time_axis ? ' &middot; ' + escapeHtml(t('chart.time_axis_short', {}, 'hour row')) : '')
                 + '</span></span>'
                 + '<span class="flex gap-1 items-center" data-no-toggle="1">'
@@ -5326,6 +5328,28 @@
                     + '</div></div>';
             });
             html += fTombol('series-add', sel, '+ ' + t('chart.add_series', {}, 'Add series')) + '</div>';
+
+            // Pita nilai berlaku di panel jenis apa pun — yang berbeda cuma
+            // tempat melukisnya. Karena itu bagian ini di LUAR `if (!isSel)`.
+            const pita = Array.isArray(p.bands) ? p.bands : [];
+            html += '<div class="mt-3"><div class="text-[11px] font-medium text-gray-600 mb-1">'
+                + escapeHtml(t('chart.bands_section', {}, 'Value bands'))
+                + ' <span class="font-normal text-gray-400">'
+                + escapeHtml(isSel
+                    ? t('chart.bands_hint_cell', {}, 'colours each cell')
+                    : t('chart.bands_hint_panel', {}, 'stripes behind the panel'))
+                + '</span></div>';
+            pita.forEach(function (b, j) {
+                const bs = sel + '.bands.' + j;
+                html += '<div class="bg-gray-50 rounded p-2 mb-1 grid grid-cols-4 gap-2 items-end">'
+                    + fNum(bs + '.from', t('chart.band_from', {}, 'From'), b.from == null ? 0 : b.from)
+                    + fNum(bs + '.to', t('chart.band_to', {}, 'To'), b.to == null ? '' : b.to)
+                    + fColor(bs + '.color', t('chart.color', {}, 'Colour'), b.color || '#dcfce7')
+                    + '<span class="text-right">' + fTombol('band-del', bs, '✕ ' + t('chart.remove', {}, 'Remove'),
+                        'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50')
+                    + '</span></div>';
+            });
+            html += fTombol('band-add', sel, '+ ' + t('chart.add_band', {}, 'Add band')) + '</div>';
 
             if (!isSel) {
                 const acuan = Array.isArray(p.references) ? p.references : [];
@@ -5538,6 +5562,17 @@
                 p.series.push({ field: '', title: '', draw: 'point+line', marker: 'circle', color: '#111111' });
             } else if (act === 'series-del') {
                 chartHapusInduk(spec, path);
+            } else if (act === 'band-add') {
+                const p = chartAmbil(spec, path);
+                p.bands = Array.isArray(p.bands) ? p.bands : [];
+                // Pita baru diletakkan di atas yang terakhir, bukan di 0–1:
+                // pita yang lahir bertumpang tindih langsung ditolak server,
+                // dan yang menambahkannya melihat galat sebagai sambutan.
+                const akhir = p.bands.length > 0 ? p.bands[p.bands.length - 1] : null;
+                const dari = akhir ? (Number(akhir.to == null ? akhir.from : akhir.to) + 1) : 0;
+                p.bands.push({ from: dari, to: dari + 2, color: '#dcfce7' });
+            } else if (act === 'band-del') {
+                chartHapusInduk(spec, path);
             } else if (act === 'ref-add') {
                 const p = chartAmbil(spec, path);
                 p.references = Array.isArray(p.references) ? p.references : [];
@@ -5656,6 +5691,7 @@
             panels.forEach(function (p) {
                 const isSel = p.type === 'symbol' || p.type === 'text';
                 const tingkat = Object.keys(p.levels || {});
+                const pita = Array.isArray(p.bands) ? p.bands : [];
                 const y = p.y || {};
                 const min = Number(y.min == null ? 0 : y.min);
                 const max = Number(y.max == null ? 10 : y.max);
@@ -5674,7 +5710,16 @@
                         if (acak() < 0.25) continue;
 
                         let isi;
-                        if (isSel) {
+                        if (isSel && pita.length > 0) {
+                            // Baris sel berpita dibaca dari warnanya. Contoh
+                            // berisi huruf tidak memperlihatkan itu sama
+                            // sekali — angka di dalam jangkauan pitanya yang
+                            // memperlihatkannya.
+                            const b = pita[Math.floor(acak() * pita.length)];
+                            const dari = Number(b.from) || 0;
+                            const ke = b.to == null ? dari + 2 : Number(b.to);
+                            isi = Math.round(dari + (acak() * (ke - dari)));
+                        } else if (isSel) {
                             isi = chartContohSel(p.type, acak);
                         } else if (tingkat.length > 0) {
                             isi = Number(tingkat[Math.floor(acak() * tingkat.length)]);

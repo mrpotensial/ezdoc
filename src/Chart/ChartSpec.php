@@ -549,10 +549,101 @@ final class ChartSpec
                 ? self::readFloat($panel, 'gap_before', 0.0, 0.0, 200.0)
                 : null,
             'levels' => $levels,
+            'bands' => self::readBands($panel, $position),
             'verticals' => $verticals,
             'references' => $references,
             'series' => $series,
         ];
+    }
+
+    /**
+     * Pita nilai: "nilai di rentang ini warnanya ini".
+     *
+     * Satu aturan, dua bacaan — yang membedakan cuma bentuk panelnya. Di
+     * baris sel ia mewarnai latar tiap sel menurut nilai sel itu; di panel
+     * bersumbu Y ia melukis pita mendatar di latar panel.
+     *
+     * Rancangan pertama menjadikannya jenis panel tersendiri (`heat`), lalu
+     * dibatalkan: pita nilai berguna juga di panel garis — suhu 36–37,5 hijau,
+     * di atasnya kuning — dan jenis panel yang cuma menutupi separuh
+     * kebutuhannya bukan jenis, cuma kebetulan. Lihat
+     * `docs/260930-grafik-jenis-baru.md` §6.3.
+     *
+     * @param array<string,mixed> $panel
+     * @return array<int,array<string,mixed>>
+     *
+     * @throws ValidationException
+     */
+    private static function readBands(array $panel, int $position): array
+    {
+        $mentah = isset($panel['bands']) && is_array($panel['bands']) ? $panel['bands'] : [];
+        $bands = [];
+
+        foreach (array_values($mentah) as $i => $band) {
+            $urutan = $i + 1;
+            if (!is_array($band) || !isset($band['from']) || !is_numeric($band['from'])) {
+                throw new ValidationException(
+                    "Panel ke-{$position}, pita ke-{$urutan}: 'from' wajib berupa angka."
+                );
+            }
+
+            $dari = (float) $band['from'];
+            $ke = isset($band['to']) && $band['to'] !== '' && $band['to'] !== null
+                ? (float) $band['to']
+                : null;
+
+            if ($ke !== null && $ke <= $dari) {
+                throw new ValidationException(
+                    "Panel ke-{$position}, pita ke-{$urutan}: 'to' harus lebih besar dari 'from'."
+                );
+            }
+
+            // Sumbu Y kedua belum ada. Kuncinya sudah dibaca supaya bentuk
+            // spesifikasinya tidak berubah lagi nanti, tapi 'right' ditolak:
+            // pita yang diam-diam dilukis di skala yang salah menandai nilai
+            // yang tidak pernah terjadi.
+            $sumbu = isset($band['axis']) && $band['axis'] !== '' ? (string) $band['axis'] : 'left';
+            if ($sumbu !== 'left') {
+                throw new ValidationException(
+                    "Panel ke-{$position}, pita ke-{$urutan}: sumbu Y kedua belum ada."
+                );
+            }
+
+            $bands[] = [
+                'from' => $dari,
+                'to' => $ke,
+                'color' => self::readColor($band, 'color', '#e5e7eb', $position, $urutan),
+                'label' => isset($band['label']) ? (string) $band['label'] : '',
+                'axis' => $sumbu,
+            ];
+        }
+
+        usort($bands, static function (array $a, array $b): int {
+            return $a['from'] <=> $b['from'];
+        });
+
+        // Bertumpang tindih ditolak: "nilai 4 warnanya apa" tidak boleh punya
+        // dua jawaban. Celah di antaranya boleh — nilai yang tidak masuk pita
+        // mana pun memang tidak diwarnai.
+        for ($i = 0; $i < count($bands) - 1; $i++) {
+            $ke = $bands[$i]['to'];
+            if ($ke === null || $ke >= $bands[$i + 1]['from']) {
+                throw new ValidationException(
+                    "Panel ke-{$position}: pita nilai bertumpang tindih di sekitar "
+                    . self::angka($bands[$i + 1]['from']) . '.'
+                );
+            }
+        }
+
+        return $bands;
+    }
+
+    /** Angka untuk pesan galat, tanpa nol berlebih di belakang koma. */
+    private static function angka(float $value): string
+    {
+        $teks = number_format($value, 2, '.', '');
+
+        return strpos($teks, '.') === false ? $teks : rtrim(rtrim($teks, '0'), '.');
     }
 
     /**

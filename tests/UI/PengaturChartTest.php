@@ -557,6 +557,62 @@ final class PengaturChartTest extends TestCase
         }
     }
 
+    /**
+     * Pita nilai bisa diatur di penyunting, di panel jenis apa pun.
+     *
+     * Bagiannya sengaja di LUAR blok yang cuma berlaku untuk panel bersumbu
+     * Y: kuncinya satu, dan yang berbeda cuma tempat melukisnya.
+     */
+    public function testValueBandsCanBeEditedOnEveryPanelType(): void
+    {
+        $skrip = self::skrip();
+
+        self::assertSame(
+            1,
+            preg_match("/escapeHtml\(t\('chart\.bands_section'/", $skrip),
+            'tidak ada bagian pita nilai di formulirnya'
+        );
+        // Diperiksa letaknya, bukan dengan pola "ada ... lalu ada ...".
+        // Pola begitu tetap cocok walau bagiannya dipindah ke dalam blok
+        // `if (!isSel)`, karena ada `if (!isSel)` LAIN di bawahnya — uji
+        // mutasi menunjukkannya lolos.
+        $tombolDeret = strpos($skrip, "fTombol('series-add'");
+        $bagianPita = strpos($skrip, "t('chart.bands_section'");
+
+        self::assertNotFalse($tombolDeret);
+        self::assertNotFalse($bagianPita);
+        self::assertLessThan($bagianPita, $tombolDeret, 'bagian pitanya sebelum daftar deret');
+        self::assertStringNotContainsString(
+            'if (!isSel) {',
+            substr($skrip, $tombolDeret, $bagianPita - $tombolDeret),
+            'bagian pitanya dibungkus syarat jenis panel — baris sel tidak kebagian'
+        );
+    }
+
+    /**
+     * Pita baru lahir di atas yang terakhir, bukan di 0–2.
+     *
+     * Pita yang bertumpang tindih ditolak server, jadi tombol yang selalu
+     * menambahkan 0–2 membuat penambahan kedua langsung gagal — dan yang
+     * menekannya melihat pesan galat sebagai sambutan. Kesalahan yang sama
+     * pernah terjadi pada "Tambah panel".
+     */
+    public function testANewBandIsPlacedAboveTheLastOne(): void
+    {
+        $skrip = self::skrip();
+
+        self::assertSame(
+            1,
+            preg_match('/const akhir = p\.bands\.length > 0 \? p\.bands\[p\.bands\.length - 1\] : null;/', $skrip),
+            'pita baru tidak melihat pita sebelumnya'
+        );
+        self::assertSame(
+            1,
+            preg_match('/p\.bands\.push\(\{ from: dari, to: dari \+ 2,/', $skrip),
+            'pita baru memakai angka tetap — penambahan kedua akan bertumpang tindih'
+        );
+    }
+
     /** Semua kalimatnya ada di kedua bahasa. */
     public function testEveryLabelExistsInBothLanguages(): void
     {

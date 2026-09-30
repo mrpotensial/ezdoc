@@ -6,6 +6,50 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — pita nilai: satu kunci, dua bacaan (2026-09-30)**
+
+Kunci panel baru `bands`, berlaku di panel jenis apa pun:
+
+```json
+"bands": [
+  {"from": 0, "to": 2, "color": "#dcfce7"},
+  {"from": 3, "to": 5, "color": "#fef08a"},
+  {"from": 6,          "color": "#7f1d1d"}
+]
+```
+
+Aturannya satu — *"nilai di rentang ini warnanya ini"* — dan cuma tempat
+melukisnya yang ikut bentuk panelnya:
+
+- **baris sel** (`symbol`, `text`): latar tiap sel, menurut nilai sel itu.
+  Untuk skor nyeri dan peringatan dini, yang dicari pembacanya baris merah,
+  bukan angkanya.
+- **panel bersumbu Y** (`line`, `bar`): pita mendatar di latar panel. Untuk
+  batas normal yang berlaku sepanjang lembar — suhu 2–8 °C hijau, di atasnya
+  merah.
+
+Rancangan pertama menjadikannya jenis panel tersendiri (`heat`), lalu
+dibatalkan: pita nilai berguna juga di panel garis, dan jenis panel yang cuma
+menutupi separuh kebutuhannya bukan jenis.
+
+Selebihnya:
+
+- Pita dilukis **di belakang kisi**: ia latar, bukan isi.
+- Pita tanpa ujung atas dipotong pada tepi panelnya, dan latar sel dipotong
+  pada tepi kisinya.
+- Pita bertumpang tindih **ditolak** saat validasi — "nilai 4 warnanya apa"
+  tidak boleh punya dua jawaban. Celah di antaranya boleh.
+- Warna angka di atas pita **dihitung** dari kecerahan latarnya (luminansi
+  WCAG), bukan disetel. Yang menyetel warna pitanya tidak bisa diharapkan
+  menghitungnya sendiri, dan angka hitam di atas merah tua tidak terbaca.
+- Nilai bukan angka — "✓", "U" — tidak masuk pita mana pun, dan tetap memakai
+  warna deretnya.
+- `axis: "right"` sudah dibaca tapi **ditolak**: sumbu Y kedua belum ada, dan
+  pita yang diam-diam dilukis di skala yang salah menandai nilai yang tidak
+  pernah terjadi.
+
+Bisa diatur di penyunting papan, termasuk pada baris sel.
+
 **Added — dua cara gambar baru: tangga dan arsiran (2026-09-30)**
 
 `draw` bertambah `step`, `point+step`, `area`, dan `point+area`.
