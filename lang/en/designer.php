@@ -370,6 +370,12 @@ return [
         'used_in_docs_count' => '{used} / {total} doc(s)',
     ],
         'chart' => [
+            'drag_hint' => 'Drag to reorder',
+            'series_word' => 'series',
+            'panel_word' => 'panels',
+            'fits' => 'fits the page',
+            'too_wide' => 'WIDER THAN THE PAGE',
+            'reset' => 'Revert',
             'editor_title' => 'Chart board settings',
             'tab_form' => 'Settings',
             'preview_label' => 'Live preview',

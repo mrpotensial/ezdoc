@@ -272,8 +272,8 @@ bisa berubah tidak menutupi apa pun.
 
 ## 8. Urutan pengerjaan
 
-Fase 0–3 **sudah dikerjakan** 29 Sep 2026 (commit 46bb6fb, 8652df1). Fase 4
-belum.
+Fase 0–3 dikerjakan 29 Sep 2026 (commit 46bb6fb, 8652df1), fase 4–5 30 Sep
+2026. Semuanya **sudah dikerjakan**.
 
 | Fase | Hasil yang bisa dipakai | |
 |---|---|---|
@@ -281,12 +281,15 @@ belum.
 | 1 | Elemen papan di designer + panel pengaturnya. Grafik tampil di dokumen dan di PDF | selesai |
 | 2 | Jenis field **deret** + penyimpanan nilainya. Grafik sudah terisi, walau belum interaktif | selesai |
 | 3 | Lapisan pegangan: klik, geser, hapus, ketik angka persis — di atas lembarnya sendiri | selesai |
-| 4 | Panel simbol, batang, teks + spesifikasi partograf + contoh di `contoh/` | belum |
+| 4 | Panel simbol, batang, teks + spesifikasi partograf + contoh di `contoh/` | selesai |
+| 5 | Papan diatur lewat formulir (bukan JSON), dilipat jadi satu baris per panel | selesai |
 
 Fase 2 sudah menghasilkan dokumen yang utuh dan tercetak benar. Fase 3
-membuatnya enak dipakai. Fase 4 membuatnya partograf.
+membuatnya enak diisi. Fase 4 membuatnya partograf. Fase 5 membuatnya bisa
+dirancang tanpa mengetik JSON — tidak direncanakan, diminta setelah partograf
+tiga belas panel pertama disusun dengan tangan.
 
-Dua hal ditemukan saat mengerjakannya, keduanya kegagalan senyap:
+Empat hal ditemukan saat mengerjakannya, semuanya kegagalan senyap:
 
 1. **Nilai hilang kalau perendernya tak terjangkau.** Isian tersembunyi semula
    ditulis hanya sesudah server menjawab. Sekarang ditulis lebih dulu dalam
@@ -295,6 +298,12 @@ Dua hal ditemukan saat mengerjakannya, keduanya kegagalan senyap:
    dari penanda `{{...}}`, nama field tanda tangan, dan `data-qr` — deret
    grafik bukan satu pun dari ketiganya. Seluruh fitur tampak bekerja sampai
    titik terakhir, lalu angkanya hilang.
+3. **Papan lebih lebar dari kertas lolos sampai ke PDF.** Tidak ada yang
+   membandingkan lebar papan dengan lebar halaman; ketahuannya setelah dicetak
+   jadi tiga halaman. Sekarang angkanya ada di atas pratinjau, beserta
+   kalimat "muat di halaman" atau "lebih lebar dari halaman".
+4. **Panel baru lahir kosong.** "Tambah panel" menghasilkan panel tanpa nama
+   field, dan server menolaknya. Sekarang tiap jenis punya bawaannya sendiri.
 
 ## 9. Yang tidak dikerjakan
 

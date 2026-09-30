@@ -1214,6 +1214,8 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 <span class="text-[11px] text-gray-500"><?= h(t('chart.editor_hint', [], 'Every series is an ordinary document field — its values live in the document, not here.')) ?></span>
                 <div class="flex gap-2">
                     <button type="button" class="px-3 py-1.5 rounded text-xs border border-gray-300 bg-white hover:bg-gray-50"
+                            onclick="chartEditorAksi('reset', '')"><?= h(t('chart.reset', [], 'Revert')) ?></button>
+                    <button type="button" class="px-3 py-1.5 rounded text-xs border border-gray-300 bg-white hover:bg-gray-50"
                             @click="$store.modals.chartEditor = false"><?= h(t('actions.cancel', [], 'Cancel')) ?></button>
                     <button type="button" class="px-3 py-1.5 rounded text-xs border-0 bg-cyan-600 text-white hover:bg-cyan-700"
                             onclick="terapkanChartEditor()"><?= h(t('chart.apply_button', [], 'Apply')) ?></button>

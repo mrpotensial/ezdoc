@@ -6,6 +6,41 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Changed — formulir papan grafik jadi daftar yang bisa dilipat (2026-09-30)**
+
+Formulirnya dipakai sebentar, lalu: "apa bisa dibuat lebih mudah lagi ya cara
+isinya? namun tetap lengkap". Tiga belas panel yang terbuka sekaligus jadi tiga
+layar penuh, dan mencari satu baris di antaranya memakan lebih banyak waktu
+daripada mengubahnya.
+
+- **Satu baris per panel.** Tiap panel ditutup jadi satu baris: nomor, judul,
+  lalu jenis · tinggi · jumlah deret. Yang sedang disunting saja yang terbuka;
+  membuka satu menutup yang lain. Tombol ↑ ↓ ⧉ ✕ tetap di barisnya dan tidak
+  ikut membuka-tutup panelnya.
+- **Klik gambarnya untuk membukanya.** Menunjuk satu baris di pratinjau membuka
+  kartunya — lebih langsung daripada menggulir mencari namanya. Panel yang
+  sedang terbuka ditandai di pratinjau.
+- **Seret ☰ untuk menukar urutan.** Tombol ↑ ↓ tetap ada: seretan tidak bisa
+  dijangkau papan ketik.
+- **Panel baru sudah berisi.** "+ Garis", "+ Batang", "+ Simbol", "+ Teks"
+  masing-masing lahir dengan sumbu, tinggi, dan satu deret yang masuk akal.
+  Sebelumnya panel baru kosong, lalu ditolak server karena nama fieldnya belum
+  ada — sambutan pertama bagi yang menambahkannya adalah pesan galat.
+- **Pesan galat membuka panel yang salah.** Servernya menjawab "Panel ke-2:
+  …"; sekarang kartunya yang dibuka dan digulir ke layar, bukan nomornya yang
+  perlu dihitung sendiri.
+- **Ringkasan di atas pratinjau**: jumlah panel, jumlah deret, ukuran papan, dan
+  muat atau tidaknya di kertas — dihitung dari lebar kertas dikurangi
+  marginnya. Papan yang lebih lebar dari halaman sudah dua kali lolos sampai ke
+  PDF, sekali jadi tiga halaman.
+- **Esc** menutup, **Ctrl+Enter** menerapkan, dan **Kembalikan** memulangkan
+  spesifikasinya ke keadaan saat modal dibuka — percobaan tidak lagi harus
+  dibatalkan dengan menutup modal.
+
+Mengubah judul menyegarkan baris ringkasnya saja, tanpa menyusun ulang
+formulir: menyusun ulang saat orang sedang mengetik merebut fokus pada huruf
+kedua.
+
 **Added — papan grafik diatur lewat formulir, bukan dengan mengetik JSON (2026-09-30)**
 
 Diminta pemakai setelah memakai partograf: "tidak mungkin manusia tulis manual

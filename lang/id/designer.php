@@ -374,6 +374,12 @@ return [
         'used_in_docs_count'          => '{used} / {total} dok',
     ],
         'chart' => [
+            'drag_hint'           => 'Seret untuk menukar urutan',
+            'series_word'         => 'deret',
+            'panel_word'          => 'panel',
+            'fits'                => 'muat di halaman',
+            'too_wide'            => 'LEBIH LEBAR DARI HALAMAN',
+            'reset'               => 'Kembalikan',
             'editor_title'        => 'Pengaturan papan grafik',
             'tab_form'            => 'Pengaturan',
             'preview_label'       => 'Pratinjau langsung',
