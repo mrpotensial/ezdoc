@@ -1,7 +1,7 @@
 # Jenis grafik baru, satuan sumbu baru, dan contoh di luar rumah sakit
 
-> Status: **rancangan, belum dikerjakan.** Ditulis 30 Sep 2026 sesudah papan
-> grafik terisi (lihat [260929-grafik-terisi.md](260929-grafik-terisi.md))
+> Status: **fase 0 selesai (§3), fase 1–9 belum dikerjakan.**
+> Ditulis 30 Sep 2026 sesudah papan grafik terisi (lihat [260929-grafik-terisi.md](260929-grafik-terisi.md))
 > dipakai untuk partograf, lalu diminta dipakai untuk yang lain.
 
 Diminta pemakai:
@@ -102,18 +102,61 @@ harus tetap hijau sesudah pekerjaan ini.
 
 ---
 
-## 3. Fase 0 — tiga hal yang harus dibuktikan dulu
+## 3. Fase 0 — sudah dijawab, 30 Sep 2026
 
-Jangan dibangun sebelum ketiganya dijawab dengan berkas PDF sungguhan, bukan
-dengan dugaan. Cara yang sama dipakai waktu menemukan `<pattern>` gagal senyap.
+**Ketiganya lulus.** Diuji dengan PDF sungguhan lewat jalur cetak yang sama
+seperti dokumen (`<img src="data:image/svg+xml;base64,…">` → Dompdf), lalu
+hasilnya dibaca piksel demi piksel, bukan ditatap. Tiap petak punya
+pembanding di sebelahnya — `<pattern>` dulu lolos justru karena tidak ada
+pembandingnya: gambarnya muncul, artinya hilang.
 
-| Yang diuji | Kenapa penting | Kalau gagal |
+| Yang diuji | Hasil | Bukti terukur |
 |---|---|---|
-| `fill-opacity` pada `<path>` | Arsiran area memerlukannya | Warna muda dihitung sendiri dari warna deret (campur ke putih), lalu diisi pekat |
-| `<rect>` bertumpuk dengan warna beda | Batang bertumpuk dan sel berwarna | Tidak ada jalan lain — fitur dibatalkan, bukan dipaksakan |
-| Teks di atas `<rect>` berwarna | Sel berwarna menulis angkanya di atas latar | Angkanya ditaruh di luar sel |
+| `fill-opacity` pada `<path>` | **lulus** | `#cc0000` pada 0,25 terbaca `(242, 191, 191)` — **persis** hitungan teori di atas putih; pembanding pekat `(204, 0, 0)`; garis kisi di bawahnya tetap terlihat menembus |
+| `<rect>` bertumpuk, warna beda | **lulus** | Sapuan satu kolom: biru 53 px → hijau 41 px → kuning 29 px, **tanpa satu baris putih pun** di perbatasan; perbandingan tingginya sesuai spesifikasi |
+| Teks di atas `<rect>` berwarna | **lulus** | 544 piksel gelap di dalam kotak latar muda, 640 piksel putih di dalam kotak latar gelap — teksnya benar-benar tergambar di atas latar |
 
-Hasilnya ditulis di sini, di tabel ini, sebelum fase 1 dimulai.
+Tambahan yang ikut terjawab, dan ikut menentukan bentuk `bands`:
+
+- `fill-opacity` pada `<rect>` **jalan**.
+- `opacity` pada `<g>` **jalan**.
+
+Jadi arsiran area digambar dengan opasitas sungguhan, bukan dengan warna muda
+yang dihitung sendiri. Dan pita latar boleh memakai warna pekat ber-opasitas,
+tidak harus warna muda yang disetel orang.
+
+Berkas ujinya: `scratchpad/fase0_dompdf.php` → `fase0.pdf`.
+
+### Temuan keempat, yang tidak dicari: label grafik tercetak berkait
+
+Muncul saat membaca hasilnya — bentuk hurufnya tidak seperti di layar.
+
+Perender memakai `font-family="Helvetica, Arial, sans-serif"` di **setiap**
+teks. php-svg-lib tidak membaca daftar berkoma yang **berspasi**, lalu jatuh
+ke huruf berkait. Diuji enam ejaan:
+
+| `font-family` | Hasil di PDF |
+|---|---|
+| `Helvetica, Arial, sans-serif` ← **dipakai sekarang** | **berkait (Times)** |
+| `Helvetica,Arial,sans-serif` | tak berkait ✓ |
+| `Helvetica` | tak berkait ✓ |
+| `Arial` | tak berkait ✓ |
+| `sans-serif` | tak berkait ✓ |
+| `helvetica` | tak berkait ✓ |
+
+Spasi sesudah komanya yang mematikan. Akibatnya: **seluruh label grafik yang
+tercetak selama ini berkait, sementara di layar tak berkait** — satu perender,
+tapi dua rupa. Persis kelas kegagalan yang dijaga §2 butir 1, cuma penyebabnya
+bukan dua perender melainkan satu perender yang tulisannya tidak dimengerti
+mesin cetaknya.
+
+Perbaikannya satu tetapan: `SvgChartRenderer::FONT` jadi
+`'Helvetica,Arial,sans-serif'` — rantai cadangannya tetap utuh untuk peramban,
+cuma spasinya dibuang.
+
+**Belum diperbaiki.** Mengubahnya mengubah byte SVG **tiap** papan, dan
+partograf sudah jalan di `ezdoc_v3`. Keputusannya milik pemilik dokumen, bukan
+milik yang menemukannya. Berkas ujinya: `scratchpad/fase0_font.php`.
 
 ---
 
@@ -496,7 +539,7 @@ tetap berguna.
 
 | Fase | Hasil | Berat |
 |---|---|---|
-| 0 | Tiga jawaban Dompdf di §3 | kecil |
+| 0 | ~~Tiga jawaban Dompdf di §3~~ | **selesai 30 Sep** |
 | 1 | Titik sambung sumbu X + `TimeAxis` (`hour`/`day`/`month`) + kesamaan PHP↔JS | **besar** |
 | 2 | `draw`: `step`, `area` | kecil |
 | 3 | Kunci panel `bands` (sel berwarna + pita latar) | sedang |
@@ -584,8 +627,8 @@ membalikkannya tahu apa yang harus dibantah.
 
 ### Yang masih benar-benar terbuka
 
-- **Tiga jawaban Dompdf di §3.** Belum diuji, dan tidak boleh ditebak. Hasil
-  `fill-opacity` menentukan apakah arsiran area digambar dengan opasitas atau
-  dengan warna muda yang dihitung sendiri.
+- **Apakah label grafik yang berkait diperbaiki sekarang** (§3, temuan
+  keempat). Perbaikannya satu tetapan, tapi ia mengubah byte tiap papan yang
+  sudah ada. Menunggu keputusan pemilik dokumen.
 - **Apakah satu kunci `bands` untuk dua bacaan terasa wajar di penyunting.**
   Ketahuannya di fase 9, saat contoh nomor 2 dan 5 dibuat bersebelahan.
