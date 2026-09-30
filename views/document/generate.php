@@ -2875,10 +2875,17 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
     </script>
     <style>
         /* Pegangan papan grafik — hanya di layar, tidak pernah ikut tercetak.
-           Bulat samar yang menebal saat disentuh: cukup terlihat untuk dicari,
-           cukup sepi untuk tidak menutupi titik yang digambar di bawahnya. */
+           TAK TERLIHAT sampai pointer masuk ke papannya. Dua puluh bulatan biru
+           yang selalu menyala membuat grafiknya sulit dibaca sebagai grafik;
+           yang dibaca orang jauh lebih sering daripada yang diisinya. */
+        .ez-chart-handle,
+        .ez-chart-legend { opacity: 0; transition: opacity .12s ease; }
+        .ez-chart:hover .ez-chart-handle,
+        .ez-chart:hover .ez-chart-legend,
+        .ez-chart:focus-within .ez-chart-handle,
+        .ez-chart:focus-within .ez-chart-legend { opacity: 1; }
         .ez-chart-handle { background: rgba(8,145,178,.14); border: 1px solid rgba(8,145,178,.45); }
-        .ez-chart-handle:hover { background: rgba(8,145,178,.30); }
+        .ez-chart-handle:hover { background: rgba(8,145,178,.34); border-color: rgba(8,145,178,.8); }
         .ez-chart-layer { user-select: none; }
         @media print { .ez-chart-layer { display: none !important; } }
     </style>

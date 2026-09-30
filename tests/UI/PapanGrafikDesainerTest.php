@@ -138,7 +138,7 @@ final class PapanGrafikDesainerTest extends TestCase
     {
         self::assertSame(
             1,
-            preg_match("/doc\.addEventListener\('mousedown', function \(ev\) \{[\s\S]{0,900}?\}, true\);/", self::skrip()),
+            preg_match("/doc\.addEventListener\('mousedown', function \(ev\) \{[\s\S]{0,1600}?\}, true\);/", self::skrip()),
             'mousedown didengarkan di fase gelembung — TinyMCE keburu menangkapnya'
         );
     }
@@ -157,7 +157,7 @@ final class PapanGrafikDesainerTest extends TestCase
         $skrip = self::skrip();
         $awal = strpos($skrip, 'function siapkanChartResize()');
         self::assertNotFalse($awal);
-        $blok = substr($skrip, $awal, 2600);
+        $blok = substr($skrip, $awal, 3600);
 
         self::assertStringNotContainsString(
             "addEventListener('mouseleave'",
@@ -210,6 +210,29 @@ final class PapanGrafikDesainerTest extends TestCase
             1,
             preg_match('/sisaTinggi = awal\.scale\.height - jumlahTinggi/', $skrip),
             'sisa tingginya ditebak'
+        );
+    }
+
+    /**
+     * Seretan dibatasi selebar isi halaman.
+     *
+     * Papan yang lebih lebar dari halamannya tetap bisa dibuat, tapi bagian
+     * kanannya terpotong saat dicetak — dan terpotongnya baru ketahuan di
+     * kertas, setelah dokumennya ditandatangani.
+     */
+    public function testDragIsCappedAtThePageWidth(): void
+    {
+        $skrip = self::skrip();
+
+        self::assertSame(
+            1,
+            preg_match('/const lebar = Math\.min\(\s*seret\.lebarMaks,/', $skrip),
+            'seretan tidak dibatasi lebar halaman'
+        );
+        self::assertSame(
+            1,
+            preg_match('/lebarMaks = Math\.max\(180, induk\.clientWidth/', $skrip),
+            'batas lebarnya ditebak, bukan diukur dari induknya'
         );
     }
 

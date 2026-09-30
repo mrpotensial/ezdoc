@@ -5059,14 +5059,34 @@
                 ev.preventDefault();
                 ev.stopPropagation();
                 const kotak = papan.getBoundingClientRect();
-                seret = { papan: papan, x: ev.clientX, y: ev.clientY, lebar: kotak.width, tinggi: kotak.height };
+
+                // Lebar isi halaman, diukur dari induk terdekat yang memang
+                // membatasi — bukan ditebak dari setelan kertas, karena
+                // padding dan lebar kolom ikut menentukan.
+                const induk = papan.parentElement || editor.getBody();
+                const lebarMaks = Math.max(180, induk.clientWidth || 9999);
+
+                seret = {
+                    papan: papan,
+                    x: ev.clientX,
+                    y: ev.clientY,
+                    lebar: kotak.width,
+                    tinggi: kotak.height,
+                    lebarMaks: lebarMaks
+                };
             }, true);
 
             doc.addEventListener('mousemove', function (ev) {
                 if (!seret) return;
                 // Batas bawah supaya papannya tidak bisa diseret jadi segaris
-                // dan hilang dari pandangan.
-                const lebar = Math.max(180, seret.lebar + (ev.clientX - seret.x));
+                // dan hilang dari pandangan. Batas atas selebar kertasnya:
+                // papan yang lebih lebar dari halaman tetap bisa dibuat, tapi
+                // bagian kanannya terpotong saat dicetak — dan terpotongnya
+                // baru ketahuan di kertas.
+                const lebar = Math.min(
+                    seret.lebarMaks,
+                    Math.max(180, seret.lebar + (ev.clientX - seret.x))
+                );
                 const tinggi = Math.max(80, seret.tinggi + (ev.clientY - seret.y));
                 seret.papan.style.width = Math.round(lebar) + 'px';
                 seret.papan.style.height = Math.round(tinggi) + 'px';

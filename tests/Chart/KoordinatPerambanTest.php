@@ -96,6 +96,58 @@ final class KoordinatPerambanTest extends TestCase
         );
     }
 
+    /**
+     * Pegangan dan pemilih deret tidak terlihat sampai pointer masuk papannya.
+     *
+     * Diminta pemakai setelah mencoba partograf: "lingkaran biru transparan
+     * tiap titik ... apa bisa tampil saat hover aja, agar tidak ganggu visual".
+     * Tujuh puluh bulatan biru yang selalu menyala membuat grafiknya sulit
+     * dibaca sebagai grafik — dan dibaca jauh lebih sering daripada diisi.
+     */
+    public function testHandlesStayInvisibleUntilHovered(): void
+    {
+        $halaman = (string) file_get_contents(dirname(__DIR__, 2) . '/views/document/generate.php');
+
+        self::assertSame(
+            1,
+            preg_match('/\.ez-chart-handle,\s*\.ez-chart-legend \{ opacity: 0;/', $halaman),
+            'pegangan dan pemilih deret terlihat terus'
+        );
+        self::assertSame(
+            1,
+            preg_match('/\.ez-chart:hover \.ez-chart-handle,/', $halaman),
+            'tidak ada yang memunculkannya saat pointer masuk'
+        );
+        self::assertSame(
+            1,
+            preg_match('/\.ez-chart:focus-within \.ez-chart-handle,/', $halaman),
+            'yang memakai papan ketik tidak pernah melihat pegangannya'
+        );
+    }
+
+    /**
+     * Pemilih deret berdiri di pojok kanan atas panelnya.
+     *
+     * Di kiri ia menutupi titik paling awal — justru titik yang paling sering
+     * dilihat orang. Diminta pemakai: "tombol untuk pilih mau tambah itu
+     * mungkin pindah ke ujung kanan atas aja".
+     */
+    public function testSeriesPickerSitsTopRight(): void
+    {
+        $skrip = (string) file_get_contents(dirname(__DIR__, 2) . '/views/_partials/generate_scripts.php');
+
+        self::assertSame(
+            1,
+            preg_match("/pilih\.style\.cssText = 'position:absolute;right:'/", $skrip),
+            'pemilih deret masih ditempel dari kiri'
+        );
+        self::assertSame(
+            1,
+            preg_match('/kananKisi = keadaan\.scale\.left\s*\+ \(keadaan\.scale\.hours \* keadaan\.scale\.column_width\)/', $skrip),
+            'tepi kanan kisinya ditebak, bukan dihitung dari skala'
+        );
+    }
+
     /** Dan kalau gambarnya gagal diperbarui, itu dikatakan. */
     public function testStaleDrawingIsAnnounced(): void
     {

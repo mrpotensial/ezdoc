@@ -6,6 +6,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Changed — perkakas isian grafik menyingkir sampai dibutuhkan (2026-09-30)**
+
+Dilaporkan pemakai setelah memakai partografnya: papannya terlalu kecil,
+tombol pemilih deret mengganggu, dan tujuh puluh bulatan biru pegangan membuat
+grafiknya sulit dibaca sebagai grafik.
+
+- **Pegangan dan pemilih deret tak terlihat sampai pointer masuk ke papannya**
+  (`:hover`, dan `:focus-within` supaya yang memakai papan ketik tidak
+  kehilangannya). Grafik jauh lebih sering dibaca daripada diisi.
+- **Pemilih deret pindah ke pojok kanan atas panelnya.** Di kiri ia menutupi
+  titik paling awal — justru titik yang paling sering dilihat orang.
+- **Seretan ubah-ukuran dibatasi selebar isi halaman**, diukur dari induk
+  penanda, bukan ditebak dari setelan kertas. Papan yang lebih lebar dari
+  halamannya terpotong saat dicetak, dan terpotongnya baru ketahuan di kertas.
+- Contoh `contoh/partograf/` dilebarkan jadi 668 — sebelumnya 588, separuh
+  halaman, dan memang terlalu sempit untuk diisi dengan nyaman.
+
 **Added — papan grafik bisa diubah ukurannya dengan menyeret sudutnya (2026-09-30)**
 
 Diminta pemakai saat mencoba partografnya: "di designer belum bisa resize area

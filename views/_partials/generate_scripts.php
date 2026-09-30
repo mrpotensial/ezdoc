@@ -1777,9 +1777,15 @@
                 // jatuh ke deret pertama, dan yang kedua cuma bisa diisi dengan
                 // cara lain — yang tidak ada.
                 if ((panel.series || []).length > 1) {
+                    // Di pojok kanan ATAS panelnya, bukan kiri: kiri adalah tempat
+                    // data paling awal, dan tombolnya menutupi titik pertama —
+                    // justru titik yang paling sering dilihat orang.
+                    const kananKisi = keadaan.scale.left
+                        + (keadaan.scale.hours * keadaan.scale.column_width);
                     const pilih = document.createElement('div');
                     pilih.className = 'ez-chart-legend';
-                    pilih.style.cssText = 'position:absolute;left:' + (keadaan.scale.left + 4) + 'px;top:'
+                    pilih.style.cssText = 'position:absolute;right:'
+                        + (keadaan.scale.width - kananKisi + 4) + 'px;top:'
                         + (skalaPanel.top + 3) + 'px;display:flex;gap:4px';
                     panel.series.forEach(function (deret, iDeret) {
                         const tombol = document.createElement('button');
