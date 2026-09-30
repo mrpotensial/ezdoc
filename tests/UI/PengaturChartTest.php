@@ -613,6 +613,24 @@ final class PengaturChartTest extends TestCase
         );
     }
 
+    /**
+     * Batang bertumpuk bisa dinyalakan di penyunting, dan cuma di panel batang.
+     *
+     * Centang yang muncul di panel garis akan ditolak server — dan yang
+     * mencentangnya melihat pesan galat sebagai sambutan.
+     */
+    public function testStackedBarsAreOfferedOnBarPanelsOnly(): void
+    {
+        self::assertSame(
+            1,
+            preg_match(
+                "/jenis === 'bar'\s*\?\s*fCheck\(sel \+ '\.stacked', t\('chart\.stacked'/",
+                self::skrip()
+            ),
+            'centang batang bertumpuk tidak ada, atau muncul di panel jenis lain'
+        );
+    }
+
     /** Semua kalimatnya ada di kedua bahasa. */
     public function testEveryLabelExistsInBothLanguages(): void
     {

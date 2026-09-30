@@ -549,11 +549,47 @@ final class ChartSpec
                 ? self::readFloat($panel, 'gap_before', 0.0, 0.0, 200.0)
                 : null,
             'levels' => $levels,
+            // Batang bertumpuk: TIAP deret jadi potongan, bukan cuma yang
+            // pertama. Ditolak bersama `levels` karena keduanya memperebutkan
+            // deret kedua — yang satu menganggapnya potongan, yang lain
+            // menganggapnya pemilih isian.
+            'stacked' => self::readStacked($panel, $type, $levels, $position),
             'bands' => self::readBands($panel, $position),
             'verticals' => $verticals,
             'references' => $references,
             'series' => $series,
         ];
+    }
+
+    /**
+     * Apakah batang panel ini bertumpuk.
+     *
+     * @param array<string,mixed> $panel
+     * @param array<string,array<string,string>> $levels
+     *
+     * @throws ValidationException
+     */
+    private static function readStacked(array $panel, string $type, array $levels, int $position): bool
+    {
+        $stacked = isset($panel['stacked']) && (bool) $panel['stacked'];
+        if (!$stacked) {
+            return false;
+        }
+
+        if ($type !== 'bar') {
+            throw new ValidationException(
+                "Panel ke-{$position}: batang bertumpuk cuma berlaku di panel jenis 'bar'."
+            );
+        }
+
+        if ($levels !== []) {
+            throw new ValidationException(
+                "Panel ke-{$position}: tingkat isian batang tidak berlaku di batang bertumpuk "
+                . '— deret keduanya jadi potongan, bukan pemilih isian.'
+            );
+        }
+
+        return true;
     }
 
     /**

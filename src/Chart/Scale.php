@@ -201,6 +201,7 @@ final class Scale
         foreach ($this->spec->panels() as $i => $panel) {
             $panels[] = [
                 'type' => (string) $panel['type'],
+                'stacked' => (bool) $panel['stacked'],
                 'top' => $this->tops[$i],
                 'height' => (float) $panel['height'],
                 'y_min' => (float) $panel['y_min'],

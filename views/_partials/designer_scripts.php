@@ -5307,6 +5307,9 @@
                 + fSelect(sel + '.title_align', t('chart.title_align', {}, 'Title placement'), p.title_align || (isSel ? 'left' : 'rotated'), CHART_JUDUL)
                 + fCheck(sel + '.grid', t('chart.grid', {}, 'Grid'), p.grid !== false)
                 + fCheck(sel + '.time_axis', t('chart.panel_time_axis', {}, 'Hour row below'), !!p.time_axis)
+                + (jenis === 'bar'
+                    ? fCheck(sel + '.stacked', t('chart.stacked', {}, 'Stacked bars'), !!p.stacked)
+                    : '')
                 + '</div>';
 
             const deret = Array.isArray(p.series) ? p.series : [];

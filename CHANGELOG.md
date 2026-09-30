@@ -6,6 +6,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — batang bertumpuk (2026-09-30)**
+
+Kunci panel `stacked` pada panel `bar`: tiap deret jadi satu potongan,
+ditumpuk dari dasar. Untuk balans cairan, masuk-keluar per jam, dan sejenisnya.
+
+- **Nilai negatif ditumpuk ke bawah dasar**, dalam tumpukannya sendiri. Cairan
+  masuk dan keluar dicatat sebagai +500 dan −300; menumpuk keduanya searah
+  menghasilkan batang setinggi 800 yang tidak menggambarkan apa pun — bukan
+  masuk, bukan keluar, bukan selisihnya.
+- Jumlah yang melewati tepi sumbu **dipotong, bukan dibuang**. Aturan "nilai di
+  luar sumbu tidak digambar" berlaku untuk pengukuran tunggal; di sini yang
+  melewati tepi adalah jumlah, dan membuangnya menghilangkan seluruh kolom.
+- `stacked` bersama `levels` **ditolak**: keduanya memperebutkan deret kedua.
+- Nilai bukan angka tidak ikut ditumpuk. `(float) "3 kali"` adalah 3 di PHP,
+  dan tanpa penjagaan catatan berupa teks diam-diam jadi potongan.
+
+**Diisi dengan mengetik, tanpa seret** — bukan karena seretnya sulit dibuat,
+tapi karena nilainya bukan jenis yang ditaksir mata: orang menulis "250 cc"
+karena membaca kantong, bukan karena membidik tinggi batang. Potongan bernilai
+nol juga tidak punya tinggi, jadi tidak punya pegangan sama sekali. Polanya
+sama dengan baris sel, yang sudah begitu sejak awal.
+
 **Added — pita nilai: satu kunci, dua bacaan (2026-09-30)**
 
 Kunci panel baru `bands`, berlaku di panel jenis apa pun:

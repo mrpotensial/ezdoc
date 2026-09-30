@@ -393,6 +393,10 @@ final class SvgChartRenderer
             return '';
         }
 
+        if ((bool) $panel['stacked']) {
+            return $this->stackedBars($spec, $scale, $values, $index, $panel);
+        }
+
         $heightField = (string) $series[0]['field'];
         $points = SeriesValues::parse($values[$heightField] ?? null, $scale->axis());
 
@@ -426,6 +430,126 @@ final class SvgChartRenderer
         }
 
         return $out;
+    }
+
+    /**
+     * Batang bertumpuk: tiap deret satu potongan, ditumpuk dari dasar.
+     *
+     * Nilai negatif ditumpuk ke BAWAH dasar, dalam tumpukannya sendiri.
+     * Cairan masuk dan keluar dicatat sebagai +500 dan −300, dan menumpuk
+     * keduanya ke satu arah menghasilkan batang setinggi 800 yang tidak
+     * menggambarkan apa pun.
+     *
+     * Potongan yang terdorong melewati tepi sumbu **dipotong**, bukan
+     * dibuang. Aturan "nilai di luar sumbu tidak digambar" berlaku untuk
+     * pengukuran tunggal, yang di luar jangkauan biasanya salah ketik. Di
+     * sini yang melewati tepi adalah JUMLAH, dan jumlah yang lebih besar dari
+     * sumbunya adalah keadaan yang sah — membuangnya menghilangkan seluruh
+     * kolom, bukan satu angka.
+     *
+     * @param array<string,mixed> $values
+     * @param array<string,mixed> $panel
+     */
+    private function stackedBars(
+        ChartSpec $spec,
+        Scale $scale,
+        array $values,
+        int $index,
+        array $panel
+    ): string {
+        /** @var array<int,array<string,mixed>> $series */
+        $series = $panel['series'];
+
+        // Nilai tiap deret, dikelompokkan menurut kolomnya, dengan urutan
+        // kolom mengikuti yang pertama kali terlihat.
+        $perX = [];
+        foreach ($series as $i => $one) {
+            foreach (SeriesValues::parse($values[(string) $one['field']] ?? null, $scale->axis()) as $point) {
+                if (!is_numeric($point['y'])) {
+                    continue;
+                }
+                $perX[$point['x']][$i] = (float) $point['y'];
+            }
+        }
+        ksort($perX, SORT_STRING);
+
+        $atas = $scale->top($index);
+        $bawah = $atas + (float) $panel['height'];
+        $dasar = $scale->baselineY($index);
+        if ($dasar === null) {
+            return '';
+        }
+
+        // Piksel per satuan, dihitung dari panelnya sendiri — bukan dengan
+        // menanyakan tempat nilai 0 dan 1 ke skala. Sumbu yang tidak memuat
+        // keduanya (35-40, misalnya) akan menjawab null untuk kedua-duanya.
+        $min = (float) $panel['y_min'];
+        $max = (float) $panel['y_max'];
+        $perUnit = $max > $min ? ((float) $panel['height'] / ($max - $min)) : 0.0;
+
+        $width = $spec->columnWidth() * 0.6;
+        $out = '';
+
+        foreach ($perX as $x => $nilai) {
+            $kiri = $scale->x((string) $x);
+            if ($kiri === null) {
+                continue;
+            }
+            $barX = $kiri + (($spec->columnWidth() - $width) / 2);
+
+            $naik = 0.0;
+            $turun = 0.0;
+            foreach ($series as $i => $one) {
+                if (!isset($nilai[$i])) {
+                    continue;
+                }
+
+                $v = $nilai[$i];
+                if ($v >= 0.0) {
+                    $dari = $naik;
+                    $naik += $v;
+                    $ke = $naik;
+                } else {
+                    $dari = $turun;
+                    $turun += $v;
+                    $ke = $turun;
+                }
+
+                $y1 = self::stackY($dasar, $dari, $perUnit, $atas, $bawah);
+                $y2 = self::stackY($dasar, $ke, $perUnit, $atas, $bawah);
+                $tinggi = abs($y2 - $y1);
+                if ($tinggi <= 0.0) {
+                    continue;
+                }
+
+                $out .= $this->barShape(
+                    $barX,
+                    min($y1, $y2),
+                    $width,
+                    $tinggi,
+                    'solid',
+                    self::attr((string) $one['color'])
+                );
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Tempat tegak sebuah jumlah bertumpuk, dipotong pada tepi panelnya.
+     *
+     * Dihitung dari DASAR ke atas. Sumbu di layar terbalik — nilai besar di
+     * atas berarti y kecil — jadi jumlah yang naik mengurangi y.
+     */
+    private static function stackY(
+        float $baseline,
+        float $jumlah,
+        float $perUnit,
+        float $atas,
+        float $bawah
+    ): float {
+        return max($atas, min($bawah, $baseline - ($jumlah * $perUnit)));
     }
 
     /**

@@ -1,6 +1,6 @@
 # Jenis grafik baru, satuan sumbu baru, dan contoh di luar rumah sakit
 
-> Status: **fase 0–3 selesai, fase 4–9 belum dikerjakan.**
+> Status: **fase 0–4 selesai, fase 5–9 belum dikerjakan.**
 > Ditulis 30 Sep 2026 sesudah papan grafik terisi (lihat [260929-grafik-terisi.md](260929-grafik-terisi.md))
 > dipakai untuk partograf, lalu diminta dipakai untuk yang lain.
 
@@ -525,6 +525,20 @@ Polanya bukan pengecualian baru: baris sel di halaman generate **sudah**
 diisi dengan mengetik (`tanya: true` di `generate_scripts.php`). Dengan ini
 bagian tersulit fase 4 hilang — yang tersisa cuma gambarnya.
 
+**Dikerjakan 30 Sep 2026.** Dua hal ditambahkan yang tidak ada di rancangan:
+
+1. **Nilai negatif ditumpuk ke BAWAH dasar**, dalam tumpukannya sendiri.
+   Cairan masuk dan keluar dicatat sebagai +500 dan −300; menumpuk keduanya
+   searah menghasilkan batang setinggi 800 yang tidak menggambarkan apa pun.
+2. **`stacked` bersama `levels` ditolak.** Keduanya memperebutkan deret kedua:
+   yang satu menganggapnya potongan, yang lain pemilih isian. Mengabaikan
+   salah satunya diam-diam menghasilkan gambar yang tidak diminta siapa pun.
+
+Jumlah yang melewati tepi sumbu **dipotong**, bukan dibuang — pengecualian
+sadar dari aturan "nilai di luar sumbu tidak digambar". Yang melewati tepi di
+sini adalah jumlah, bukan pengukuran, dan membuangnya menghilangkan seluruh
+kolom.
+
 ### 6.5 Timeline (`type: "timeline"`) — jenis panel baru
 
 Tiap deret satu jalur; nilainya rentang (§4). Untuk jadwal obat, waktu infus,
@@ -606,7 +620,7 @@ tetap berguna.
 | 1 | ~~Titik sambung sumbu X + `TimeAxis` + kesamaan PHP↔JS~~ | **selesai 30 Sep** |
 | 2 | ~~`draw`: `step`, `area`~~ | **selesai 30 Sep** |
 | 3 | ~~Kunci panel `bands` (sel berwarna + pita latar)~~ | **selesai 30 Sep** |
-| 4 | `stacked` pada panel `bar` (gambar saja, isian diketik) | kecil |
+| 4 | ~~`stacked` pada panel `bar`~~ | **selesai 30 Sep** |
 | 5 | `x2` di `SeriesValues` + panel `timeline` (gambar) | sedang |
 | 6 | Isian timeline di peramban | **besar** |
 | 7 | `references.points` | kecil |

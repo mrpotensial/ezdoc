@@ -412,6 +412,7 @@ return [
             'title_align'         => 'Letak judul',
             'grid'                => 'Kisi',
             'series_section'      => 'Deret',
+            'stacked'             => 'Batang bertumpuk',
             'bands_section'       => 'Pita nilai',
             'bands_hint_cell'     => '— mewarnai tiap sel',
             'bands_hint_panel'    => '— pita di latar panel',

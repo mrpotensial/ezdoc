@@ -408,6 +408,7 @@ return [
             'title_align' => 'Title placement',
             'grid' => 'Grid',
             'series_section' => 'Series',
+            'stacked' => 'Stacked bars',
             'bands_section' => 'Value bands',
             'bands_hint_cell' => '— colours each cell',
             'bands_hint_panel' => '— stripes behind the panel',

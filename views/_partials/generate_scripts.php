@@ -1766,6 +1766,21 @@
             return panel && (panel.type === 'symbol' || panel.type === 'text');
         }
 
+        /**
+         * Panel yang diisi dengan MENGETIK, bukan dengan menunjuk tingginya.
+         *
+         * Baris sel sudah begitu sejak awal. Batang bertumpuk menyusul, dan
+         * bukan karena seretnya sulit dibuat: nilainya bukan jenis yang
+         * ditaksir mata. Orang menulis "250 cc" karena membaca kantong, bukan
+         * karena membidik tinggi batang — dan potongan bernilai nol tidak
+         * punya tinggi, jadi tidak punya pegangan untuk diseret sama sekali.
+         *
+         * Lihat `docs/260930-grafik-jenis-baru.md` §6.4.
+         */
+        function ezChartDiketik(panel) {
+            return ezChartSel(panel) || !!(panel && panel.stacked);
+        }
+
         function ezChartY(panel, nilai) {
             // Baris sel tidak punya sumbu Y: isinya huruf, dan tempatnya selalu
             // di tengah barisnya. Memaksakan angka ke situ membuat pegangan
@@ -1790,7 +1805,7 @@
 
             // Baris sel diisi huruf. Klik di situ menanyakan isinya; menaruh
             // angka hasil hitungan sumbu akan mengisi "Air Ketuban" dengan 0,4.
-            if (ezChartSel(panel)) {
+            if (ezChartDiketik(panel)) {
                 return { panel: iPanel, x: ezChartWaktuKolom(scale, jam), y: null, tanya: true };
             }
 
@@ -1901,7 +1916,7 @@
                         if (x === null || y === null) return;
                         // Isi sel milik KOLOM yang dimulai pada jam itu, bukan
                         // garis jamnya — sama dengan cara server menggambarnya.
-                        if (ezChartSel(skalaPanel)) x += keadaan.scale.column_width / 2;
+                        if (ezChartDiketik(skalaPanel)) x += keadaan.scale.column_width / 2;
 
                         const pegangan = document.createElement('div');
                         pegangan.className = 'ez-chart-handle';
