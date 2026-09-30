@@ -6,6 +6,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — dua cara gambar baru: tangga dan arsiran (2026-09-30)**
+
+`draw` bertambah `step`, `point+step`, `area`, dan `point+area`.
+
+**Tangga** bukan hiasan. Untuk tetes/menit, dosis, dan aliran oksigen,
+angkanya berlaku sepanjang rentang — bukan pengukuran sesaat. Garis lurus di
+situ berbohong: ia menggambarkan perubahan bertahap dari 20 ke 40 tetes/menit
+sepanjang dua jam, sedangkan yang terjadi 20 sampai pukul 10, lalu 40. Dokumen
+yang ditandatangani lalu memperlihatkan nilai yang tidak pernah disetel siapa
+pun.
+
+Bentuknya *step-after*: perubahannya terjadi pada saat yang dicatat, bukan
+sebelumnya dan bukan separuh jalan.
+
+**Arsiran** mengisi bidang di bawah garisnya, setengah tembus, dan digambar
+lebih dulu supaya garis dan titiknya tetap di atas. Dasarnya **nol kalau nol
+ada di dalam jangkauan sumbunya**; kalau tidak, tepi yang paling dekat dengan
+nol — bidang suhu 35–40 terisi dari 35, bukan dari nol yang letaknya jauh di
+luar panel.
+
+Keduanya bisa dipilih di penyunting papan, bukan cuma lewat JSON. Pengukuran
+yang hilang tetap memutus keduanya, seperti garis biasa.
+
 **Added — sumbu X boleh berjam, berhari, atau berbulan (2026-09-30)**
 
 Satu kolom tidak lagi selalu satu jam. Kunci papan `x`:

@@ -1,6 +1,6 @@
 # Jenis grafik baru, satuan sumbu baru, dan contoh di luar rumah sakit
 
-> Status: **fase 0 dan 1 selesai (§3, §5), fase 2–9 belum dikerjakan.**
+> Status: **fase 0, 1, dan 2 selesai, fase 3–9 belum dikerjakan.**
 > Ditulis 30 Sep 2026 sesudah papan grafik terisi (lihat [260929-grafik-terisi.md](260929-grafik-terisi.md))
 > dipakai untuk partograf, lalu diminta dipakai untuk yang lain.
 
@@ -428,12 +428,22 @@ disetel siapa pun.
 Bentuknya *step-after*: nilai berlaku dari waktunya sampai waktu berikutnya.
 Masuk ke `ChartSpec::DRAWS` sebagai `step` dan `point+step`.
 
+**Dikerjakan 30 Sep 2026.** Yang dijaga uji bukan "ada garisnya", melainkan
+**ada simpul di sudutnya** — tanpa simpul itu, tangga dan garis lurus
+menghasilkan gambar yang sama, dan ujinya tidak menguji apa pun.
+
 ### 6.2 Arsiran (`draw: "area"`) — cara gambar
 
-Garis dengan bidang terisi sampai dasar panel (`y_min`, atau 0 kalau 0 ada di
-dalam jangkauan). Untuk jumlah kumulatif. Bergantung penuh pada hasil fase 0.
+Garis dengan bidang terisi sampai dasar panel. Untuk jumlah kumulatif. Masuk
+ke `DRAWS` sebagai `area` dan `point+area`.
 
-Masuk ke `DRAWS` sebagai `area` dan `point+area`.
+**Dikerjakan 30 Sep 2026** dengan `fill-opacity` sungguhan, sesuai hasil §3.
+
+Dasarnya **nol kalau nol ada di dalam jangkauan sumbunya**, kalau tidak tepi
+yang paling dekat dengan nol. Aturan itu cuma berbeda dari "tepi bawah" pada
+panel yang melewati nol — balans cairan −1000..+2000 — dan uji mutasi
+menunjukkan kedua aturan itu tidak terbedakan sampai panel seperti itu
+diuji.
 
 ### 6.3 Pita nilai (`bands`) — kunci panel, bukan jenis baru
 
@@ -580,7 +590,7 @@ tetap berguna.
 |---|---|---|
 | 0 | ~~Tiga jawaban Dompdf di §3~~ | **selesai 30 Sep** |
 | 1 | ~~Titik sambung sumbu X + `TimeAxis` + kesamaan PHP↔JS~~ | **selesai 30 Sep** |
-| 2 | `draw`: `step`, `area` | kecil |
+| 2 | ~~`draw`: `step`, `area`~~ | **selesai 30 Sep** |
 | 3 | Kunci panel `bands` (sel berwarna + pita latar) | sedang |
 | 4 | `stacked` pada panel `bar` (gambar saja, isian diketik) | kecil |
 | 5 | `x2` di `SeriesValues` + panel `timeline` (gambar) | sedang |
