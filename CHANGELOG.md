@@ -6,6 +6,37 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — papan grafik diatur lewat formulir, bukan dengan mengetik JSON (2026-09-30)**
+
+Diminta pemakai setelah memakai partograf: "tidak mungkin manusia tulis manual
+json nya". Untuk papan tiga belas baris memang bukan — satu koma yang salah
+membuat seluruh papan berhenti tergambar, dan letak salahnya tidak kelihatan.
+
+Tombol **Atur…** di kartu panel kanan membuka modal dua panel: formulir di
+kiri, gambarnya di kanan.
+
+- **Papan**: jumlah jam, lebar kolom, kolom kiri, jarak panel, label tiap
+  berapa jam, field jam mulai.
+- **Tiap panel**: jenis, judul, tinggi, sumbu Y, kisi halus, legenda, letak
+  judul — dan isiannya menyesuaikan jenisnya. Baris simbol tidak menampilkan
+  sumbu Y maupun garis acuan, karena keduanya memang tidak berlaku di situ.
+- **Deret, garis acuan, penanda waktu, tingkat isian batang** bisa ditambah,
+  dihapus, dan diatur satu per satu. Panel bisa digeser naik-turun, disalin,
+  atau dihapus.
+- **Pratinjaunya hidup**, ditunda 280 ms sesudah ketikan berhenti. Mengatur
+  papan tanpa melihat hasilnya berarti menebak lalu menutup modal untuk
+  memeriksa.
+- Nama field disarankan dari penanda `{{...}}` yang ada di template.
+
+**Penyuntingan JSON tetap ada**, sebagai tab tersendiri, dan diminta begitu.
+Formulir menutupi yang lazim; JSON menutupi sisanya, dan menghapusnya membuat
+yang jarang jadi mustahil. Urutannya jelas: kalau tab JSON yang terbuka saat
+menerapkan, yang diketik di sana yang berlaku.
+
+Spesifikasi yang tidak sah ditolak sebelum diterapkan, dengan kalimat yang
+menyebut panel keberapa — dan pratinjaunya menampilkan kalimat itu saat sedang
+disunting, bukan menunggu sampai tombol ditekan.
+
 **Changed — perkakas isian grafik menyingkir sampai dibutuhkan (2026-09-30)**
 
 Dilaporkan pemakai setelah memakai partografnya: papannya terlalu kecil,

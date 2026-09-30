@@ -5010,6 +5010,549 @@
             }
         }
 
+
+        // ===== Pengaturan papan grafik lewat formulir =====
+        //
+        // Sebelum ini satu-satunya cara mengatur papan adalah mengetik JSON.
+        // Untuk papan tiga belas baris itu bukan pekerjaan manusia: satu koma
+        // yang salah membuat seluruh papan berhenti tergambar, dan letak
+        // salahnya tidak kelihatan.
+        //
+        // Formulirnya menutupi yang lazim. Tab JSON tetap ada dan tidak
+        // dihapus — menghapusnya membuat yang jarang jadi mustahil.
+
+        let chartEditor = null; // { id, spec, tab, tunda }
+
+        const CHART_JENIS = [
+            ['line', 'Garis'], ['bar', 'Batang'], ['symbol', 'Simbol'], ['text', 'Teks'],
+        ];
+        const CHART_TANDA = [
+            ['circle', 'Lingkaran'], ['dot', 'Titik'], ['cross', 'Silang'], ['square', 'Kotak'],
+            ['diamond', 'Wajik'], ['triangle-up', 'Segitiga naik'], ['triangle-down', 'Segitiga turun'],
+        ];
+        const CHART_GAMBAR = [['point+line', 'Titik + garis'], ['point', 'Titik saja'], ['line', 'Garis saja']];
+        const CHART_ISIAN = [['solid', 'Penuh'], ['hatch', 'Arsir'], ['dots', 'Titik-titik'], ['empty', 'Kosong']];
+        const CHART_LEGENDA = [['', 'Tidak ada'], ['above', 'Di atas'], ['below', 'Di bawah'], ['left', 'Di kiri']];
+        const CHART_GAYA = [['solid', 'Utuh'], ['dashed', 'Putus-putus']];
+        const CHART_JUDUL = [['left', 'Mendatar di kiri'], ['rotated', 'Berdiri']];
+
+        /** Nama field yang ada di template, untuk saran isian. */
+        function chartFieldSaran() {
+            const editor = tinymce.get('editor');
+            if (!editor) return [];
+            const nama = new Set();
+            const pola = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
+            let m;
+            const isi = editor.getContent();
+            while ((m = pola.exec(isi)) !== null) nama.add(m[1]);
+            return Array.from(nama).sort();
+        }
+
+        function chartAmbil(obj, path) {
+            return path.split('.').reduce(function (o, k) {
+                return (o === null || o === undefined) ? undefined : o[k];
+            }, obj);
+        }
+
+        function chartSet(obj, path, value) {
+            const bagian = path.split('.');
+            const akhir = bagian.pop();
+            const induk = bagian.reduce(function (o, k) {
+                if (o[k] === undefined || o[k] === null) o[k] = /^\d+$/.test(k) ? [] : {};
+                return o[k];
+            }, obj);
+            if (value === undefined) { delete induk[akhir]; return; }
+            induk[akhir] = value;
+        }
+
+        function chartHapusDari(obj, path, index) {
+            const arr = chartAmbil(obj, path);
+            if (Array.isArray(arr)) arr.splice(index, 1);
+        }
+
+        // ── Potongan formulir ────────────────────────────────────────────
+        function fLabel(teks) {
+            return '<span class="block text-[10px] uppercase tracking-wide text-gray-500 mb-0.5">'
+                + escapeHtml(teks) + '</span>';
+        }
+
+        function fText(path, label, value, extra) {
+            return '<label class="block">' + fLabel(label)
+                + '<input type="text" data-path="' + path + '" value="' + escapeHtml(value == null ? '' : String(value))
+                + '" ' + (extra || '') + ' class="w-full rounded border-gray-300 text-[11px] px-2 py-1"></label>';
+        }
+
+        function fNum(path, label, value, step) {
+            return '<label class="block">' + fLabel(label)
+                + '<input type="number" data-path="' + path + '" data-num="1" step="' + (step || 1)
+                + '" value="' + (value == null ? '' : escapeHtml(String(value)))
+                + '" class="w-full rounded border-gray-300 text-[11px] px-2 py-1"></label>';
+        }
+
+        function fSelect(path, label, value, pilihan) {
+            const opt = pilihan.map(function (p) {
+                return '<option value="' + escapeHtml(p[0]) + '"'
+                    + (String(value == null ? '' : value) === p[0] ? ' selected' : '') + '>'
+                    + escapeHtml(p[1]) + '</option>';
+            }).join('');
+            return '<label class="block">' + fLabel(label)
+                + '<select data-path="' + path + '" class="w-full rounded border-gray-300 text-[11px] px-2 py-1">'
+                + opt + '</select></label>';
+        }
+
+        function fCheck(path, label, checked) {
+            return '<label class="flex items-center gap-1.5 text-[11px] text-gray-700 mt-4">'
+                + '<input type="checkbox" data-path="' + path + '" data-bool="1"'
+                + (checked ? ' checked' : '') + ' class="rounded border-gray-300">' + escapeHtml(label) + '</label>';
+        }
+
+        function fColor(path, label, value) {
+            return '<label class="block">' + fLabel(label)
+                + '<input type="color" data-path="' + path + '" value="' + escapeHtml(value || '#111111')
+                + '" class="w-full h-[26px] rounded border-gray-300 p-0.5"></label>';
+        }
+
+        function fTombol(act, path, teks, kelas) {
+            return '<button type="button" data-act="' + act + '" data-path="' + (path || '')
+                + '" class="' + (kelas || 'px-2 py-0.5 rounded text-[10px] border border-gray-300 hover:bg-gray-50')
+                + '">' + escapeHtml(teks) + '</button>';
+        }
+
+        // ── Formulir utuh ────────────────────────────────────────────────
+        function renderChartEditorForm() {
+            const wadah = document.getElementById('chartEditorForm');
+            if (!wadah || !chartEditor) return;
+            const spec = chartEditor.spec;
+            const saran = chartFieldSaran();
+            const daftar = '<datalist id="chartFieldSaran">'
+                + saran.map(function (n) { return '<option value="' + escapeHtml(n) + '">'; }).join('')
+                + '</datalist>';
+
+            let html = daftar
+                + '<div class="border border-gray-200 rounded-md p-2 mb-3">'
+                + '<div class="text-xs font-medium text-gray-700 mb-2">' + escapeHtml(t('chart.board_section', {}, 'Board')) + '</div>'
+                + '<div class="grid grid-cols-3 gap-2">'
+                + fNum('hours', t('chart.hours', {}, 'Hours'), spec.hours == null ? 16 : spec.hours)
+                + fNum('column_width', t('chart.column_width', {}, 'Column width'), spec.column_width == null ? 40 : spec.column_width)
+                + fNum('left', t('chart.left', {}, 'Left column'), spec.left == null ? 64 : spec.left)
+                + fNum('panel_gap', t('chart.panel_gap', {}, 'Panel gap'), spec.panel_gap == null ? 14 : spec.panel_gap)
+                + fNum('label_every', t('chart.label_every', {}, 'Label every'), spec.label_every == null ? 1 : spec.label_every)
+                + fText('start_field', t('chart.start_field', {}, 'Start-time field'), spec.start_field, 'list="chartFieldSaran"')
+                + '</div></div>';
+
+            const panels = Array.isArray(spec.panels) ? spec.panels : [];
+            panels.forEach(function (p, i) {
+                html += renderChartPanelForm(p, i, panels.length);
+            });
+
+            html += '<div class="mt-2">' + fTombol('panel-add', '', '+ ' + t('chart.add_panel', {}, 'Add panel'),
+                'w-full px-2 py-1.5 rounded text-[11px] border border-dashed border-gray-400 text-gray-600 hover:bg-gray-50') + '</div>';
+
+            wadah.innerHTML = html;
+        }
+
+        function renderChartPanelForm(p, i, total) {
+            const jenis = p.type || 'line';
+            const sel = 'panels.' + i;
+            const isSel = jenis === 'symbol' || jenis === 'text';
+
+            let html = '<div class="border border-gray-200 rounded-md p-2 mb-2">'
+                + '<div class="flex items-center justify-between mb-2">'
+                + '<span class="text-xs font-medium text-gray-700">' + (i + 1) + '. '
+                + escapeHtml(p.title || t('chart.untitled_panel', {}, 'Untitled panel')) + '</span>'
+                + '<span class="flex gap-1">'
+                + (i > 0 ? fTombol('panel-up', sel, '↑') : '')
+                + (i < total - 1 ? fTombol('panel-down', sel, '↓') : '')
+                + fTombol('panel-dup', sel, '⧉')
+                + fTombol('panel-del', sel, '✕', 'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50')
+                + '</span></div>'
+                + '<div class="grid grid-cols-3 gap-2">'
+                + fSelect(sel + '.type', t('chart.panel_type', {}, 'Type'), jenis, CHART_JENIS)
+                + fText(sel + '.title', t('chart.panel_title_label', {}, 'Row title'), p.title)
+                + fNum(sel + '.height', t('chart.height', {}, 'Height'), p.height == null ? (isSel ? 22 : 200) : p.height)
+                + '</div>';
+
+            if (!isSel) {
+                const y = p.y || {};
+                html += '<div class="grid grid-cols-4 gap-2 mt-2">'
+                    + fNum(sel + '.y.min', t('chart.y_min', {}, 'Y min'), y.min == null ? 0 : y.min)
+                    + fNum(sel + '.y.max', t('chart.y_max', {}, 'Y max'), y.max == null ? 10 : y.max)
+                    + fNum(sel + '.y.step', t('chart.y_step', {}, 'Y step'), y.step == null ? 1 : y.step)
+                    + fNum(sel + '.sub_columns', t('chart.sub_columns', {}, 'Sub-columns'), p.sub_columns == null ? 1 : p.sub_columns)
+                    + '</div>';
+            }
+
+            html += '<div class="grid grid-cols-3 gap-2 mt-2">'
+                + fSelect(sel + '.legend', t('chart.legend', {}, 'Legend'), p.legend === true ? 'above' : (p.legend || ''), CHART_LEGENDA)
+                + fSelect(sel + '.title_align', t('chart.title_align', {}, 'Title placement'), p.title_align || (isSel ? 'left' : 'rotated'), CHART_JUDUL)
+                + fCheck(sel + '.grid', t('chart.grid', {}, 'Grid'), p.grid !== false)
+                + '</div>';
+
+            // ── Deret ────────────────────────────────────────────────────
+            const deret = Array.isArray(p.series) ? p.series : [];
+            html += '<div class="mt-3"><div class="text-[11px] font-medium text-gray-600 mb-1">'
+                + escapeHtml(t('chart.series_section', {}, 'Series')) + '</div>';
+            deret.forEach(function (d, j) {
+                const ds = sel + '.series.' + j;
+                html += '<div class="bg-gray-50 rounded p-2 mb-1"><div class="grid grid-cols-4 gap-2">'
+                    + fText(ds + '.field', t('chart.field', {}, 'Field'), d.field, 'list="chartFieldSaran"')
+                    + fText(ds + '.title', t('chart.series_title', {}, 'Name'), d.title)
+                    + (isSel ? '' : fSelect(ds + '.draw', t('chart.draw', {}, 'Draw'), d.draw || 'point+line', CHART_GAMBAR))
+                    + (isSel ? '' : fSelect(ds + '.marker', t('chart.marker', {}, 'Marker'), d.marker || 'circle', CHART_TANDA))
+                    + '</div><div class="grid grid-cols-4 gap-2 mt-1 items-end">'
+                    + fColor(ds + '.color', t('chart.color', {}, 'Colour'), d.color || '#cc0000')
+                    + (isSel ? '' : fCheck(ds + '.labels', t('chart.labels', {}, 'Show numbers'), !!d.labels))
+                    + '<span></span>'
+                    + '<span class="text-right">' + fTombol('series-del', ds, '✕ ' + t('chart.remove', {}, 'Remove'),
+                        'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50') + '</span>'
+                    + '</div></div>';
+            });
+            html += fTombol('series-add', sel, '+ ' + t('chart.add_series', {}, 'Add series')) + '</div>';
+
+            // ── Garis acuan ──────────────────────────────────────────────
+            if (!isSel) {
+                const acuan = Array.isArray(p.references) ? p.references : [];
+                html += '<div class="mt-3"><div class="text-[11px] font-medium text-gray-600 mb-1">'
+                    + escapeHtml(t('chart.references_section', {}, 'Reference lines')) + '</div>';
+                acuan.forEach(function (a, j) {
+                    const as = sel + '.references.' + j;
+                    const dari = Array.isArray(a.from) ? a.from : [0, 0];
+                    const ke = Array.isArray(a.to) ? a.to : [0, 0];
+                    html += '<div class="bg-gray-50 rounded p-2 mb-1"><div class="grid grid-cols-4 gap-2">'
+                        + fNum(as + '.from.0', t('chart.from_hour', {}, 'From hour'), dari[0])
+                        + fNum(as + '.from.1', t('chart.from_value', {}, 'From value'), dari[1])
+                        + fNum(as + '.to.0', t('chart.to_hour', {}, 'To hour'), ke[0])
+                        + fNum(as + '.to.1', t('chart.to_value', {}, 'To value'), ke[1])
+                        + '</div><div class="grid grid-cols-4 gap-2 mt-1 items-end">'
+                        + fText(as + '.label', t('chart.label', {}, 'Name'), a.label)
+                        + fSelect(as + '.style', t('chart.line_style', {}, 'Style'), a.style || 'solid', CHART_GAYA)
+                        + fColor(as + '.color', t('chart.color', {}, 'Colour'), a.color || '#333333')
+                        + fCheck(as + '.label_on_line', t('chart.label_on_line', {}, 'Name on the line'), !!a.label_on_line)
+                        + '</div><div class="text-right mt-1">'
+                        + fTombol('ref-del', as, '✕ ' + t('chart.remove', {}, 'Remove'),
+                            'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50')
+                        + '</div></div>';
+                });
+                html += fTombol('ref-add', sel, '+ ' + t('chart.add_reference', {}, 'Add reference line')) + '</div>';
+
+                // ── Garis tegak ──────────────────────────────────────────
+                const tegak = Array.isArray(p.verticals) ? p.verticals : [];
+                html += '<div class="mt-3"><div class="text-[11px] font-medium text-gray-600 mb-1">'
+                    + escapeHtml(t('chart.verticals_section', {}, 'Time markers')) + '</div>';
+                tegak.forEach(function (v, j) {
+                    const vs = sel + '.verticals.' + j;
+                    html += '<div class="bg-gray-50 rounded p-2 mb-1 grid grid-cols-4 gap-2 items-end">'
+                        + fText(vs + '.at_field', t('chart.at_field', {}, 'Time field'), v.at_field, 'list="chartFieldSaran"')
+                        + fColor(vs + '.color', t('chart.color', {}, 'Colour'), v.color || '#cc0000')
+                        + fCheck(vs + '.label', t('chart.show_time', {}, 'Show the time'), v.label !== false)
+                        + '<span class="text-right">' + fTombol('vert-del', vs, '✕',
+                            'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50') + '</span>'
+                        + '</div>';
+                });
+                html += fTombol('vert-add', sel, '+ ' + t('chart.add_vertical', {}, 'Add time marker')) + '</div>';
+            }
+
+            // ── Tingkat isian batang ─────────────────────────────────────
+            if (jenis === 'bar') {
+                const levels = p.levels && typeof p.levels === 'object' ? p.levels : {};
+                html += '<div class="mt-3"><div class="text-[11px] font-medium text-gray-600 mb-1">'
+                    + escapeHtml(t('chart.levels_section', {}, 'Bar fills (second series decides which)')) + '</div>';
+                Object.keys(levels).forEach(function (kunci, j) {
+                    const isian = typeof levels[kunci] === 'string'
+                        ? { fill: levels[kunci], label: '' }
+                        : (levels[kunci] || {});
+                    html += '<div class="bg-gray-50 rounded p-2 mb-1 grid grid-cols-4 gap-2 items-end"'
+                        + ' data-level-row="' + i + '" data-level-key="' + escapeHtml(kunci) + '">'
+                        + '<label class="block">' + fLabel(t('chart.level_value', {}, 'Value'))
+                        + '<input type="text" data-level="key" value="' + escapeHtml(kunci)
+                        + '" class="w-full rounded border-gray-300 text-[11px] px-2 py-1"></label>'
+                        + '<label class="block">' + fLabel(t('chart.level_fill', {}, 'Fill'))
+                        + '<select data-level="fill" class="w-full rounded border-gray-300 text-[11px] px-2 py-1">'
+                        + CHART_ISIAN.map(function (o) {
+                            return '<option value="' + o[0] + '"' + (isian.fill === o[0] ? ' selected' : '') + '>'
+                                + escapeHtml(o[1]) + '</option>';
+                        }).join('') + '</select></label>'
+                        + '<label class="block">' + fLabel(t('chart.level_label', {}, 'Legend text'))
+                        + '<input type="text" data-level="label" value="' + escapeHtml(isian.label || '')
+                        + '" class="w-full rounded border-gray-300 text-[11px] px-2 py-1"></label>'
+                        + '<span class="text-right">' + fTombol('level-del', sel + '|' + kunci, '✕',
+                            'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50') + '</span>'
+                        + '</div>';
+                });
+                html += fTombol('level-add', sel, '+ ' + t('chart.add_level', {}, 'Add fill level')) + '</div>';
+            }
+
+            return html + '</div>';
+        }
+
+        // ── Perubahan dari formulir ──────────────────────────────────────
+        function chartEditorPasangListener() {
+            const wadah = document.getElementById('chartEditorForm');
+            if (!wadah || wadah._ezPasang) return;
+            wadah._ezPasang = true;
+
+            wadah.addEventListener('input', function (ev) {
+                const el = ev.target;
+                if (el.dataset && el.dataset.level) { chartEditorLevelUbah(el); return; }
+                if (!el.dataset || !el.dataset.path) return;
+
+                let nilai = el.value;
+                if (el.dataset.bool) nilai = el.checked;
+                else if (el.dataset.num) nilai = nilai === '' ? undefined : Number(nilai);
+                else if (nilai === '') nilai = undefined;
+
+                // Legenda kosong berarti tidak ada legenda, bukan legenda
+                // bernama kosong.
+                if (el.dataset.path.endsWith('.legend') && nilai === undefined) nilai = false;
+
+                chartSet(chartEditor.spec, el.dataset.path, nilai);
+                chartEditorJsonSegar();
+                chartEditorPratinjauTunda();
+            });
+
+            wadah.addEventListener('change', function (ev) {
+                if (ev.target.tagName === 'SELECT' || ev.target.type === 'checkbox' || ev.target.type === 'color') {
+                    wadah.dispatchEvent(new Event('input'));
+                    const el = ev.target;
+                    if (el.dataset && el.dataset.path) {
+                        let nilai = el.type === 'checkbox' ? el.checked : el.value;
+                        if (el.dataset.path.endsWith('.legend') && nilai === '') nilai = false;
+                        if (el.dataset.num) nilai = Number(nilai);
+                        chartSet(chartEditor.spec, el.dataset.path, nilai);
+                    }
+                    // Jenis panel menentukan isian mana yang berlaku, jadi
+                    // formulirnya disusun ulang — bukan sekadar digambar ulang
+                    // pratinjaunya.
+                    if (el.dataset && /\.type$/.test(el.dataset.path || '')) renderChartEditorForm();
+                    chartEditorJsonSegar();
+                    chartEditorPratinjauTunda();
+                }
+            });
+
+            wadah.addEventListener('click', function (ev) {
+                const tombol = ev.target.closest ? ev.target.closest('[data-act]') : null;
+                if (!tombol) return;
+                ev.preventDefault();
+                chartEditorAksi(tombol.dataset.act, tombol.dataset.path || '');
+            });
+        }
+
+        function chartEditorLevelUbah(el) {
+            const baris = el.closest('[data-level-row]');
+            if (!baris) return;
+            const i = parseInt(baris.dataset.levelRow, 10);
+            const panel = chartEditor.spec.panels[i];
+            if (!panel) return;
+
+            const lama = baris.dataset.levelKey;
+            const kunci = (baris.querySelector('[data-level="key"]') || {}).value || lama;
+            const fill = (baris.querySelector('[data-level="fill"]') || {}).value || 'solid';
+            const label = (baris.querySelector('[data-level="label"]') || {}).value || '';
+
+            const levels = {};
+            Object.keys(panel.levels || {}).forEach(function (k) {
+                if (k === lama) levels[kunci] = { fill: fill, label: label };
+                else levels[k] = panel.levels[k];
+            });
+            panel.levels = levels;
+            baris.dataset.levelKey = kunci;
+
+            chartEditorJsonSegar();
+            chartEditorPratinjauTunda();
+        }
+
+        function chartEditorAksi(act, path) {
+            const spec = chartEditor.spec;
+            spec.panels = Array.isArray(spec.panels) ? spec.panels : [];
+
+            if (act === 'panel-add') {
+                spec.panels.push({
+                    type: 'line', title: '', height: 120,
+                    y: { min: 0, max: 10, step: 1 },
+                    series: [{ field: '', draw: 'point+line', marker: 'circle', color: '#cc0000' }],
+                });
+            } else if (act === 'panel-del') {
+                chartHapusDari(spec, 'panels', chartIndexTerakhir(path));
+            } else if (act === 'panel-dup') {
+                const i = chartIndexTerakhir(path);
+                spec.panels.splice(i + 1, 0, JSON.parse(JSON.stringify(spec.panels[i])));
+            } else if (act === 'panel-up' || act === 'panel-down') {
+                const i = chartIndexTerakhir(path);
+                const j = act === 'panel-up' ? i - 1 : i + 1;
+                if (j >= 0 && j < spec.panels.length) {
+                    const t2 = spec.panels[i];
+                    spec.panels[i] = spec.panels[j];
+                    spec.panels[j] = t2;
+                }
+            } else if (act === 'series-add') {
+                const p = chartAmbil(spec, path);
+                p.series = Array.isArray(p.series) ? p.series : [];
+                p.series.push({ field: '', draw: 'point+line', marker: 'circle', color: '#111111' });
+            } else if (act === 'series-del') {
+                chartHapusInduk(spec, path);
+            } else if (act === 'ref-add') {
+                const p = chartAmbil(spec, path);
+                p.references = Array.isArray(p.references) ? p.references : [];
+                p.references.push({ from: [0, 0], to: [4, 10], style: 'solid', label: '', color: '#333333' });
+            } else if (act === 'ref-del') {
+                chartHapusInduk(spec, path);
+            } else if (act === 'vert-add') {
+                const p = chartAmbil(spec, path);
+                p.verticals = Array.isArray(p.verticals) ? p.verticals : [];
+                p.verticals.push({ at_field: '', color: '#cc0000' });
+            } else if (act === 'vert-del') {
+                chartHapusInduk(spec, path);
+            } else if (act === 'level-add') {
+                const p = chartAmbil(spec, path);
+                p.levels = p.levels && typeof p.levels === 'object' ? p.levels : {};
+                let n = 1;
+                while (p.levels[String(n)] !== undefined) n++;
+                p.levels[String(n)] = { fill: 'solid', label: '' };
+            } else if (act === 'level-del') {
+                const bagian = path.split('|');
+                const p = chartAmbil(spec, bagian[0]);
+                if (p && p.levels) delete p.levels[bagian[1]];
+            }
+
+            renderChartEditorForm();
+            chartEditorJsonSegar();
+            chartEditorPratinjauTunda();
+        }
+
+        function chartIndexTerakhir(path) {
+            const bagian = path.split('.');
+            return parseInt(bagian[bagian.length - 1], 10);
+        }
+
+        function chartHapusInduk(spec, path) {
+            const bagian = path.split('.');
+            const index = parseInt(bagian.pop(), 10);
+            chartHapusDari(spec, bagian.join('.'), index);
+        }
+
+        // ── Pratinjau hidup ──────────────────────────────────────────────
+        function chartEditorPratinjauTunda() {
+            if (!chartEditor) return;
+            if (chartEditor.tunda) clearTimeout(chartEditor.tunda);
+            chartEditor.tunda = setTimeout(chartEditorPratinjau, 280);
+        }
+
+        async function chartEditorPratinjau() {
+            if (!chartEditor) return;
+            const kotak = document.getElementById('chartEditorPreview');
+            const galat = document.getElementById('chartEditorError');
+            const ukuran = document.getElementById('chartEditorSize');
+
+            const hasil = await chartRenderRequest(chartEditor.spec, {});
+            if (!hasil.ok) {
+                if (galat) { galat.textContent = hasil.message; galat.classList.remove('hidden'); }
+                return;
+            }
+            if (galat) galat.classList.add('hidden');
+            if (ukuran) ukuran.textContent = Math.round(hasil.scale.width) + ' × ' + Math.round(hasil.scale.height);
+            if (!kotak) return;
+
+            // Dikecilkan supaya muat, tapi hanya kalau perlu: papan kecil tidak
+            // perlu dilihat lebih kecil lagi.
+            const lebarAda = Math.max(200, kotak.clientWidth - 24);
+            const skala = Math.min(1, lebarAda / hasil.scale.width);
+            kotak.innerHTML = '<div style="transform:scale(' + skala + ');transform-origin:top left;width:'
+                + (hasil.scale.width * skala) + 'px;height:' + (hasil.scale.height * skala) + 'px">'
+                + hasil.svg + '</div>';
+        }
+
+        function chartEditorJsonSegar() {
+            const box = document.getElementById('chartEditorJson');
+            if (box && chartEditor) box.value = JSON.stringify(chartEditor.spec, null, 2);
+        }
+
+        // ── Buka, pindah tab, terapkan ───────────────────────────────────
+        function bukaChartEditor(i) {
+            const c = configChart[i];
+            if (!c) return;
+
+            chartEditor = { id: c.id, spec: JSON.parse(JSON.stringify(c.spec || {})), tunda: null };
+            const nama = document.getElementById('chartEditorName');
+            if (nama) nama.textContent = c.id;
+
+            renderChartEditorForm();
+            chartEditorPasangListener();
+            chartEditorJsonSegar();
+            chartEditorTab('form');
+            openAppModal('chartEditor');
+            chartEditorPratinjau();
+        }
+
+        function chartEditorTab(tab) {
+            const form = document.getElementById('chartEditorForm');
+            const json = document.getElementById('chartEditorJsonPane');
+            if (!form || !json) return;
+
+            const panelUtama = form.parentElement;
+            if (tab === 'json') {
+                panelUtama.classList.add('hidden');
+                json.classList.remove('hidden');
+                json.classList.add('flex');
+            } else {
+                panelUtama.classList.remove('hidden');
+                json.classList.add('hidden');
+                json.classList.remove('flex');
+                // Kembali dari JSON: yang diketik di sana yang berlaku.
+                const box = document.getElementById('chartEditorJson');
+                if (box) {
+                    try {
+                        chartEditor.spec = JSON.parse(box.value);
+                        renderChartEditorForm();
+                        chartEditorPratinjauTunda();
+                    } catch (e) { /* JSON belum sah — formulir dibiarkan */ }
+                }
+            }
+
+            document.querySelectorAll('[data-chart-tab]').forEach(function (b) {
+                const aktif = b.dataset.chartTab === tab;
+                b.classList.toggle('bg-cyan-600', aktif);
+                b.classList.toggle('text-white', aktif);
+                b.classList.toggle('bg-white', !aktif);
+            });
+        }
+
+        async function terapkanChartEditor() {
+            if (!chartEditor) return;
+
+            // Kalau yang terakhir disunting tab JSON, itu yang berlaku.
+            const json = document.getElementById('chartEditorJsonPane');
+            if (json && !json.classList.contains('hidden')) {
+                const box = document.getElementById('chartEditorJson');
+                try {
+                    chartEditor.spec = JSON.parse(box.value);
+                } catch (e) {
+                    showToast(t('chart.bad_json', {}, 'The specification is not valid JSON'), 'error');
+                    return;
+                }
+            }
+
+            const hasil = await chartRenderRequest(chartEditor.spec, {});
+            if (!hasil.ok) { showToast(hasil.message, 'error'); return; }
+
+            const editor = tinymce.get('editor');
+            const el = editor && editor.getBody()
+                .querySelector('.chart-placeholder[data-chart="' + chartEditor.id + '"]');
+            if (!el) { showToast(t('chart.not_found', {}, 'That chart is no longer in the document'), 'error'); return; }
+
+            el.setAttribute('data-chart-spec', JSON.stringify(chartEditor.spec));
+            terapkanUkuranChart(el, hasil.scale);
+            editorKotor();
+            scanChartPlaceholders();
+
+            if (window.Alpine && window.Alpine.store) window.Alpine.store('modals').close('chartEditor');
+            showToast(t('chart.applied', {}, 'Applied'));
+        }
+
+        document.addEventListener('click', function (ev) {
+            const tab = ev.target.closest ? ev.target.closest('[data-chart-tab]') : null;
+            if (tab) chartEditorTab(tab.dataset.chartTab);
+        });
+
         /**
          * Pasang pegangan ubah-ukuran di tiap papan grafik.
          *
@@ -5237,6 +5780,8 @@
                     + ' class="w-full rounded border-gray-300 text-[11px] font-mono px-2 py-1">'
                     + escapeHtml(JSON.stringify(c.spec || {}, null, 2)) + '</textarea>'
                     + '<div class="flex gap-1 mt-1">'
+                    + '<button type="button" class="flex-1 px-2 py-1 rounded text-[11px] border-0 bg-gray-800 text-white hover:bg-gray-700" onclick="bukaChartEditor(' + i + ')">'
+                    + escapeHtml(t('chart.open_editor', {}, 'Settings…')) + '</button>'
                     + '<button type="button" class="flex-1 px-2 py-1 rounded text-[11px] border border-gray-300 hover:bg-gray-50" onclick="previewChart(' + i + ')">'
                     + escapeHtml(t('chart.preview_button', {}, 'Preview')) + '</button>'
                     + '<button type="button" class="flex-1 px-2 py-1 rounded text-[11px] border-0 bg-cyan-600 text-white hover:bg-cyan-700" onclick="applyChartSpec(' + i + ')">'

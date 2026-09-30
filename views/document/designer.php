@@ -1164,6 +1164,64 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         </div>
     </div>
 
+    <!-- Pengaturan papan grafik (Alpine) -->
+    <!--
+      Dua panel: formulir di kiri, gambarnya di kanan. Yang diubah orang
+      langsung terlihat hasilnya — tanpa itu, mengatur papan tiga belas baris
+      berarti menebak lalu menutup modal untuk melihat.
+
+      Tab JSON tetap ada. Formulir menutupi yang lazim; JSON menutupi sisanya,
+      dan menghapusnya berarti membuat yang jarang jadi mustahil.
+    -->
+    <div x-data x-show="$store.modals.chartEditor" x-transition
+         class="fixed inset-0 flex items-center justify-center p-4 z-[100010]"
+         style="display:none;">
+        <div class="fixed inset-0 bg-black/50" @click="$store.modals.chartEditor = false"></div>
+        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-6xl mx-4 h-[92vh] flex flex-col" id="chartEditorModal">
+            <div class="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 bg-gray-100 rounded-t-lg">
+                <h6 class="text-sm font-semibold flex items-center gap-2">
+                    <i class="bi bi-graph-up"></i><?= h(t('chart.editor_title', [], 'Chart board settings')) ?>
+                    <span id="chartEditorName" class="text-xs font-normal text-gray-500"></span>
+                </h6>
+                <div class="flex items-center gap-1">
+                    <button type="button" data-chart-tab="form"
+                            class="px-2.5 py-1 rounded text-xs border border-gray-300 bg-white"><?= h(t('chart.tab_form', [], 'Settings')) ?></button>
+                    <button type="button" data-chart-tab="json"
+                            class="px-2.5 py-1 rounded text-xs border border-gray-300 bg-white">JSON</button>
+                    <button type="button" class="text-gray-400 hover:text-gray-600 text-2xl leading-none ml-2"
+                            @click="$store.modals.chartEditor = false">&times;</button>
+                </div>
+            </div>
+
+            <div class="flex-1 flex min-h-0">
+                <div class="w-[58%] border-r border-gray-200 overflow-y-auto p-3" id="chartEditorForm"></div>
+                <div class="w-[42%] flex flex-col min-h-0">
+                    <div class="px-3 py-1.5 text-[11px] text-gray-500 border-b border-gray-200 flex items-center justify-between">
+                        <span><?= h(t('chart.preview_label', [], 'Live preview')) ?></span>
+                        <span id="chartEditorSize" class="tabular-nums"></span>
+                    </div>
+                    <div class="flex-1 overflow-auto p-3 bg-gray-50" id="chartEditorPreview"></div>
+                    <div id="chartEditorError" class="px-3 py-2 text-[11px] text-red-700 bg-red-50 border-t border-red-200 hidden"></div>
+                </div>
+            </div>
+
+            <div class="hidden flex-1 min-h-0 p-3" id="chartEditorJsonPane">
+                <textarea id="chartEditorJson" spellcheck="false"
+                          class="w-full h-full rounded border-gray-300 text-[11px] font-mono px-2 py-1"></textarea>
+            </div>
+
+            <div class="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+                <span class="text-[11px] text-gray-500"><?= h(t('chart.editor_hint', [], 'Every series is an ordinary document field — its values live in the document, not here.')) ?></span>
+                <div class="flex gap-2">
+                    <button type="button" class="px-3 py-1.5 rounded text-xs border border-gray-300 bg-white hover:bg-gray-50"
+                            @click="$store.modals.chartEditor = false"><?= h(t('actions.cancel', [], 'Cancel')) ?></button>
+                    <button type="button" class="px-3 py-1.5 rounded text-xs border-0 bg-cyan-600 text-white hover:bg-cyan-700"
+                            onclick="terapkanChartEditor()"><?= h(t('chart.apply_button', [], 'Apply')) ?></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Field Inspector Modal (Alpine) -->
     <div x-data x-show="$store.modals.fieldInspector" x-transition
          class="fixed inset-0 flex items-center justify-center p-4 z-[100010]"
@@ -1449,6 +1507,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 tabledb: false,
                 params: false,
                 verifyPreview: false,
+                chartEditor: false,
                 open(name) { this[name] = true; },
                 close(name) { this[name] = false; }
             });
