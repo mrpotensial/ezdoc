@@ -6,6 +6,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — tidak ada lagi kunci papan yang cuma bisa diatur lewat JSON (2026-10-01)**
+
+Tab JSON tetap ada dan tidak dihapus — ia menutupi yang jarang. Tapi lima
+kunci yang lazim sempat tertinggal, dan sekarang ada di formulirnya:
+
+- **Bentuk label kolom** (`label_format`) di bagian Papan.
+- **Angka sumbu Y** (`y_axis`) dan **jarak atas panel** (`gap_before`) di tiap
+  panel. Jarak atas yang **dikosongkan** berarti "ikut jarak papan", bukan nol
+  — nol merapatkan panelnya sampai bersentuhan, dan itu pilihan yang berbeda.
+- **Nama pita** (`bands[].label`).
+- **Daftar titik acuan berkurva**, disunting langsung sebagai pasangan
+  kolom-nilai. Acuan lurus bisa dijadikan kurva dengan satu tombol, dan kurva
+  itu lahir dengan dua titik yang kolomnya pasti naik — kurva yang lahir
+  tertolak server membuat yang menekan tombolnya melihat galat sebagai
+  sambutan.
+
+Tombol hapus titik hilang saat tersisa dua: tombol yang pasti ditolak lebih
+baik tidak ada daripada ada lalu mengeluarkan galat.
+
 **Added — garis acuan boleh berbentuk kurva (2026-10-01)**
 
 `references` menerima kunci `points`: daftar `[kolom, nilai]`, bukan cuma dua

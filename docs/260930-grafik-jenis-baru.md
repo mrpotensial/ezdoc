@@ -1,6 +1,6 @@
 # Jenis grafik baru, satuan sumbu baru, dan contoh di luar rumah sakit
 
-> Status: **fase 0–7 selesai, fase 8–9 belum dikerjakan.**
+> Status: **fase 0–8 selesai, fase 9 belum dikerjakan.**
 > Ditulis 30 Sep 2026 sesudah papan grafik terisi (lihat [260929-grafik-terisi.md](260929-grafik-terisi.md))
 > dipakai untuk partograf, lalu diminta dipakai untuk yang lain.
 
@@ -618,8 +618,9 @@ yang paling curam, dan nama yang miring mengikuti potongan itu terbaca
 sebagai nama kurva yang lain.
 
 Di penyunting, acuan berkurva tidak menawarkan isian dua ujung — isian yang
-diabaikan diam-diam terbaca sebagai formulir yang rusak. Daftar titiknya
-diatur di tab JSON sampai fase 8.
+diabaikan diam-diam terbaca sebagai formulir yang rusak. Sejak fase 8 daftar
+titiknya disunting langsung di formulir, dan acuan lurus bisa dijadikan kurva
+dengan satu tombol.
 
 ---
 
@@ -668,7 +669,7 @@ tetap berguna.
 | 5 | ~~`x2` di `SeriesValues` + panel `timeline` (gambar)~~ | **selesai 30 Sep** |
 | 6 | ~~Isian timeline di peramban~~ | **selesai 1 Okt** |
 | 7 | ~~`references.points`~~ | **selesai 1 Okt** |
-| 8 | Isian semuanya di penyunting designer | sedang |
+| 8 | ~~Isian semuanya di penyunting designer~~ | **selesai 1 Okt** |
 | 9 | Tujuh berkas contoh | sedang |
 
 Fase 1 dan 6 yang paling mungkin memakan waktu dua kali lipat dari dugaan.

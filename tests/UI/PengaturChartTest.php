@@ -692,14 +692,103 @@ final class PengaturChartTest extends TestCase
         );
         self::assertSame(
             1,
-            preg_match("/berkurva\s*\?[\s\S]{0,500}?t\('chart\.reference_curve'/", $skrip),
-            'acuan berkurva tidak diberi keterangan sendiri'
+            preg_match('/\? renderChartTitikAcuan\(a\.points, as\)/', $skrip),
+            'acuan berkurva tidak menampilkan daftar titiknya'
         );
         // Isian dua ujung cuma dipasang di cabang `: ` — yaitu acuan lurus.
         self::assertSame(
             1,
             preg_match('/: .<div class="grid grid-cols-4 gap-2">.\s*\+ fNum\(as \+ .\.from\.0./', $skrip),
             'isian dua ujung tidak lagi dibatasi untuk acuan lurus'
+        );
+    }
+
+    /**
+     * Tidak ada lagi kunci spesifikasi yang cuma bisa diatur lewat JSON.
+     *
+     * Tab JSON tetap ada dan tidak dihapus — ia menutupi yang jarang. Tapi
+     * yang lazim harus ada di formulirnya, dan lima kunci ini sempat tertinggal:
+     * bentuk label kolom, angka sumbu Y, jarak atas panel, nama pita, dan
+     * daftar titik acuan berkurva.
+     */
+    public function testEverySpecKeyCanBeSetWithoutTypingJson(): void
+    {
+        $skrip = self::skrip();
+
+        $wajib = [
+            "fText('label_format'" => 'bentuk label kolom',
+            "fCheck(sel + '.y_axis'" => 'angka sumbu Y',
+            "fNum(sel + '.gap_before'" => 'jarak atas panel',
+            "fText(bs + '.label'" => 'nama pita',
+            "fNum(ts + '.0'" => 'kolom titik acuan',
+            "fNum(ts + '.1'" => 'nilai titik acuan',
+        ];
+
+        foreach ($wajib as $potongan => $apa) {
+            self::assertStringContainsString($potongan, $skrip, $apa . ' tidak ada di formulirnya');
+        }
+    }
+
+    /**
+     * Jarak atas yang dikosongkan berarti "ikut jarak papan", bukan nol.
+     *
+     * Nol merapatkan panelnya sampai bersentuhan — pilihan yang sah, tapi
+     * berbeda. Isian kosong yang diam-diam berarti nol membuat yang
+     * mengosongkannya mendapat papan yang bukan dimintanya.
+     */
+    public function testAnEmptyGapMeansAutoNotZero(): void
+    {
+        self::assertSame(
+            1,
+            preg_match("/fNum\(sel \+ '\.gap_before', t\('chart\.gap_before'[^
+]*
+\s*p\.gap_before == null \? '' : p\.gap_before\)/", self::skrip()),
+            'jarak atas yang belum disetel ditampilkan sebagai angka'
+        );
+    }
+
+    /**
+     * Acuan lurus bisa dijadikan kurva, dan kurvanya lahir dengan dua titik.
+     *
+     * Kurva berisi satu titik ditolak server, dan yang menekan tombolnya akan
+     * melihat pesan galat sebagai sambutan — kesalahan yang sama pernah
+     * terjadi pada "Tambah panel" dan "Tambah pita".
+     */
+    public function testAStraightReferenceCanBecomeACurve(): void
+    {
+        $skrip = self::skrip();
+
+        self::assertSame(
+            1,
+            preg_match("/act === 'ref-curve'[\s\S]{0,600}?a\.points = \[\[Number\(dari\[0\]\)/", $skrip),
+            'tidak ada cara menjadikan acuan lurus sebagai kurva'
+        );
+        self::assertSame(
+            1,
+            preg_match('/if \(a\.points\[1\]\[0\] <= a\.points\[0\]\[0\]\) a\.points\[1\]\[0\] = a\.points\[0\]\[0\] \+ 1;/', $skrip),
+            'kurva baru bisa lahir dengan kolom yang tidak naik — langsung ditolak server'
+        );
+    }
+
+    /**
+     * Titik tidak bisa dihapus sampai tersisa kurang dari dua.
+     *
+     * Tombol yang pasti ditolak lebih baik tidak ada daripada ada lalu
+     * mengeluarkan galat.
+     */
+    public function testTheLastTwoPointsCannotBeRemoved(): void
+    {
+        $skrip = self::skrip();
+
+        self::assertSame(
+            1,
+            preg_match("/points\.length > 2\s*\?\s*fTombol\('point-del'/", $skrip),
+            'tombol hapus titik tetap muncul saat tinggal dua'
+        );
+        self::assertSame(
+            1,
+            preg_match('/if \(a && Array\.isArray\(a\.points\) && a\.points\.length > 2\) \{/', $skrip),
+            'menghapus titik tidak dijaga di sisi aksinya'
         );
     }
 

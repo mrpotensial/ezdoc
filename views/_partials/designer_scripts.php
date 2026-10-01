@@ -5207,6 +5207,7 @@
                 + fText('start_field', t('chart.start_field', {}, 'Start-time field'), spec.start_field, 'list="chartFieldSaran"')
                 + fSelect('time_axis', t('chart.time_axis', {}, 'Hour row'),
                     spec.time_axis === false ? 'none' : (spec.time_axis || 'bottom'), CHART_BARIS_JAM)
+                + fText('label_format', t('chart.label_format', {}, 'Label format'), spec.label_format)
                 + '</div></div>';
 
             const panels = Array.isArray(spec.panels) ? spec.panels : [];
@@ -5247,6 +5248,36 @@
             delete spec.hours;
 
             return spec;
+        }
+
+        /**
+         * Daftar titik sebuah acuan berkurva.
+         *
+         * Dua kolom per baris, karena satu titik memang dua angka. Tombol
+         * hapusnya hilang saat tinggal dua titik: kurva berisi satu titik
+         * ditolak server, dan tombol yang pasti ditolak lebih baik tidak ada
+         * daripada ada lalu mengeluarkan galat.
+         */
+        function renderChartTitikAcuan(points, as) {
+            let html = '<div class="text-[10px] font-medium text-gray-600 mb-1">'
+                + escapeHtml(t('chart.reference_curve', {}, 'Curve'))
+                + ' · ' + points.length + ' '
+                + escapeHtml(t('chart.reference_points', {}, 'points')) + '</div>';
+
+            points.forEach(function (titik, k) {
+                const ts = as + '.points.' + k;
+                html += '<div class="grid grid-cols-4 gap-2 items-end mb-1">'
+                    + fNum(ts + '.0', t('chart.point_column', {}, 'Column'), titik[0])
+                    + fNum(ts + '.1', t('chart.point_value', {}, 'Value'), titik[1])
+                    + '<span></span><span class="text-right">'
+                    + (points.length > 2
+                        ? fTombol('point-del', ts, '✕',
+                            'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50')
+                        : '')
+                    + '</span></div>';
+            });
+
+            return html;
         }
 
         /** Satu baris ringkas; isinya baru tampil kalau baris itu yang dibuka. */
@@ -5318,6 +5349,11 @@
                 + fSelect(sel + '.title_align', t('chart.title_align', {}, 'Title placement'), p.title_align || (isSel ? 'left' : 'rotated'), CHART_JUDUL)
                 + fCheck(sel + '.grid', t('chart.grid', {}, 'Grid'), p.grid !== false)
                 + fCheck(sel + '.time_axis', t('chart.panel_time_axis', {}, 'Hour row below'), !!p.time_axis)
+                + (isSel ? '' : fCheck(sel + '.y_axis', t('chart.y_axis', {}, 'Y numbers'), p.y_axis !== false))
+                // Kosong berarti "ikut jarak papan" — bukan nol. Nol merapatkan
+                // panelnya sampai bersentuhan, dan itu pilihan yang berbeda.
+                + fNum(sel + '.gap_before', t('chart.gap_before', {}, 'Gap above'),
+                    p.gap_before == null ? '' : p.gap_before)
                 + (jenis === 'bar'
                     ? fCheck(sel + '.stacked', t('chart.stacked', {}, 'Stacked bars'), !!p.stacked)
                     : '')
@@ -5355,13 +5391,15 @@
                 + '</span></div>';
             pita.forEach(function (b, j) {
                 const bs = sel + '.bands.' + j;
-                html += '<div class="bg-gray-50 rounded p-2 mb-1 grid grid-cols-4 gap-2 items-end">'
+                html += '<div class="bg-gray-50 rounded p-2 mb-1"><div class="grid grid-cols-4 gap-2">'
                     + fNum(bs + '.from', t('chart.band_from', {}, 'From'), b.from == null ? 0 : b.from)
                     + fNum(bs + '.to', t('chart.band_to', {}, 'To'), b.to == null ? '' : b.to)
                     + fColor(bs + '.color', t('chart.color', {}, 'Colour'), b.color || '#dcfce7')
-                    + '<span class="text-right">' + fTombol('band-del', bs, '✕ ' + t('chart.remove', {}, 'Remove'),
+                    + fText(bs + '.label', t('chart.label', {}, 'Name'), b.label)
+                    + '</div><div class="text-right mt-1">'
+                    + fTombol('band-del', bs, '✕ ' + t('chart.remove', {}, 'Remove'),
                         'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50')
-                    + '</span></div>';
+                    + '</div></div>';
             });
             html += fTombol('band-add', sel, '+ ' + t('chart.add_band', {}, 'Add band')) + '</div>';
 
@@ -5380,11 +5418,7 @@
                     const berkurva = Array.isArray(a.points) && a.points.length >= 2;
                     html += '<div class="bg-gray-50 rounded p-2 mb-1">'
                         + (berkurva
-                            ? '<div class="text-[10px] text-gray-500 mb-1">'
-                                + escapeHtml(t('chart.reference_curve', {}, 'Curve of'))
-                                + ' ' + a.points.length + ' '
-                                + escapeHtml(t('chart.reference_points', {}, 'points — edit it in the JSON tab'))
-                                + '</div>'
+                            ? renderChartTitikAcuan(a.points, as)
                             : '<div class="grid grid-cols-4 gap-2">'
                                 + fNum(as + '.from.0', t('chart.from_hour', {}, 'From hour'), dari[0])
                                 + fNum(as + '.from.1', t('chart.from_value', {}, 'From value'), dari[1])
@@ -5396,7 +5430,10 @@
                         + fSelect(as + '.style', t('chart.line_style', {}, 'Style'), a.style || 'solid', CHART_GAYA)
                         + fColor(as + '.color', t('chart.color', {}, 'Colour'), a.color || '#333333')
                         + fCheck(as + '.label_on_line', t('chart.label_on_line', {}, 'Name on the line'), !!a.label_on_line)
-                        + '</div><div class="text-right mt-1">'
+                        + '</div><div class="flex justify-between items-center mt-1">'
+                        + (berkurva
+                            ? fTombol('point-add', as, '+ ' + t('chart.add_point', {}, 'Add point'))
+                            : fTombol('ref-curve', as, t('chart.make_curve', {}, 'Make it a curve')))
                         + fTombol('ref-del', as, '✕ ' + t('chart.remove', {}, 'Remove'),
                             'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50')
                         + '</div></div>';
@@ -5604,6 +5641,30 @@
                 const p = chartAmbil(spec, path);
                 p.references = Array.isArray(p.references) ? p.references : [];
                 p.references.push({ from: [0, 0], to: [4, 10], style: 'solid', label: '', color: '#333333' });
+            } else if (act === 'ref-curve') {
+                // Dua ujungnya jadi dua titik pertama. Kurva yang lahir kosong
+                // langsung ditolak server, dan yang menekannya melihat galat
+                // sebagai sambutan.
+                const a = chartAmbil(spec, path);
+                const dari = Array.isArray(a.from) ? a.from : [0, 0];
+                const ke = Array.isArray(a.to) ? a.to : [1, 0];
+                a.points = [[Number(dari[0]) || 0, Number(dari[1]) || 0],
+                            [Number(ke[0]) || 1, Number(ke[1]) || 0]];
+                if (a.points[1][0] <= a.points[0][0]) a.points[1][0] = a.points[0][0] + 1;
+                delete a.from;
+                delete a.to;
+            } else if (act === 'point-add') {
+                const a = chartAmbil(spec, path);
+                a.points = Array.isArray(a.points) ? a.points : [];
+                const akhir = a.points[a.points.length - 1] || [0, 0];
+                a.points.push([Number(akhir[0]) + 1, Number(akhir[1])]);
+            } else if (act === 'point-del') {
+                const bagian = path.split('.');
+                const k = parseInt(bagian.pop(), 10);
+                const a = chartAmbil(spec, bagian.slice(0, -1).join('.'));
+                if (a && Array.isArray(a.points) && a.points.length > 2) {
+                    a.points.splice(k, 1);
+                }
             } else if (act === 'ref-del') {
                 chartHapusInduk(spec, path);
             } else if (act === 'vert-add') {
