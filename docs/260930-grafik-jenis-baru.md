@@ -1,6 +1,6 @@
 # Jenis grafik baru, satuan sumbu baru, dan contoh di luar rumah sakit
 
-> Status: **fase 0–6 selesai, fase 7–9 belum dikerjakan.**
+> Status: **fase 0–7 selesai, fase 8–9 belum dikerjakan.**
 > Ditulis 30 Sep 2026 sesudah papan grafik terisi (lihat [260929-grafik-terisi.md](260929-grafik-terisi.md))
 > dipakai untuk partograf, lalu diminta dipakai untuk yang lain.
 
@@ -605,6 +605,22 @@ bertambah kunci `points`:
 
 Garis lurus `from`/`to` yang ada sekarang tidak berubah.
 
+**Dikerjakan 1 Okt 2026.** Kolom titiknya wajib **naik terus** — kurva acuan
+adalah fungsi dari sumbunya, dan yang berbalik arah atau berhenti di kolom
+yang sama menghasilkan zigzag yang tetap terbaca sebagai batas.
+
+Titik yang nilainya di luar sumbu **dipotong ke tepi**, bukan dibuang:
+acuan bukan pengukuran, dan membuang titiknya memutus kurvanya persis di
+tempat yang paling menarik.
+
+Namanya mengikuti potongan di **tengah** kurvanya. Potongan pertama sering
+yang paling curam, dan nama yang miring mengikuti potongan itu terbaca
+sebagai nama kurva yang lain.
+
+Di penyunting, acuan berkurva tidak menawarkan isian dua ujung — isian yang
+diabaikan diam-diam terbaca sebagai formulir yang rusak. Daftar titiknya
+diatur di tab JSON sampai fase 8.
+
 ---
 
 ## 7. Berkas contoh
@@ -651,7 +667,7 @@ tetap berguna.
 | 4 | ~~`stacked` pada panel `bar`~~ | **selesai 30 Sep** |
 | 5 | ~~`x2` di `SeriesValues` + panel `timeline` (gambar)~~ | **selesai 30 Sep** |
 | 6 | ~~Isian timeline di peramban~~ | **selesai 1 Okt** |
-| 7 | `references.points` | kecil |
+| 7 | ~~`references.points`~~ | **selesai 1 Okt** |
 | 8 | Isian semuanya di penyunting designer | sedang |
 | 9 | Tujuh berkas contoh | sedang |
 

@@ -416,6 +416,8 @@ return [
             'band_from' => 'From',
             'band_to' => 'To',
             'add_band' => 'Add band',
+            'reference_curve' => 'Curve of',
+            'reference_points' => 'points — edit it in the JSON tab',
             'field' => 'Field',
             'series_title' => 'Name',
             'draw' => 'Draw',

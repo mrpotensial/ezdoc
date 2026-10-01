@@ -674,6 +674,35 @@ final class PengaturChartTest extends TestCase
         );
     }
 
+    /**
+     * Acuan berkurva tidak menawarkan isian dua ujung.
+     *
+     * Kurvanya disetel lewat daftar titik. Isian "dari jam / sampai jam" di
+     * situ mengundang orang mengisinya, dan isiannya diabaikan diam-diam —
+     * yang terbaca sebagai formulir yang rusak, bukan sebagai pilihan.
+     */
+    public function testACurveReferenceOffersNoFromAndToFields(): void
+    {
+        $skrip = self::skrip();
+
+        self::assertSame(
+            1,
+            preg_match('/const berkurva = Array\.isArray\(a\.points\) && a\.points\.length >= 2;/', $skrip),
+            'formulirnya tidak membedakan acuan berkurva'
+        );
+        self::assertSame(
+            1,
+            preg_match("/berkurva\s*\?[\s\S]{0,500}?t\('chart\.reference_curve'/", $skrip),
+            'acuan berkurva tidak diberi keterangan sendiri'
+        );
+        // Isian dua ujung cuma dipasang di cabang `: ` — yaitu acuan lurus.
+        self::assertSame(
+            1,
+            preg_match('/: .<div class="grid grid-cols-4 gap-2">.\s*\+ fNum\(as \+ .\.from\.0./', $skrip),
+            'isian dua ujung tidak lagi dibatasi untuk acuan lurus'
+        );
+    }
+
     /** Semua kalimatnya ada di kedua bahasa. */
     public function testEveryLabelExistsInBothLanguages(): void
     {

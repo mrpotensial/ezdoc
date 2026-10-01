@@ -6,6 +6,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — garis acuan boleh berbentuk kurva (2026-10-01)**
+
+`references` menerima kunci `points`: daftar `[kolom, nilai]`, bukan cuma dua
+ujung.
+
+```json
+{"points": [[0, 3.3], [3, 6.4], [6, 7.9]], "label": "MEDIAN"}
+```
+
+Kurva pertumbuhan WHO tidak pernah lurus, dan mendekatinya dengan garis lurus
+menggeser batasnya justru di umur yang paling sering dibaca.
+
+- Kolom titiknya **wajib naik terus**. Kurva acuan adalah fungsi dari
+  sumbunya; yang berbalik arah atau berhenti di kolom yang sama menghasilkan
+  zigzag yang tetap terbaca sebagai batas.
+- Titik yang nilainya di luar sumbu **dipotong ke tepi, bukan dibuang** —
+  acuan bukan pengukuran, dan membuangnya memutus kurvanya persis di tempat
+  yang paling menarik.
+- Namanya mengikuti potongan di **tengah** kurvanya, bukan yang pertama.
+- `from`/`to` yang lama tidak berubah sama sekali, dan tetap digambar sebagai
+  satu `<line>`.
+
+Di penyunting papan, acuan berkurva tidak menawarkan isian dua ujung: isian
+yang diabaikan diam-diam terbaca sebagai formulir yang rusak.
+
 **Added — rentang diisi langsung di lembarnya (2026-10-01)**
 
 Panel timeline tidak lagi cuma bisa dibaca:

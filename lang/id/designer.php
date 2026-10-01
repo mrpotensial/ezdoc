@@ -420,6 +420,8 @@ return [
             'band_from'           => 'Dari nilai',
             'band_to'             => 'Sampai nilai',
             'add_band'            => 'Tambah pita',
+            'reference_curve'     => 'Kurva',
+            'reference_points'    => 'titik — diatur di tab JSON',
             'field'               => 'Field',
             'series_title'        => 'Nama',
             'draw'                => 'Digambar',

@@ -1136,6 +1136,63 @@ final class SvgChartRenderer
     }
 
     /**
+     * Acuan berkurva: daftar titik, bukan dua ujung.
+     *
+     * Titik yang nilainya di luar sumbu **dipotong ke tepi**, bukan dibuang.
+     * Aturan "nilai di luar sumbu tidak digambar" berlaku untuk pengukuran —
+     * yang di luar jangkauan biasanya salah ketik. Acuan bukan pengukuran: ia
+     * garis bantu yang memang boleh melewati tepi panel, dan membuang
+     * titiknya akan memutus kurvanya persis di tempat yang paling menarik.
+     *
+     * @param array<string,mixed> $reference
+     * @param array<int,array{0:float,1:float}> $points
+     */
+    private function referenceCurve(Scale $scale, int $index, array $reference, array $points): string
+    {
+        $panels = $scale->export()['panels'];
+        $atas = (float) $panels[$index]['top'];
+        $bawah = $atas + (float) $panels[$index]['height'];
+
+        $xy = [];
+        foreach ($points as $titik) {
+            $y = $scale->y($index, $titik[1]);
+            if ($y === null) {
+                $y = $titik[1] > (float) $panels[$index]['y_max'] ? $atas : $bawah;
+            }
+            $xy[] = [$scale->xFromColumn($titik[0]), $y];
+        }
+
+        $d = '';
+        foreach ($xy as $i => $t) {
+            $d .= ($i === 0 ? 'M' : 'L') . self::num($t[0]) . ' ' . self::num($t[1]) . ' ';
+        }
+
+        $dash = $reference['style'] === 'dashed' ? ' stroke-dasharray="5 3"' : '';
+        $warna = self::attr((string) $reference['color']);
+        $out = '<path d="' . rtrim($d) . '" fill="none" stroke="' . $warna
+            . '" stroke-width="1.2"' . $dash . '/>';
+
+        $label = (string) $reference['label'];
+        if (!(bool) $reference['label_on_line'] || $label === '') {
+            return $out;
+        }
+
+        // Namanya mengikuti potongan di TENGAH kurvanya. Potongan pertama
+        // sering yang paling curam, dan nama yang miring mengikuti potongan
+        // itu terbaca sebagai nama kurva yang lain.
+        $tengah = intdiv(count($xy) - 1, 2);
+        $a = $xy[$tengah];
+        $b = $xy[$tengah + 1];
+        $sudut = rad2deg(atan2($b[1] - $a[1], $b[0] - $a[0]));
+
+        return $out . '<g transform="translate(' . self::num(($a[0] + $b[0]) / 2) . ' '
+            . self::num(((($a[1] + $b[1]) / 2)) - 3) . ') rotate(' . self::num($sudut) . ')">'
+            . '<text x="0" y="0" font-family="' . self::FONT . '" font-size="9" font-weight="bold" fill="'
+            . $warna . '" text-anchor="middle" letter-spacing="2">'
+            . self::text($label) . '</text></g>';
+    }
+
+    /**
      * Garis tegak penanda waktu, dengan kotak jamnya di bawah.
      *
      * @param array<string,mixed> $values
@@ -1202,6 +1259,12 @@ final class SvgChartRenderer
      */
     private function reference(Scale $scale, int $index, array $reference): string
     {
+        /** @var array<int,array{0:float,1:float}> $points */
+        $points = $reference['points'];
+        if ($points !== []) {
+            return $this->referenceCurve($scale, $index, $reference, $points);
+        }
+
         $y1 = $scale->y($index, (float) $reference['y1']);
         $y2 = $scale->y($index, (float) $reference['y2']);
         if ($y1 === null || $y2 === null) {

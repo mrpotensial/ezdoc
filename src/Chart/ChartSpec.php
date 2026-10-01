@@ -739,12 +739,23 @@ final class ChartSpec
      */
     private static function readReference(array $reference, int $panelPosition, int $position): array
     {
-        $from = isset($reference['from']) && is_array($reference['from']) ? array_values($reference['from']) : [];
-        $to = isset($reference['to']) && is_array($reference['to']) ? array_values($reference['to']) : [];
-        if (count($from) !== 2 || count($to) !== 2) {
-            throw new ValidationException(
-                "Panel ke-{$panelPosition}, acuan ke-{$position}: 'from' dan 'to' harus dua angka [jam, nilai]."
-            );
+        // Acuan berbentuk kurva: daftar titik, bukan dua ujung. Kurva
+        // pertumbuhan WHO tidak pernah lurus, dan mendekatinya dengan garis
+        // lurus menggeser batasnya justru di umur yang paling sering dibaca.
+        $points = self::readReferencePoints($reference, $panelPosition, $position);
+
+        if ($points === []) {
+            $from = isset($reference['from']) && is_array($reference['from']) ? array_values($reference['from']) : [];
+            $to = isset($reference['to']) && is_array($reference['to']) ? array_values($reference['to']) : [];
+            if (count($from) !== 2 || count($to) !== 2) {
+                throw new ValidationException(
+                    "Panel ke-{$panelPosition}, acuan ke-{$position}: "
+                    . "'from' dan 'to' harus dua angka [jam, nilai], atau pakai 'points'."
+                );
+            }
+        } else {
+            $from = [$points[0][0], $points[0][1]];
+            $to = [$points[count($points) - 1][0], $points[count($points) - 1][1]];
         }
 
         $style = isset($reference['style']) ? (string) $reference['style'] : 'solid';
@@ -759,6 +770,7 @@ final class ChartSpec
             'y1' => (float) $from[1],
             'x2' => (float) $to[0],
             'y2' => (float) $to[1],
+            'points' => $points,
             'style' => $style,
             'label' => isset($reference['label']) ? (string) $reference['label'] : '',
             // Nama yang ditulis MIRING mengikuti garisnya, seperti "WASPADA"
@@ -773,6 +785,73 @@ final class ChartSpec
      * Garis tegak pada satu waktu — "sekarang", atau saat apa pun yang ditandai.
      *
      * Waktunya datang dari sebuah field, bukan dari jam dinding: yang ditandai
+     * harus ikut tersimpan bersama dokumennya, dan harus sama tiap kali
+     * dokumen itu digambar ulang.
+     *
+     * @param array<string,mixed> $vertical
+     * @return array<string,mixed>
+     *
+     * @throws ValidationException
+     */
+    /**
+     * Titik-titik sebuah acuan berkurva.
+     *
+     * Kosong kalau kuncinya tidak ada — acuan bentuk lama tetap dibaca lewat
+     * `from`/`to`, dan tiap papan yang sudah tersimpan berbentuk begitu.
+     *
+     * Kolomnya wajib naik terus. Kurva acuan adalah fungsi dari sumbunya
+     * (berat menurut umur, misalnya); yang berbalik arah bukan kurva acuan
+     * melainkan daftar yang salah urut, dan menggambarnya menghasilkan
+     * zigzag yang terbaca sebagai batas.
+     *
+     * @param array<string,mixed> $reference
+     * @return array<int,array{0:float,1:float}>
+     *
+     * @throws ValidationException
+     */
+    private static function readReferencePoints(array $reference, int $panelPosition, int $position): array
+    {
+        if (!isset($reference['points']) || !is_array($reference['points'])) {
+            return [];
+        }
+
+        $mentah = array_values($reference['points']);
+        if (count($mentah) < 2) {
+            throw new ValidationException(
+                "Panel ke-{$panelPosition}, acuan ke-{$position}: 'points' butuh sedikitnya dua titik."
+            );
+        }
+
+        $points = [];
+        $sebelumnya = null;
+        foreach ($mentah as $i => $titik) {
+            $pasangan = is_array($titik) ? array_values($titik) : [];
+            if (count($pasangan) !== 2 || !is_numeric($pasangan[0]) || !is_numeric($pasangan[1])) {
+                throw new ValidationException(
+                    "Panel ke-{$panelPosition}, acuan ke-{$position}, titik ke-" . ($i + 1)
+                    . ': harus dua angka [kolom, nilai].'
+                );
+            }
+
+            $x = (float) $pasangan[0];
+            if ($sebelumnya !== null && $x <= $sebelumnya) {
+                throw new ValidationException(
+                    "Panel ke-{$panelPosition}, acuan ke-{$position}: kolom titiknya harus naik terus."
+                );
+            }
+            $sebelumnya = $x;
+
+            $points[] = [$x, (float) $pasangan[1]];
+        }
+
+        return $points;
+    }
+
+    /**
+     * Garis tegak penanda waktu.
+     *
+     * Waktunya dibaca dari sebuah field dokumen, bukan disetel di
+     * spesifikasi: penanda yang menunjuk saat tertentu di sebuah dokumen
      * harus ikut tersimpan bersama dokumennya, dan harus sama tiap kali
      * dokumen itu digambar ulang.
      *

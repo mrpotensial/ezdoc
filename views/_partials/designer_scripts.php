@@ -5373,12 +5373,25 @@
                     const as = sel + '.references.' + j;
                     const dari = Array.isArray(a.from) ? a.from : [0, 0];
                     const ke = Array.isArray(a.to) ? a.to : [0, 0];
-                    html += '<div class="bg-gray-50 rounded p-2 mb-1"><div class="grid grid-cols-4 gap-2">'
-                        + fNum(as + '.from.0', t('chart.from_hour', {}, 'From hour'), dari[0])
-                        + fNum(as + '.from.1', t('chart.from_value', {}, 'From value'), dari[1])
-                        + fNum(as + '.to.0', t('chart.to_hour', {}, 'To hour'), ke[0])
-                        + fNum(as + '.to.1', t('chart.to_value', {}, 'To value'), ke[1])
-                        + '</div><div class="grid grid-cols-4 gap-2 mt-1 items-end">'
+                    // Acuan berkurva disetel lewat daftar titik, bukan dua
+                    // ujung. Menampilkan isian dua ujung di situ mengundang
+                    // orang mengisinya, dan isiannya diabaikan diam-diam —
+                    // yang terbaca sebagai formulir yang rusak.
+                    const berkurva = Array.isArray(a.points) && a.points.length >= 2;
+                    html += '<div class="bg-gray-50 rounded p-2 mb-1">'
+                        + (berkurva
+                            ? '<div class="text-[10px] text-gray-500 mb-1">'
+                                + escapeHtml(t('chart.reference_curve', {}, 'Curve of'))
+                                + ' ' + a.points.length + ' '
+                                + escapeHtml(t('chart.reference_points', {}, 'points — edit it in the JSON tab'))
+                                + '</div>'
+                            : '<div class="grid grid-cols-4 gap-2">'
+                                + fNum(as + '.from.0', t('chart.from_hour', {}, 'From hour'), dari[0])
+                                + fNum(as + '.from.1', t('chart.from_value', {}, 'From value'), dari[1])
+                                + fNum(as + '.to.0', t('chart.to_hour', {}, 'To hour'), ke[0])
+                                + fNum(as + '.to.1', t('chart.to_value', {}, 'To value'), ke[1])
+                                + '</div>')
+                        + '<div class="grid grid-cols-4 gap-2 mt-1 items-end">'
                         + fText(as + '.label', t('chart.label', {}, 'Name'), a.label)
                         + fSelect(as + '.style', t('chart.line_style', {}, 'Style'), a.style || 'solid', CHART_GAYA)
                         + fColor(as + '.color', t('chart.color', {}, 'Colour'), a.color || '#333333')
