@@ -199,9 +199,16 @@ final class Scale
     {
         $panels = [];
         foreach ($this->spec->panels() as $i => $panel) {
+            /** @var array<int,array<string,mixed>> $deret */
+            $deret = $panel['series'];
+
             $panels[] = [
                 'type' => (string) $panel['type'],
                 'stacked' => (bool) $panel['stacked'],
+                // Jumlah jalur panel timeline. Tanpa ini yang di peramban tidak
+                // punya cara tahu klik di ketinggian tertentu milik deret yang
+                // mana — dan akan selalu jatuh ke deret pertama.
+                'lanes' => count($deret),
                 'top' => $this->tops[$i],
                 'height' => (float) $panel['height'],
                 'y_min' => (float) $panel['y_min'],

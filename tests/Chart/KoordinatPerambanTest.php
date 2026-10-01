@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ezdoc\Tests\Chart;
 
+use Ezdoc\Chart\SeriesValues;
 use Ezdoc\Chart\TimeAxis;
 use PHPUnit\Framework\TestCase;
 
@@ -69,6 +70,7 @@ final class KoordinatPerambanTest extends TestCase
 
                 self::assertStringContainsString('LULUS', $keluaran, $zona . ': ' . $keluaran);
                 self::assertStringContainsString('kasus satuan diperiksa', $keluaran, $zona . ': ' . $keluaran);
+                self::assertStringContainsString('kasus rapikan diperiksa', $keluaran, $zona . ': ' . $keluaran);
             }
         } finally {
             @unlink($js);
@@ -94,19 +96,81 @@ final class KoordinatPerambanTest extends TestCase
         $kasus = tempnam(sys_get_temp_dir(), 'ezdoc-satuan-') . '.json';
         file_put_contents($kasus, json_encode(self::kasusSatuan()));
 
+        $rapi = tempnam(sys_get_temp_dir(), 'ezdoc-rapi-') . '.json';
+        file_put_contents($rapi, json_encode(self::kasusRapikan()));
+
         try {
             return (string) @shell_exec(sprintf(
-                '%s %s %s %s 2>&1',
+                '%s %s %s %s %s 2>&1',
                 escapeshellarg($node),
                 escapeshellarg(dirname(__DIR__) . '/js/chart-koordinat.js'),
                 escapeshellarg($js),
-                escapeshellarg($kasus)
+                escapeshellarg($kasus),
+                escapeshellarg($rapi)
             ));
         } finally {
             @unlink($kasus);
+            @unlink($rapi);
             date_default_timezone_set($semulaPhp);
             putenv($semulaTz === false ? 'TZ' : 'TZ=' . $semulaTz);
         }
+    }
+
+    /**
+     * Daftar kasus pembakuan nilai, dengan harapan dihitung sisi PHP.
+     *
+     * Yang dibandingkan bentuk TERSIMPAN — yang ikut di-hash tanda tangan.
+     * Dua salinan aturan di dua bahasa, dan yang satu pernah membuang `x2`
+     * tanpa ada yang tahu sampai gambarnya dibaca.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private static function kasusRapikan(): array
+    {
+        $kasus = [
+            'titik biasa' => [
+                ['x' => '2026-09-29 10:00', 'y' => 8],
+                ['x' => '2026-09-29 08:00', 'y' => 4],
+            ],
+            'rentang tertutup' => [
+                ['x' => '2026-09-29 08:00', 'x2' => '2026-09-29 14:00', 'y' => 'RL 500'],
+            ],
+            'rentang terbuka' => [
+                ['x' => '2026-09-29 08:00', 'x2' => false, 'y' => 'Oksitosin'],
+            ],
+            'rentang tanpa label' => [
+                ['x' => '2026-09-29 08:00', 'x2' => '2026-09-29 09:00'],
+            ],
+            'dua rentang mulai bersamaan' => [
+                ['x' => '2026-09-29 08:00', 'x2' => '2026-09-29 14:00', 'y' => 'B'],
+                ['x' => '2026-09-29 08:00', 'x2' => '2026-09-29 10:00', 'y' => 'A'],
+            ],
+            'titik dan rentang bersamaan' => [
+                ['x' => '2026-09-29 08:00', 'x2' => false, 'y' => 'terbuka'],
+                ['x' => '2026-09-29 08:00', 'y' => 3],
+                ['x' => '2026-09-29 08:00', 'x2' => '2026-09-29 10:00', 'y' => 'tertutup'],
+            ],
+            'rentang kembar persis' => [
+                ['x' => '2026-09-29 08:00', 'x2' => '2026-09-29 10:00', 'y' => 'lama'],
+                ['x' => '2026-09-29 08:00', 'x2' => '2026-09-29 10:00', 'y' => 'baru'],
+            ],
+            'campuran berurutan' => [
+                ['x' => '2026-09-29 12:00', 'x2' => false, 'y' => 'C'],
+                ['x' => '2026-09-29 08:00', 'y' => 1],
+                ['x' => '2026-09-29 10:00', 'x2' => '2026-09-29 11:00', 'y' => 'B'],
+            ],
+        ];
+
+        $keluar = [];
+        foreach ($kasus as $nama => $masuk) {
+            $keluar[] = [
+                'nama' => $nama,
+                'masuk' => $masuk,
+                'harap' => SeriesValues::toJson($masuk),
+            ];
+        }
+
+        return $keluar;
     }
 
     /**

@@ -6,6 +6,47 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — rentang diisi langsung di lembarnya (2026-10-01)**
+
+Panel timeline tidak lagi cuma bisa dibaca:
+
+| Perbuatan | Hasilnya |
+|---|---|
+| Seret mendatar di jalur kosong | rentang baru, dari kolom awal sampai kolom akhir |
+| Seret badan rentang | seluruhnya bergeser, panjangnya tetap |
+| Seret ujung kiri atau kanan | ujung itu saja yang bergeser |
+| Seret ujung kanan melewati tepi | rentangnya jadi **terbuka** — "belum selesai" |
+| Klik ganda | ketik labelnya |
+| Klik lalu Delete | rentangnya dihapus |
+
+Satu kolom yang diseret berarti kolom ITU, dari awalnya sampai awal kolom
+berikutnya — aturan yang sama dengan isi sel.
+
+**Fixed — bentuk baku di peramban membuang `x2` (2026-10-01)**
+
+`ezChartRapikan` menulis ulang tiap nilai jadi `{x, y}`. Akibatnya rentang yang
+baru dibuat jadi titik tanpa nilai lalu dibuang server, dan rentang yang sudah
+ada **kehilangan jam selesainya** begitu ada yang menyentuh papan itu.
+Gambarnya tetap muncul, cuma isinya berbeda.
+
+Ia kembaran `SeriesValues::parse()` di PHP, dan sekarang kesamaannya diuji:
+delapan bentuk nilai dihitung PHP lalu dihitung ulang peramban, di dua zona
+waktu. Uji itu langsung menangkap perbedaan kedua — label kosong ditulis
+sebagai kunci yang hilang di peramban dan sebagai `""` di server.
+
+**Fixed — penangan titik ikut menyentuh kotak rentang (2026-10-01)**
+
+Keduanya memakai kelas `ez-chart-handle` supaya aturan "muncul saat disentuh
+pointer" berlaku untuk keduanya. Menyeret rentang lewat jalur itu menulis
+ulang isinya sebagai titik.
+
+**Fixed — memilih rentang membuat label tidak bisa diberikan (2026-10-01)**
+
+Memilih menggambar ulang lapisannya, yang menghapus elemen yang barusan
+diklik. Klik kedua sepersekian detik kemudian mendarat di elemen lain, dan
+klik ganda untuk memberi label tidak pernah sampai. Sorotannya sekarang
+disetel di tempat.
+
 **Added — rentang nilai (`x2`) dan panel `timeline` (2026-09-30)**
 
 Jadwal obat dan waktu infus bukan titik. Bentuk nilai bertambah satu kunci

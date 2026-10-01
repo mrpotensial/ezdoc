@@ -252,6 +252,8 @@ return [
     ],
     'chart' => [
             'ask_cell'            => 'Isi kolom ini',
+            'ask_range'           => 'Nama untuk rentang ini',
+            'range_open'          => 'masih berjalan',
             'stale'               => 'Gambar grafiknya belum terbarui — angkanya sudah tersimpan',
     ],
     'modal' => [

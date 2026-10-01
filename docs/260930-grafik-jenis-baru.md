@@ -1,6 +1,6 @@
 # Jenis grafik baru, satuan sumbu baru, dan contoh di luar rumah sakit
 
-> Status: **fase 0–5 selesai, fase 6–9 belum dikerjakan.**
+> Status: **fase 0–6 selesai, fase 7–9 belum dikerjakan.**
 > Ditulis 30 Sep 2026 sesudah papan grafik terisi (lihat [260929-grafik-terisi.md](260929-grafik-terisi.md))
 > dipakai untuk partograf, lalu diminta dipakai untuk yang lain.
 
@@ -575,6 +575,25 @@ jam operasi mesin, jadwal perawatan.
 | Seret ujung kanan ke luar tepi | rentangnya jadi terbuka (`x2: false`) |
 | Klik lalu Delete | rentangnya dihapus |
 
+**Dikerjakan 1 Okt 2026**, dan ketiga bug yang ditemukan hanya muncul saat
+dicoba di peramban sungguhan — bukan satu pun terbaca dari kodenya:
+
+1. **`ezChartRapikan` membuang `x2`.** Ia menulis ulang tiap nilai jadi
+   `{x, y}`. Rentang yang baru dibuat jadi titik tanpa nilai lalu dibuang
+   server; rentang yang sudah ada kehilangan jam selesainya begitu ada yang
+   menyentuh papan itu. Gambarnya tetap muncul, cuma isinya berbeda.
+2. **Kotak rentang ikut terjaring penangan titik**, karena keduanya memakai
+   kelas yang sama supaya aturan "muncul saat disentuh pointer" berlaku untuk
+   keduanya. Menyeretnya menulis ulang rentang sebagai titik.
+3. **Memilih rentang menggambar ulang lapisannya**, yang menghapus elemen
+   yang barusan diklik — sehingga klik kedua mendarat di elemen lain dan klik
+   ganda untuk memberi label tidak pernah sampai.
+
+Yang keempat ditemukan uji kesamaan PHP↔JS yang diperluas untuk rentang:
+label kosong ditulis sebagai **kunci yang hilang** di peramban (`JSON.stringify`
+membuang `undefined`) dan sebagai `""` di server. Dua byte, dua hash, satu
+dokumen.
+
 ### 6.6 Garis acuan berbentuk kurva
 
 Untuk grafik pertumbuhan: kurva acuan WHO bukan garis lurus. `references`
@@ -631,7 +650,7 @@ tetap berguna.
 | 3 | ~~Kunci panel `bands` (sel berwarna + pita latar)~~ | **selesai 30 Sep** |
 | 4 | ~~`stacked` pada panel `bar`~~ | **selesai 30 Sep** |
 | 5 | ~~`x2` di `SeriesValues` + panel `timeline` (gambar)~~ | **selesai 30 Sep** |
-| 6 | Isian timeline di peramban | **besar** |
+| 6 | ~~Isian timeline di peramban~~ | **selesai 1 Okt** |
 | 7 | `references.points` | kecil |
 | 8 | Isian semuanya di penyunting designer | sedang |
 | 9 | Tujuh berkas contoh | sedang |

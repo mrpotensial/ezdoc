@@ -1734,6 +1734,11 @@
                 // baru saat kisinya diklik.
                 aktif: spec.panels.map(function () { return 0; }),
                 nilai: {},
+                // Rentang yang sedang dipilih, kalau ada: { field, index }.
+                // Dipilih dulu, lalu Delete — klik ganda sudah dipakai label,
+                // dan rentang yang hilang karena klik ganda yang meleset tidak
+                // bisa dikembalikan.
+                pilih: null,
                 tunda: null
             };
 
@@ -1743,6 +1748,7 @@
 
             ezChartGambarPegangan(keadaan);
             ezChartPasangKlik(keadaan);
+            ezChartPasangRentang(keadaan);
             root._ezChart = keadaan;
         }
 
@@ -1801,6 +1807,7 @@
 
             const jam = (px - scale.left) / scale.column_width;
             if (jam < 0 || jam > scale.hours) return null;
+            if (ezChartJalurTimeline(panel)) return null;
             const satuan = ezChartSatuan(scale);
 
             // Baris sel diisi huruf. Klik di situ menanyakan isinya; menaruh
@@ -1857,6 +1864,46 @@
             return new Date(d.getFullYear(), d.getMonth() - n, 1, 0, 0, 0, 0).getTime();
         }
 
+        // ── Rentang: dibuat, digeser, diberi label, dihapus ─────────
+        //
+        // Titik diisi dengan menunjuk satu tempat. Rentang tidak punya satu
+        // tempat — ia punya dua, dan salah satunya boleh belum ada. Karena itu
+        // lapisan ini terpisah dari pegangan titik, bukan ditambal ke dalamnya.
+        //
+        // Satu kolom yang diseret berarti kolom ITU, dari awalnya sampai awal
+        // kolom berikutnya. Aturan yang sama dengan isi sel: nilai milik kolom
+        // yang dimulai pada jam itu, bukan garis jamnya.
+
+        function ezChartJalurTimeline(panel) {
+            return panel && panel.type === 'timeline' ? Math.max(1, panel.lanes || 1) : 0;
+        }
+
+        /** Jalur keberapa sebuah ketinggian di panel timeline. */
+        function ezChartJalurDi(panel, py) {
+            const jalur = ezChartJalurTimeline(panel);
+            if (!jalur) return null;
+            const n = Math.floor((py - panel.top) / (panel.height / jalur));
+
+            return (n < 0 || n >= jalur) ? null : n;
+        }
+
+        /** Kolom keberapa sebuah tempat mendatar — pecahan, belum dibulatkan. */
+        function ezChartKolomDi(scale, px) {
+            return (px - scale.left) / scale.column_width;
+        }
+
+        /** Tempat mendatar awal sebuah kolom. */
+        function ezChartPxKolom(scale, kolom) {
+            return scale.left + (kolom * scale.column_width);
+        }
+
+        /** Waktu awal kolom ke-n, dipotong ke dalam papan. */
+        function ezChartWaktuKolomKe(scale, kolom) {
+            const n = Math.max(0, Math.min(scale.hours, Math.round(kolom)));
+
+            return ezChartWaktuKolom(scale, n);
+        }
+
         function ezChartPanelDi(scale, py) {
             for (let i = 0; i < scale.panels.length; i++) {
                 const p = scale.panels[i];
@@ -1908,6 +1955,11 @@
                     lapisan.appendChild(pilih);
                 }
 
+                if (ezChartJalurTimeline(skalaPanel)) {
+                    ezChartGambarRentang(keadaan, iPanel, panel, skalaPanel);
+                    return;
+                }
+
                 (panel.series || []).forEach(function (deret, iDeret) {
                     const titik = keadaan.nilai[deret.field] || [];
                     titik.forEach(function (t, iTitik) {
@@ -1933,6 +1985,272 @@
             });
         }
 
+        /**
+         * Kotak-kotak rentang di atas panel timeline.
+         *
+         * Satu kotak per rentang, dengan dua pegangan tipis di ujungnya.
+         * Ujung yang terbuka tidak diberi pegangan kanan — yang diseret di
+         * situ adalah "belum selesai", dan menyeretnya berarti menutupnya,
+         * yang dikerjakan lewat jalur lain supaya tidak terjadi tanpa sengaja.
+         */
+        function ezChartGambarRentang(keadaan, iPanel, panel, skalaPanel) {
+            const jalur = ezChartJalurTimeline(skalaPanel);
+            const tinggiJalur = skalaPanel.height / jalur;
+            const kananKisi = ezChartPxKolom(keadaan.scale, keadaan.scale.hours);
+
+            (panel.series || []).forEach(function (deret, iDeret) {
+                if (iDeret >= jalur) return;
+                const atas = skalaPanel.top + (iDeret * tinggiJalur);
+
+                (keadaan.nilai[deret.field] || []).forEach(function (r, iR) {
+                    if (!('x2' in r)) return;
+
+                    const x1 = ezChartX(keadaan.scale, r.x);
+                    const x2 = r.x2 === false ? kananKisi : ezChartX(keadaan.scale, r.x2);
+                    const kiri = x1 === null ? keadaan.scale.left : x1;
+                    const kanan = x2 === null ? kananKisi : x2;
+                    if (kanan - kiri < 1) return;
+
+                    const kotak = document.createElement('div');
+                    kotak.className = 'ez-chart-handle ez-chart-range';
+                    kotak.style.cssText = 'position:absolute;left:' + kiri + 'px;top:' + (atas + 2)
+                        + 'px;width:' + (kanan - kiri) + 'px;height:' + Math.max(6, tinggiJalur - 4)
+                        + 'px;cursor:move;border-radius:3px';
+                    kotak.dataset.field = deret.field;
+                    kotak.dataset.index = String(iR);
+                    kotak.dataset.panel = String(iPanel);
+                    kotak.dataset.rentang = '1';
+                    kotak.dataset.warna = deret.color || '#111111';
+                    kotak.title = r.x + ' — ' + (r.x2 === false
+                        ? t('chart.range_open', {}, 'still running')
+                        : r.x2) + (r.y ? ' · ' + r.y : '');
+
+                    const terpilih = keadaan.pilih
+                        && keadaan.pilih.field === deret.field
+                        && keadaan.pilih.index === iR;
+                    if (terpilih) {
+                        kotak.style.outline = '2px solid ' + (deret.color || '#111');
+                        kotak.style.outlineOffset = '1px';
+                    }
+
+                    ['awal', 'akhir'].forEach(function (ujung) {
+                        if (ujung === 'akhir' && r.x2 === false) return;
+                        const gagang = document.createElement('div');
+                        gagang.dataset.ujung = ujung;
+                        gagang.style.cssText = 'position:absolute;top:0;bottom:0;width:7px;cursor:ew-resize;'
+                            + (ujung === 'awal' ? 'left:-3px' : 'right:-3px');
+                        kotak.appendChild(gagang);
+                    });
+
+                    keadaan.lapisan.appendChild(kotak);
+                });
+            });
+        }
+
+        /** Sorotan pada satu kotak rentang, tanpa menyentuh yang lain. */
+        function ezChartSorotRentang(lapisan, kotak) {
+            lapisan.querySelectorAll('[data-rentang]').forEach(function (el) {
+                el.style.outline = '';
+                el.style.outlineOffset = '';
+            });
+            if (!kotak) return;
+            kotak.style.outline = '2px solid ' + (kotak.dataset.warna || '#111111');
+            kotak.style.outlineOffset = '1px';
+        }
+
+        /**
+         * Isian rentang: dibuat dengan menyeret, digeser, diberi label, dihapus.
+         *
+         * Dipisah dari {@see ezChartPasangKlik} karena aturannya memang
+         * berbeda, bukan karena berkasnya kepanjangan. Menyeret di panel titik
+         * memindahkan satu pengukuran; menyeret di jalur membuat sesuatu yang
+         * tadinya tidak ada.
+         */
+        function ezChartPasangRentang(keadaan) {
+            if (keadaan.terkunci) return;
+            const lapisan = keadaan.lapisan;
+            let seret = null;
+            let bayangan = null;
+
+            const bersihkan = function () {
+                if (bayangan && bayangan.parentNode) bayangan.parentNode.removeChild(bayangan);
+                bayangan = null;
+                seret = null;
+            };
+
+            lapisan.addEventListener('mousedown', function (ev) {
+                const kotakLapisan = lapisan.getBoundingClientRect();
+                const px = ev.clientX - kotakLapisan.left;
+                const py = ev.clientY - kotakLapisan.top;
+
+                const iPanel = ezChartPanelDi(keadaan.scale, py);
+                if (iPanel === null) return;
+                const skalaPanel = keadaan.scale.panels[iPanel];
+                if (!ezChartJalurTimeline(skalaPanel)) return;
+
+                ev.preventDefault();
+
+                const kotak = ev.target.closest('.ez-chart-range');
+                if (kotak) {
+                    const gagang = ev.target.dataset && ev.target.dataset.ujung ? ev.target.dataset.ujung : null;
+                    seret = {
+                        mode: gagang || 'pindah',
+                        field: kotak.dataset.field,
+                        index: parseInt(kotak.dataset.index, 10),
+                        awalPx: px,
+                        pindah: false,
+                    };
+                    keadaan.pilih = { field: seret.field, index: seret.index };
+
+                    // Sorotannya disetel di tempat, BUKAN dengan menggambar
+                    // ulang lapisannya. Menggambar ulang menghapus elemen yang
+                    // barusan diklik, dan klik kedua sepersekian detik
+                    // kemudian mendarat di elemen lain — klik ganda untuk
+                    // memberi label tidak pernah sampai.
+                    ezChartSorotRentang(lapisan, kotak);
+                    return;
+                }
+
+                // Jalur kosong: seretan membuat rentang baru.
+                const iJalur = ezChartJalurDi(skalaPanel, py);
+                const deret = (keadaan.spec.panels[iPanel].series || [])[iJalur];
+                if (!deret) return;
+
+                seret = { mode: 'baru', panel: iPanel, jalur: iJalur, field: deret.field, awalPx: px, pindah: false };
+                keadaan.pilih = null;
+                ezChartSorotRentang(lapisan, null);
+
+                bayangan = document.createElement('div');
+                const tinggiJalur = skalaPanel.height / ezChartJalurTimeline(skalaPanel);
+                bayangan.style.cssText = 'position:absolute;pointer-events:none;border:1px dashed '
+                    + (deret.color || '#111') + ';background:rgba(0,0,0,.05);left:' + px + 'px;top:'
+                    + (skalaPanel.top + (iJalur * tinggiJalur) + 2) + 'px;width:0;height:'
+                    + Math.max(6, tinggiJalur - 4) + 'px';
+                lapisan.appendChild(bayangan);
+            });
+
+            document.addEventListener('mousemove', function (ev) {
+                if (!seret) return;
+                seret.pindah = true;
+                if (!bayangan) return;
+
+                const kotakLapisan = lapisan.getBoundingClientRect();
+                const px = ev.clientX - kotakLapisan.left;
+                bayangan.style.left = Math.min(seret.awalPx, px) + 'px';
+                bayangan.style.width = Math.abs(px - seret.awalPx) + 'px';
+            });
+
+            document.addEventListener('mouseup', function (ev) {
+                if (!seret) return;
+                const s = seret;
+                bersihkan();
+
+                const kotakLapisan = lapisan.getBoundingClientRect();
+                const px = ev.clientX - kotakLapisan.left;
+                const scale = keadaan.scale;
+                const kolomAwal = ezChartKolomDi(scale, s.awalPx);
+                const kolomAkhir = ezChartKolomDi(scale, px);
+
+                if (s.mode === 'baru') {
+                    if (!s.pindah) return;
+
+                    const dari = Math.max(0, Math.floor(Math.min(kolomAwal, kolomAkhir)));
+                    const sampai = Math.min(scale.hours, Math.floor(Math.max(kolomAwal, kolomAkhir)) + 1);
+                    if (sampai <= dari) return;
+
+                    keadaan.nilai[s.field] = keadaan.nilai[s.field] || [];
+                    keadaan.nilai[s.field].push({
+                        x: ezChartWaktuKolom(scale, dari),
+                        x2: ezChartWaktuKolom(scale, sampai),
+                        y: '',
+                    });
+                    ezChartSimpan(keadaan);
+                    return;
+                }
+
+                if (!s.pindah) return;
+                const r = (keadaan.nilai[s.field] || [])[s.index];
+                if (!r) return;
+
+                const geserKolom = Math.round(kolomAkhir - kolomAwal);
+
+                if (s.mode === 'awal') {
+                    const baru = Math.max(0, Math.round(ezChartKolomDi(scale, px)));
+                    const akhir = r.x2 === false ? scale.hours : Math.round(ezChartKolomDi(scale, ezChartX(scale, r.x2)));
+                    if (baru >= akhir) return;
+                    r.x = ezChartWaktuKolom(scale, baru);
+                } else if (s.mode === 'akhir') {
+                    const kolom = ezChartKolomDi(scale, px);
+                    // Diseret melewati tepi kanan berarti "belum selesai",
+                    // bukan "selesai tepat di tepi" — dan itu keadaan yang
+                    // paling sering dipakai saat mengisi.
+                    if (kolom > scale.hours + 0.5) {
+                        r.x2 = false;
+                    } else {
+                        const awal = Math.round(ezChartKolomDi(scale, ezChartX(scale, r.x)));
+                        const baru = Math.min(scale.hours, Math.max(awal + 1, Math.round(kolom)));
+                        r.x2 = ezChartWaktuKolom(scale, baru);
+                    }
+                } else {
+                    if (geserKolom === 0) return;
+                    const awal = Math.round(ezChartKolomDi(scale, ezChartX(scale, r.x)));
+                    const panjang = r.x2 === false ? null
+                        : Math.round(ezChartKolomDi(scale, ezChartX(scale, r.x2))) - awal;
+                    const awalBaru = Math.max(0, Math.min(scale.hours - (panjang || 1), awal + geserKolom));
+                    r.x = ezChartWaktuKolom(scale, awalBaru);
+                    if (panjang !== null) r.x2 = ezChartWaktuKolom(scale, awalBaru + panjang);
+                }
+
+                ezChartSimpan(keadaan);
+            });
+
+            lapisan.addEventListener('dblclick', function (ev) {
+                const kotak = ev.target.closest('.ez-chart-range');
+                if (!kotak) return;
+                ev.preventDefault();
+                ev.stopPropagation();
+
+                const field = kotak.dataset.field;
+                const i = parseInt(kotak.dataset.index, 10);
+                const r = (keadaan.nilai[field] || [])[i];
+                if (!r) return;
+
+                const jawab = window.prompt(t('chart.ask_range', {}, 'Label for this range'), String(r.y || ''));
+                if (jawab === null) return;
+                r.y = jawab.trim();
+                ezChartSimpan(keadaan);
+            });
+
+            // Dipilih lalu Delete. Klik ganda sudah dipakai label, dan rentang
+            // yang hilang karena klik ganda yang meleset tidak bisa
+            // dikembalikan.
+            //
+            // Didengarkan di DOKUMEN, bukan di lapisannya. Lapisan adalah
+            // sebuah <div>: ia tidak menerima tombol papan ketik kecuali
+            // sedang terpilih, dan mengklik rentang tidak selalu memindahkan
+            // pilihan ke situ. Papan lain tidak ikut bereaksi karena yang
+            // dijaga `keadaan.pilih`, yang milik tiap papan sendiri.
+            document.addEventListener('keydown', function (ev) {
+                if (ev.key !== 'Delete' && ev.key !== 'Backspace') return;
+                if (!keadaan.pilih) return;
+
+                // Yang sedang mengetik di isian lain tidak sedang menghapus
+                // rentang.
+                const fokus = document.activeElement;
+                if (fokus && /^(INPUT|TEXTAREA|SELECT)$/.test(fokus.tagName)) return;
+                if (fokus && fokus.isContentEditable) return;
+
+                ev.preventDefault();
+
+                const field = keadaan.pilih.field;
+                const index = keadaan.pilih.index;
+                keadaan.pilih = null;
+                if (!keadaan.nilai[field] || !keadaan.nilai[field][index]) return;
+                keadaan.nilai[field].splice(index, 1);
+                ezChartSimpan(keadaan);
+            });
+        }
+
         function ezChartPasangKlik(keadaan) {
             if (keadaan.terkunci) return;
             const lapisan = keadaan.lapisan;
@@ -1941,7 +2259,11 @@
 
             lapisan.addEventListener('mousedown', function (ev) {
                 const pegangan = ev.target.closest('.ez-chart-handle');
-                if (!pegangan) return;
+                // Kotak rentang memakai kelas yang sama supaya aturan "muncul
+                // saat disentuh pointer" berlaku untuk keduanya. Tapi isinya
+                // bukan titik: menyeretnya lewat jalur ini menulis ulang
+                // rentangnya sebagai titik, dan jam selesainya hilang.
+                if (!pegangan || pegangan.dataset.rentang) return;
                 ev.preventDefault();
                 geser = { pegangan: pegangan, pindah: false };
                 pegangan.style.cursor = 'grabbing';
@@ -1983,7 +2305,7 @@
 
             lapisan.addEventListener('dblclick', function (ev) {
                 const pegangan = ev.target.closest('.ez-chart-handle');
-                if (!pegangan) return;
+                if (!pegangan || pegangan.dataset.rentang) return;
                 ev.preventDefault();
                 const field = pegangan.dataset.field;
                 const i = parseInt(pegangan.dataset.index, 10);
@@ -1997,6 +2319,12 @@
                 const kotak = lapisan.getBoundingClientRect();
                 const px = ev.clientX - kotak.left;
                 const py = ev.clientY - kotak.top;
+
+                // Panel jalur punya aturannya sendiri: satu klik di situ tidak
+                // membuat apa-apa, karena rentang butuh dua tempat.
+                const iPanelKlik = ezChartPanelDi(keadaan.scale, py);
+                if (iPanelKlik !== null && ezChartJalurTimeline(keadaan.scale.panels[iPanelKlik])) return;
+
                 const baru = ezChartDariTempat(keadaan, px, py);
                 if (!baru) return;
 
@@ -2068,14 +2396,52 @@
         }
 
         /** Urut menurut waktu, satu nilai per waktu — aturan yang sama dengan server. */
+        /**
+         * Bentuk baku sebelum disimpan — kembaran `SeriesValues::parse()`.
+         *
+         * Harus menghasilkan daftar yang SAMA dengan yang dihasilkan server
+         * untuk isi yang sama. Versi pertama menulis ulang tiap nilai jadi
+         * `{x, y}`, dan dengan itu membuang `x2` tanpa jejak: rentang yang
+         * baru dibuat jadi titik tanpa nilai lalu dibuang server, dan rentang
+         * yang sudah ada kehilangan jam selesainya begitu ada yang menyentuh
+         * papan itu. Gambarnya tetap muncul, cuma isinya berbeda.
+         */
         function ezChartRapikan(titik) {
             const peta = {};
+
             (titik || []).forEach(function (t) {
-                if (t && t.x) peta[t.x] = t.y;
+                if (!t || !t.x) return;
+
+                const punyaX2 = Object.prototype.hasOwnProperty.call(t, 'x2');
+
+                // Rentang boleh tanpa label, dan labelnya ditulis sebagai teks
+                // kosong — BUKAN dihilangkan. `JSON.stringify` membuang kunci
+                // yang nilainya undefined, dan bentuk tersimpannya lalu
+                // berbeda dari yang ditulis server untuk isi yang sama: dua
+                // byte, dua hash, satu dokumen.
+                const label = (t.y === undefined || t.y === null) ? '' : t.y;
+
+                // Titik tanpa nilai tidak menggambarkan pengukuran apa pun —
+                // server membuangnya, jadi di sini pun dibuang.
+                if (!punyaX2 && label === '') return;
+
+                // Kuncinya `x` DAN `x2`: dua obat yang dimulai bersamaan tapi
+                // berhenti di jam berbeda adalah dua rentang.
+                const kunci = punyaX2 ? (t.x + '|' + (t.x2 === false ? '~' : t.x2)) : t.x;
+
+                peta[kunci] = punyaX2
+                    ? { x: t.x, x2: t.x2, y: label }
+                    : { x: t.x, y: label };
             });
 
-            return Object.keys(peta).sort().map(function (x) {
-                return { x: x, y: peta[x] };
+            const ujung = function (t) {
+                if (!Object.prototype.hasOwnProperty.call(t, 'x2')) return 0;
+                return t.x2 === false ? 2 : 1;
+            };
+
+            return Object.keys(peta).map(function (k) { return peta[k]; }).sort(function (a, b) {
+                if (a.x !== b.x) return a.x < b.x ? -1 : 1;
+                return ujung(a) - ujung(b);
             });
         }
 

@@ -227,6 +227,8 @@ return [
     ],
     'chart' => [
             'ask_cell' => 'Value for this column',
+            'ask_range' => 'Label for this range',
+            'range_open' => 'still running',
             'stale' => 'Chart image is out of date — the values are saved',
     ],
     'modal' => [

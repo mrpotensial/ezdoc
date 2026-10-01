@@ -96,6 +96,29 @@ if (rapi.length !== 2) gagal('waktu kembar tidak ditimpa: ' + rapi.length);
 if (rapi[0].x !== '2026-09-29 08:00') gagal('tidak diurutkan menurut waktu');
 if (rapi[1].y !== 7) gagal('yang menang bukan yang terakhir diketik');
 
+// ── Bentuk baku rentang: harapannya datang dari PHP ────────────────
+//
+// `ezChartRapikan` adalah kembaran `SeriesValues::parse()`. Versi pertamanya
+// menulis ulang tiap nilai jadi {x, y} — dan dengan itu membuang `x2` tanpa
+// jejak: rentang yang baru dibuat jadi titik tanpa nilai lalu dibuang server,
+// dan rentang yang sudah ada kehilangan jam selesainya begitu ada yang
+// menyentuh papan itu. Gambarnya tetap muncul, cuma isinya berbeda.
+if (process.argv[4]) {
+    const kasus = JSON.parse(fs.readFileSync(process.argv[4], 'utf8'));
+    let diperiksa = 0;
+
+    for (const k of kasus) {
+        const hasil = JSON.stringify(ctx.ezChartRapikan(k.masuk));
+        if (hasil !== k.harap) {
+            gagal('rapikan "' + k.nama + '":\n    JS  ' + hasil + '\n    PHP ' + k.harap);
+        }
+        diperiksa++;
+    }
+
+    if (diperiksa < 6) gagal('kasus rapikan cuma ' + diperiksa);
+    console.log('kasus rapikan diperiksa: ' + diperiksa);
+}
+
 // ── Satuan hari dan bulan: angkanya datang dari PHP ──────────────────────
 //
 // Daftarnya TIDAK ditulis di sini. Ia dihitung `TimeAxis` di PHP lalu
