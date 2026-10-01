@@ -32,6 +32,28 @@ Empat yang terakhir satu rangkaian: bentuk kertasnya berasal dari satu berkas
 cetak obstetri yang dipecah jadi empat template terpisah, karena keempatnya
 diisi di saat yang berbeda oleh orang yang berbeda.
 
+### Yang memakai papan grafik
+
+Satu papan, banyak panel, satu sumbu waktu bersama. Sumbunya bisa jam, hari,
+atau bulan; isian papannya ditempel sebagai nilai field biasa, jadi dokumennya
+tetap satu baris di database.
+
+| Folder | Isi | Sumbu | Fitur yang ditonjolkan |
+| --- | --- | --- | --- |
+| `partograf/` | Partograf WHO | jam | 13 panel satu sumbu, garis acuan WASPADA/BERTINDAK dengan nama miring, baris sel, isian batang bertingkat |
+| `lembar-pemantauan/` | Lembar pemantauan persalinan | jam | Papan sederhana berdampingan dengan tabel biasa |
+| `balans-cairan/` | Balans cairan 24 jam | jam | Batang bertumpuk dua arah (masuk ke atas, keluar ke bawah), kurva kumulatif berarsir |
+| `meows/` | Peringatan dini obstetri (MEOWS) | jam | Satu kunci `bands` dibaca dua cara: pita latar di panel garis, dan latar sel di baris skor |
+| `observasi-pasca-operasi/` | Observasi pasca-operasi | jam | Timeline obat tiga jalur termasuk rentang tanpa jam selesai, tangga tetes/menit |
+| `pemantauan-bayi-baru-lahir/` | Pemantauan bayi baru lahir | jam | Pita suhu normal, baris ikterus berwarna dengan tulisan putih di atas latar gelap |
+| `rantai-dingin/` | Kartu suhu lemari vaksin | **hari** | Tiga pita bercelah, pita tanpa ujung atas, dua garis batas |
+| `riwayat-perawatan-mesin/` | Riwayat perawatan mesin | **hari** | Timeline keadaan mesin, tangga jam operasi, batang hasil dengan hari kosong |
+| `pertumbuhan-anak/` | Kartu pertumbuhan anak 0&ndash;24 bulan | **bulan** | Tiga acuan berkurva (`points`, bukan `from`/`to`) dengan nama mengikuti garisnya |
+
+Tiga yang terakhir sengaja **di luar rumah sakit** — puskesmas, pabrik, dan
+posyandu. Papan grafiknya bukan fitur rekam medis; yang membedakannya dari
+lembar pemantauan cuma isian dan satuan sumbunya.
+
 ## Isi folder
 
 ```

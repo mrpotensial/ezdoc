@@ -1,0 +1,41 @@
+<div style="text-align:center;margin-bottom:4px;">
+<table style="border:none;width:100%;"><tbody><tr>
+<td style="border:none;width:64px;vertical-align:middle;"><span class="logo-placeholder" data-logo="kop" data-width="60px">[LOGO:kop]</span></td>
+<td style="border:none;text-align:left;vertical-align:middle;">
+<p class="ezdoc-kop-nama" style="margin:0;font-size:14pt;font-weight:bold;">PUSKESMAS CONTOH MELATI</p>
+<p class="ezdoc-kop-alamat" style="margin:0;font-size:7pt;">Jl. Kenanga No. 3, Kota Contoh 40124 &middot; Telp (021) 555-0220</p>
+<p class="ezdoc-kop-kota" style="margin:0;font-size:9pt;font-weight:bold;">Kota Contoh</p>
+</td>
+<td style="border:none;width:240px;vertical-align:top;">
+<table style="border-collapse:collapse;width:100%;font-size:7pt;"><tbody><tr><td style="border:1px solid #000;padding:1px 3px;width:84px;">UNIT</td><td style="border:1px solid #000;padding:1px 3px;"><span class="field-placeholder" data-type="text" data-label="Unit">{{unit}}</span></td></tr><tr><td style="border:1px solid #000;padding:1px 3px;width:84px;">NO LEMBAR</td><td style="border:1px solid #000;padding:1px 3px;"><span class="field-placeholder" data-type="text" data-label="No lembar">{{no_lembar}}</span></td></tr><tr><td style="border:1px solid #000;padding:1px 3px;width:84px;">PERIODE</td><td style="border:1px solid #000;padding:1px 3px;"><span class="field-placeholder" data-type="text" data-label="Periode">{{periode}}</span></td></tr></tbody></table>
+</td>
+</tr></tbody></table>
+</div>
+<p style="text-align:center;font-size:11pt;font-weight:bold;margin:2px 0 6px 0;">KARTU PEMANTAUAN SUHU LEMARI VAKSIN</p>
+<table style="border-collapse:collapse;width:100%;font-size:8pt;margin-bottom:6px;"><tbody>
+<tr><td style="border:none;width:110px;">Unit</td><td style="border:none;width:8px;">:</td><td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Unit">{{unit}}</span></td></tr>
+<tr><td style="border:none;width:110px;">No lembar</td><td style="border:none;width:8px;">:</td><td style="border:none;"><span class="field-placeholder" data-type="text" data-label="No lembar">{{no_lembar}}</span></td></tr>
+<tr><td style="border:none;width:110px;">Periode</td><td style="border:none;width:8px;">:</td><td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Periode">{{periode}}</span></td></tr>
+<tr><td style="border:none;width:110px;">Mulai tanggal</td><td style="border:none;width:8px;">:</td><td style="border:none;"><span class="field-placeholder" data-type="date" data-label="Mulai tanggal">{{rd_mulai}}</span></td></tr>
+<tr><td style="border:none;width:110px;">Alat</td><td style="border:none;width:8px;">:</td><td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Alat">{{rd_alat}}</span></td></tr>
+</tbody></table>
+<div style="text-align:center;">
+<div class="chart-placeholder" data-chart="chart_rantai" data-chart-spec="{&quot;x&quot;: {&quot;kind&quot;: &quot;time&quot;, &quot;unit&quot;: &quot;day&quot;}, &quot;columns&quot;: 28, &quot;column_width&quot;: 19, &quot;left&quot;: 118, &quot;panel_gap&quot;: 8, &quot;start_field&quot;: &quot;rd_mulai&quot;, &quot;label_every&quot;: 2, &quot;time_axis&quot;: &quot;none&quot;, &quot;panels&quot;: [{&quot;title&quot;: &quot;Suhu (°C)&quot;, &quot;height&quot;: 150, &quot;legend&quot;: &quot;below&quot;, &quot;y&quot;: {&quot;min&quot;: -2, &quot;max&quot;: 14, &quot;step&quot;: 2}, &quot;bands&quot;: [{&quot;from&quot;: -2, &quot;to&quot;: 1.9, &quot;color&quot;: &quot;#dbeafe&quot;, &quot;label&quot;: &quot;Terlalu dingin&quot;}, {&quot;from&quot;: 2, &quot;to&quot;: 8, &quot;color&quot;: &quot;#dcfce7&quot;, &quot;label&quot;: &quot;Aman&quot;}, {&quot;from&quot;: 8.1, &quot;color&quot;: &quot;#fee2e2&quot;, &quot;label&quot;: &quot;Terlalu panas&quot;}], &quot;references&quot;: [{&quot;from&quot;: [0, 8], &quot;to&quot;: [28, 8], &quot;style&quot;: &quot;dashed&quot;, &quot;label&quot;: &quot;Batas atas&quot;, &quot;label_on_line&quot;: true, &quot;color&quot;: &quot;#991b1b&quot;}, {&quot;from&quot;: [0, 2], &quot;to&quot;: [28, 2], &quot;style&quot;: &quot;dashed&quot;, &quot;label&quot;: &quot;Batas bawah&quot;, &quot;label_on_line&quot;: true, &quot;color&quot;: &quot;#1e40af&quot;}], &quot;series&quot;: [{&quot;field&quot;: &quot;rd_pagi&quot;, &quot;title&quot;: &quot;Pagi&quot;, &quot;draw&quot;: &quot;point+line&quot;, &quot;marker&quot;: &quot;dot&quot;, &quot;color&quot;: &quot;#111111&quot;}, {&quot;field&quot;: &quot;rd_sore&quot;, &quot;title&quot;: &quot;Sore&quot;, &quot;draw&quot;: &quot;point+line&quot;, &quot;marker&quot;: &quot;circle&quot;, &quot;color&quot;: &quot;#1d4ed8&quot;}]}, {&quot;type&quot;: &quot;symbol&quot;, &quot;title&quot;: &quot;Tindakan&quot;, &quot;height&quot;: 18, &quot;gap_before&quot;: 16, &quot;series&quot;: [{&quot;field&quot;: &quot;rd_tindakan&quot;, &quot;color&quot;: &quot;#111111&quot;}]}, {&quot;type&quot;: &quot;text&quot;, &quot;title&quot;: &quot;Paraf&quot;, &quot;height&quot;: 16, &quot;time_axis&quot;: true, &quot;series&quot;: [{&quot;field&quot;: &quot;rd_paraf&quot;, &quot;color&quot;: &quot;#111111&quot;}]}]}" contenteditable="false" style="display:inline-block;width:662px;height:252px;border:1px dashed #0891b2;background:#ecfeff;text-align:center;overflow:hidden"><span style="font-size:11px;color:#0e7490;line-height:252px">Papan kartu suhu</span></div>
+</div>
+<table style="border-collapse:collapse;width:100%;font-size:8pt;margin-top:6px;"><tbody><tr>
+<td style="border:1px solid #000;padding:4px;vertical-align:top;">
+<strong>KETERANGAN:</strong><br>
+<span class="field-placeholder" data-type="text" data-label="Keterangan">{{keterangan}}</span>
+</td>
+</tr></tbody></table>
+
+<table style="border:none;width:100%;margin-top:12px;"><tbody><tr>
+<td style="border:none;width:60%;font-size:7pt;vertical-align:bottom;">Kartu suhu rantai dingin &mdash; 28 hari, satu kolom satu hari</td>
+<td style="border:none;width:40%;text-align:center;vertical-align:top;">
+<div class="ttd-placeholder" data-ttd="petugas" data-label="Petugas gudang vaksin," data-nama-field="nama_petugas" data-ttd-modes="image" contenteditable="false">
+<div style="font-size:9pt;margin-bottom:4px;">Petugas gudang vaksin,</div>
+<div style="width:90px;height:44px;border:1px dashed #10b981;background:#ecfdf5;margin:0 auto;"></div>
+<div style="font-size:9pt;margin-top:3px;">(..................)</div>
+</div>
+</td>
+</tr></tbody></table>

@@ -194,12 +194,27 @@ final class KopContohTest extends TestCase
      * Pustaka ini berdiri sendiri dan boleh dipakai siapa saja. Nama sungguhan
      * di dalamnya membuat contohnya salah untuk semua pemakai lain — dan
      * menyebarkan identitas satu tempat ke repositori yang bukan miliknya.
+     *
+     * Yang diperiksa kata "CONTOH" di nama kopnya, bukan satu nama tertentu:
+     * contohnya tidak semuanya rumah sakit — ada puskesmas, pabrik, dan
+     * posyandu — dan mengunci satu nama akan memaksa kop rumah sakit dipakai
+     * di kartu perawatan mesin.
      */
     public function testBerkasContohTetapNetral(): void
     {
         foreach (array_keys(Contoh::daftar()) as $slug) {
             $berkas = (string) file_get_contents(dirname(__DIR__, 2) . '/contoh/' . $slug . '/template.html');
-            self::assertStringContainsString('RUMAH SAKIT CONTOH SEJAHTERA', $berkas, $slug . ': kopnya bukan kop karangan');
+
+            self::assertSame(
+                1,
+                preg_match('/class="ezdoc-kop-nama"[^>]*>([^<]+)</', $berkas, $m),
+                $slug . ': kopnya tidak punya nama organisasi'
+            );
+            self::assertStringContainsString(
+                'CONTOH',
+                strtoupper($m[1]),
+                $slug . ': nama kopnya bukan nama karangan'
+            );
         }
     }
 

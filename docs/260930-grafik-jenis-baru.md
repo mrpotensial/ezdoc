@@ -1,6 +1,6 @@
 # Jenis grafik baru, satuan sumbu baru, dan contoh di luar rumah sakit
 
-> Status: **fase 0–8 selesai, fase 9 belum dikerjakan.**
+> Status: **fase 0–9 selesai.** Fase 10 ke atas belum dikerjakan.
 > Ditulis 30 Sep 2026 sesudah papan grafik terisi (lihat [260929-grafik-terisi.md](260929-grafik-terisi.md))
 > dipakai untuk partograf, lalu diminta dipakai untuk yang lain.
 
@@ -167,7 +167,7 @@ Berkas ujinya: `scratchpad/fase0_font.php`.
 Huruf bawaan Dompdf tidak punya lambang seperti ✓ dan ✗; keduanya tercetak
 sebagai `?`. Contoh partograf tidak terpengaruh (isinya ASCII semua), tapi
 contoh di §7 yang memakai centang harus memilih: lambang ASCII, atau huruf
-yang memuatnya ikut dibenamkan. Diputuskan di fase 9.
+yang memuatnya ikut dibenamkan. Fase 9 memilih yang pertama — lihat §10.
 
 ---
 
@@ -652,6 +652,39 @@ perlu dibuat.
 Semuanya masuk `contoh/<slug>/` dengan `template.html` + `contoh.json`, pola
 yang sudah ada.
 
+### Yang jadi, 1 Okt 2026
+
+| # | Folder | Kop | Papan |
+|---|---|---|---|
+| 1 | `balans-cairan/` | rumah sakit | 658 × 320 |
+| 2 | `meows/` | rumah sakit | 658 × 322 |
+| 3 | `observasi-pasca-operasi/` | rumah sakit | 684 × 364 |
+| 4 | `pemantauan-bayi-baru-lahir/` | rumah sakit | 658 × 342 |
+| 5 | `rantai-dingin/` | **puskesmas** | 662 × 252 |
+| 6 | `riwayat-perawatan-mesin/` | **pabrik** | 659 × 360 |
+| 7 | `pertumbuhan-anak/` | **posyandu** | 655 × 396 |
+
+Ketujuhnya dibangkitkan dari satu daftar, bukan diketik satu per satu: kop,
+bingkai, dan tanda tangannya sama persis, dan yang diketik tujuh kali selalu
+berpisah di salah satu salinan. Ukuran kotak penampung di HTML-nya diambil
+dari papan itu sendiri — kotak yang diketik tangan membuat papan terlihat pas
+di layar lalu melar di kertas, dan itu baru ketahuan setelah dicetak.
+
+Tiga hal ketahuan justru saat contohnya dibuat, bukan saat kodenya ditulis:
+
+1. **Legenda `below` dilukis 9 px di bawah bingkai panel.** Dengan
+   `panel_gap` 6–8 ia menabrak panel berikutnya. Contohnya memberi
+   `gap_before: 16` pada panel sesudahnya; kodenya tidak diubah, karena jarak
+   yang dibutuhkan tergantung ada-tidaknya legenda dan itu memang pilihan
+   yang mengatur.
+2. **Nilai di luar kolom terakhir tetap dilukis, di luar bingkai.** Aldrete
+   pukul 14.00 di papan 8 kolom mendarat di luar papan. Diperbaiki di
+   contohnya (9 kolom), bukan di penggambar: memotong diam-diam akan
+   menyembunyikan catatan yang sudah terlanjur diisi.
+3. **Nama rentang yang tidak muat dipenggal dengan …, bukan dihilangkan.**
+   Rentang selebar satu kolom cuma memuat lima huruf. Nama di contohnya
+   dipendekkan; penjelasannya pindah ke keterangan.
+
 ---
 
 ## 8. Urutan pengerjaan
@@ -670,7 +703,7 @@ tetap berguna.
 | 6 | ~~Isian timeline di peramban~~ | **selesai 1 Okt** |
 | 7 | ~~`references.points`~~ | **selesai 1 Okt** |
 | 8 | ~~Isian semuanya di penyunting designer~~ | **selesai 1 Okt** |
-| 9 | Tujuh berkas contoh | sedang |
+| 9 | ~~Tujuh berkas contoh~~ | **selesai 1 Okt** |
 
 Fase 1 dan 6 yang paling mungkin memakan waktu dua kali lipat dari dugaan.
 Fase 1 karena aritmetika kalender harus sama persis di dua bahasa, dan karena
@@ -747,14 +780,27 @@ membalikkannya tahu apa yang harus dibantah.
    `bands` melukis wilayah nilai, jadi "di skala yang mana" harus punya jawaban
    sebelum `bands` ditulis. Yang dipasang parameternya, bukan fiturnya. (§5)
 
-### Yang masih benar-benar terbuka
+### Yang dijawab fase 9
 
-- **Lambang ✓ dan ✗ tercetak `?`** (§3). Contoh mana yang boleh memakainya,
-  dan apakah huruf yang memuatnya dibenamkan — diputuskan di fase 9.
-- **Apakah satu kunci `bands` untuk dua bacaan terasa wajar di penyunting.**
-  Di gambar sudah terjawab: dua bacaannya dicetak berdampingan dalam satu
-  papan dan keduanya terbaca sebagaimana mestinya. Di formulir belum —
-  ketahuannya di fase 9, saat contoh nomor 2 dan 5 dibuat bersebelahan.
+- **Lambang ✓ dan ✗ tercetak `?`** (§3). Diputuskan: **ketujuh contoh tidak
+  memakainya**, dan tidak ada huruf yang dibenamkan. Yang dibutuhkan baris
+  simbol ternyata huruf biasa — `A`/`V` untuk kesadaran, `M`/`K`/`+` untuk
+  BAB/BAK, `L`/`T`/`S` untuk tindakan rantai dingin, inisial untuk paraf.
+  Membenamkan satu huruf demi dua lambang menambah ratusan kilobyte ke tiap
+  PDF untuk sesuatu yang hurufnya sendiri sudah bisa.
+- **Apakah satu kunci `bands` untuk dua bacaan terasa wajar.** Terjawab: di
+  `meows/` kunci yang sama melukis pita latar di panel tekanan darah dan
+  mewarnai sel di baris skor, dan di `pemantauan-bayi-baru-lahir/` hal yang
+  sama terulang tanpa penjelasan tambahan. Di `rantai-dingin/` ia dipakai
+  murni sebagai pita latar. Tidak ada contoh yang butuh kunci kedua.
+- **Pita yang bersentuhan ditolak, dan itu terasa di contoh pertama kalinya.**
+  Kartu rantai dingin menyebut batasnya "2–8 °C", tapi `2..8` dan `8..`
+  bertumpang tindih di 8. Pitanya ditulis `-2..1,9 · 2..8 · 8,1..`, mengikuti
+  ketelitian pencatatannya (0,1 °C). Aturannya dipertahankan: "suhu 8
+  warnanya apa" tidak boleh punya dua jawaban, dan di baris sel pertanyaan itu
+  benar-benar ditanyakan tiap sel.
+
+### Yang masih benar-benar terbuka
 - **Apakah `x.kind` kelak memuat `columns` juga.** Sekarang `columns` dibaca
   dari `x`, dari akar papan, dan dari `hours` lama — tiga tempat untuk satu
   angka. Ketiganya dibaca selamanya, tapi penyunting hanya menulis satu.

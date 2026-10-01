@@ -6,6 +6,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — tujuh berkas contoh berpapan grafik, tiga di antaranya di luar rumah sakit (2026-10-01)**
+
+| Folder | Sumbu | Yang ditunjukkan |
+| --- | --- | --- |
+| `balans-cairan/` | jam | Batang bertumpuk dua arah, kurva kumulatif berarsir |
+| `meows/` | jam | Satu kunci `bands` dibaca dua cara: pita latar dan latar sel |
+| `observasi-pasca-operasi/` | jam | Timeline obat tiga jalur, rentang tanpa jam selesai, tangga tetes/menit |
+| `pemantauan-bayi-baru-lahir/` | jam | Pita suhu normal, baris ikterus berwarna |
+| `rantai-dingin/` | **hari** | Tiga pita bercelah, pita tanpa ujung atas, dua garis batas |
+| `riwayat-perawatan-mesin/` | **hari** | Timeline keadaan mesin, tangga jam operasi, hari tanpa batang |
+| `pertumbuhan-anak/` | **bulan** | Tiga acuan berkurva dengan nama mengikuti garisnya |
+
+Tiga yang terakhir memakai kop puskesmas, pabrik, dan posyandu. Papan grafik
+bukan fitur rekam medis, dan contoh yang semuanya rumah sakit membuatnya
+terbaca begitu.
+
+Uji `KopContohTest::testBerkasContohTetapNetral` ikut dilonggarkan: yang
+diperiksa sekarang kata "CONTOH" di nama kopnya, bukan satu nama tertentu.
+Maksud penjaganya tetap sama — nama organisasi sungguhan ditolak — tapi
+mengunci satu nama akan memaksa kop rumah sakit dipakai di kartu perawatan
+mesin.
+
 **Added — tidak ada lagi kunci papan yang cuma bisa diatur lewat JSON (2026-10-01)**
 
 Tab JSON tetap ada dan tidak dihapus — ia menutupi yang jarang. Tapi lima

@@ -1,0 +1,41 @@
+<div style="text-align:center;margin-bottom:4px;">
+<table style="border:none;width:100%;"><tbody><tr>
+<td style="border:none;width:64px;vertical-align:middle;"><span class="logo-placeholder" data-logo="kop" data-width="60px">[LOGO:kop]</span></td>
+<td style="border:none;text-align:left;vertical-align:middle;">
+<p class="ezdoc-kop-nama" style="margin:0;font-size:14pt;font-weight:bold;">POSYANDU CONTOH MELATI 4</p>
+<p class="ezdoc-kop-alamat" style="margin:0;font-size:7pt;">RW 04 Kelurahan Contoh, Kota Contoh 40124</p>
+<p class="ezdoc-kop-kota" style="margin:0;font-size:9pt;font-weight:bold;">Kota Contoh</p>
+</td>
+<td style="border:none;width:240px;vertical-align:top;">
+<table style="border-collapse:collapse;width:100%;font-size:7pt;"><tbody><tr><td style="border:1px solid #000;padding:1px 3px;width:84px;">UNIT</td><td style="border:1px solid #000;padding:1px 3px;"><span class="field-placeholder" data-type="text" data-label="Unit">{{unit}}</span></td></tr><tr><td style="border:1px solid #000;padding:1px 3px;width:84px;">NO LEMBAR</td><td style="border:1px solid #000;padding:1px 3px;"><span class="field-placeholder" data-type="text" data-label="No lembar">{{no_lembar}}</span></td></tr><tr><td style="border:1px solid #000;padding:1px 3px;width:84px;">PERIODE</td><td style="border:1px solid #000;padding:1px 3px;"><span class="field-placeholder" data-type="text" data-label="Periode">{{periode}}</span></td></tr></tbody></table>
+</td>
+</tr></tbody></table>
+</div>
+<p style="text-align:center;font-size:11pt;font-weight:bold;margin:2px 0 6px 0;">KARTU PERTUMBUHAN ANAK (0-24 BULAN)</p>
+<table style="border-collapse:collapse;width:100%;font-size:8pt;margin-bottom:6px;"><tbody>
+<tr><td style="border:none;width:110px;">Unit</td><td style="border:none;width:8px;">:</td><td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Unit">{{unit}}</span></td></tr>
+<tr><td style="border:none;width:110px;">No lembar</td><td style="border:none;width:8px;">:</td><td style="border:none;"><span class="field-placeholder" data-type="text" data-label="No lembar">{{no_lembar}}</span></td></tr>
+<tr><td style="border:none;width:110px;">Periode</td><td style="border:none;width:8px;">:</td><td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Periode">{{periode}}</span></td></tr>
+<tr><td style="border:none;width:110px;">Nama anak</td><td style="border:none;width:8px;">:</td><td style="border:none;"><span class="field-placeholder" data-type="text" data-label="Nama anak">{{pa_nama}}</span></td></tr>
+<tr><td style="border:none;width:110px;">Bulan pertama</td><td style="border:none;width:8px;">:</td><td style="border:none;"><span class="field-placeholder" data-type="date" data-label="Bulan pertama">{{pa_mulai}}</span></td></tr>
+</tbody></table>
+<div style="text-align:center;">
+<div class="chart-placeholder" data-chart="chart_tumbuh" data-chart-spec="{&quot;x&quot;: {&quot;kind&quot;: &quot;time&quot;, &quot;unit&quot;: &quot;month&quot;}, &quot;columns&quot;: 25, &quot;column_width&quot;: 21, &quot;left&quot;: 118, &quot;panel_gap&quot;: 10, &quot;start_field&quot;: &quot;pa_mulai&quot;, &quot;label_every&quot;: 3, &quot;time_axis&quot;: &quot;none&quot;, &quot;panels&quot;: [{&quot;title&quot;: &quot;Berat badan (kg)&quot;, &quot;height&quot;: 190, &quot;legend&quot;: &quot;below&quot;, &quot;y&quot;: {&quot;min&quot;: 2, &quot;max&quot;: 16, &quot;step&quot;: 2}, &quot;references&quot;: [{&quot;points&quot;: [[0, 4.4], [3, 8.0], [6, 9.8], [9, 11.0], [12, 12.0], [15, 12.8], [18, 13.7], [21, 14.5], [24, 15.3]], &quot;style&quot;: &quot;dashed&quot;, &quot;label&quot;: &quot;+2 SD&quot;, &quot;label_on_line&quot;: true, &quot;color&quot;: &quot;#b45309&quot;}, {&quot;points&quot;: [[0, 3.3], [3, 6.4], [6, 7.9], [9, 8.9], [12, 9.6], [15, 10.3], [18, 10.9], [21, 11.5], [24, 12.2]], &quot;style&quot;: &quot;solid&quot;, &quot;label&quot;: &quot;Median&quot;, &quot;label_on_line&quot;: true, &quot;color&quot;: &quot;#15803d&quot;}, {&quot;points&quot;: [[0, 2.5], [3, 5.0], [6, 6.4], [9, 7.1], [12, 7.7], [15, 8.3], [18, 8.8], [21, 9.2], [24, 9.7]], &quot;style&quot;: &quot;dashed&quot;, &quot;label&quot;: &quot;-2 SD&quot;, &quot;label_on_line&quot;: true, &quot;color&quot;: &quot;#b91c1c&quot;}], &quot;series&quot;: [{&quot;field&quot;: &quot;pa_berat&quot;, &quot;title&quot;: &quot;Berat anak&quot;, &quot;draw&quot;: &quot;point+line&quot;, &quot;marker&quot;: &quot;dot&quot;, &quot;color&quot;: &quot;#111111&quot;}]}, {&quot;title&quot;: &quot;Panjang badan (cm)&quot;, &quot;height&quot;: 120, &quot;gap_before&quot;: 16, &quot;y&quot;: {&quot;min&quot;: 45, &quot;max&quot;: 95, &quot;step&quot;: 10}, &quot;references&quot;: [{&quot;points&quot;: [[0, 49.9], [3, 61.4], [6, 67.6], [9, 72.0], [12, 75.7], [15, 79.1], [18, 82.3], [21, 85.1], [24, 87.8]], &quot;style&quot;: &quot;solid&quot;, &quot;label&quot;: &quot;Median&quot;, &quot;label_on_line&quot;: true, &quot;color&quot;: &quot;#15803d&quot;}], &quot;series&quot;: [{&quot;field&quot;: &quot;pa_panjang&quot;, &quot;title&quot;: &quot;Panjang&quot;, &quot;draw&quot;: &quot;point+line&quot;, &quot;marker&quot;: &quot;circle&quot;, &quot;color&quot;: &quot;#111111&quot;}]}, {&quot;type&quot;: &quot;text&quot;, &quot;title&quot;: &quot;Imunisasi&quot;, &quot;height&quot;: 16, &quot;time_axis&quot;: true, &quot;series&quot;: [{&quot;field&quot;: &quot;pa_imunisasi&quot;, &quot;color&quot;: &quot;#111111&quot;}]}]}" contenteditable="false" style="display:inline-block;width:655px;height:396px;border:1px dashed #0891b2;background:#ecfeff;text-align:center;overflow:hidden"><span style="font-size:11px;color:#0e7490;line-height:396px">Papan kartu pertumbuhan</span></div>
+</div>
+<table style="border-collapse:collapse;width:100%;font-size:8pt;margin-top:6px;"><tbody><tr>
+<td style="border:1px solid #000;padding:4px;vertical-align:top;">
+<strong>KETERANGAN:</strong><br>
+<span class="field-placeholder" data-type="text" data-label="Keterangan">{{keterangan}}</span>
+</td>
+</tr></tbody></table>
+
+<table style="border:none;width:100%;margin-top:12px;"><tbody><tr>
+<td style="border:none;width:60%;font-size:7pt;vertical-align:bottom;">Kartu pertumbuhan anak &mdash; sumbu bulan dan acuan berkurva</td>
+<td style="border:none;width:40%;text-align:center;vertical-align:top;">
+<div class="ttd-placeholder" data-ttd="petugas" data-label="Kader posyandu," data-nama-field="nama_petugas" data-ttd-modes="image" contenteditable="false">
+<div style="font-size:9pt;margin-bottom:4px;">Kader posyandu,</div>
+<div style="width:90px;height:44px;border:1px dashed #10b981;background:#ecfdf5;margin:0 auto;"></div>
+<div style="font-size:9pt;margin-top:3px;">(..................)</div>
+</div>
+</td>
+</tr></tbody></table>
