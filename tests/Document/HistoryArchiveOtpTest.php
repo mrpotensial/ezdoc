@@ -20,7 +20,7 @@ use PHPUnit\Framework\TestCase;
  * terakhir.
  *
  * Action-nya mengakhiri permintaan dengan `exit`, jadi dijalankan di proses
- * terpisah lewat tests/fixtures/jalankan_riwayat.php dan jawabannya dibaca
+ * terpisah lewat tests/fixtures/run_history.php dan jawabannya dibaca
  * sebagai JSON — ujung ke ujung, bukan pemeriksaan sumber.
  */
 final class HistoryArchiveOtpTest extends TestCase
@@ -35,7 +35,7 @@ final class HistoryArchiveOtpTest extends TestCase
         $keluaran = (string) shell_exec(sprintf(
             '%s %s %s 2>&1',
             escapeshellarg(PHP_BINARY),
-            escapeshellarg(dirname(__DIR__) . '/fixtures/jalankan_riwayat.php'),
+            escapeshellarg(dirname(__DIR__) . '/fixtures/run_history.php'),
             escapeshellarg($peran)
         ));
 

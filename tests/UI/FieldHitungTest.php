@@ -45,7 +45,7 @@ final class FieldHitungTest extends TestCase
         exec(sprintf(
             '%s %s %s %s 2>&1',
             escapeshellarg(PHP_BINARY),
-            escapeshellarg(dirname(__DIR__) . '/fixtures/jalankan_contoh.php'),
+            escapeshellarg(dirname(__DIR__) . '/fixtures/run_example.php'),
             escapeshellarg('ya'),
             escapeshellarg('skor-bishop')
         ), $baris);
@@ -99,7 +99,7 @@ final class FieldHitungTest extends TestCase
     {
         foreach (['views/document/generate.php', 'lib/pdf_compose.php'] as $berkas) {
             self::assertStringContainsString(
-                '\Ezdoc\Format\CalcField::hitung(',
+                '\Ezdoc\Format\CalcField::compute(',
                 self::baca($berkas),
                 $berkas . ' tidak memakai penghitung bersama'
             );
@@ -189,7 +189,7 @@ final class FieldHitungTest extends TestCase
             $keluaran = (string) @shell_exec(sprintf(
                 '%s %s %s 2>&1',
                 escapeshellarg($node),
-                escapeshellarg(dirname(__DIR__) . '/js/field-hitung.js'),
+                escapeshellarg(dirname(__DIR__) . '/js/field-calc.js'),
                 escapeshellarg($js)
             ));
         } finally {

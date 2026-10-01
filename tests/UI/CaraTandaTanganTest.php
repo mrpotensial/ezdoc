@@ -30,8 +30,8 @@ final class CaraTandaTanganTest extends TestCase
         exec(sprintf(
             '%s %s %s 2>&1',
             escapeshellarg(PHP_BINARY),
-            escapeshellarg(dirname(__DIR__) . '/fixtures/jalankan_contoh_generate.php'),
-            escapeshellarg('contoh')
+            escapeshellarg(dirname(__DIR__) . '/fixtures/run_example_generate.php'),
+            escapeshellarg('example')
         ), $baris);
 
         return implode("\n", $baris);

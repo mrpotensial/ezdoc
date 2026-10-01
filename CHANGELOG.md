@@ -29,7 +29,7 @@ padahal di sini judulnya berdiri dan cuma memakai 45 px. Sisanya 40–77 px
 kosong di kiri, dan papannya menyempit sebanyak itu. `left` adalah angka yang
 diketik, dan tidak ada yang membandingkannya dengan isi kolom itu.
 
-Uji `KopContohTest::testBerkasContohTetapNetral` ikut dilonggarkan: yang
+Uji `ExampleLetterheadTest::testBerkasContohTetapNetral` ikut dilonggarkan: yang
 diperiksa sekarang kata "CONTOH" di nama kopnya, bukan satu nama tertentu.
 Maksud penjaganya tetap sama — nama organisasi sungguhan ditolak — tapi
 mengunci satu nama akan memaksa kop rumah sakit dipakai di kartu perawatan
@@ -97,7 +97,7 @@ berikutnya — aturan yang sama dengan isi sel.
 
 **Fixed — bentuk baku di peramban membuang `x2` (2026-10-01)**
 
-`ezChartRapikan` menulis ulang tiap nilai jadi `{x, y}`. Akibatnya rentang yang
+`ezChartNormalise` menulis ulang tiap nilai jadi `{x, y}`. Akibatnya rentang yang
 baru dibuat jadi titik tanpa nilai lalu dibuang server, dan rentang yang sudah
 ada **kehilangan jam selesainya** begitu ada yang menyentuh papan itu.
 Gambarnya tetap muncul, cuma isinya berbeda.
@@ -767,7 +767,7 @@ sebabnya ini hidup lama tanpa terlihat.
 
 Sekarang kontraknya satu arah: yang masuk perender adalah nilai **mentah**, dan
 perendernya yang meng-escape, tepat sekali. Dijaga
-`tests/UI/NilaiFieldSatuLapisTest.php`, yang membandingkan apa yang akan
+`tests/UI/SingleLayerFieldValueTest.php`, yang membandingkan apa yang akan
 dikirim peramban kembali dengan apa yang tersimpan — atas petik satu, petik
 dua, ampersand, dan tanda kurung sudut.
 
@@ -862,7 +862,7 @@ bentuk mentah, escape hanya saat mencetak.
 
 **Added — uji yang berlaku untuk setiap contoh**
 
-`tests/UI/SemuaContohTest.php` menemukan sendiri semua folder di `contoh/` dan
+`tests/UI/AllExamplesTest.php` menemukan sendiri semua folder di `contoh/` dan
 memberlakukan aturan yang sama: dirender tanpa sisa penanda, tiap field punya
 nilai contoh (kecuali field hitung), rumus hanya menyebut field yang ada, tipe
 fieldnya dikenali perender, field pilihan punya pilihannya dan nilainya

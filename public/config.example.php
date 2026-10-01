@@ -44,7 +44,7 @@ return [
 
     // ── Kop surat organisasi ──
     //
-    // Dibaca contoh template (?ezdoc_page=contoh). Berkas contoh di folder
+    // Dibaca contoh template (?ezdoc_page=example). Berkas contoh di folder
     // `contoh/` sengaja memakai kop karangan supaya pustaka ini tidak memihak
     // satu organisasi pun; nilai di bawah inilah yang menggantikannya — di
     // layar, di cetakan, dan di template yang disimpan dari contoh itu.
@@ -52,7 +52,7 @@ return [
     // Tanpa ini contohnya tetap terbuka, cuma kopnya karangan. Nilai di sini
     // adalah titik awal: halaman contoh punya panel "Kop surat" yang bisa
     // menimpanya tanpa menyentuh berkas ini (tersimpan di folder penyimpanan
-    // sebagai kop-contoh.json).
+    // sebagai letterhead.json).
     //
     // 'letterhead.name'    => 'NAMA ORGANISASI ANDA',
     // 'letterhead.address' => 'Alamat satu baris',   // larik = beberapa baris

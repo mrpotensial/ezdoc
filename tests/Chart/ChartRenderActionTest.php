@@ -27,7 +27,7 @@ final class ChartRenderActionTest extends TestCase
     {
         $keluaran = (string) shell_exec(sprintf(
             'php %s %s %s 2>&1',
-            escapeshellarg(dirname(__DIR__) . '/fixtures/jalankan_chart_render.php'),
+            escapeshellarg(dirname(__DIR__) . '/fixtures/run_chart_render.php'),
             escapeshellarg('b64:' . base64_encode((string) json_encode($spec))),
             escapeshellarg('b64:' . base64_encode((string) json_encode($values)))
         ));

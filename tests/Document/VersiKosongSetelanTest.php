@@ -32,7 +32,7 @@ final class VersiKosongSetelanTest extends TestCase
     {
         $keluaran = (string) shell_exec(sprintf(
             'php %s %s %d %d 2>&1',
-            escapeshellarg(dirname(__DIR__) . '/fixtures/jalankan_versi_baru.php'),
+            escapeshellarg(dirname(__DIR__) . '/fixtures/run_new_version.php'),
             $bolehKosong ? '1' : '0',
             $sourceVersion,
             $versiAwal

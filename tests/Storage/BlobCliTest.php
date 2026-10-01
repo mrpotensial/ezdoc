@@ -18,7 +18,7 @@ use PHPUnit\Framework\TestCase;
  * `signature_values`, jadi `apply` akan menghapus setiap PDF beku yang lebih tua
  * dari masa tenggang. Arsip itu bukti dengan masa simpan.
  *
- * Dijalankan lewat tests/fixtures/jalankan_cli_blob.php, karena CLI-nya
+ * Dijalankan lewat tests/fixtures/run_cli_blob.php, karena CLI-nya
  * berakhir dengan `exit`.
  */
 final class BlobCliTest extends TestCase
@@ -56,7 +56,7 @@ final class BlobCliTest extends TestCase
         exec(sprintf(
             '%s %s %s %s %s %s 2>&1',
             escapeshellarg(PHP_BINARY),
-            escapeshellarg(dirname(__DIR__) . '/fixtures/jalankan_cli_blob.php'),
+            escapeshellarg(dirname(__DIR__) . '/fixtures/run_cli_blob.php'),
             escapeshellarg($cli),
             escapeshellarg($mode),
             escapeshellarg($this->dir . '/db.sqlite'),

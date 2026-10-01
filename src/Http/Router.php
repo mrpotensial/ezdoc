@@ -51,7 +51,7 @@ final class Router
      */
     private static $PAGE_WHITELIST = [
         // Core routes
-        'list', 'view', 'download', 'action', 'admin_migrate', 'contoh',
+        'list', 'view', 'download', 'action', 'admin_migrate', 'example',
         // Legacy sub-view dispatch (backward-compat, forward via alias ke direct names)
         'designer', 'generate', 'new_document',
         // Direct sub-view routes (v1.0-prep)
@@ -233,7 +233,7 @@ final class Router
         $this->handlers['asset']         = [$this, 'handleAsset'];
         $this->handlers['action']        = [$this, 'handleAction'];
         $this->handlers['admin_migrate'] = [$this, 'handleAdminMigrate'];
-        $this->handlers['contoh']        = [$this, 'handleContoh'];
+        $this->handlers['example']        = [$this, 'handleExample'];
 
         // Direct sub-view routes (v1.0-prep) — canonical names matching
         // extracted view files (v0.9.11 view separation).
@@ -335,9 +335,9 @@ final class Router
      * Precedent: halaman contoh yang dirender dari berkas contoh itu sendiri —
      * Storybook, Tailwind UI, dan contoh di dokumentasi Stripe.
      */
-    public function handleContoh(RequestContext $req, ResponseWriter $res): ?string
+    public function handleExample(RequestContext $req, ResponseWriter $res): ?string
     {
-        return $this->renderView(__DIR__ . '/../../views/contoh.php', [
+        return $this->renderView(__DIR__ . '/../../views/example.php', [
             '__ezdoc_fragment' => true,
         ], $res);
     }

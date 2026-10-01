@@ -475,8 +475,8 @@ function processTabledbRows($html, $tableDbQueries, $param_norm, $param_nopen, $
     // sementara tidak satu pun kueri boleh berjalan. Diletakkan di sini, bukan
     // di pemanggilnya, karena pemanggilnya ada dua — layar dan PDF — dan
     // keduanya harus menunjukkan tabel yang sama.
-    $barisSiap = isset($GLOBALS['ezdocBarisTabelSiap']) && is_array($GLOBALS['ezdocBarisTabelSiap'])
-        ? $GLOBALS['ezdocBarisTabelSiap']
+    $barisSiap = isset($GLOBALS['ezdocTableRowsReady']) && is_array($GLOBALS['ezdocTableRowsReady'])
+        ? $GLOBALS['ezdocTableRowsReady']
         : [];
 
     // Regex captures: (1) namespace optional, (2) selector, (3) format pipe optional
@@ -1111,7 +1111,7 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
             if (preg_match('/data-decimals=["\'](\d+)["\']/', $attrs, $dcm)) {
                 $desimal = (int) $dcm[1];
             }
-            $val = (string) (\Ezdoc\Format\CalcField::hitung($rumus, $dbFields, $desimal) ?? '');
+            $val = (string) (\Ezdoc\Format\CalcField::compute($rumus, $dbFields, $desimal) ?? '');
             $type = 'number';
         }
 

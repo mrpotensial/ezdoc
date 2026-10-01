@@ -5027,7 +5027,7 @@
 
         let chartEditor = null; // { id, spec, awal, buka, salah, scale, tunda }
 
-        const CHART_JENIS = [
+        const CHART_TYPES = [
             ['line', 'Garis'], ['bar', 'Batang'], ['symbol', 'Simbol'], ['text', 'Teks'],
             ['timeline', 'Timeline'],
         ];
@@ -5035,17 +5035,17 @@
             ['circle', 'Lingkaran'], ['dot', 'Titik'], ['cross', 'Silang'], ['square', 'Kotak'],
             ['diamond', 'Wajik'], ['triangle-up', 'Segitiga naik'], ['triangle-down', 'Segitiga turun'],
         ];
-        const CHART_GAMBAR = [
+        const CHART_DRAWS = [
             ['point+line', 'Titik + garis'], ['point', 'Titik saja'], ['line', 'Garis saja'],
             ['point+step', 'Titik + tangga'], ['step', 'Tangga saja'],
             ['point+area', 'Titik + arsiran'], ['area', 'Arsiran saja'],
         ];
-        const CHART_ISIAN = [['solid', 'Penuh'], ['hatch', 'Arsir'], ['dots', 'Titik-titik'], ['empty', 'Kosong']];
+        const CHART_FILLS = [['solid', 'Penuh'], ['hatch', 'Arsir'], ['dots', 'Titik-titik'], ['empty', 'Kosong']];
         const CHART_LEGENDA = [['', 'Tidak ada'], ['above', 'Di atas'], ['below', 'Di bawah'], ['left', 'Di kiri']];
         const CHART_GAYA = [['solid', 'Utuh'], ['dashed', 'Putus-putus']];
         const CHART_JUDUL = [['left', 'Mendatar di kiri'], ['rotated', 'Berdiri']];
-        const CHART_BARIS_JAM = [['bottom', 'Di dasar papan'], ['none', 'Tidak ada']];
-        const CHART_SATUAN = [['hour', 'Jam'], ['day', 'Hari'], ['month', 'Bulan']];
+        const CHART_TIME_AXIS_PLACES = [['bottom', 'Di dasar papan'], ['none', 'Tidak ada']];
+        const CHART_UNITS = [['hour', 'Jam'], ['day', 'Hari'], ['month', 'Bulan']];
 
         /**
          * Panel siap pakai per jenis.
@@ -5055,7 +5055,7 @@
          * galat sebagai sambutan. Bawaan yang masuk akal menghemat empat sampai
          * lima isian per baris.
          */
-        const CHART_BAWAAN = {
+        const CHART_DEFAULTS = {
             line: function () {
                 return {
                     type: 'line', title: '', height: 120,
@@ -5109,7 +5109,7 @@
             return Array.from(nama).sort();
         }
 
-        function chartAmbil(obj, path) {
+        function chartValueAt(obj, path) {
             return path.split('.').reduce(function (o, k) {
                 return (o === null || o === undefined) ? undefined : o[k];
             }, obj);
@@ -5126,8 +5126,8 @@
             induk[akhir] = value;
         }
 
-        function chartHapusDari(obj, path, index) {
-            const arr = chartAmbil(obj, path);
+        function chartDeleteAt(obj, path, index) {
+            const arr = chartValueAt(obj, path);
             if (Array.isArray(arr)) arr.splice(index, 1);
         }
 
@@ -5173,7 +5173,7 @@
                 + '" class="w-full h-[26px] rounded border-gray-300 p-0.5"></label>';
         }
 
-        function fTombol(act, path, teks, kelas) {
+        function fButton(act, path, teks, kelas) {
             return '<button type="button" data-act="' + act + '" data-path="' + (path || '')
                 + '" class="' + (kelas || 'px-2 py-0.5 rounded text-[10px] border border-gray-300 hover:bg-gray-50')
                 + '">' + escapeHtml(teks) + '</button>';
@@ -5199,14 +5199,14 @@
                 + '<div class="text-xs font-medium text-gray-700 mb-2">' + escapeHtml(t('chart.board_section', {}, 'Board')) + '</div>'
                 + '<div class="grid grid-cols-3 gap-2">'
                 + fNum('columns', t('chart.columns', {}, 'Columns'), spec.columns == null ? 16 : spec.columns)
-                + fSelect('x.unit', t('chart.unit', {}, 'Column unit'), chartSatuan(spec), CHART_SATUAN)
+                + fSelect('x.unit', t('chart.unit', {}, 'Column unit'), chartUnit(spec), CHART_UNITS)
                 + fNum('column_width', t('chart.column_width', {}, 'Column width'), spec.column_width == null ? 40 : spec.column_width)
                 + fNum('left', t('chart.left', {}, 'Left column'), spec.left == null ? 64 : spec.left)
                 + fNum('panel_gap', t('chart.panel_gap', {}, 'Panel gap'), spec.panel_gap == null ? 14 : spec.panel_gap)
                 + fNum('label_every', t('chart.label_every', {}, 'Label every'), spec.label_every == null ? 1 : spec.label_every)
                 + fText('start_field', t('chart.start_field', {}, 'Start-time field'), spec.start_field, 'list="chartFieldSaran"')
                 + fSelect('time_axis', t('chart.time_axis', {}, 'Hour row'),
-                    spec.time_axis === false ? 'none' : (spec.time_axis || 'bottom'), CHART_BARIS_JAM)
+                    spec.time_axis === false ? 'none' : (spec.time_axis || 'bottom'), CHART_TIME_AXIS_PLACES)
                 + fText('label_format', t('chart.label_format', {}, 'Label format'), spec.label_format)
                 + '</div></div>';
 
@@ -5218,8 +5218,8 @@
             html += '</div>';
 
             html += '<div class="mt-2 flex gap-1">'
-                + CHART_JENIS.map(function (j) {
-                    return fTombol('panel-add', j[0], '+ ' + j[1],
+                + CHART_TYPES.map(function (j) {
+                    return fButton('panel-add', j[0], '+ ' + j[1],
                         'flex-1 px-2 py-1.5 rounded text-[11px] border border-dashed border-gray-400 text-gray-600 hover:bg-gray-50');
                 }).join('')
                 + '</div>';
@@ -5229,7 +5229,7 @@
         }
 
         /** Satuan kolom papan ini. Bentuk lama tanpa `x` berarti jam. */
-        function chartSatuan(spec) {
+        function chartUnit(spec) {
             return (spec.x && spec.x.unit) || spec.unit || 'hour';
         }
 
@@ -5241,7 +5241,7 @@
          * selamanya; yang dipindah cuma yang lewat penyunting, sekali, supaya
          * tab JSON tidak memperlihatkan dua kunci untuk satu hal.
          */
-        function chartPindahKunciLama(spec) {
+        function chartMigrateLegacyKeys(spec) {
             if (spec.hours != null && spec.columns == null) {
                 spec.columns = spec.hours;
             }
@@ -5258,7 +5258,7 @@
          * ditolak server, dan tombol yang pasti ditolak lebih baik tidak ada
          * daripada ada lalu mengeluarkan galat.
          */
-        function renderChartTitikAcuan(points, as) {
+        function renderChartReferencePoints(points, as) {
             let html = '<div class="text-[10px] font-medium text-gray-600 mb-1">'
                 + escapeHtml(t('chart.reference_curve', {}, 'Curve'))
                 + ' · ' + points.length + ' '
@@ -5271,7 +5271,7 @@
                     + fNum(ts + '.1', t('chart.point_value', {}, 'Value'), titik[1])
                     + '<span></span><span class="text-right">'
                     + (points.length > 2
-                        ? fTombol('point-del', ts, '✕',
+                        ? fButton('point-del', ts, '✕',
                             'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50')
                         : '')
                     + '</span></div>';
@@ -5287,7 +5287,7 @@
             const terbuka = chartEditor.buka === i;
             const salah = chartEditor.salah === i;
             const deret = Array.isArray(p.series) ? p.series.length : 0;
-            const namaJenis = (CHART_JENIS.filter(function (j) { return j[0] === jenis; })[0] || ['', jenis])[1];
+            const namaJenis = (CHART_TYPES.filter(function (j) { return j[0] === jenis; })[0] || ['', jenis])[1];
 
             let html = '<div class="border rounded-md mb-1.5 ' + (salah ? 'border-red-400 bg-red-50' : 'border-gray-200')
                 + '" data-panel-card="' + i + '">'
@@ -5306,10 +5306,10 @@
                 + (p.time_axis ? ' &middot; ' + escapeHtml(t('chart.time_axis_short', {}, 'hour row')) : '')
                 + '</span></span>'
                 + '<span class="flex gap-1 items-center" data-no-toggle="1">'
-                + (i > 0 ? fTombol('panel-up', sel, '↑') : '')
-                + (i < total - 1 ? fTombol('panel-down', sel, '↓') : '')
-                + fTombol('panel-dup', sel, '⧉')
-                + fTombol('panel-del', sel, '✕', 'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50')
+                + (i > 0 ? fButton('panel-up', sel, '↑') : '')
+                + (i < total - 1 ? fButton('panel-down', sel, '↓') : '')
+                + fButton('panel-dup', sel, '⧉')
+                + fButton('panel-del', sel, '✕', 'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50')
                 + '</span>'
                 + '<span class="text-gray-400 text-xs">' + (terbuka ? '▴' : '▾') + '</span>'
                 + '</div>';
@@ -5329,7 +5329,7 @@
             const isJalur = jenis === 'timeline';
 
             let html = '<div class="grid grid-cols-3 gap-2">'
-                + fSelect(sel + '.type', t('chart.panel_type', {}, 'Type'), jenis, CHART_JENIS)
+                + fSelect(sel + '.type', t('chart.panel_type', {}, 'Type'), jenis, CHART_TYPES)
                 + fText(sel + '.title', t('chart.panel_title_label', {}, 'Row title'), p.title)
                 + fNum(sel + '.height', t('chart.height', {}, 'Height'), p.height == null ? (isSel ? 16 : 120) : p.height)
                 + '</div>';
@@ -5367,17 +5367,17 @@
                 html += '<div class="bg-gray-50 rounded p-2 mb-1"><div class="grid grid-cols-4 gap-2">'
                     + fText(ds + '.field', t('chart.field', {}, 'Field'), d.field, 'list="chartFieldSaran"')
                     + fText(ds + '.title', t('chart.series_title', {}, 'Name'), d.title)
-                    + (isSel ? '' : fSelect(ds + '.draw', t('chart.draw', {}, 'Draw'), d.draw || 'point+line', CHART_GAMBAR))
+                    + (isSel ? '' : fSelect(ds + '.draw', t('chart.draw', {}, 'Draw'), d.draw || 'point+line', CHART_DRAWS))
                     + (isSel ? '' : fSelect(ds + '.marker', t('chart.marker', {}, 'Marker'), d.marker || 'circle', CHART_TANDA))
                     + '</div><div class="grid grid-cols-4 gap-2 mt-1 items-end">'
                     + fColor(ds + '.color', t('chart.color', {}, 'Colour'), d.color || '#cc0000')
                     + (isSel ? '' : fCheck(ds + '.labels', t('chart.labels', {}, 'Show numbers'), !!d.labels))
                     + '<span></span>'
-                    + '<span class="text-right">' + fTombol('series-del', ds, '✕ ' + t('chart.remove', {}, 'Remove'),
+                    + '<span class="text-right">' + fButton('series-del', ds, '✕ ' + t('chart.remove', {}, 'Remove'),
                         'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50') + '</span>'
                     + '</div></div>';
             });
-            html += fTombol('series-add', sel, '+ ' + t('chart.add_series', {}, 'Add series')) + '</div>';
+            html += fButton('series-add', sel, '+ ' + t('chart.add_series', {}, 'Add series')) + '</div>';
 
             // Pita nilai berlaku di panel jenis apa pun — yang berbeda cuma
             // tempat melukisnya. Karena itu bagian ini di LUAR `if (!isSel)`.
@@ -5397,11 +5397,11 @@
                     + fColor(bs + '.color', t('chart.color', {}, 'Colour'), b.color || '#dcfce7')
                     + fText(bs + '.label', t('chart.label', {}, 'Name'), b.label)
                     + '</div><div class="text-right mt-1">'
-                    + fTombol('band-del', bs, '✕ ' + t('chart.remove', {}, 'Remove'),
+                    + fButton('band-del', bs, '✕ ' + t('chart.remove', {}, 'Remove'),
                         'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50')
                     + '</div></div>';
             });
-            html += fTombol('band-add', sel, '+ ' + t('chart.add_band', {}, 'Add band')) + '</div>';
+            html += fButton('band-add', sel, '+ ' + t('chart.add_band', {}, 'Add band')) + '</div>';
 
             if (!isSel) {
                 const acuan = Array.isArray(p.references) ? p.references : [];
@@ -5418,7 +5418,7 @@
                     const berkurva = Array.isArray(a.points) && a.points.length >= 2;
                     html += '<div class="bg-gray-50 rounded p-2 mb-1">'
                         + (berkurva
-                            ? renderChartTitikAcuan(a.points, as)
+                            ? renderChartReferencePoints(a.points, as)
                             : '<div class="grid grid-cols-4 gap-2">'
                                 + fNum(as + '.from.0', t('chart.from_hour', {}, 'From hour'), dari[0])
                                 + fNum(as + '.from.1', t('chart.from_value', {}, 'From value'), dari[1])
@@ -5432,13 +5432,13 @@
                         + fCheck(as + '.label_on_line', t('chart.label_on_line', {}, 'Name on the line'), !!a.label_on_line)
                         + '</div><div class="flex justify-between items-center mt-1">'
                         + (berkurva
-                            ? fTombol('point-add', as, '+ ' + t('chart.add_point', {}, 'Add point'))
-                            : fTombol('ref-curve', as, t('chart.make_curve', {}, 'Make it a curve')))
-                        + fTombol('ref-del', as, '✕ ' + t('chart.remove', {}, 'Remove'),
+                            ? fButton('point-add', as, '+ ' + t('chart.add_point', {}, 'Add point'))
+                            : fButton('ref-curve', as, t('chart.make_curve', {}, 'Make it a curve')))
+                        + fButton('ref-del', as, '✕ ' + t('chart.remove', {}, 'Remove'),
                             'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50')
                         + '</div></div>';
                 });
-                html += fTombol('ref-add', sel, '+ ' + t('chart.add_reference', {}, 'Add reference line')) + '</div>';
+                html += fButton('ref-add', sel, '+ ' + t('chart.add_reference', {}, 'Add reference line')) + '</div>';
 
                 const tegak = Array.isArray(p.verticals) ? p.verticals : [];
                 html += '<div class="mt-3"><div class="text-[11px] font-medium text-gray-600 mb-1">'
@@ -5449,11 +5449,11 @@
                         + fText(vs + '.at_field', t('chart.at_field', {}, 'Time field'), v.at_field, 'list="chartFieldSaran"')
                         + fColor(vs + '.color', t('chart.color', {}, 'Colour'), v.color || '#cc0000')
                         + fCheck(vs + '.label', t('chart.show_time', {}, 'Show the time'), v.label !== false)
-                        + '<span class="text-right">' + fTombol('vert-del', vs, '✕',
+                        + '<span class="text-right">' + fButton('vert-del', vs, '✕',
                             'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50') + '</span>'
                         + '</div>';
                 });
-                html += fTombol('vert-add', sel, '+ ' + t('chart.add_vertical', {}, 'Add time marker')) + '</div>';
+                html += fButton('vert-add', sel, '+ ' + t('chart.add_vertical', {}, 'Add time marker')) + '</div>';
             }
 
             if (jenis === 'bar') {
@@ -5471,25 +5471,25 @@
                         + '" class="w-full rounded border-gray-300 text-[11px] px-2 py-1"></label>'
                         + '<label class="block">' + fLabel(t('chart.level_fill', {}, 'Fill'))
                         + '<select data-level="fill" class="w-full rounded border-gray-300 text-[11px] px-2 py-1">'
-                        + CHART_ISIAN.map(function (o) {
+                        + CHART_FILLS.map(function (o) {
                             return '<option value="' + o[0] + '"' + (isian.fill === o[0] ? ' selected' : '') + '>'
                                 + escapeHtml(o[1]) + '</option>';
                         }).join('') + '</select></label>'
                         + '<label class="block">' + fLabel(t('chart.level_label', {}, 'Legend text'))
                         + '<input type="text" data-level="label" value="' + escapeHtml(isian.label || '')
                         + '" class="w-full rounded border-gray-300 text-[11px] px-2 py-1"></label>'
-                        + '<span class="text-right">' + fTombol('level-del', sel + '|' + kunci, '✕',
+                        + '<span class="text-right">' + fButton('level-del', sel + '|' + kunci, '✕',
                             'px-2 py-0.5 rounded text-[10px] border border-red-300 text-red-600 hover:bg-red-50') + '</span>'
                         + '</div>';
                 });
-                html += fTombol('level-add', sel, '+ ' + t('chart.add_level', {}, 'Add fill level')) + '</div>';
+                html += fButton('level-add', sel, '+ ' + t('chart.add_level', {}, 'Add fill level')) + '</div>';
             }
 
             return html;
         }
 
         // ── Perubahan dari formulir ──────────────────────────────────────
-        function chartEditorPasangListener() {
+        function chartEditorBindListeners() {
             const wadah = document.getElementById('chartEditorForm');
             if (!wadah || wadah._ezPasang) return;
             wadah._ezPasang = true;
@@ -5544,7 +5544,7 @@
                 chartEditorAksi(tombol.dataset.act, tombol.dataset.path || '');
             });
 
-            chartEditorPasangSeret(wadah);
+            chartEditorBindDrag(wadah);
         }
 
         /**
@@ -5563,7 +5563,7 @@
 
             const judul = kartu.querySelector('.text-xs.font-medium');
             const rincian = kartu.querySelector('.text-\\[10px\\].text-gray-500');
-            const namaJenis = (CHART_JENIS.filter(function (j) { return j[0] === (p.type || 'line'); })[0] || ['', p.type])[1];
+            const namaJenis = (CHART_TYPES.filter(function (j) { return j[0] === (p.type || 'line'); })[0] || ['', p.type])[1];
             if (judul) {
                 judul.textContent = (i + 1) + '. ' + (p.title || t('chart.untitled_panel', {}, 'Untitled panel'));
             }
@@ -5607,11 +5607,11 @@
                 const i = chartIndexTerakhir(path);
                 chartEditor.buka = chartEditor.buka === i ? -1 : i;
             } else if (act === 'panel-add') {
-                const buat = CHART_BAWAAN[path] || CHART_BAWAAN.line;
+                const buat = CHART_DEFAULTS[path] || CHART_DEFAULTS.line;
                 spec.panels.push(buat());
                 chartEditor.buka = spec.panels.length - 1;
             } else if (act === 'panel-del') {
-                chartHapusDari(spec, 'panels', chartIndexTerakhir(path));
+                chartDeleteAt(spec, 'panels', chartIndexTerakhir(path));
                 chartEditor.buka = -1;
             } else if (act === 'panel-dup') {
                 const i = chartIndexTerakhir(path);
@@ -5619,15 +5619,15 @@
                 chartEditor.buka = i + 1;
             } else if (act === 'panel-up' || act === 'panel-down') {
                 const i = chartIndexTerakhir(path);
-                chartTukarPanel(i, act === 'panel-up' ? i - 1 : i + 1);
+                chartSwapPanels(i, act === 'panel-up' ? i - 1 : i + 1);
             } else if (act === 'series-add') {
-                const p = chartAmbil(spec, path);
+                const p = chartValueAt(spec, path);
                 p.series = Array.isArray(p.series) ? p.series : [];
                 p.series.push({ field: '', title: '', draw: 'point+line', marker: 'circle', color: '#111111' });
             } else if (act === 'series-del') {
-                chartHapusInduk(spec, path);
+                chartDeleteParent(spec, path);
             } else if (act === 'band-add') {
-                const p = chartAmbil(spec, path);
+                const p = chartValueAt(spec, path);
                 p.bands = Array.isArray(p.bands) ? p.bands : [];
                 // Pita baru diletakkan di atas yang terakhir, bukan di 0–1:
                 // pita yang lahir bertumpang tindih langsung ditolak server,
@@ -5636,16 +5636,16 @@
                 const dari = akhir ? (Number(akhir.to == null ? akhir.from : akhir.to) + 1) : 0;
                 p.bands.push({ from: dari, to: dari + 2, color: '#dcfce7' });
             } else if (act === 'band-del') {
-                chartHapusInduk(spec, path);
+                chartDeleteParent(spec, path);
             } else if (act === 'ref-add') {
-                const p = chartAmbil(spec, path);
+                const p = chartValueAt(spec, path);
                 p.references = Array.isArray(p.references) ? p.references : [];
                 p.references.push({ from: [0, 0], to: [4, 10], style: 'solid', label: '', color: '#333333' });
             } else if (act === 'ref-curve') {
                 // Dua ujungnya jadi dua titik pertama. Kurva yang lahir kosong
                 // langsung ditolak server, dan yang menekannya melihat galat
                 // sebagai sambutan.
-                const a = chartAmbil(spec, path);
+                const a = chartValueAt(spec, path);
                 const dari = Array.isArray(a.from) ? a.from : [0, 0];
                 const ke = Array.isArray(a.to) ? a.to : [1, 0];
                 a.points = [[Number(dari[0]) || 0, Number(dari[1]) || 0],
@@ -5654,34 +5654,34 @@
                 delete a.from;
                 delete a.to;
             } else if (act === 'point-add') {
-                const a = chartAmbil(spec, path);
+                const a = chartValueAt(spec, path);
                 a.points = Array.isArray(a.points) ? a.points : [];
                 const akhir = a.points[a.points.length - 1] || [0, 0];
                 a.points.push([Number(akhir[0]) + 1, Number(akhir[1])]);
             } else if (act === 'point-del') {
                 const bagian = path.split('.');
                 const k = parseInt(bagian.pop(), 10);
-                const a = chartAmbil(spec, bagian.slice(0, -1).join('.'));
+                const a = chartValueAt(spec, bagian.slice(0, -1).join('.'));
                 if (a && Array.isArray(a.points) && a.points.length > 2) {
                     a.points.splice(k, 1);
                 }
             } else if (act === 'ref-del') {
-                chartHapusInduk(spec, path);
+                chartDeleteParent(spec, path);
             } else if (act === 'vert-add') {
-                const p = chartAmbil(spec, path);
+                const p = chartValueAt(spec, path);
                 p.verticals = Array.isArray(p.verticals) ? p.verticals : [];
                 p.verticals.push({ at_field: '', color: '#cc0000' });
             } else if (act === 'vert-del') {
-                chartHapusInduk(spec, path);
+                chartDeleteParent(spec, path);
             } else if (act === 'level-add') {
-                const p = chartAmbil(spec, path);
+                const p = chartValueAt(spec, path);
                 p.levels = p.levels && typeof p.levels === 'object' ? p.levels : {};
                 let n = 1;
                 while (p.levels[String(n)] !== undefined) n++;
                 p.levels[String(n)] = { fill: 'solid', label: '' };
             } else if (act === 'level-del') {
                 const bagian = path.split('|');
-                const p = chartAmbil(spec, bagian[0]);
+                const p = chartValueAt(spec, bagian[0]);
                 if (p && p.levels) delete p.levels[bagian[1]];
             } else if (act === 'reset') {
                 chartEditor.spec = JSON.parse(chartEditor.awal);
@@ -5694,7 +5694,7 @@
             chartEditorPratinjauTunda();
         }
 
-        function chartTukarPanel(i, j) {
+        function chartSwapPanels(i, j) {
             const panels = chartEditor.spec.panels;
             if (j < 0 || j >= panels.length || i === j) return;
             const simpan = panels[i];
@@ -5709,10 +5709,10 @@
             return parseInt(bagian[bagian.length - 1], 10);
         }
 
-        function chartHapusInduk(spec, path) {
+        function chartDeleteParent(spec, path) {
             const bagian = path.split('.');
             const index = parseInt(bagian.pop(), 10);
-            chartHapusDari(spec, bagian.join('.'), index);
+            chartDeleteAt(spec, bagian.join('.'), index);
         }
 
         /**
@@ -5722,7 +5722,7 @@
          * HTML5 drag sering melepas di tempat yang salah. Tombol ↑↓ tetap ada —
          * seretan tidak bisa dijangkau papan ketik.
          */
-        function chartEditorPasangSeret(wadah) {
+        function chartEditorBindDrag(wadah) {
             let seret = null;
 
             wadah.addEventListener('mousedown', function (ev) {
@@ -5739,7 +5739,7 @@
                 if (!kartu) return;
                 const ke = parseInt(kartu.dataset.panelCard, 10);
                 if (ke === seret.dari) return;
-                chartTukarPanel(seret.dari, ke);
+                chartSwapPanels(seret.dari, ke);
                 seret.dari = ke;
                 renderChartEditorForm();
                 chartEditorJsonSegar();
@@ -5767,13 +5767,13 @@
          * nilai sementara, dan tombol Terapkan tetap mengirim papan tanpa
          * nilai.
          */
-        function chartContohNilai(spec) {
+        function chartSampleValues(spec) {
             const MULAI = '2026-01-01 08:00';
             const nilai = {};
             if (spec.start_field) nilai[spec.start_field] = MULAI;
 
             const jam = Math.max(1, Number(spec.columns == null ? spec.hours : spec.columns) || 16);
-            const satuan = chartSatuan(spec);
+            const satuan = chartUnit(spec);
             const panels = Array.isArray(spec.panels) ? spec.panels : [];
 
             panels.forEach(function (p) {
@@ -5794,7 +5794,7 @@
                     // panel timeline tidak menggambar apa pun — dan papan yang
                     // kosong saat data contoh menyala terbaca sebagai rusak.
                     if (isJalur) {
-                        nilai[d.field] = JSON.stringify(chartContohRentang(MULAI, jam, satuan, acak));
+                        nilai[d.field] = JSON.stringify(chartSampleRanges(MULAI, jam, satuan, acak));
                         return;
                     }
 
@@ -5826,7 +5826,7 @@
                             v = Math.min(max, Math.max(min, v));
                             isi = Math.round(v * 10) / 10;
                         }
-                        titik.push({ x: chartJamKe(MULAI, h, satuan), y: isi });
+                        titik.push({ x: chartSetColumns(MULAI, h, satuan), y: isi });
                     }
 
                     nilai[d.field] = JSON.stringify(titik);
@@ -5843,7 +5843,7 @@
          * mudah terlewat saat merancang, dan paling sering dipakai saat
          * mengisi — infus yang masih jalan.
          */
-        function chartContohRentang(mulai, kolom, satuan, acak) {
+        function chartSampleRanges(mulai, kolom, satuan, acak) {
             const keluar = [];
             let h = Math.floor(acak() * 2);
 
@@ -5852,8 +5852,8 @@
                 const terbuka = (h + panjang) >= kolom && acak() < 0.6;
 
                 keluar.push({
-                    x: chartJamKe(mulai, h, satuan),
-                    x2: terbuka ? false : chartJamKe(mulai, Math.min(h + panjang, kolom), satuan),
+                    x: chartSetColumns(mulai, h, satuan),
+                    x2: terbuka ? false : chartSetColumns(mulai, Math.min(h + panjang, kolom), satuan),
                     y: 'Contoh ' + (keluar.length + 1),
                 });
 
@@ -5874,7 +5874,7 @@
         }
 
         /** 'YYYY-MM-DD HH:MM' sekian kolom sesudah waktu mulai. */
-        function chartJamKe(mulai, kolom, satuan) {
+        function chartSetColumns(mulai, kolom, satuan) {
             const t = new Date(mulai.replace(' ', 'T') + ':00');
             let hasil;
 
@@ -5918,14 +5918,14 @@
         }
 
         /** Saklar data contoh. Dipasang sekali; keadaannya milik tiap papan. */
-        function chartEditorPasangContoh() {
+        function chartEditorBindSample() {
             const saklar = document.getElementById('chartEditorSample');
             if (!saklar || saklar._ezPasang) return;
             saklar._ezPasang = true;
 
             saklar.addEventListener('change', function () {
                 if (!chartEditor) return;
-                chartEditor.contoh = saklar.checked;
+                chartEditor.sampleData = saklar.checked;
                 chartEditorPratinjau();
             });
         }
@@ -5945,7 +5945,7 @@
 
             const hasil = await chartRenderRequest(
                 chartEditor.spec,
-                chartEditor.contoh ? chartContohNilai(chartEditor.spec) : {}
+                chartEditor.sampleData ? chartSampleValues(chartEditor.spec) : {}
             );
             if (!hasil.ok) {
                 // Pesannya menyebut panel keberapa. Kartunya dibuka dan ditandai
@@ -5981,7 +5981,7 @@
                 + hasil.svg + '</div>';
             kotak.style.height = (hasil.scale.height * skala + 8) + 'px';
 
-            chartEditorSorotPanel();
+            chartEditorHighlightPanel();
         }
 
         /** Ringkasan singkat, termasuk muat atau tidak di kertasnya. */
@@ -6016,7 +6016,7 @@
         }
 
         /** Panel yang sedang dibuka disorot di pratinjau. */
-        function chartEditorSorotPanel() {
+        function chartEditorHighlightPanel() {
             const kanvas = document.getElementById('chartEditorCanvas');
             if (!kanvas || !chartEditor.scale) return;
             const p = (chartEditor.scale.panels || [])[chartEditor.buka];
@@ -6039,7 +6039,7 @@
             const c = configChart[i];
             if (!c) return;
 
-            const spec = chartPindahKunciLama(JSON.parse(JSON.stringify(c.spec || {})));
+            const spec = chartMigrateLegacyKeys(JSON.parse(JSON.stringify(c.spec || {})));
             chartEditor = {
                 id: c.id,
                 spec: spec,
@@ -6049,7 +6049,7 @@
                 scale: null,
                 skala: 1,
                 tunda: null,
-                contoh: false,
+                sampleData: false,
             };
             const saklar = document.getElementById('chartEditorSample');
             if (saklar) saklar.checked = false;
@@ -6057,9 +6057,9 @@
             if (nama) nama.textContent = c.id;
 
             renderChartEditorForm();
-            chartEditorPasangListener();
-            chartEditorPasangPratinjauKlik();
-            chartEditorPasangContoh();
+            chartEditorBindListeners();
+            chartEditorBindPreviewClick();
+            chartEditorBindSample();
             chartEditorJsonSegar();
             chartEditorTab('form');
             openAppModal('chartEditor');
@@ -6073,7 +6073,7 @@
          * lebih langsung daripada menggulir mencari namanya di antara tiga
          * belas kartu.
          */
-        function chartEditorPasangPratinjauKlik() {
+        function chartEditorBindPreviewClick() {
             const kotak = document.getElementById('chartEditorPreview');
             if (!kotak || kotak._ezPasang) return;
             kotak._ezPasang = true;
@@ -6092,7 +6092,7 @@
                         renderChartEditorForm();
                         const kartu = document.querySelector('[data-panel-card="' + i + '"]');
                         if (kartu) kartu.scrollIntoView({ block: 'center', behavior: 'smooth' });
-                        chartEditorSorotPanel();
+                        chartEditorHighlightPanel();
                         return;
                     }
                 }

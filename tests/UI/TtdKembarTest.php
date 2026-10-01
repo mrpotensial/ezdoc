@@ -70,7 +70,7 @@ final class TtdKembarTest extends TestCase
             $keluaran = (string) @shell_exec(sprintf(
                 '%s %s %s 2>&1',
                 escapeshellarg($node),
-                escapeshellarg(dirname(__DIR__) . '/js/ttd-kembar.js'),
+                escapeshellarg(dirname(__DIR__) . '/js/twin-signature.js'),
                 escapeshellarg($js)
             ));
         } finally {

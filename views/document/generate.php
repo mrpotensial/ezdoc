@@ -228,7 +228,7 @@ $isSuperadmin = $ctx->roleProvider->hasRole($adminRoleSlug);
 $template_id = isset($_GET['template_id']) ? (int)$_GET['template_id'] : 0;
 
 // Contoh dari berkas: `?ezdoc_page=generate&template_id=contoh` atau
-// `template_id=contoh:<nama-folder>`.
+// `template_id=example:<nama-folder>`.
 //
 // Gunanya melihat contoh di halaman kerjanya sendiri, bukan di halaman
 // penjelasan — yang dinilai orang sebelum memakai sesuatu adalah tampilan
@@ -239,10 +239,10 @@ $template_id = isset($_GET['template_id']) ? (int)$_GET['template_id'] : 0;
 // `$param_is_locked` — jalur yang sama dengan dokumen terkunci, yang sudah
 // mematikan tombol Simpan dan seluruh isian. Cabang khusus bisa terlewat di
 // satu tempat; jalur yang sudah dipakai di mana-mana tidak.
-$contohSlug = '';
+$exampleSlug = '';
 $__tidMentah = isset($_GET['template_id']) ? (string) $_GET['template_id'] : '';
-if (preg_match('/^contoh(?::([a-z0-9-]+))?$/', $__tidMentah, $__mContoh) === 1) {
-    $contohSlug = ($__mContoh[1] ?? '') !== '' ? $__mContoh[1] : \Ezdoc\Template\Contoh::BAWAAN;
+if (preg_match('/^example(?::([a-z0-9-]+))?$/', $__tidMentah, $__mExample) === 1) {
+    $exampleSlug = ($__mExample[1] ?? '') !== '' ? $__mExample[1] : \Ezdoc\Template\Example::DEFAULT_SLUG;
 }
 $doc_id = isset($_GET['doc_id']) ? (int)$_GET['doc_id'] : 0;
 $param_norm = trim($_GET['norm'] ?? $_POST['_norm'] ?? '');
@@ -263,7 +263,7 @@ $docMeta = [
 
 // Template selection — allow caller override $templates (demo/consumer bypass DB)
 // spec: ezdoc-spec/views/generate.md#picker-templates-injection
-if ($template_id <= 0 && $contohSlug === '') {
+if ($template_id <= 0 && $exampleSlug === '') {
     if (!isset($templates) || !is_array($templates)) {
         $result = mysqli_query($conn, "SELECT id, name AS nama_template FROM ezdoc_templates WHERE content IS NOT NULL AND content != '' AND is_current = 1 AND deleted_at IS NULL ORDER BY name");
         $templates = [];
@@ -287,8 +287,8 @@ if ($template_id <= 0 && $contohSlug === '') {
 
 // Load template — pakai alias supaya kode rendering existing tetap works
 $template = null;
-if ($contohSlug !== '') {
-    $template = \Ezdoc\Template\Contoh::muat($contohSlug, $config);
+if ($exampleSlug !== '') {
+    $template = \Ezdoc\Template\Example::load($exampleSlug, $config);
 
     // Boleh DICOBA, tapi tidak menyentuh server.
     //
@@ -311,7 +311,7 @@ if ($contohSlug !== '') {
     $GLOBALS['ezdocModeContoh'] = true;
     // Baris tabelnya dari berkas. Kueri di config tetap ada supaya bisa dibaca
     // dan disalin, tapi tidak dijalankan — lihat processTabledbRows().
-    $GLOBALS['ezdocBarisTabelSiap'] = is_array($template['baris_tabel'] ?? null) ? $template['baris_tabel'] : [];
+    $GLOBALS['ezdocTableRowsReady'] = is_array($template['table_rows'] ?? null) ? $template['table_rows'] : [];
     if (is_array($template)) {
         // OTP menuntut dokumen sungguhan: kodenya dicatat di database lalu
         // dikirim ke nomor orang. Di contoh, slotnya ditandatangani langsung;
@@ -389,7 +389,7 @@ $dbTtd = [];
 // generate.php di-include dari method scope (Router::renderView).
 $GLOBALS['dbFields'] = $dbFields;
 $GLOBALS['dbTtd']    = $dbTtd;
-if ($contohSlug !== '') {
+if ($exampleSlug !== '') {
     // Nilai contoh dari berkas. Tanpa ini halamannya tampil kosong, dan contoh
     // yang kosong tidak menunjukkan apa pun tentang hasilnya.
     $dbFields = is_array($template['nilai'] ?? null) ? $template['nilai'] : [];
@@ -459,7 +459,7 @@ if ($isGeneralDoc) {
     $canLookup = ($param_norm !== '' && $param_nopen !== '');
 }
 // Mode contoh tidak punya dokumen tersimpan untuk dicari.
-if ($contohSlug !== '') {
+if ($exampleSlug !== '') {
     $canLookup = false;
 }
 
@@ -1363,7 +1363,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
                 $desimal = (int) $dcm[1];
             }
             $hitung = ['formula' => $rumus, 'decimals' => $desimal];
-            $val = (string) (\Ezdoc\Format\CalcField::hitung($rumus, $GLOBALS['dbFields'] ?? [], $desimal) ?? '');
+            $val = (string) (\Ezdoc\Format\CalcField::compute($rumus, $GLOBALS['dbFields'] ?? [], $desimal) ?? '');
         }
 
         $isFrozen = $frozenFields === null || isset($frozenFields[$name]);
@@ -1564,7 +1564,7 @@ function renderFieldInputRaw($name, $type, $val, $options, $label, $validation =
 // ini setiap tautan mandiri — PDF Raw, cetak, ganti versi — kembali membawa
 // `template_id=0`, dan halaman menjawabnya dengan pemilih template. Dilaporkan
 // pemakai: "pdf raw nya gak bisa dilihat ya contoh?".
-$__tidUrl = $contohSlug !== '' ? 'contoh:' . $contohSlug : (string) $template_id;
+$__tidUrl = $exampleSlug !== '' ? 'example:' . $exampleSlug : (string) $template_id;
 $currentUrl = "?template_id=" . rawurlencode($__tidUrl);
 if ($doc_id > 0) $currentUrl .= "&doc_id=$doc_id";
 elseif ($param_norm && $param_nopen) {
@@ -1773,19 +1773,19 @@ if (isset($_GET['view']) && $_GET['view'] === 'pdf') {
 $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
 ?>
 <body class="<?= $__bacaSaja ? 'edit-off' : 'edit-on' ?>">
-    <?php if ($contohSlug !== ''):
-        $__urlContohBase = (string) $config->get('app.base_path', '');
-        $__qkContoh = (string) $config->get('app.query_key', 'ezdoc_page');
-        $__gabungContoh = (strpos($__urlContohBase, '?') === false ? '?' : '&');
-        $__urlContoh = $__urlContohBase . $__gabungContoh . $__qkContoh . '=contoh&contoh=' . rawurlencode($contohSlug);
-        $__urlAksiContoh = $__urlContohBase . $__gabungContoh . $__qkContoh . '=action';
-        $__urlDesignerContoh = $__urlContohBase . $__gabungContoh . $__qkContoh . '=designer&action=edit&id=';
-        $__namaUsulContoh = trim((string) preg_replace('/\s*\(contoh\)\s*$/iu', '', (string) ($template['nama_template'] ?? $contohSlug)));
+    <?php if ($exampleSlug !== ''):
+        $__urlExampleBase = (string) $config->get('app.base_path', '');
+        $__qkExample = (string) $config->get('app.query_key', 'ezdoc_page');
+        $__joinExample = (strpos($__urlExampleBase, '?') === false ? '?' : '&');
+        $__urlExample = $__urlExampleBase . $__joinExample . $__qkExample . '=example&example=' . rawurlencode($exampleSlug);
+        $__urlAksiContoh = $__urlExampleBase . $__joinExample . $__qkExample . '=action';
+        $__urlDesignerContoh = $__urlExampleBase . $__joinExample . $__qkExample . '=designer&action=edit&id=';
+        $__suggestedExampleName = trim((string) preg_replace('/\s*\(contoh\)\s*$/iu', '', (string) ($template['nama_template'] ?? $exampleSlug)));
         ?>
     <style>
         /* Pita mode contoh — selebar kertasnya, supaya ia terbaca sebagai
            bagian dari halaman, bukan tempelan yang menggantung di kiri. */
-        .ez-pita-contoh {
+        .ez-example-banner {
             width: <?= $paperDim['width'] ?>mm;
             max-width: calc(100% - 32px);
             margin: 14px auto 0;
@@ -1801,15 +1801,15 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
             font: 12.5px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif;
             box-sizing: border-box;
         }
-        .ez-pita-contoh b { font-weight: 600; }
-        .ez-pita-contoh .ez-pita-isi { flex: 1 1 320px; min-width: 0; }
+        .ez-example-banner b { font-weight: 600; }
+        .ez-example-banner .ez-example-banner-body { flex: 1 1 320px; min-width: 0; }
         /* Tombolnya satu rombongan: kalau tidak muat, semuanya turun
            bersama. Kalau masing-masing membungkus sendiri, satu tombol
            menggantung sendirian di baris kedua — dan tulisan tombol yang
            memanjang sesudah ditekan menggeser seluruh halaman. */
-        .ez-pita-contoh .ez-pita-aksi { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-        .ez-pita-contoh code { font-size: 11.5px; background: rgba(146,64,14,.08); padding: 0 4px; border-radius: 3px; }
-        .ez-pita-contoh a, .ez-pita-contoh button {
+        .ez-example-banner .ez-example-banner-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .ez-example-banner code { font-size: 11.5px; background: rgba(146,64,14,.08); padding: 0 4px; border-radius: 3px; }
+        .ez-example-banner a, .ez-example-banner button {
             color: #92400e;
             background: transparent;
             border: 1px solid #fcd34d;
@@ -1820,14 +1820,14 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
             text-decoration: none;
             white-space: nowrap;
         }
-        .ez-pita-contoh a:hover, .ez-pita-contoh button:hover { background: #fef3c7; }
-        @media print { .ez-pita-contoh { display: none; } }
+        .ez-example-banner a:hover, .ez-example-banner button:hover { background: #fef3c7; }
+        @media print { .ez-example-banner { display: none; } }
     </style>
-    <div class="ez-pita-contoh">
-        <span class="ez-pita-isi">
+    <div class="ez-example-banner">
+        <span class="ez-example-banner-body">
             <b>Mode contoh.</b>
             Silakan dicoba: isi, tanda tangani, lalu Simpan — tersimpan di <b>peramban ini saja</b>.
-            Dokumennya dibaca dari berkas <code>contoh/<?= h($contohSlug) ?>/</code>, database tidak disentuh
+            Dokumennya dibaca dari berkas <code>examples/<?= h($exampleSlug) ?>/</code>, database tidak disentuh
             dan OTP tidak dikirim.
         </span>
         <?php // Pintu ke PDF-nya ditaruh di sini, bukan di bagian Admin.
@@ -1837,18 +1837,18 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
         // yang benar untuk tombol yang hanya berlaku di mode contoh.
         // Tanpa `raw=1`: contoh tidak punya dokumen, jadi tidak ada artefak
         // beku yang perlu dilewati. Dilaporkan pemakai. ?>
-        <span class="ez-pita-aksi">
+        <span class="ez-example-banner-actions">
         <a href="<?= h($currentUrl) ?>&amp;view=pdf" target="_blank" rel="noopener">Lihat PDF</a>
         <?php // Yang tidak berhak merancang template tidak diberi tombol yang
         // pasti ditolak sisi server. Penjaganya tetap di sana; ini soal
         // tidak menawarkan pintu yang terkunci. ?>
         <?php if (!function_exists('ezdoc_can_manage_templates') || ezdoc_can_manage_templates()): ?>
-        <button type="button" id="ezContohJadiTemplate"
-                data-url="<?= h($__urlAksiContoh) ?>" data-contoh="<?= h($contohSlug) ?>"
-                data-nama="<?= h($__namaUsulContoh) ?>">Simpan jadi template</button>
+        <button type="button" id="ezExampleToTemplate"
+                data-url="<?= h($__urlAksiContoh) ?>" data-example="<?= h($exampleSlug) ?>"
+                data-nama="<?= h($__suggestedExampleName) ?>">Simpan jadi template</button>
         <?php endif; ?>
-        <button type="button" id="ezContohHapus">Hapus simpanan</button>
-        <a href="<?= h($__urlContoh) ?>">Penjelasan fiturnya →</a>
+        <button type="button" id="ezExampleClear">Hapus simpanan</button>
+        <a href="<?= h($__urlExample) ?>">Penjelasan fiturnya →</a>
         </span>
     </div>
     <script>
@@ -1859,13 +1859,13 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
         // disediakan untuk dibatalkan konsumen), jadi tombol, validasi, dan
         // umpan baliknya tetap yang asli. Menulis jalur simpan tiruan akan
         // menyimpang dari yang asli tanpa ada yang tahu kapan.
-        var KUNCI = 'ezdoc_contoh_<?= h($contohSlug) ?>';
+        var KUNCI = 'ezdoc_contoh_<?= h($exampleSlug) ?>';
 
         // Mode contoh tidak punya dokumen, jadi tidak ada URL verifikasi
         // sungguhan — dan tanpa itu QR tanda tangan cuma menulis "simpan dokumen
         // dulu". Dipakai alamat contoh supaya QR-nya tetap terlihat: yang ingin
         // ditunjukkan bentuk, tempat, dan ukurannya, bukan isinya.
-        window.EZDOC_CONTOH_VERIFY = <?= json_encode($dbFields['link_verifikasi'] ?? 'https://contoh.example/verifikasi/CONTOH') ?>;
+        window.EZDOC_EXAMPLE_VERIFY = <?= json_encode($dbFields['link_verifikasi'] ?? 'https://contoh.example/verifikasi/CONTOH') ?>;
         var ABAIKAN = { _ajax: 1, template_id: 1, _doc_id: 1, verify_url: 1 };
         // Slot tanda tangan dikenali dari daftarnya, bukan dari ada-tidaknya
         // elemen `ttd_<nama>`: field NAMA penanda tangan juga punya elemen
@@ -1966,7 +1966,7 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
             // menempel apa pun. Nama yang sudah dipakai ditolak server, jadi
             // tidak ada template orang lain yang bisa tertimpa dari sini.
             var ALAMAT_DESIGNER = <?= json_encode($__urlDesignerContoh) ?>;
-            var jadiTemplate = document.getElementById('ezContohJadiTemplate');
+            var jadiTemplate = document.getElementById('ezExampleToTemplate');
             var idTersimpan = 0;
             if (jadiTemplate) {
                 jadiTemplate.addEventListener('click', function () {
@@ -1978,8 +1978,8 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                     jadiTemplate.disabled = true;
                     var data = new FormData();
                     data.append('ajax', '1');
-                    data.append('action', 'save_contoh');
-                    data.append('contoh', jadiTemplate.dataset.contoh);
+                    data.append('action', 'save_example');
+                    data.append('example', jadiTemplate.dataset.example);
                     data.append('nama_template', jadiTemplate.dataset.nama);
                     fetch(jadiTemplate.dataset.url, { method: 'POST', body: data })
                         .then(function (r) { return r.json(); })
@@ -2000,7 +2000,7 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                 });
             }
 
-            var hapus = document.getElementById('ezContohHapus');
+            var hapus = document.getElementById('ezExampleClear');
             if (hapus) {
                 hapus.addEventListener('click', function () {
                     try { localStorage.removeItem(KUNCI); } catch (e) { /* peramban menolak */ }

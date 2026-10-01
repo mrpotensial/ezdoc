@@ -150,7 +150,7 @@ final class ChartSpecTest extends TestCase
                 'jangkauan',
             ],
             'jenis sumbu belum ada' => [
-                ['x' => ['kind' => 'kategori']] + ['panels' => [['series' => [['field' => 'a']]]]],
+                ['x' => ['kind' => 'category']] + ['panels' => [['series' => [['field' => 'a']]]]],
                 'belum didukung',
             ],
             'satuan sumbu tidak dikenal' => [

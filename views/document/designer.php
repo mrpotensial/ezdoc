@@ -93,16 +93,16 @@ $message = '';
 $messageType = '';
 
 // Contoh dari berkas: `?ezdoc_page=designer&action=edit&id=contoh` (atau
-// `id=contoh:<nama-folder>`).
+// `id=example:<nama-folder>`).
 //
 // Gunanya memastikan contohnya benar-benar nyambung: kalau markupnya salah,
 // yang pertama menunjukkannya adalah designer — panelnya kosong, atau
 // elemennya tidak terdeteksi. Templatenya dibaca dari berkas, dan Simpan
 // dialihkan ke peramban (lihat skrip mode contoh di bawah).
-$contohSlug = '';
+$exampleSlug = '';
 $__idMentah = isset($_GET['id']) && is_string($_GET['id']) ? $_GET['id'] : '';
-if (preg_match('/^contoh(?::([a-z0-9-]+))?$/', $__idMentah, $__mContoh) === 1) {
-    $contohSlug = ($__mContoh[1] ?? '') !== '' ? $__mContoh[1] : \Ezdoc\Template\Contoh::BAWAAN;
+if (preg_match('/^example(?::([a-z0-9-]+))?$/', $__idMentah, $__mExample) === 1) {
+    $exampleSlug = ($__mExample[1] ?? '') !== '' ? $__mExample[1] : \Ezdoc\Template\Example::DEFAULT_SLUG;
     $action = 'edit';
     $id = 0;
 }
@@ -180,10 +180,10 @@ $ezdocUrls = [
 // spec: ezdoc-spec/schemas/template.json
 // ═══════════════════════════════════════════════════════════════
 $template = null;
-if ($contohSlug !== '') {
+if ($exampleSlug !== '') {
     // Berkas, bukan baris database. Bentuknya sama dengan baris template, jadi
     // sisa halaman ini tidak perlu tahu contohnya datang dari mana.
-    $template = \Ezdoc\Template\Contoh::muat($contohSlug, $config);
+    $template = \Ezdoc\Template\Example::load($exampleSlug, $config);
     if ($template === null) {
         header("Location: " . $urlList);
         exit;
@@ -477,32 +477,32 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
                 // Dua gunanya: skrip halaman tahu ini contoh, dan kalau satu
                 // permintaan simpan lolos juga, penjaga di sisi server
                 // menolaknya karena nomor template tidak pernah berupa teks. ?>
-                <input type="hidden" id="templateId" value="<?= $contohSlug !== '' ? h('contoh:' . $contohSlug) : (int) ($template['id'] ?? 0) ?>">
+                <input type="hidden" id="templateId" value="<?= $exampleSlug !== '' ? h('example:' . $exampleSlug) : (int) ($template['id'] ?? 0) ?>">
 
-                <?php if ($contohSlug !== ''):
+                <?php if ($exampleSlug !== ''):
                     $__qk = (string) $config->get('app.query_key', 'ezdoc_page');
                     $__base = (string) $config->get('app.base_path', '');
                     $__join = (strpos($__base, '?') === false) ? '?' : '&';
-                    $__urlContohPenjelasan = $__base . $__join . $__qk . '=contoh';
-                    $__urlContohBuat = $__base . $__join . $__qk . '=generate&template_id=contoh:' . rawurlencode($contohSlug);
+                    $__urlExampleDoc = $__base . $__join . $__qk . '=example';
+                    $__urlExampleCreate = $__base . $__join . $__qk . '=generate&template_id=example:' . rawurlencode($exampleSlug);
                     $__urlContohEdit = $__base . $__join . $__qk . '=designer&action=edit&id=';
-                    $__namaUsulContoh = trim((string) preg_replace('/\s*\(contoh\)\s*$/iu', '', (string) ($template['nama_template'] ?? $contohSlug)));
+                    $__suggestedExampleName = trim((string) preg_replace('/\s*\(contoh\)\s*$/iu', '', (string) ($template['nama_template'] ?? $exampleSlug)));
                     ?>
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[12.5px] leading-snug text-amber-900">
                     <span class="flex-1 min-w-[280px]">
                         <b class="font-semibold">Mode contoh.</b>
                         Boleh diubah-ubah: Simpan menulis ke <b>peramban ini saja</b>, bukan jadi template.
-                        Sumbernya berkas <code class="rounded bg-amber-900/10 px-1"><?= h('contoh/' . $contohSlug . '/') ?></code>.
+                        Sumbernya berkas <code class="rounded bg-amber-900/10 px-1"><?= h('examples/' . $exampleSlug . '/') ?></code>.
                     </span>
                     <?php if (!function_exists('ezdoc_can_manage_templates') || ezdoc_can_manage_templates()): ?>
-                    <button type="button" id="ezContohJadiTemplate"
-                            data-nama="<?= h($__namaUsulContoh) ?>"
+                    <button type="button" id="ezExampleToTemplate"
+                            data-nama="<?= h($__suggestedExampleName) ?>"
                             class="rounded border border-amber-400 bg-white px-2 py-0.5 text-[11.5px] font-medium hover:bg-amber-100">Simpan jadi template</button>
                     <?php endif; ?>
-                    <button type="button" id="ezContohDesainerHapus"
+                    <button type="button" id="ezExampleDesignerClear"
                             class="rounded border border-amber-300 px-2 py-0.5 text-[11.5px] hover:bg-amber-100">Hapus draf</button>
-                    <a href="<?= h($__urlContohBuat) ?>" class="rounded border border-amber-300 px-2 py-0.5 text-[11.5px] hover:bg-amber-100">Buka di Buat dokumen</a>
-                    <a href="<?= h($__urlContohPenjelasan) ?>" class="rounded border border-amber-300 px-2 py-0.5 text-[11.5px] hover:bg-amber-100">Penjelasan fiturnya &rarr;</a>
+                    <a href="<?= h($__urlExampleCreate) ?>" class="rounded border border-amber-300 px-2 py-0.5 text-[11.5px] hover:bg-amber-100">Buka di Buat dokumen</a>
+                    <a href="<?= h($__urlExampleDoc) ?>" class="rounded border border-amber-300 px-2 py-0.5 text-[11.5px] hover:bg-amber-100">Penjelasan fiturnya &rarr;</a>
                 </div>
                 <?php endif; ?>
 
@@ -1537,7 +1537,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
     </script>
     <?php include __DIR__ . '/../_partials/designer_scripts.php'; ?>
 
-    <?php if ($contohSlug !== ''): ?>
+    <?php if ($exampleSlug !== ''): ?>
     <script>
     (function () {
         // ── Mode contoh di designer ──────────────────────────────────────
@@ -1551,7 +1551,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         // peramban. Draf terakhir dipulihkan DI SINI — sesudah nilai awal
         // halaman disiapkan, sebelum editor menyala dan sebelum panel dirender
         // — jadi tidak ada yang perlu dirender dua kali.
-        var KUNCI = 'ezdoc_contoh_designer_<?= h($contohSlug) ?>';
+        var KUNCI = 'ezdoc_example_designer_<?= h($exampleSlug) ?>';
 
         function kabar(teks) {
             // Ditunda satu putaran: halaman menulis "Cancelled" ke penanda yang
@@ -1611,7 +1611,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
         // (pemetikan elemen mengapung, pemeriksaan nama, catatan audit) tetap
         // berlaku. Menulis jalur simpan sendiri berarti dua jalur yang harus
         // sama selamanya.
-        var jadiTemplate = document.getElementById('ezContohJadiTemplate');
+        var jadiTemplate = document.getElementById('ezExampleToTemplate');
         if (jadiTemplate && typeof saveTemplate === 'function') {
             jadiTemplate.addEventListener('click', function () {
                 var isiId = document.getElementById('templateId');
@@ -1649,7 +1649,7 @@ $__ezdoc_isFragment = !empty($__ezdoc_fragment);
             });
         }
 
-        var hapus = document.getElementById('ezContohDesainerHapus');
+        var hapus = document.getElementById('ezExampleDesignerClear');
         if (hapus) {
             hapus.addEventListener('click', function () {
                 try { localStorage.removeItem(KUNCI); } catch (e) { /* tidak ada yang bisa dihapus */ }

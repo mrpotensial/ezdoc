@@ -42,7 +42,7 @@ ezdoc_require_manage_templates('Tidak berhak simpan template');
 // itu jadi 0 sepuluh baris di bawah — artinya "buat template baru", dan contoh
 // yang dicoba-coba orang mendarat sebagai template sungguhan.
 $__tidMentah = (string) ($_POST['template_id'] ?? '');
-if ($__tidMentah !== '' && strncmp($__tidMentah, 'contoh', 6) === 0) {
+if ($__tidMentah !== '' && strncmp($__tidMentah, 'example', 7) === 0) {
     ezdoc_respond_error(
         t('response.contoh_not_saveable', [], 'The example is not a template — it cannot be saved.'),
         400

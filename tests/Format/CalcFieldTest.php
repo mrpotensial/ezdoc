@@ -22,17 +22,17 @@ final class CalcFieldTest extends TestCase
 {
     public function testMenjumlahkanBeberapaField(): void
     {
-        self::assertSame('7', CalcField::hitung('a + b + c', ['a' => '3', 'b' => '2', 'c' => '2']));
+        self::assertSame('7', CalcField::compute('a + b + c', ['a' => '3', 'b' => '2', 'c' => '2']));
     }
 
     /** Bahasanya sama dengan rumus tabel: kurung, kali, bagi, kurang. */
     public function testBentukRumusLain(): void
     {
-        self::assertSame('10', CalcField::hitung('(a + b) * 2', ['a' => '3', 'b' => '2']));
-        self::assertSame('1.5', CalcField::hitung('a / b', ['a' => '3', 'b' => '2'], 1));
-        self::assertSame('1', CalcField::hitung('a - b', ['a' => '3', 'b' => '2']));
+        self::assertSame('10', CalcField::compute('(a + b) * 2', ['a' => '3', 'b' => '2']));
+        self::assertSame('1.5', CalcField::compute('a / b', ['a' => '3', 'b' => '2'], 1));
+        self::assertSame('1', CalcField::compute('a - b', ['a' => '3', 'b' => '2']));
         // Nama boleh ditulis berkurung seperti di rumus tabel.
-        self::assertSame('5', CalcField::hitung('{a} + {b}', ['a' => '3', 'b' => '2']));
+        self::assertSame('5', CalcField::compute('{a} + {b}', ['a' => '3', 'b' => '2']));
     }
 
     /**
@@ -44,8 +44,8 @@ final class CalcFieldTest extends TestCase
      */
     public function testYangKosongDihitungNol(): void
     {
-        self::assertSame('5', CalcField::hitung('a + b + c', ['a' => '3', 'b' => '2']));
-        self::assertSame('3', CalcField::hitung('a + b', ['a' => '3', 'b' => 'bukan angka']));
+        self::assertSame('5', CalcField::compute('a + b + c', ['a' => '3', 'b' => '2']));
+        self::assertSame('3', CalcField::compute('a + b', ['a' => '3', 'b' => 'bukan angka']));
     }
 
     /**
@@ -56,24 +56,24 @@ final class CalcFieldTest extends TestCase
      */
     public function testSemuaKosongBerartiKosong(): void
     {
-        self::assertNull(CalcField::hitung('a + b + c', []));
-        self::assertNull(CalcField::hitung('a + b', ['a' => '', 'b' => '   ']));
+        self::assertNull(CalcField::compute('a + b + c', []));
+        self::assertNull(CalcField::compute('a + b', ['a' => '', 'b' => '   ']));
     }
 
     /** Kotak centang bernilai satu, baik tersimpan sebagai '1' maupun 'Ya'. */
     public function testKotakCentangBernilaiSatu(): void
     {
-        self::assertSame('2', CalcField::hitung('x + y', ['x' => '1', 'y' => 'Ya']));
-        self::assertSame('1', CalcField::hitung('x + y', ['x' => 'true', 'y' => '']));
-        self::assertSame('1', CalcField::hitung('x + y', ['x' => true, 'y' => false]));
+        self::assertSame('2', CalcField::compute('x + y', ['x' => '1', 'y' => 'Ya']));
+        self::assertSame('1', CalcField::compute('x + y', ['x' => 'true', 'y' => '']));
+        self::assertSame('1', CalcField::compute('x + y', ['x' => true, 'y' => false]));
     }
 
     /** Desimal bisa diatur, dan dibatasi supaya tidak jadi angka tak terbaca. */
     public function testDesimalDiatur(): void
     {
-        self::assertSame('0.33', CalcField::hitung('a / b', ['a' => '1', 'b' => '3'], 2));
-        self::assertSame('0', CalcField::hitung('a / b', ['a' => '1', 'b' => '3']));
-        self::assertSame('0.333333', CalcField::hitung('a / b', ['a' => '1', 'b' => '3'], 99));
+        self::assertSame('0.33', CalcField::compute('a / b', ['a' => '1', 'b' => '3'], 2));
+        self::assertSame('0', CalcField::compute('a / b', ['a' => '1', 'b' => '3']));
+        self::assertSame('0.333333', CalcField::compute('a / b', ['a' => '1', 'b' => '3'], 99));
     }
 
     /**
@@ -84,15 +84,15 @@ final class CalcFieldTest extends TestCase
      */
     public function testRumusSalahTulisTidakMelempar(): void
     {
-        self::assertNull(CalcField::hitung('a + + *', ['a' => '3']));
-        self::assertNull(CalcField::hitung('', ['a' => '3']));
-        self::assertNull(CalcField::hitung('123 + 4', ['a' => '3']), 'tanpa rujukan field, tidak ada yang dihitung');
+        self::assertNull(CalcField::compute('a + + *', ['a' => '3']));
+        self::assertNull(CalcField::compute('', ['a' => '3']));
+        self::assertNull(CalcField::compute('123 + 4', ['a' => '3']), 'tanpa rujukan field, tidak ada yang dihitung');
     }
 
     /** Pembagian nol tidak menghasilkan angka, dan tidak melempar. */
     public function testPembagianNol(): void
     {
-        self::assertNull(CalcField::hitung('a / b', ['a' => '3', 'b' => '0']));
+        self::assertNull(CalcField::compute('a / b', ['a' => '3', 'b' => '0']));
     }
 
     /** Daftar rujukan dipakai sisi peramban untuk tahu isian mana yang diawasi. */

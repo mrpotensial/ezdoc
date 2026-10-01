@@ -112,7 +112,7 @@ hitung yang menjumlahkannya, dan satu blok bersyarat yang membaca hasilnya.
 Buka lewat **Example** → pilih "Lembar Skor Bishop (contoh)", atau langsung:
 
 ```
-?ezdoc_page=contoh&contoh=skor-bishop
-?ezdoc_page=generate&template_id=contoh:skor-bishop
-?ezdoc_page=designer&action=edit&id=contoh:skor-bishop
+?ezdoc_page=example&example=skor-bishop
+?ezdoc_page=generate&template_id=example:skor-bishop
+?ezdoc_page=designer&action=edit&id=example:skor-bishop
 ```

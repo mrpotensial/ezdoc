@@ -330,7 +330,7 @@ final class LocaleFollowsConfigTest extends TestCase
         $keluaran = (string) shell_exec(sprintf(
             '%s %s %s 2>&1',
             escapeshellarg(PHP_BINARY),
-            escapeshellarg(dirname(__DIR__) . '/fixtures/jalankan_locale.php'),
+            escapeshellarg(dirname(__DIR__) . '/fixtures/run_locale.php'),
             escapeshellarg(base64_encode((string) json_encode($setelan)))
         ));
 

@@ -301,7 +301,7 @@ final class ChartSpec
      * Satu-satunya jalan memakai sumbu selain waktu, dan sengaja lewat kode,
      * bukan lewat spesifikasi: bentuk sumbu berangka belum diputuskan, dan
      * spesifikasi tersimpan yang telanjur memakainya akan mengikat keputusan
-     * itu. Dipakai {@see \Ezdoc\Tests\Chart\PapanSumbuNilaiTest} untuk
+     * itu. Dipakai {@see \Ezdoc\Tests\Chart\ValueAxisBoardTest} untuk
      * membuktikan {@see XAxis} benar-benar muat untuk yang bukan waktu.
      */
     public function withAxis(XAxis $axis): self
@@ -673,7 +673,7 @@ final class ChartSpec
             if ($ke === null || $ke >= $bands[$i + 1]['from']) {
                 throw new ValidationException(
                     "Panel ke-{$position}: pita nilai bertumpang tindih di sekitar "
-                    . self::angka($bands[$i + 1]['from']) . '.'
+                    . self::formatNumber($bands[$i + 1]['from']) . '.'
                 );
             }
         }
@@ -682,7 +682,7 @@ final class ChartSpec
     }
 
     /** Angka untuk pesan galat, tanpa nol berlebih di belakang koma. */
-    private static function angka(float $value): string
+    private static function formatNumber(float $value): string
     {
         $teks = number_format($value, 2, '.', '');
 

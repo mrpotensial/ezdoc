@@ -346,7 +346,7 @@ Dan perhitungan yang sama harus dijalankan **dua kali**: sekali di PHP,
 sekali di peramban untuk lapisan pegangan. Selisih setengah kolom tidak pernah
 terbaca sebagai bug, cuma sebagai "grafiknya agak meleset".
 
-Penjagaannya sudah ada polanya: `tests/Chart/KoordinatPerambanTest.php`
+Penjagaannya sudah ada polanya: `tests/Chart/BrowserCoordinateTest.php`
 menjalankan `tests/js/chart-koordinat.js` dengan Node dan membandingkan
 hasilnya dengan PHP.
 
@@ -578,7 +578,7 @@ jam operasi mesin, jadwal perawatan.
 **Dikerjakan 1 Okt 2026**, dan ketiga bug yang ditemukan hanya muncul saat
 dicoba di peramban sungguhan — bukan satu pun terbaca dari kodenya:
 
-1. **`ezChartRapikan` membuang `x2`.** Ia menulis ulang tiap nilai jadi
+1. **`ezChartNormalise` membuang `x2`.** Ia menulis ulang tiap nilai jadi
    `{x, y}`. Rentang yang baru dibuat jadi titik tanpa nilai lalu dibuang
    server; rentang yang sudah ada kehilangan jam selesainya begitu ada yang
    menyentuh papan itu. Gambarnya tetap muncul, cuma isinya berbeda.

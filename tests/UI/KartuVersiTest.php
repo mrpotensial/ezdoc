@@ -49,7 +49,7 @@ final class KartuVersiTest extends TestCase
         exec(sprintf(
             '%s %s %s 2>&1',
             escapeshellarg(PHP_BINARY),
-            escapeshellarg(dirname(__DIR__) . '/fixtures/jalankan_daftar_versi.php'),
+            escapeshellarg(dirname(__DIR__) . '/fixtures/run_version_list.php'),
             escapeshellarg($denganTersembunyi ? 'dengan-tersembunyi' : '')
         ), $baris);
         $keluaran = trim(implode("\n", $baris));
@@ -334,7 +334,7 @@ final class KartuVersiTest extends TestCase
             $keluaran = (string) @shell_exec(sprintf(
                 '%s %s %s 2>&1',
                 escapeshellarg($node),
-                escapeshellarg(dirname(__DIR__) . '/js/kartu-versi.js'),
+                escapeshellarg(dirname(__DIR__) . '/js/version-card.js'),
                 escapeshellarg($js)
             ));
         } finally {

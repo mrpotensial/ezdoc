@@ -47,7 +47,7 @@ return [
     'app.author_roles' => $author_role_array ?? [],
 
     // ── Kop surat ──
-    // Dibaca contoh template (?ezdoc_page=contoh). Berkas contohnya sendiri
+    // Dibaca contoh template (?ezdoc_page=example). Berkas contohnya sendiri
     // netral — kop karangan — dan nilai di bawah inilah yang menggantikannya,
     // di layar maupun di template yang disimpan dari contoh itu. Jadi contoh
     // langsung terlihat seperti dokumen tempat ini, tanpa satu nama pun

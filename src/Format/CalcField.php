@@ -99,7 +99,7 @@ final class CalcField
                 if (preg_match('/data-decimals=["\'](\d+)["\']/', $atribut, $dm)) {
                     $desimal = (int) $dm[1];
                 }
-                $hasil = self::hitung($rumus, $nilai, $desimal);
+                $hasil = self::compute($rumus, $nilai, $desimal);
                 $nilai[$nama] = $hasil === null ? '' : $hasil;
             }
         }
@@ -113,7 +113,7 @@ final class CalcField
      *
      * @param array<string,mixed> $nilai peta nama field → nilainya
      */
-    public static function hitung(string $formula, array $nilai, int $desimal = 0): ?string
+    public static function compute(string $formula, array $nilai, int $desimal = 0): ?string
     {
         $formula = trim($formula);
         if ($formula === '') {

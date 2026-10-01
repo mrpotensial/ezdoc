@@ -394,14 +394,14 @@ final class BlobMaintenance
             'byte'     => (int) ($baris['byte'] ?? 0),
             'di_kolom' => $diKolom,
             'di_disk'  => $objek - $diKolom,
-            'berkas'   => $files === null ? -1 : $this->hitungBerkas($files->root()),
+            'berkas'   => $files === null ? -1 : $this->countFiles($files->root()),
             'inline'   => $inline,
             'dirujuk'  => count($this->referencedKeys()),
         ];
     }
 
     /** Berkas objek di bawah root, yang namanya kunci. -1 kalau foldernya tidak ada. */
-    private function hitungBerkas(string $root): int
+    private function countFiles(string $root): int
     {
         if (!is_dir($root)) {
             return -1;

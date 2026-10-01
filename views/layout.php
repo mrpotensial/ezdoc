@@ -180,13 +180,13 @@ $pageTitle = isset($title) && $title !== ''
                 // membuat template, jadi pintunya ikut hak itu — bukan hak admin.
                 $sudahAdaContoh = false;
                 foreach ($navItems as $item) {
-                    if (($item['page'] ?? '') === 'contoh') {
+                    if (($item['page'] ?? '') === 'example') {
                         $sudahAdaContoh = true;
                         break;
                     }
                 }
                 if (!$sudahAdaContoh && function_exists('ezdoc_can_manage_templates') && ezdoc_can_manage_templates()) {
-                    $navItems[] = ['label' => 'Example', 'page' => 'contoh'];
+                    $navItems[] = ['label' => 'Example', 'page' => 'example'];
                 }
                 $currentPage = '';
                 if (isset($_GET[$qk]) && is_string($_GET[$qk])) {

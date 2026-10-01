@@ -18,7 +18,7 @@ namespace Ezdoc\Chart;
  * kedua: bentuknya ditebak dari yang ada, lalu yang berikutnya tidak masuk.
  * Tempelan yang sekadar memanggil metodenya juga tidak membuktikan apa-apa,
  * karena tempelan bisa dibentuk mengikuti antarmuka apa pun. Karena itu
- * `PapanSumbuNilaiTest` menggambar papan dua panel sungguhan lewat kelas ini,
+ * `ValueAxisBoardTest` menggambar papan dua panel sungguhan lewat kelas ini,
  * ujung ke ujung. Kalau uji itu memaksa antarmukanya berubah, ketahuannya
  * sekarang — bukan sesudah delapan fase menumpuk di atasnya.
  *

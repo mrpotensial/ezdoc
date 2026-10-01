@@ -15,7 +15,7 @@ use PHPUnit\Framework\TestCase;
  * pemotongan per batch, dan bahwa tak satu pun tugasnya menulis ke basis data.
  *
  * Aksinya menjawab JSON lalu `exit`, jadi dijalankan di proses terpisah lewat
- * tests/fixtures/jalankan_admin_penyimpanan.php.
+ * tests/fixtures/run_storage_admin.php.
  */
 final class AdminStorageTest extends TestCase
 {
@@ -51,7 +51,7 @@ final class AdminStorageTest extends TestCase
         exec(sprintf(
             '%s %s %s %s %s %s %s %s 2>&1',
             escapeshellarg(PHP_BINARY),
-            escapeshellarg(dirname(__DIR__) . '/fixtures/jalankan_admin_penyimpanan.php'),
+            escapeshellarg(dirname(__DIR__) . '/fixtures/run_storage_admin.php'),
             escapeshellarg($peran),
             escapeshellarg($aksi),
             escapeshellarg($apply),

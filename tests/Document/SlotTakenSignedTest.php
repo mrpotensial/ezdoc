@@ -18,7 +18,7 @@ use PHPUnit\Framework\TestCase;
  * versi barunya.
  *
  * Dijalankan ujung ke ujung lewat dispatcher di proses terpisah —
- * tests/fixtures/jalankan_simpan.php — karena action-nya berakhir dengan `exit`.
+ * tests/fixtures/run_save.php — karena action-nya berakhir dengan `exit`.
  */
 final class SlotTakenSignedTest extends TestCase
 {
@@ -32,7 +32,7 @@ final class SlotTakenSignedTest extends TestCase
         $keluaran = (string) shell_exec(sprintf(
             '%s %s %s 2>&1',
             escapeshellarg(PHP_BINARY),
-            escapeshellarg(dirname(__DIR__) . '/fixtures/jalankan_simpan.php'),
+            escapeshellarg(dirname(__DIR__) . '/fixtures/run_save.php'),
             escapeshellarg($skenario)
         ));
 
