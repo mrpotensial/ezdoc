@@ -22,6 +22,13 @@ Tiga yang terakhir memakai kop puskesmas, pabrik, dan posyandu. Papan grafik
 bukan fitur rekam medis, dan contoh yang semuanya rumah sakit membuatnya
 terbaca begitu.
 
+Kolom kiri (`left`) ketujuhnya dipaskan ke tulisan yang benar-benar ada di
+situ, dan lebar yang dibebaskan dibagi ke kolom-kolomnya. Semula ketujuhnya
+menyalin `left` dari partograf — yang judul panelnya mendatar dan panjang —
+padahal di sini judulnya berdiri dan cuma memakai 45 px. Sisanya 40–77 px
+kosong di kiri, dan papannya menyempit sebanyak itu. `left` adalah angka yang
+diketik, dan tidak ada yang membandingkannya dengan isi kolom itu.
+
 Uji `KopContohTest::testBerkasContohTetapNetral` ikut dilonggarkan: yang
 diperiksa sekarang kata "CONTOH" di nama kopnya, bukan satu nama tertentu.
 Maksud penjaganya tetap sama — nama organisasi sungguhan ditolak — tapi
