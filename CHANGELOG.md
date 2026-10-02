@@ -6,6 +6,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Changed — pemilih contoh dikelompokkan (2026-10-02)**
+
+Empat belas nama dalam satu daftar datar memaksa yang mencari membaca
+semuanya. Sekarang `<optgroup>` menurut dua hal yang membedakan isinya:
+
+- Papan grafik — rumah sakit (6)
+- Papan grafik — di luar rumah sakit (3)
+- Formulir & skor — rumah sakit (5)
+
+Penggolongannya dihitung dari berkasnya sendiri lewat `Example::catalogue()`
+— ada tidaknya `chart-placeholder` di templatenya, dan `doc_scope`-nya —
+bukan ditulis di manifes. Contoh yang ditambahkan nanti ikut tergolong tanpa
+ada yang perlu ingat menandainya, dan golongan yang kosong tidak dicetak.
+
+**Fixed — pemilih contoh menunjuk halaman yang sudah tidak ada (2026-10-02)**
+
+Satu baris tertinggal saat `?ezdoc_page=contoh` diganti jadi `=example`:
+alamat di pemilihnya masih `=contoh&example=`. Memilih contoh lain
+menghasilkan 404. Ketahuan saat pemilihnya dikelompokkan, bukan oleh uji —
+jadi ujinya ikut ditambah: alamat tiap pilihan harus memakai kunci halaman
+yang benar-benar terdaftar di router.
+
+
 **Added — tujuh berkas contoh berpapan grafik, tiga di antaranya di luar rumah sakit (2026-10-01)**
 
 | Folder | Sumbu | Yang ditunjukkan |

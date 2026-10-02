@@ -47,6 +47,29 @@ final class Example
     public static function all(): array
     {
         $keluar = [];
+        foreach (self::catalogue() as $slug => $satu) {
+            $keluar[$slug] = $satu['name'];
+        }
+
+        return $keluar;
+    }
+
+    /**
+     * Semua contoh beserta penggolongannya.
+     *
+     * Dua penanda, karena dua itu yang membedakan isinya saat dicari: apakah
+     * ia memakai papan grafik, dan apakah ia dokumen pasien. Daftar empat
+     * belas nama tanpa pengelompokan memaksa yang mencari membaca semuanya.
+     *
+     * Penggolongannya dihitung dari berkasnya sendiri, bukan diketik di
+     * manifes: contoh yang ditambahkan nanti ikut tergolong tanpa ada yang
+     * perlu ingat menandainya.
+     *
+     * @return array<string,array{name: string, scope: string, has_chart: bool}>
+     */
+    public static function catalogue(): array
+    {
+        $keluar = [];
         $dasar = self::root();
         if (!is_dir($dasar)) {
             return $keluar;
@@ -55,10 +78,16 @@ final class Example
             if (!is_string($nama) || $nama === '.' || $nama === '..') {
                 continue;
             }
-            $muat = self::load($nama);  // tanpa config: yang dipakai cuma namanya
-            if ($muat !== null) {
-                $keluar[$nama] = (string) $muat['nama_template'];
+            $muat = self::load($nama);  // tanpa config: kopnya tidak dipakai di sini
+            if ($muat === null) {
+                continue;
             }
+
+            $keluar[$nama] = [
+                'name' => (string) $muat['nama_template'],
+                'scope' => (string) $muat['doc_scope'],
+                'has_chart' => strpos((string) $muat['template_html'], 'chart-placeholder') !== false,
+            ];
         }
 
         return $keluar;

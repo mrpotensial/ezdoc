@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ezdoc\Tests\UI;
 
+use Ezdoc\Template\Example;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -322,6 +323,64 @@ final class ExampleConversionTest extends TestCase
         $layout = (string) file_get_contents(self::akar() . '/views/layout.php');
         self::assertStringContainsString("'page' => 'example'", $layout, 'halaman contoh tidak punya pintu di menu');
         self::assertStringContainsString('ezdoc_can_manage_templates()', $layout, 'pintu menu harus ikut hak kelola template');
+    }
+
+    /**
+     * Pemilih contoh dikelompokkan, dan tiap contoh muncul tepat sekali.
+     *
+     * Empat belas nama dalam satu daftar datar memaksa yang mencari membaca
+     * semuanya. Yang dijaga di sini bukan ada-tidaknya `<optgroup>` saja —
+     * melainkan bahwa pengelompokannya tidak menjatuhkan atau menggandakan
+     * satu pun contoh. Golongan yang salah masih terbaca; contoh yang hilang
+     * dari daftar tidak bisa dibuka sama sekali.
+     */
+    public function testPemilihContohDikelompokkan(): void
+    {
+        $halaman = self::halaman();
+
+        self::assertGreaterThanOrEqual(
+            2,
+            substr_count($halaman, '<optgroup label="'),
+            'pemilihnya masih daftar datar'
+        );
+
+        $daftar = Example::all();
+        foreach ($daftar as $slug => $nama) {
+            self::assertSame(
+                1,
+                substr_count($halaman, 'example=' . rawurlencode($slug) . '"'),
+                $slug . ': tidak muncul tepat sekali di pemilih'
+            );
+        }
+
+        // Alamat pilihannya harus menunjuk halaman yang benar-benar terdaftar
+        // di router. Kunci halaman yang salah tidak kelihatan rusak di layar;
+        // ia baru ketahuan saat ada yang memilih sesuatu dan mendapat 404.
+        self::assertStringNotContainsString(
+            '=contoh&',
+            $halaman,
+            'pemilihnya masih memakai kunci halaman lama'
+        );
+        // Alamatnya di-escape saat dicetak, jadi `&` muncul sebagai `&amp;`.
+        self::assertStringContainsString('=example&amp;example=', $halaman);
+    }
+
+    /** Golongan yang tidak ada isinya tidak dicetak. */
+    public function testGolonganKosongTidakDicetak(): void
+    {
+        $halaman = self::halaman();
+
+        if (preg_match_all('/<optgroup label="([^"]*)">(.*?)<\/optgroup>/s', $halaman, $m) === 0) {
+            self::fail('tidak ada golongan sama sekali');
+        }
+
+        foreach ($m[2] as $i => $isi) {
+            self::assertStringContainsString(
+                '<option',
+                $isi,
+                'golongan "' . $m[1][$i] . '" dicetak tanpa isi'
+            );
+        }
     }
 
     /** Contohnya berkas, bukan baris database. */

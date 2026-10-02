@@ -111,6 +111,22 @@ if (isset($configTampil['logos']) && is_array($configTampil['logos'])) {
 $configTeks = json_encode($configTampil, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
 $daftarContoh = \Ezdoc\Template\Example::all();
+
+// Empat belas nama dalam satu daftar datar memaksa yang mencari membaca
+// semuanya. Dikelompokkan menurut dua hal yang membedakan isinya: pakai papan
+// grafik atau tidak, dan dokumen pasien atau bukan. Kelompok yang kosong tidak
+// dicetak, jadi contoh yang ditambahkan nanti tidak perlu menyentuh ini.
+$kelompokContoh = [
+    'papan-pasien' => ['label' => 'Papan grafik — rumah sakit', 'isi' => []],
+    'papan-umum'   => ['label' => 'Papan grafik — di luar rumah sakit', 'isi' => []],
+    'biasa-pasien' => ['label' => 'Formulir & skor — rumah sakit', 'isi' => []],
+    'biasa-umum'   => ['label' => 'Formulir & skor — umum', 'isi' => []],
+];
+foreach (\Ezdoc\Template\Example::catalogue() as $slugItem => $satuContoh) {
+    $kunciKelompok = ($satuContoh['has_chart'] ? 'papan' : 'biasa')
+        . ($satuContoh['scope'] === 'patient' ? '-pasien' : '-umum');
+    $kelompokContoh[$kunciKelompok]['isi'][$slugItem] = $satuContoh['name'];
+}
 // Tidak semua contoh lahir dari selembar kertas. Yang memperagakan satu fitur
 // tidak punya dokumen asal — dan panel "Dokumen asal" yang kosong lebih
 // membingungkan daripada tidak ada.
@@ -200,9 +216,14 @@ $ringkasan .= "\n## Config halaman (config_header)\n\n```json\n" . $configTeks .
                 <?php if (count($daftarContoh) > 1): ?>
                     <select onchange="location.href=this.value"
                             class="rounded border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-700">
-                        <?php foreach ($daftarContoh as $slug => $nama):
-                            $u = $base . $join . $qk . '=contoh&example=' . rawurlencode($slug); ?>
-                            <option value="<?= h($u) ?>" <?= $slug === $contoh['slug'] ? 'selected' : '' ?>><?= h($nama) ?></option>
+                        <?php foreach ($kelompokContoh as $satuKelompok): ?>
+                            <?php if ($satuKelompok['isi'] === []) { continue; } ?>
+                            <optgroup label="<?= h($satuKelompok['label']) ?>">
+                                <?php foreach ($satuKelompok['isi'] as $slugPilihan => $namaPilihan):
+                                    $u = $base . $join . $qk . '=example&example=' . rawurlencode($slugPilihan); ?>
+                                    <option value="<?= h($u) ?>" <?= $slugPilihan === $contoh['slug'] ? 'selected' : '' ?>><?= h($namaPilihan) ?></option>
+                                <?php endforeach; ?>
+                            </optgroup>
                         <?php endforeach; ?>
                     </select>
                 <?php endif; ?>
