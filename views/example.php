@@ -51,7 +51,7 @@ if ($contoh === null) {
 
 $templateHtml = (string) $contoh['template_html'];
 $peta = $contoh['feature_map'];
-$nilai = $contoh['nilai'];
+$nilai = $contoh['sample_values'];
 $configHeader = json_decode((string) $contoh['config_header'], true);
 if (!is_array($configHeader)) {
     $configHeader = [];
@@ -130,8 +130,8 @@ foreach (\Ezdoc\Template\Example::catalogue() as $slugItem => $satuContoh) {
 // Tidak semua contoh lahir dari selembar kertas. Yang memperagakan satu fitur
 // tidak punya dokumen asal — dan panel "Dokumen asal" yang kosong lebih
 // membingungkan daripada tidak ada.
-$gambarUri = ($contoh['gambar'] !== '' && is_file($contoh['gambar']))
-    ? 'data:image/jpeg;base64,' . base64_encode((string) file_get_contents($contoh['gambar']))
+$gambarUri = ($contoh['source_image'] !== '' && is_file($contoh['source_image']))
+    ? 'data:image/jpeg;base64,' . base64_encode((string) file_get_contents($contoh['source_image']))
     : '';
 
 // Tautan ke halaman pembuatan dokumen, memakai contoh yang sama.

@@ -26,7 +26,7 @@ final class ExampleLoaderTest extends TestCase
         self::assertSame(Example::DEFAULT_SLUG, $contoh['slug']);
         self::assertNotSame('', (string) $contoh['nama_template']);
         self::assertStringContainsString('ttd-placeholder', (string) $contoh['template_html']);
-        self::assertNotEmpty($contoh['nilai']);
+        self::assertNotEmpty($contoh['sample_values']);
         self::assertNotEmpty($contoh['feature_map']);
     }
 
@@ -85,7 +85,7 @@ final class ExampleLoaderTest extends TestCase
     {
         $contoh = Example::load();
 
-        self::assertNotSame('', (string) $contoh['gambar']);
-        self::assertFileExists((string) $contoh['gambar']);
+        self::assertNotSame('', (string) $contoh['source_image']);
+        self::assertFileExists((string) $contoh['source_image']);
     }
 }

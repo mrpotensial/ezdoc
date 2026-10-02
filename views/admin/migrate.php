@@ -715,7 +715,7 @@ if ($rs) {
                             <span class="h-1.5 w-1.5 shrink-0 rounded-full <?= $titik ?>" aria-hidden="true"></span>
                             <?= htmlspecialchars($a['nama'], ENT_QUOTES, 'UTF-8') ?>
                         </span>
-                        <span class="min-w-0 flex-1 break-all font-mono text-xs text-gray-900"><?= htmlspecialchars($a['nilai'], ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="min-w-0 flex-1 break-all font-mono text-xs text-gray-900"><?= htmlspecialchars($a['value'], ENT_QUOTES, 'UTF-8') ?></span>
                         <?php if ($a['catatan'] !== ''): ?>
                             <span class="flex-1 text-xs <?= $a['status'] === 'ok' ? 'text-gray-500' : 'text-gray-700' ?>"><?= htmlspecialchars($a['catatan'], ENT_QUOTES, 'UTF-8') ?></span>
                         <?php endif; ?>
@@ -812,15 +812,15 @@ if ($rs) {
             </div>
             <ul class="divide-y divide-gray-100">
                 <?php foreach ($setelanAktif as $baris): ?>
-                    <?php $bawaan = strpos($baris['asal'], 'Library default') === 0 || strpos($baris['asal'], 'Not set') === 0; ?>
+                    <?php $bawaan = strpos($baris['source'], 'Library default') === 0 || strpos($baris['source'], 'Not set') === 0; ?>
                     <li class="px-5 py-3 sm:flex sm:items-baseline sm:gap-4">
                         <span class="block w-56 shrink-0 text-sm text-gray-500"><?= htmlspecialchars($baris['label'], ENT_QUOTES, 'UTF-8') ?></span>
                         <span class="block min-w-0 flex-1">
-                            <span class="block break-words text-sm font-medium text-gray-900"><?= htmlspecialchars($baris['nilai'], ENT_QUOTES, 'UTF-8') ?></span>
-                            <span class="mt-0.5 block text-xs text-gray-500"><?= htmlspecialchars($baris['arti'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <span class="block break-words text-sm font-medium text-gray-900"><?= htmlspecialchars($baris['value'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <span class="mt-0.5 block text-xs text-gray-500"><?= htmlspecialchars($baris['meaning'], ENT_QUOTES, 'UTF-8') ?></span>
                         </span>
                         <span class="mt-1 block shrink-0 text-xs sm:mt-0 <?= $bawaan ? 'text-amber-700' : 'text-gray-400' ?>">
-                            <?= htmlspecialchars($baris['asal'], ENT_QUOTES, 'UTF-8') ?>
+                            <?= htmlspecialchars($baris['source'], ENT_QUOTES, 'UTF-8') ?>
                         </span>
                     </li>
                 <?php endforeach; ?>

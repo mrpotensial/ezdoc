@@ -392,7 +392,7 @@ $GLOBALS['dbTtd']    = $dbTtd;
 if ($exampleSlug !== '') {
     // Nilai contoh dari berkas. Tanpa ini halamannya tampil kosong, dan contoh
     // yang kosong tidak menunjukkan apa pun tentang hasilnya.
-    $dbFields = is_array($template['nilai'] ?? null) ? $template['nilai'] : [];
+    $dbFields = is_array($template['sample_values'] ?? null) ? $template['sample_values'] : [];
     $GLOBALS['dbFields'] = $dbFields;
 }
 $isEditMode = false;

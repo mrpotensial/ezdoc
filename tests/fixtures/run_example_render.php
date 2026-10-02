@@ -33,7 +33,7 @@ $GLOBALS['ezdocTableRowsReady'] = $contoh['table_rows'];
 echo ezdoc_document_pdf_html([
     'template'   => $contoh,
     'doc_id'     => 0,
-    'fields'     => $contoh['nilai'],
+    'fields'     => $contoh['sample_values'],
     'ttd_values' => [],
     'conn'       => null,
 ]);

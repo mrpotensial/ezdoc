@@ -238,9 +238,9 @@ final class DiagnosticsTest extends TestCase
     {
         $setelan = $this->setelan(['app.locale' => 'id']);
 
-        self::assertSame('Bahasa Indonesia', $setelan['Interface language']['nilai']);
-        self::assertStringNotContainsString('app.locale', $setelan['Interface language']['nilai']);
-        self::assertNotSame('', $setelan['Interface language']['arti'], 'tiap baris menjelaskan dirinya');
+        self::assertSame('Bahasa Indonesia', $setelan['Interface language']['value']);
+        self::assertStringNotContainsString('app.locale', $setelan['Interface language']['value']);
+        self::assertNotSame('', $setelan['Interface language']['meaning'], 'tiap baris menjelaskan dirinya');
     }
 
     /**
@@ -253,9 +253,9 @@ final class DiagnosticsTest extends TestCase
     {
         $setelan = $this->setelan([]);
 
-        self::assertSame('Library default', $setelan['Interface language']['asal']);
-        self::assertSame('English', $setelan['Interface language']['nilai']);
-        self::assertSame('Config file', $this->setelan(['app.locale' => 'en'])['Interface language']['asal']);
+        self::assertSame('Library default', $setelan['Interface language']['source']);
+        self::assertSame('English', $setelan['Interface language']['value']);
+        self::assertSame('Config file', $this->setelan(['app.locale' => 'en'])['Interface language']['source']);
     }
 
     /** Bahasa dokumen yang kosong berarti ikut tampilan — dan itu dikatakan. */
@@ -263,12 +263,12 @@ final class DiagnosticsTest extends TestCase
     {
         $setelan = $this->setelan(['app.locale' => 'id']);
 
-        self::assertStringContainsString('follows the interface', $setelan['Document language']['nilai']);
-        self::assertStringContainsString('follows the interface language', $setelan['Document language']['asal']);
+        self::assertStringContainsString('follows the interface', $setelan['Document language']['value']);
+        self::assertStringContainsString('follows the interface language', $setelan['Document language']['source']);
 
         $lain = $this->setelan(['app.locale' => 'en', 'document.locale' => 'id']);
-        self::assertSame('Bahasa Indonesia', $lain['Document language']['nilai']);
-        self::assertSame('Config file', $lain['Document language']['asal']);
+        self::assertSame('Bahasa Indonesia', $lain['Document language']['value']);
+        self::assertSame('Config file', $lain['Document language']['source']);
     }
 
     /** Tempat penyimpanan dijelaskan akibatnya, bukan nama modenya. */
@@ -276,8 +276,8 @@ final class DiagnosticsTest extends TestCase
     {
         $baris = $this->setelan([])['Where images are kept'];
 
-        self::assertContains($baris['nilai'], ['Database only', 'Database and files', 'Files only']);
-        self::assertStringContainsString('Signature images', $baris['arti']);
+        self::assertContains($baris['value'], ['Database only', 'Database and files', 'Files only']);
+        self::assertStringContainsString('Signature images', $baris['meaning']);
     }
     // ── Hak akses template ───────────────────────────────────────────────
 

@@ -10,7 +10,7 @@ use Ezdoc\UI\Config;
  * Contoh template yang hidup sebagai BERKAS, bukan baris database.
  *
  * Dipakai dua tempat: halaman contoh (`?ezdoc_page=example`) yang membedahnya,
- * dan halaman pembuatan dokumen (`?ezdoc_page=generate&template_id=contoh`)
+ * dan halaman pembuatan dokumen (`?ezdoc_page=generate&template_id=example`)
  * yang menampilkannya sebagai dokumen sungguhan — baca saja.
  *
  * Satu pemuat untuk keduanya, karena contoh yang berbeda di dua halaman lebih
@@ -98,7 +98,7 @@ final class Example
      * berkasnya tidak lengkap — pemanggil yang memutuskan apa artinya.
      *
      * Kop suratnya dipasang dari konfigurasi aplikasi pemakai kalau ada
-     * ({@see pasangKop()}). Berkas contohnya sendiri tetap netral.
+     * ({@see applyLetterhead()}). Berkas contohnya sendiri tetap netral.
      *
      * @return array<string,mixed>|null
      */
@@ -171,8 +171,8 @@ final class Example
             // ── Tambahan khusus contoh ──
             'slug' => $slug,
             'dir' => $dir,
-            'gambar' => $gambar,
-            'nilai' => isset($data['sample_values']) && is_array($data['sample_values']) ? $data['sample_values'] : [],
+            'source_image' => $gambar,
+            'sample_values' => isset($data['sample_values']) && is_array($data['sample_values']) ? $data['sample_values'] : [],
             // Baris siap-pakai untuk tabel kueri. Contohnya harus terlihat
             // TERISI, sementara tidak satu pun kueri boleh berjalan — kueri
             // yang di config tetap ada supaya bisa dibaca dan disalin.
