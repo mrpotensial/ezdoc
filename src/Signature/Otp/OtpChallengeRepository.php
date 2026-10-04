@@ -416,9 +416,11 @@ final class OtpChallengeRepository
      * `provider_meta.signer_ref` saat pindaian — misalnya akun portalnya.
      * Pustaka tidak menafsirkannya.
      *
-     * Disaring LIKE dulu, lalu dicocokkan persis di PHP. Fungsi JSON di SQL
-     * berbeda di tiap mesin basis data, dan LIKE saja bisa cocok sebagian:
-     * "akun:12" ikut menemukan "akun:123".
+     * Disaring LIKE dulu, lalu dicocokkan persis di PHP — fungsi JSON di SQL
+     * berbeda di tiap mesin basis data. Jarumnya menyertakan tanda kutip
+     * penutup, jadi "akun:12" tidak menemukan "akun:123". Pencocokan di PHP
+     * untuk yang tidak bisa dibedakan LIKE: kunci yang sama di dalam objek
+     * bersarang (`{"x":{"signer_ref":"akun:12"}}`) bukan pemiliknya.
      *
      * @return list<array<string,mixed>> `provider_meta` sudah berupa larik.
      */

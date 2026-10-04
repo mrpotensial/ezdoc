@@ -272,6 +272,39 @@ final class ScanSignerSideTest extends TestCase
         self::assertCount(1, $this->repo->findBySignerRef('akun_1'));
     }
 
+    /**
+     * Karakter escape-nya sendiri juga harus di-escape.
+     *
+     * Kesalahan escape lain tertutupi pencocokan persis di PHP — ia cuma
+     * menyaring yang kebanyakan. Yang tidak bisa ditutupi adalah yang HILANG:
+     * tanpa escape, "akun!1" dibaca LIKE sebagai "akun1" dan tidak pernah ketemu.
+     */
+    public function testTheEscapeCharacterItselfIsLiteral(): void
+    {
+        $token = $this->service->issue(7, 'ttd1', 42)['scan_token'];
+        $this->service->fulfil($token, self::PHONE, 'pesan', ['signer_ref' => 'akun!1']);
+
+        self::assertCount(1, $this->repo->findBySignerRef('akun!1'));
+    }
+
+    /** Kunci yang sama di dalam objek bersarang bukan pemiliknya. */
+    public function testANestedSignerRefIsNotAMatch(): void
+    {
+        $token = $this->service->issue(7, 'ttd1', 42)['scan_token'];
+        $this->service->fulfil($token, self::PHONE, 'pesan', ['extra' => ['signer_ref' => 'akun:12']]);
+
+        self::assertSame([], $this->repo->findBySignerRef('akun:12'));
+    }
+
+    /** `route` bersarang tidak membuat QR di layar ikut tertunda di aplikasi. */
+    public function testANestedRouteIsNotPending(): void
+    {
+        $this->document(42, 'RM-001');
+        $this->service->issue(7, 'ttd1', 42, null, ['extra' => ['route' => 'app']]);
+
+        self::assertSame([], $this->repo->findPendingForSubject('patient', 'RM-001', 'app'));
+    }
+
     public function testHistoryIsNewestFirstAndLimited(): void
     {
         foreach (['ttd1', 'ttd2', 'ttd3'] as $slot) {

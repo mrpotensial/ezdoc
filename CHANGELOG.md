@@ -24,7 +24,8 @@ tanpa mengubah perilaku pemanggil lama sedikit pun.
 - `ezdoc_scan_context()` ikut mengembalikan `seconds_left` dan `route`.
 - `ezdoc_scan_history($signerRef)`, `ezdoc_scan_pending($subjectType, $subjectId)`,
   `ezdoc_subject_documents(...)` untuk halaman penanda tangan. Riwayat disaring
-  LIKE lalu dicocokkan persis ("akun:12" tidak menemukan "akun:123"); QR di
+  LIKE (jarumnya menyertakan kutip penutup, jadi "akun:12" tidak menemukan
+  "akun:123") lalu dicocokkan persis untuk kunci bersarang; QR di
   layar petugas TIDAK pernah muncul sebagai permintaan tertunda.
 - Layar petugas: tombol "Kirim ke aplikasi penanda tangan" di samping
   "Tampilkan QR", hanya digambar kalau aplikasi pemakai mendefinisikan
