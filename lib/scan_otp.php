@@ -55,10 +55,14 @@ define('EZDOC_SCAN_OTP_LOADED', true);
  * dan nomor kunjungan sudah cukup untuk mengenali — dan ponsel bisa dilihat
  * orang lain.
  *
+ * `seconds_left` dan `route` dipakai halaman penanda tangan: yang pertama
+ * untuk hitung mundur sebelum menekan setuju, yang kedua untuk membedakan QR di
+ * layar petugas (`scan`) dari permintaan yang dikirim ke aplikasinya (`app`).
+ *
  * @return array{
  *     status: string, document_name?: string, signer_name?: string,
  *     context_id?: string, subject_id?: string, label?: string,
- *     ttd_label?: string, created_at?: string
+ *     ttd_label?: string, created_at?: string, seconds_left?: int, route?: string
  * }
  */
 function ezdoc_scan_context(string $scanToken): array
@@ -77,7 +81,14 @@ function ezdoc_scan_context(string $scanToken): array
     }
 
     $challenge = $resolved['challenge'];
-    $out = ['status' => 'ok'];
+    $meta = json_decode((string) ($challenge['provider_meta'] ?? ''), true);
+    $out = [
+        'status'       => 'ok',
+        'seconds_left' => $service->secondsLeft($challenge),
+        'route'        => is_array($meta) && isset($meta['route'])
+            ? (string) $meta['route']
+            : \Ezdoc\Signature\Otp\ScanOtpService::ROUTE_SCAN,
+    ];
 
     try {
         $db = \Ezdoc\Context::default()->connection();
@@ -186,15 +197,21 @@ function ezdoc_scan_signer_name(string $fieldValuesJson, string $namaField, stri
  * "apa yang diberitahukan kepadanya saat itu" — dan merangkainya ulang nanti
  * tidak menjawab itu.
  *
+ * `$meta` digabung ke `provider_meta` — kanal yang dipakai (`channel`) dan
+ * pengenal penanda tangan di aplikasi pemakai (`signer_ref`), kalau ada. Yang
+ * kedua yang membuat {@see ezdoc_scan_history()} bisa menjawab "apa saja yang
+ * pernah saya tanda tangani".
+ *
  * Tidak pernah melempar, dengan alasan yang sama seperti di atas.
  *
+ * @param array<string,mixed> $meta
  * @return array{ok: bool, code?: string, ttl_seconds?: int, reason?: string}
  */
-function ezdoc_scan_fulfil(string $scanToken, string $phone, string $consentMessage): array
+function ezdoc_scan_fulfil(string $scanToken, string $phone, string $consentMessage, array $meta = []): array
 {
     try {
         $result = (new \Ezdoc\Signature\Otp\ScanOtpService())
-            ->fulfil($scanToken, $phone, $consentMessage);
+            ->fulfil($scanToken, $phone, $consentMessage, $meta);
     } catch (\Throwable $e) {
         @error_log('[ezdoc:scan:fulfil] ' . $e->getMessage());
 
@@ -204,15 +221,277 @@ function ezdoc_scan_fulfil(string $scanToken, string $phone, string $consentMess
     if (!empty($result['ok'])) {
         // Nomornya disamarkan di catatan audit. Baris yang menyebut nomor
         // lengkap setiap orang yang pernah memindai akan berubah jadi buku
-        // alamat.
+        // alamat. Pengenal penanda tangan juga tidak ikut, dengan alasan sama.
+        $audit = ['masked_phone' => \Ezdoc\Signature\Otp\OtpService::maskPhone($phone)];
+        if (isset($meta['channel']) && is_string($meta['channel'])) {
+            $audit['channel'] = $meta['channel'];
+        }
+
         ezdoc_audit_log('otp.scan_fulfilled', [
             'target_type' => 'otp_challenge',
             'target_id'   => substr($scanToken, 0, 12),
-            'metadata'    => [
-                'masked_phone' => \Ezdoc\Signature\Otp\OtpService::maskPhone($phone),
-            ],
+            'metadata'    => $audit,
         ]);
     }
 
     return $result;
+}
+
+/**
+ * Sampai mana sebuah token, untuk layar tunggu penanda tangan.
+ *
+ * Penanda tangan yang sudah membacakan kodenya perlu tahu apakah petugas sudah
+ * memasukkannya — tanpa harus bertanya. Lihat
+ * {@see \Ezdoc\Signature\Otp\ScanOtpService::progress()} untuk arti tiap status.
+ *
+ * Mengetahui token sudah cukup sebagai hak membaca: tokennya sekali pakai,
+ * acak, dan yang dikembalikan cuma satu kata.
+ *
+ * @return array{status: string}
+ */
+function ezdoc_scan_progress(string $scanToken): array
+{
+    try {
+        return ['status' => (new \Ezdoc\Signature\Otp\ScanOtpService())->progress($scanToken)];
+    } catch (\Throwable $e) {
+        @error_log('[ezdoc:scan:progress] ' . $e->getMessage());
+
+        return ['status' => 'error'];
+    }
+}
+
+/**
+ * Riwayat penandatanganan satu penanda tangan, terbaru dulu.
+ *
+ * `$signerRef` adalah pengenal yang dikirim aplikasi pemakai lewat
+ * `ezdoc_scan_fulfil(..., ['signer_ref' => ...])`. Pustaka tidak menafsirkannya;
+ * aplikasi pemakai yang menjamin bahwa yang bertanya memang pemilik pengenal itu.
+ *
+ * Dokumen yang sudah dihapus tidak ikut — catatannya masih ada untuk petugas,
+ * tapi bagi penanda tangan dokumen itu memang tidak ada lagi.
+ *
+ * Tidak pernah melempar: daftar kosong lebih baik daripada halaman yang mati.
+ *
+ * @return list<array{
+ *     document_name: string, ttd_label: string, context_id: string,
+ *     scanned_at: string, status: string, channel: string, public_slug: string
+ * }>
+ */
+function ezdoc_scan_history(string $signerRef, int $limit = 30): array
+{
+    try {
+        $repo = new \Ezdoc\Signature\Otp\OtpChallengeRepository(\Ezdoc\Context::default()->connection());
+        $rows = $repo->findBySignerRef($signerRef, $limit);
+        $service = new \Ezdoc\Signature\Otp\ScanOtpService($repo);
+
+        $out = [];
+        foreach (ezdoc_scan_describe($rows) as $item) {
+            if ($item['deleted']) {
+                continue;
+            }
+
+            $row = $item['row'];
+            $meta = is_array($row['provider_meta'] ?? null) ? $row['provider_meta'] : [];
+            $out[] = [
+                'document_name' => $item['document_name'],
+                'ttd_label'     => $item['ttd_label'],
+                'context_id'    => $item['context_id'],
+                'scanned_at'    => (string) ($row['scanned_at'] ?? ''),
+                'status'        => $service->progressOf($row),
+                'channel'       => isset($meta['channel']) ? (string) $meta['channel'] : '',
+                'public_slug'   => $item['public_slug'],
+            ];
+        }
+
+        return $out;
+    } catch (\Throwable $e) {
+        @error_log('[ezdoc:scan:history] ' . $e->getMessage());
+
+        return [];
+    }
+}
+
+/**
+ * Permintaan tanda tangan yang menunggu di aplikasi, untuk dokumen satu subjek.
+ *
+ * Hanya yang dikirim lewat aplikasi (`route` = `app`). QR di layar petugas tidak
+ * pernah muncul di sini — lihat
+ * {@see \Ezdoc\Signature\Otp\OtpChallengeRepository::findPendingForSubject()}.
+ *
+ * Tokennya IKUT dikembalikan: dialah yang dipakai untuk membuka permintaannya.
+ * Karena itu aplikasi pemakai wajib memastikan yang bertanya memang tertaut ke
+ * subjek itu sebelum memanggil fungsi ini.
+ *
+ * @return list<array{
+ *     scan_token: string, document_name: string, ttd_label: string,
+ *     context_id: string, created_at: string, seconds_left: int
+ * }>
+ */
+function ezdoc_scan_pending(string $subjectType, string $subjectId): array
+{
+    try {
+        $repo = new \Ezdoc\Signature\Otp\OtpChallengeRepository(\Ezdoc\Context::default()->connection());
+        $service = new \Ezdoc\Signature\Otp\ScanOtpService($repo);
+        $rows = $repo->findPendingForSubject(
+            $subjectType,
+            $subjectId,
+            \Ezdoc\Signature\Otp\ScanOtpService::ROUTE_APP
+        );
+
+        $out = [];
+        foreach (ezdoc_scan_describe($rows) as $item) {
+            $row = $item['row'];
+            $out[] = [
+                'scan_token'    => (string) $row['scan_token'],
+                'document_name' => $item['document_name'],
+                'ttd_label'     => $item['ttd_label'],
+                'context_id'    => $item['context_id'],
+                'created_at'    => (string) ($row['created_at'] ?? ''),
+                'seconds_left'  => $service->secondsLeft($row),
+            ];
+        }
+
+        return $out;
+    } catch (\Throwable $e) {
+        @error_log('[ezdoc:scan:pending] ' . $e->getMessage());
+
+        return [];
+    }
+}
+
+/**
+ * Dokumen milik satu subjek, terbaru dulu.
+ *
+ * Untuk halaman "dokumen atas nama saya": nama, nomor kunjungan, tanggal, dan
+ * slug verifikasi publik bila masih aktif. Isi dokumennya TIDAK ikut —
+ * menampilkannya butuh pemeriksaan hak yang lain lagi.
+ *
+ * @return list<array{document_name: string, context_id: string, created_at: string, public_slug: string}>
+ */
+function ezdoc_subject_documents(string $subjectType, string $subjectId, int $limit = 30): array
+{
+    if ($subjectType === '' || $subjectId === '' || $limit <= 0) {
+        return [];
+    }
+
+    try {
+        $db = \Ezdoc\Context::default()->connection();
+        // LIMIT ditulis langsung sebagai angka: tidak semua penghubung mengikat
+        // parameter LIMIT sebagai bilangan, dan '30' bertanda kutip ditolak MySQL.
+        $docs = $db->fetchAll(
+            'SELECT `id`, `template_id`, `context_id`, `created_at`, `public_slug`, `public_slug_active`
+               FROM `ezdoc_documents`
+              WHERE `subject_type` = ? AND `subject_id` = ? AND `deleted_at` IS NULL
+              ORDER BY `created_at` DESC
+              LIMIT ' . (int) $limit,
+            [$subjectType, $subjectId]
+        );
+
+        $names = ezdoc_scan_template_names(array_column($docs, 'template_id'));
+
+        $out = [];
+        foreach ($docs as $doc) {
+            $out[] = [
+                'document_name' => $names[(int) $doc['template_id']]['name'] ?? '',
+                'context_id'    => (string) ($doc['context_id'] ?? ''),
+                'created_at'    => (string) ($doc['created_at'] ?? ''),
+                'public_slug'   => !empty($doc['public_slug_active']) ? (string) ($doc['public_slug'] ?? '') : '',
+            ];
+        }
+
+        return $out;
+    } catch (\Throwable $e) {
+        @error_log('[ezdoc:subject:documents] ' . $e->getMessage());
+
+        return [];
+    }
+}
+
+/**
+ * Lengkapi baris tantangan dengan nama dokumen, label slot, dan nomor kunjungan.
+ *
+ * Template dan dokumen dibaca sekali untuk semua baris, bukan per baris —
+ * riwayat tiga puluh baris tidak boleh berarti enam puluh kueri.
+ *
+ * @internal
+ * @param list<array<string,mixed>> $rows
+ * @return list<array{row: array<string,mixed>, document_name: string, ttd_label: string,
+ *     context_id: string, public_slug: string, deleted: bool}>
+ */
+function ezdoc_scan_describe(array $rows): array
+{
+    if ($rows === []) {
+        return [];
+    }
+
+    $db = \Ezdoc\Context::default()->connection();
+    $templates = ezdoc_scan_template_names(array_column($rows, 'template_id'), true);
+
+    $docIds = array_values(array_unique(array_filter(array_map('intval', array_column($rows, 'doc_id')))));
+    $docs = [];
+    if ($docIds !== []) {
+        $tanda = implode(',', array_fill(0, count($docIds), '?'));
+        foreach ($db->fetchAll(
+            "SELECT `id`, `context_id`, `public_slug`, `public_slug_active`, `deleted_at`
+               FROM `ezdoc_documents` WHERE `id` IN ($tanda)",
+            $docIds
+        ) as $doc) {
+            $docs[(int) $doc['id']] = $doc;
+        }
+    }
+
+    $out = [];
+    foreach ($rows as $row) {
+        $tpl = $templates[(int) ($row['template_id'] ?? 0)] ?? ['name' => '', 'content' => ''];
+        $doc = $docs[(int) ($row['doc_id'] ?? 0)] ?? null;
+
+        $ttdConfig = \Ezdoc\Signature\Otp\OtpService::findTtdConfig(
+            (string) $tpl['content'],
+            (string) ($row['ttd_id'] ?? '')
+        );
+
+        $out[] = [
+            'row'           => $row,
+            'document_name' => (string) $tpl['name'],
+            'ttd_label'     => (string) ($ttdConfig['label'] ?? ''),
+            'context_id'    => $doc !== null ? (string) ($doc['context_id'] ?? '') : '',
+            'public_slug'   => $doc !== null && !empty($doc['public_slug_active'])
+                ? (string) ($doc['public_slug'] ?? '')
+                : '',
+            'deleted'       => $doc !== null && !empty($doc['deleted_at']),
+        ];
+    }
+
+    return $out;
+}
+
+/**
+ * Nama (dan bila diminta, isi) template untuk sekumpulan id, sekali kueri.
+ *
+ * @internal
+ * @param list<mixed> $ids
+ * @return array<int, array{name: string, content: string}>
+ */
+function ezdoc_scan_template_names(array $ids, bool $withContent = false): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+    if ($ids === []) {
+        return [];
+    }
+
+    $tanda = implode(',', array_fill(0, count($ids), '?'));
+    $kolom = $withContent ? '`id`, `name`, `content`' : '`id`, `name`';
+
+    $out = [];
+    foreach (\Ezdoc\Context::default()->connection()->fetchAll(
+        "SELECT $kolom FROM `ezdoc_templates` WHERE `id` IN ($tanda)",
+        $ids
+    ) as $tpl) {
+        $out[(int) $tpl['id']] = [
+            'name'    => (string) ($tpl['name'] ?? ''),
+            'content' => (string) ($tpl['content'] ?? ''),
+        ];
+    }
+
+    return $out;
 }

@@ -380,6 +380,16 @@ return [
             'scan_verify_btn' => 'Verify Code',
             'scan_fallback_link' => 'Signer cannot scan?',
             'scan_back_link' => 'Back to the scanned code',
+
+            // ── Requests sent to the signer's app ──
+            'app_send_btn' => "Send to the signer's app",
+            'app_send_hint' => 'For signers who already use the app. The document must be saved.',
+            'app_sending' => 'Sending…',
+            'app_needs_saved' => 'Save the document first.',
+            'app_sent' => 'Request sent. Waiting for the signer to open it in the app…',
+            'app_sent_reached' => 'Notified {count} device(s).',
+            'app_sent_unreached' => 'No device could be notified — the request still appears when the app is opened.',
+            'app_failed' => 'Could not send the request.',
         ],
     ],
 ];

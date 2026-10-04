@@ -3812,6 +3812,7 @@
                 const ident = document.getElementById('signScanDocIdentity');
                 if (ident) ident.innerHTML = _scanDocIdentity();
 
+                _scanWaitingMode('qr');
                 _scanState('signScanWaiting');
                 _startScanCountdown(Number(data.ttl_seconds) || 300);
                 startScanPoll();
@@ -3820,6 +3821,89 @@
             } finally {
                 if (btn) btn.disabled = false;
                 if (btnText) btnText.textContent = t('modal.otp.scan_show_btn', {}, 'Tampilkan QR');
+            }
+        }
+
+        /**
+         * Panel tunggu dipakai dua jalan: QR di layar, atau permintaan yang
+         * dikirim ke aplikasi penanda tangan. Yang berbeda cuma isinya — sesudah
+         * dipindai, keduanya bertemu di kolom kode yang sama.
+         */
+        function _scanWaitingMode(mode) {
+            const qr = document.getElementById('signScanQrBox');
+            const app = document.getElementById('signAppBox');
+            if (qr) qr.classList.toggle('hidden', mode !== 'qr');
+            if (app) app.classList.toggle('hidden', mode !== 'app');
+        }
+
+        /**
+         * Kirim permintaan tanda tangan ke aplikasi penanda tangan.
+         *
+         * Tidak ada QR dan tidak ada hitung mundur: permintaannya berlaku sehari,
+         * dan menunggunya di layar ini selama itu tidak masuk akal. Pemeriksaan
+         * berkalanya tetap jalan selama panel terbuka — begitu penanda tangan
+         * menyetujuinya, kolom kode terbuka sendiri seperti jalur QR.
+         *
+         * Petugas yang menutup panel lalu membukanya lagi tinggal mengirim ulang:
+         * server mematikan permintaan lama untuk slot yang sama.
+         */
+        async function requestAppSign() {
+            if (!CURRENT_DOC_ID) {
+                showToast(t('modal.otp.app_needs_saved', {}, 'Simpan dokumennya dulu.'), 'error');
+                return;
+            }
+
+            const btn = document.getElementById('btnRequestApp');
+            const btnText = document.getElementById('btnRequestAppText');
+            if (btn) btn.disabled = true;
+            if (btnText) btnText.textContent = t('modal.otp.app_sending', {}, 'Mengirim…');
+
+            try {
+                const fd = new FormData();
+                fd.append('_doc_action', 'request_scan_code');
+                fd.append('template_id', templateId);
+                fd.append('ttd_id', currentTtdId);
+                fd.append('doc_id', CURRENT_DOC_ID);
+                fd.append('delivery', 'app');
+
+                const endpoint = typeof _ezdocEndpoint === 'function' ? _ezdocEndpoint('docAction') : 'actions/_dispatcher.php';
+                const res = await fetch(endpoint, { method: 'POST', body: fd });
+                const data = await res.json();
+
+                if (!data.success) {
+                    showToast(data.message || t('modal.otp.app_failed', {}, 'Gagal mengirim permintaan.'), 'error');
+                    return;
+                }
+
+                _otpState.currentChallengeId = data.challenge_id;
+
+                const ident = document.getElementById('signScanDocIdentity');
+                if (ident) ident.innerHTML = _scanDocIdentity();
+
+                // Pesan dari aplikasi pemakai didahulukan: ia yang tahu kenapa
+                // kabarnya sampai atau tidak.
+                const reach = document.getElementById('signAppReach');
+                if (reach) {
+                    const n = Number(data.reached) || 0;
+                    reach.textContent = data.message
+                        || (n > 0
+                            ? t('modal.otp.app_sent_reached', {count: n}, `Kabar terkirim ke ${n} perangkat.`)
+                            : t('modal.otp.app_sent_unreached', {},
+                                'Belum ada perangkat yang bisa dikabari — permintaan tetap muncul saat aplikasinya dibuka.'));
+                }
+
+                if (_otpState.scanCountdown) {
+                    clearInterval(_otpState.scanCountdown);
+                    _otpState.scanCountdown = null;
+                }
+                _scanWaitingMode('app');
+                _scanState('signScanWaiting');
+                startScanPoll();
+            } catch (e) {
+                showToast(t('modal.otp.app_failed', {}, 'Gagal mengirim permintaan.') + ' ' + e.message, 'error');
+            } finally {
+                if (btn) btn.disabled = false;
+                if (btnText) btnText.textContent = t('modal.otp.app_send_btn', {}, 'Kirim ke aplikasi penanda tangan');
             }
         }
 

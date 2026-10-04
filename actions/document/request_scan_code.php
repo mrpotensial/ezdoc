@@ -10,7 +10,15 @@ declare(strict_types=1);
  * Params:
  *   - template_id : int    (wajib)
  *   - ttd_id      : string (wajib) slot tanda tangannya
- *   - doc_id      : int    (opsional)
+ *   - doc_id      : int    (opsional untuk qr, wajib untuk app)
+ *   - delivery    : qr | app (bawaan qr)
+ *
+ * `delivery=app` tidak menggambar QR. Ia menerbitkan token berumur
+ * {@see ScanOtpService::APP_TTL_SECONDS} lalu meminta aplikasi pemakai
+ * mengabari penanda tangannya lewat `EZDOC_SCAN_APP_DELIVERY` — sebuah callable
+ * yang menerima keterangan dokumen dan subjeknya, TANPA token. Aplikasi pemakai
+ * mengambil tokennya sendiri lewat `ezdoc_scan_pending()` sesudah memastikan
+ * yang bertanya memang tertaut ke subjek itu.
  *
  * Lihat docs/260803-otp-jalur-kedua.md §8h.
  *
@@ -48,8 +56,28 @@ if ($templateId <= 0 || $ttdId === '') {
     ezdoc_respond_error(t('response.missing_params', [], 'Missing required parameters'), 400);
 }
 
+$delivery = strtolower(trim((string) ($_POST['delivery'] ?? 'qr')));
+if ($delivery !== 'qr' && $delivery !== 'app') {
+    ezdoc_respond_error(t('response.scan_delivery_unknown', [], 'Unknown delivery.'), 400);
+}
+
+$deliverer = defined('EZDOC_SCAN_APP_DELIVERY') ? EZDOC_SCAN_APP_DELIVERY : '';
+if ($delivery === 'app') {
+    if ($deliverer === '' || !is_callable($deliverer)) {
+        ezdoc_respond_error(
+            t('response.scan_app_not_configured', [], 'Sending to the signer app is not configured for this installation.'),
+            503
+        );
+    }
+    // Permintaan lewat aplikasi menemukan penanda tangannya dari subjek
+    // dokumen. Dokumen yang belum disimpan belum punya subjek.
+    if ($docId === null || $docId <= 0) {
+        ezdoc_respond_error(t('response.scan_app_needs_saved', [], 'Save the document first.'), 400);
+    }
+}
+
 $urlTemplate = defined('EZDOC_SCAN_URL_TEMPLATE') ? (string) EZDOC_SCAN_URL_TEMPLATE : '';
-if ($urlTemplate === '' || strpos($urlTemplate, '{token}') === false) {
+if ($delivery === 'qr' && ($urlTemplate === '' || strpos($urlTemplate, '{token}') === false)) {
     // Dinyatakan, bukan gagal diam-diam. Petugas yang menekan tombolnya berhak
     // tahu bedanya "sedang rusak" dan "belum dipasang".
     ezdoc_respond_error(
@@ -61,7 +89,7 @@ if ($urlTemplate === '' || strpos($urlTemplate, '{token}') === false) {
 $db = Context::default()->connection();
 
 $template = $db->fetchOne(
-    'SELECT `content`, `access_config` FROM `ezdoc_templates` WHERE `id` = ? LIMIT 1',
+    'SELECT `name`, `content`, `access_config` FROM `ezdoc_templates` WHERE `id` = ? LIMIT 1',
     [$templateId]
 );
 if (!$template) {
@@ -85,6 +113,85 @@ if (!$ttdConfig['require_otp']) {
 }
 if (!ezdoc_can_sign_ttd($ttdConfig['rbac'])) {
     ezdoc_respond_error(t('response.forbidden', [], 'Not permitted'), 403);
+}
+
+if ($delivery === 'app') {
+    $doc = $db->fetchOne(
+        'SELECT `subject_type`, `subject_id`, `context_id`
+           FROM `ezdoc_documents` WHERE `id` = ? AND `template_id` = ? AND `deleted_at` IS NULL LIMIT 1',
+        [$docId, $templateId]
+    );
+    if (!$doc || (string) ($doc['subject_id'] ?? '') === '') {
+        ezdoc_respond_error(t('response.document_not_found', [], 'Document not found'), 404);
+    }
+
+    try {
+        // Permintaan lama untuk slot yang sama dimatikan dulu: dua permintaan
+        // hidup di aplikasi untuk satu tanda tangan terbaca sebagai dua hal.
+        $repo = new \Ezdoc\Signature\Otp\OtpChallengeRepository($db);
+        $retired = $repo->expirePendingForSlot((int) $docId, $ttdId, ScanOtpService::ROUTE_APP);
+        $issued = (new ScanOtpService($repo))->issue(
+            $templateId,
+            $ttdId,
+            $docId,
+            ScanOtpService::APP_TTL_SECONDS,
+            ['route' => ScanOtpService::ROUTE_APP]
+        );
+    } catch (\Throwable $e) {
+        @error_log('[ezdoc:scan:request:app] ' . $e->getMessage());
+        ezdoc_respond_error(t('response.scan_request_failed', [], 'Could not create the code request.'), 500);
+    }
+
+    // Pengirimnya milik aplikasi pemakai. Gagalnya TIDAK menggagalkan
+    // permintaan: ia tetap muncul saat penanda tangan membuka aplikasinya, dan
+    // petugas berhak tahu bahwa kabarnya tidak sampai — bukan bahwa semuanya batal.
+    $sent = ['ok' => false, 'reached' => 0, 'message' => ''];
+    try {
+        $hasil = call_user_func($deliverer, [
+            'challenge_id'  => $issued['challenge_id'],
+            'doc_id'        => (int) $docId,
+            'template_id'   => $templateId,
+            'ttd_id'        => $ttdId,
+            'ttd_label'     => (string) ($ttdConfig['label'] ?? ''),
+            'document_name' => (string) ($template['name'] ?? ''),
+            'subject_type'  => (string) ($doc['subject_type'] ?? ''),
+            'subject_id'    => (string) $doc['subject_id'],
+            'context_id'    => (string) ($doc['context_id'] ?? ''),
+            'expires_at'    => $issued['expires_at'],
+        ]);
+        if (is_array($hasil)) {
+            $sent = [
+                'ok'      => !empty($hasil['ok']),
+                'reached' => (int) ($hasil['reached'] ?? 0),
+                'message' => (string) ($hasil['message'] ?? ''),
+            ];
+        }
+    } catch (\Throwable $e) {
+        @error_log('[ezdoc:scan:request:app:deliver] ' . $e->getMessage());
+    }
+
+    ezdoc_audit_log('otp.app_requested', [
+        'target_type' => 'document',
+        'target_id'   => (string) $docId,
+        'doc_id'      => $docId,
+        'metadata'    => [
+            'template_id'  => $templateId,
+            'ttd_id'       => $ttdId,
+            'challenge_id' => $issued['challenge_id'],
+            'expires_at'   => $issued['expires_at'],
+            'retired'      => $retired,
+            'reached'      => $sent['reached'],
+        ],
+    ]);
+
+    ezdoc_respond_success([
+        'challenge_id' => $issued['challenge_id'],
+        'expires_at'   => $issued['expires_at'],
+        'ttl_seconds'  => ScanOtpService::APP_TTL_SECONDS,
+        'delivery'     => 'app',
+        'reached'      => $sent['reached'],
+        'message'      => $sent['message'],
+    ]);
 }
 
 try {

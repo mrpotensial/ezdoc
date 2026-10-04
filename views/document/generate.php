@@ -2538,14 +2538,35 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                             <i class="bi bi-qr-code"></i>
                             <span id="btnRequestScanText"><?= h(t('modal.otp.scan_show_btn', [], 'Tampilkan QR')) ?></span>
                         </button>
+                        <?php
+                        // Kirim ke aplikasi penanda tangan — hanya kalau aplikasi
+                        // pemakai menyediakan pengirimnya. Tombol yang selalu
+                        // ditolak server lebih buruk daripada tidak ada tombol.
+                        if (defined('EZDOC_SCAN_APP_DELIVERY') && is_callable(EZDOC_SCAN_APP_DELIVERY)): ?>
+                        <button type="button" id="btnRequestApp" onclick="requestAppSign()"
+                                class="w-full mt-2 py-2 px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 rounded text-xs font-bold transition flex items-center justify-center gap-2">
+                            <i class="bi bi-phone"></i>
+                            <span id="btnRequestAppText"><?= h(t('modal.otp.app_send_btn', [], 'Kirim ke aplikasi penanda tangan')) ?></span>
+                        </button>
+                        <p class="text-[11px] text-slate-500 mt-1 leading-snug"><?= h(t('modal.otp.app_send_hint', [], 'Untuk penanda tangan yang sudah memasang aplikasinya. Dokumen harus sudah tersimpan.')) ?></p>
+                        <?php endif; ?>
                     </div>
 
-                    <?php // Keadaan 2 — menunggu dipindai ?>
+                    <?php // Keadaan 2 — menunggu dipindai (QR) atau dibuka di aplikasi ?>
                     <div id="signScanWaiting" class="hidden text-center">
                         <div id="signScanDocIdentity" class="text-[11px] text-slate-600 mb-2 leading-tight"></div>
-                        <img id="signScanQr" alt="" class="mx-auto rounded border border-slate-300 bg-white p-1.5" style="width:180px;height:180px;object-fit:contain;">
-                        <p class="text-xs text-slate-600 mt-2 mb-1"><?= h(t('modal.otp.scan_waiting', [], 'Menunggu penanda tangan memindai…')) ?></p>
-                        <div id="signScanCountdown" class="text-[11px] text-slate-500 tabular-nums"></div>
+                        <div id="signScanQrBox">
+                            <img id="signScanQr" alt="" class="mx-auto rounded border border-slate-300 bg-white p-1.5" style="width:180px;height:180px;object-fit:contain;">
+                            <p class="text-xs text-slate-600 mt-2 mb-1"><?= h(t('modal.otp.scan_waiting', [], 'Menunggu penanda tangan memindai…')) ?></p>
+                            <div id="signScanCountdown" class="text-[11px] text-slate-500 tabular-nums"></div>
+                        </div>
+                        <div id="signAppBox" class="hidden text-left rounded border border-slate-200 bg-slate-50 p-3">
+                            <div class="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                                <i class="bi bi-phone"></i>
+                                <span><?= h(t('modal.otp.app_sent', [], 'Permintaan terkirim. Menunggu penanda tangan membukanya di aplikasi…')) ?></span>
+                            </div>
+                            <div id="signAppReach" class="text-[11px] text-slate-600 mt-1 leading-snug"></div>
+                        </div>
                     </div>
 
                     <?php // Keadaan 3 — sudah dipindai, kodenya sudah di tangan orangnya ?>

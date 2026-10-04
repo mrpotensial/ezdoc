@@ -373,4 +373,165 @@ final class OtpChallengeRepository
 
         return (int) $this->db->execute($sql, $params) > 0;
     }
+
+    // ── Sisi penanda tangan: metadata, riwayat, permintaan tertunda ──────
+
+    /**
+     * Gabungkan metadata ke `provider_meta` sebuah tantangan, lewat token pindaiannya.
+     *
+     * Kunci yang SUDAH ada menang. `route` ditulis saat token terbit dan
+     * menjawab "lewat jalan apa permintaan ini lahir" — pemindai yang datang
+     * belakangan tidak boleh menulis ulang sejarah itu.
+     *
+     * Dua pernyataan, bukan satu: penggabungan JSON di SQL berbeda di tiap mesin
+     * basis data. Tidak ada balapan, karena hanya pemenang {@see fulfilScan()}
+     * yang memanggilnya.
+     *
+     * @param array<string,mixed> $meta
+     */
+    public function mergeProviderMetaByScanToken(string $scanToken, array $meta): void
+    {
+        if ($scanToken === '' || $meta === []) {
+            return;
+        }
+
+        $row = $this->findByScanToken($scanToken);
+        if ($row === null) {
+            return;
+        }
+
+        $current = json_decode((string) ($row['provider_meta'] ?? ''), true);
+        $merged = (is_array($current) ? $current : []) + $meta;
+
+        $this->db->execute(
+            'UPDATE `ezdoc_ttd_otp_challenges` SET `provider_meta` = ? WHERE `scan_token` = ?',
+            [json_encode($merged, JSON_UNESCAPED_UNICODE), $scanToken]
+        );
+    }
+
+    /**
+     * Tantangan yang diselesaikan satu penanda tangan, terbaru dulu.
+     *
+     * `$signerRef` adalah pengenal yang dipilih aplikasi pemakai dan disimpan di
+     * `provider_meta.signer_ref` saat pindaian — misalnya akun portalnya.
+     * Pustaka tidak menafsirkannya.
+     *
+     * Disaring LIKE dulu, lalu dicocokkan persis di PHP. Fungsi JSON di SQL
+     * berbeda di tiap mesin basis data, dan LIKE saja bisa cocok sebagian:
+     * "akun:12" ikut menemukan "akun:123".
+     *
+     * @return list<array<string,mixed>> `provider_meta` sudah berupa larik.
+     */
+    public function findBySignerRef(string $signerRef, int $limit = 30): array
+    {
+        if ($signerRef === '' || $limit <= 0) {
+            return [];
+        }
+
+        $needle = '"signer_ref":' . json_encode($signerRef, JSON_UNESCAPED_UNICODE);
+        $rows = $this->db->fetchAll(
+            "SELECT * FROM `ezdoc_ttd_otp_challenges`
+              WHERE `provider_meta` LIKE ? ESCAPE '!'
+              ORDER BY `scanned_at` DESC, `created_at` DESC",
+            ['%' . self::likeEscape($needle) . '%']
+        );
+
+        $out = [];
+        foreach ($rows as $row) {
+            $meta = json_decode((string) ($row['provider_meta'] ?? ''), true);
+            if (!is_array($meta) || ($meta['signer_ref'] ?? null) !== $signerRef) {
+                continue;
+            }
+
+            $row['provider_meta'] = $meta;
+            $out[] = $row;
+            if (count($out) >= $limit) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Permintaan yang belum dipindai untuk dokumen milik satu subjek.
+     *
+     * Hanya yang lahir lewat `$route`. QR di layar petugas juga menghasilkan
+     * token tertunda, tapi token itu untuk orang yang sedang berdiri di depan
+     * layar — menampilkannya di aplikasi akan membuat siapa pun yang tertaut ke
+     * subjek itu bisa memakai QR milik orang lain.
+     *
+     * @return list<array<string,mixed>> `provider_meta` sudah berupa larik.
+     */
+    public function findPendingForSubject(string $subjectType, string $subjectId, string $route): array
+    {
+        if ($subjectType === '' || $subjectId === '' || $route === '') {
+            return [];
+        }
+
+        $rows = $this->db->fetchAll(
+            "SELECT c.* FROM `ezdoc_ttd_otp_challenges` c
+               JOIN `ezdoc_documents` d ON d.`id` = c.`doc_id`
+              WHERE d.`subject_type` = ? AND d.`subject_id` = ? AND d.`deleted_at` IS NULL
+                AND c.`scanned_at` IS NULL AND c.`expires_at` > ?
+                AND c.`provider_meta` LIKE ? ESCAPE '!'
+              ORDER BY c.`created_at` DESC",
+            [
+                $subjectType,
+                $subjectId,
+                $this->stamp(),
+                '%' . self::likeEscape('"route":' . json_encode($route)) . '%',
+            ]
+        );
+
+        $out = [];
+        foreach ($rows as $row) {
+            $meta = json_decode((string) ($row['provider_meta'] ?? ''), true);
+            if (!is_array($meta) || ($meta['route'] ?? null) !== $route) {
+                continue;
+            }
+
+            $row['provider_meta'] = $meta;
+            $out[] = $row;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Matikan permintaan tertunda lewat `$route` untuk satu slot tanda tangan.
+     *
+     * Petugas yang menekan "kirim" dua kali tidak boleh meninggalkan dua
+     * permintaan hidup di aplikasi untuk tanda tangan yang sama — yang satu
+     * akan terbaca sebagai permintaan lain.
+     *
+     * @return int Jumlah permintaan yang dimatikan.
+     */
+    public function expirePendingForSlot(int $docId, string $ttdId, string $route): int
+    {
+        $rows = $this->db->fetchAll(
+            "SELECT `challenge_id`, `provider_meta` FROM `ezdoc_ttd_otp_challenges`
+              WHERE `doc_id` = ? AND `ttd_id` = ? AND `scanned_at` IS NULL AND `expires_at` > ?",
+            [$docId, $ttdId, $this->stamp()]
+        );
+
+        $n = 0;
+        foreach ($rows as $row) {
+            $meta = json_decode((string) ($row['provider_meta'] ?? ''), true);
+            if (!is_array($meta) || ($meta['route'] ?? null) !== $route) {
+                continue;
+            }
+
+            $this->expire((string) $row['challenge_id']);
+            $n++;
+        }
+
+        return $n;
+    }
+
+    /** Escape LIKE dengan `!`, karena backslash ditafsirkan berbeda di tiap mesin. */
+    private static function likeEscape(string $value): string
+    {
+        return strtr($value, ['!' => '!!', '%' => '!%', '_' => '!_']);
+    }
 }

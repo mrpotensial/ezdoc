@@ -6,6 +6,38 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — tanda tangan dari aplikasi penanda tangan, sebagai kanal kedua pindai QR (2026-10-04)**
+
+Jalur pindai QR sudah memisahkan kanal dari pustakanya; yang ditambahkan di
+sini adalah yang dibutuhkan kanal kedua — halaman web milik aplikasi pemakai —
+tanpa mengubah perilaku pemanggil lama sedikit pun.
+
+- `ScanOtpService::issue()` menerima masa berlaku dan metadata. Tanpa
+  keduanya: QR 5 menit dan `route` `scan`, persis seperti sebelumnya.
+  `APP_TTL_SECONDS` (sehari) untuk permintaan yang dikirim ke aplikasi.
+- `ScanOtpService::fulfil()` / `ezdoc_scan_fulfil()` menerima metadata
+  (`channel`, `signer_ref`) yang digabung ke `provider_meta`. Kunci yang sudah
+  ada menang — `route` ditulis saat terbit dan tidak bisa ditimpa pemindai —
+  dan hanya pemenang balapan yang menulisnya.
+- `progress()` / `ezdoc_scan_progress()`: open → waiting → verified → signed
+  (atau expired), untuk layar tunggu penanda tangan.
+- `ezdoc_scan_context()` ikut mengembalikan `seconds_left` dan `route`.
+- `ezdoc_scan_history($signerRef)`, `ezdoc_scan_pending($subjectType, $subjectId)`,
+  `ezdoc_subject_documents(...)` untuk halaman penanda tangan. Riwayat disaring
+  LIKE lalu dicocokkan persis ("akun:12" tidak menemukan "akun:123"); QR di
+  layar petugas TIDAK pernah muncul sebagai permintaan tertunda.
+- Layar petugas: tombol "Kirim ke aplikasi penanda tangan" di samping
+  "Tampilkan QR", hanya digambar kalau aplikasi pemakai mendefinisikan
+  `EZDOC_SCAN_APP_DELIVERY`. `request_scan_code` menerima `delivery=app`:
+  token sehari, permintaan lama untuk slot yang sama dimatikan lebih dulu, dan
+  pengirim milik aplikasi pemakai **tidak pernah menerima token** — ia cuma
+  diberi tahu ada permintaan untuk subjek itu. Gagalnya pengirim tidak
+  membatalkan permintaan.
+
+Uji baru: `ScanSignerSideTest` (22, SQLite sungguhan) dan
+`ScanAppDeliveryContractTest` (8). Diuji juga ujung ke ujung di luar repo:
+100 kasus lewat HTTP sungguhan dan Chrome di PHP 7.4 + MySQL 8.
+
 **Changed — pemilih contoh dikelompokkan (2026-10-02)**
 
 Empat belas nama dalam satu daftar datar memaksa yang mencari membaca

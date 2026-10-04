@@ -140,5 +140,10 @@ return [
         // ── V6: document-bound code, requested via a QR on the operator's screen ──
         'scan_not_configured' => 'Scan-to-sign is not configured for this installation.',
         'scan_request_failed' => 'Could not create the code request. Please try again.',
+
+        // ── Signature requests sent to the signer's app ──
+        'scan_delivery_unknown' => 'Unknown delivery.',
+        'scan_app_not_configured' => 'Sending to the signer app is not configured for this installation.',
+        'scan_app_needs_saved' => 'Save the document first — a request sent to the app needs a saved document.',
     ],
 ];

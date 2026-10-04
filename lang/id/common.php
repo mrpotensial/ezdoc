@@ -190,5 +190,10 @@ return [
         // ── V6: kode terikat dokumen, diminta lewat QR di layar petugas ──
         'scan_not_configured'     => 'Fitur minta kode lewat QR belum dikonfigurasi di aplikasi ini.',
         'scan_request_failed'     => 'Gagal membuat permintaan kode. Silakan coba lagi.',
+
+        // ── Permintaan tanda tangan yang dikirim ke aplikasi penanda tangan ──
+        'scan_delivery_unknown'   => 'Cara pengiriman tidak dikenal.',
+        'scan_app_not_configured' => 'Pengiriman ke aplikasi penanda tangan belum dikonfigurasi di aplikasi ini.',
+        'scan_app_needs_saved'    => 'Simpan dokumennya dulu — permintaan ke aplikasi butuh dokumen yang sudah tersimpan.',
     ],
 ];

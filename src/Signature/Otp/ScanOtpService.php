@@ -50,6 +50,28 @@ final class ScanOtpService
     /** Tebakan salah yang diperbolehkan sebelum kodenya mati. */
     public const MAX_ATTEMPTS = 3;
 
+    /**
+     * Berapa lama permintaan yang dikirim ke aplikasi penanda tangan bisa dibuka.
+     *
+     * Jauh lebih panjang dari QR: tokennya tidak menganga di layar yang bisa
+     * ditinggal petugas, tapi menunggu di aplikasi seseorang yang mungkin baru
+     * membukanya sore nanti.
+     */
+    public const APP_TTL_SECONDS = 86400;
+
+    /** Batas masa berlaku yang boleh diminta pemanggil — token tidak boleh hidup selamanya. */
+    public const MAX_TTL_SECONDS = 604800;
+
+    /** Jalan lahirnya token, tersimpan di `provider_meta.route`. */
+    public const ROUTE_SCAN = 'scan';
+    public const ROUTE_APP = 'app';
+
+    /** Status untuk layar tunggu penanda tangan — lihat {@see progress()}. */
+    public const OPEN = 'open';
+    public const WAITING = 'waiting';
+    public const VERIFIED = 'verified';
+    public const SIGNED = 'signed';
+
     /** Kenapa sebuah token ditolak. Kode, bukan kalimat — tampilan yang menerjemahkan. */
     public const OK = 'ok';
     public const NOT_FOUND = 'not_found';
@@ -72,19 +94,34 @@ final class ScanOtpService
      * penanda tangan tersimpan di ponselnya dan di server penyedia chat; nama
      * dan nomor dokumen tempatnya di balasan, bukan di kiriman.
      *
+     * `$ttlSeconds` dan `$meta` dipakai permintaan yang dikirim ke aplikasi
+     * penanda tangan alih-alih ditampilkan sebagai QR: masa berlakunya lebih
+     * panjang dan `route`-nya `app`. Tanpa keduanya, perilakunya persis seperti
+     * sebelum parameter itu ada.
+     *
+     * @param array<string,mixed> $meta Masuk ke `provider_meta`. `route` bawaan `scan`.
      * @return array{scan_token: string, challenge_id: string, expires_at: string}
      */
-    public function issue(int $templateId, string $ttdId, ?int $docId = null): array
-    {
+    public function issue(
+        int $templateId,
+        string $ttdId,
+        ?int $docId = null,
+        ?int $ttlSeconds = null,
+        array $meta = []
+    ): array {
         if ($templateId <= 0 || $ttdId === '') {
             throw new EzdocException('Issuing a scan token requires both template_id and ttd_id.');
         }
 
         $now = $this->clock->now()->getTimestamp();
 
+        $ttl = $ttlSeconds === null
+            ? self::SCAN_TTL_SECONDS
+            : max(60, min(self::MAX_TTL_SECONDS, $ttlSeconds));
+
         $challengeId = 'otp_' . bin2hex(random_bytes(16));
         $scanToken = bin2hex(random_bytes(16));
-        $expiresAt = $this->fmt($now + self::SCAN_TTL_SECONDS);
+        $expiresAt = $this->fmt($now + $ttl);
 
         $this->repo->createAwaitingScan([
             'challenge_id'  => $challengeId,
@@ -95,7 +132,7 @@ final class ScanOtpService
             'max_attempts'  => self::MAX_ATTEMPTS,
             'expires_at'    => $expiresAt,
             'created_at'    => $this->fmt($now),
-            'provider_meta' => ['route' => 'scan'],
+            'provider_meta' => $meta + ['route' => self::ROUTE_SCAN],
         ]);
 
         return [
@@ -149,9 +186,14 @@ final class ScanOtpService
      * Pemanggilnya yang merangkai teks itu, bukan library. Kata-kata persetujuan
      * adalah keputusan hukum milik organisasi yang memakainya.
      *
+     * `$meta` digabung ke `provider_meta` — misalnya kanal yang dipakai dan
+     * pengenal penanda tangan di aplikasi pemakai. Kunci yang sudah ada
+     * (`route`) tidak bisa ditimpa: ia ditulis saat token terbit.
+     *
+     * @param array<string,mixed> $meta
      * @return array{ok: bool, code?: string, reason?: string}
      */
-    public function fulfil(string $scanToken, string $phone, string $consentMessage): array
+    public function fulfil(string $scanToken, string $phone, string $consentMessage, array $meta = []): array
     {
         $resolved = $this->resolve($scanToken);
         if ($resolved['status'] !== self::OK) {
@@ -182,11 +224,76 @@ final class ScanOtpService
             return ['ok' => false, 'reason' => self::ALREADY_SCANNED];
         }
 
+        // Sesudah menang saja: yang kalah balapan tidak meninggalkan jejak di
+        // baris milik orang lain.
+        if ($meta !== []) {
+            $this->repo->mergeProviderMetaByScanToken($scanToken, $meta);
+        }
+
         return [
             'ok'          => true,
             'code'        => $code,
             'ttl_seconds' => self::CODE_TTL_SECONDS,
         ];
+    }
+
+    /**
+     * Sisa detik sebuah tantangan sebelum tenggatnya — tidak pernah negatif.
+     *
+     * @param array<string,mixed> $challenge Baris dari {@see resolve()}.
+     */
+    public function secondsLeft(array $challenge): int
+    {
+        return max(0, $this->secondsUntil((string) ($challenge['expires_at'] ?? '')));
+    }
+
+    /**
+     * Sampai mana sebuah token, dilihat dari sisi penanda tangan.
+     *
+     * Dipakai layar tunggu sesudah kode tampil: penanda tangan perlu tahu
+     * apakah petugas sudah memasukkan kodenya, tanpa bertanya.
+     *
+     * | Status | Artinya |
+     * |---|---|
+     * | `open` | Belum dipindai, masih berlaku |
+     * | `waiting` | Kode sudah lahir, petugas belum memasukkannya |
+     * | `verified` | Petugas memasukkan kode yang benar |
+     * | `signed` | Tanda tangannya sudah tersimpan |
+     * | `expired` | Lewat tenggat, atau tebakan salahnya habis |
+     * | `not_found` | Token tidak dikenal |
+     *
+     * Urutan pemeriksaannya disengaja: yang sudah tersimpan tetap dilaporkan
+     * tersimpan walau tenggat kodenya lewat sesudahnya.
+     */
+    public function progress(string $scanToken): string
+    {
+        $row = $this->repo->findByScanToken($scanToken);
+
+        return $row === null ? self::NOT_FOUND : $this->progressOf($row);
+    }
+
+    /**
+     * Sama dengan {@see progress()}, untuk baris yang sudah dibaca — riwayat
+     * membaca puluhan baris sekaligus dan tidak perlu menanyakannya satu-satu.
+     *
+     * @param array<string,mixed> $row
+     */
+    public function progressOf(array $row): string
+    {
+        if (!empty($row['sign_token_used_at'])) {
+            return self::SIGNED;
+        }
+        if (!empty($row['verified_at'])) {
+            return self::VERIFIED;
+        }
+        if ($this->secondsUntil((string) $row['expires_at']) <= 0) {
+            return self::EXPIRED;
+        }
+        if ((int) ($row['attempts'] ?? 0) >= (int) ($row['max_attempts'] ?? self::MAX_ATTEMPTS)) {
+            return self::EXPIRED;
+        }
+
+        return empty($row['scanned_at']) ? self::OPEN : self::WAITING;
     }
 
     private function secondsUntil(string $stamp): int

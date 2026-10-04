@@ -410,6 +410,19 @@ return [
             'scan_verify_btn'    => 'Verifikasi Kode',
             'scan_fallback_link' => 'Penanda tangan tidak bisa memindai?',
             'scan_back_link'     => 'Kembali ke kode dari pemindaian',
+
+            // ── Permintaan yang dikirim ke aplikasi penanda tangan ──
+            // Untuk penanda tangan yang tidak berada di depan layar ini. Ia
+            // membuka permintaannya di aplikasinya sendiri, lalu membacakan
+            // kodenya — lewat telepon, atau saat datang.
+            'app_send_btn'       => 'Kirim ke aplikasi penanda tangan',
+            'app_send_hint'      => 'Untuk penanda tangan yang sudah memasang aplikasinya. Dokumen harus sudah tersimpan.',
+            'app_sending'        => 'Mengirim…',
+            'app_needs_saved'    => 'Simpan dokumennya dulu.',
+            'app_sent'           => 'Permintaan terkirim. Menunggu penanda tangan membukanya di aplikasi…',
+            'app_sent_reached'   => 'Kabar terkirim ke {count} perangkat.',
+            'app_sent_unreached' => 'Belum ada perangkat yang bisa dikabari — permintaan tetap muncul saat aplikasinya dibuka.',
+            'app_failed'         => 'Gagal mengirim permintaan.',
         ],
     ],
 ];
