@@ -180,6 +180,13 @@ return [
         'otp_not_configured'      => 'Pengiriman OTP belum dikonfigurasi di aplikasi ini.',
         'otp_phone_override_denied' => 'Kode hanya boleh dikirim ke nomor yang tercatat.',
 
+        // ── Kanal email pada jalur kirim ──
+        'otp_channel_unknown'     => 'Kanal pengiriman tidak dikenal.',
+        'otp_email_unavailable'   => 'Kanal email belum dikonfigurasi di server ini.',
+        'otp_email_required'      => 'Alamat email penanda tangan wajib diisi.',
+        'otp_email_invalid'       => 'Alamat email tidak sah.',
+        'otp_email_too_long'      => 'Alamat email terlalu panjang.',
+
         // ── V6: kode terikat dokumen, diminta lewat QR di layar petugas ──
         'scan_not_configured'     => 'Fitur minta kode lewat QR belum dikonfigurasi di aplikasi ini.',
         'scan_request_failed'     => 'Gagal membuat permintaan kode. Silakan coba lagi.',

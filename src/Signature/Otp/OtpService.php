@@ -177,7 +177,11 @@ class OtpService
      *
      * @param int         $templateId Template ID
      * @param string      $ttdId      Signature placeholder ID
-     * @param string      $phone      Patient phone number
+     * @param string      $phone      Recipient contact identity — a phone
+     *                                number or an email address. Which channel
+     *                                it goes out on is the provider's business;
+     *                                pass `$context['channel']` to say so
+     *                                explicitly.
      * @param string      $name       Patient name
      * @param int|null    $docId      Document ID (optional)
      * @param int         $ttlSeconds Time to live in seconds (default 300 = 5 minutes)
@@ -198,8 +202,33 @@ class OtpService
             throw new EzdocException('No UserOtpProvider is configured in the Ezdoc context.');
         }
 
-        $cleanPhone = self::normalizePhone($phone);
-        if (strlen($cleanPhone) < 8) {
+        // Penerima bisa nomor telepon atau alamat email — port-nya menamai
+        // parameternya `$phone` karena ia menampung "Nomor handphone /
+        // identitas kontak", bukan khusus nomor. Aturan untuk NOMOR tidak
+        // berubah sedikit pun; yang ditambahkan hanya cabang untuk email.
+        //
+        // Tanpa pemisahan ini, normalizePhone() membuang seluruh karakter
+        // bukan-digit dari sebuah alamat email lalu hasilnya ditolak sebagai
+        // "nomor tidak valid" — galat yang menyesatkan atas masukan yang sah.
+        $cleanPhone = self::normalizeRecipient($phone);
+
+        // Dicabangkan pada ADA-TIDAKNYA '@', bukan pada isEmail(). Keduanya
+        // beda, dan bedanya penting: FILTER_VALIDATE_EMAIL menolak nama lokal
+        // lebih dari 64 karakter, jadi alamat panjang membuat isEmail() palsu
+        // dan — kalau cabangnya digantungkan padanya — alamat itu jatuh ke
+        // cabang nomor, lolos `strlen >= 8`, lalu tersimpan sebagai "nomor".
+        //
+        // Jadi: apa pun yang memuat '@' adalah UPAYA mengirim email, dan upaya
+        // yang tidak sah ditolak dengan pesan tentang alamat — bukan dengan
+        // "nomor tidak valid" yang menyuruh petugas memeriksa hal yang salah.
+        if (strpos($cleanPhone, '@') !== false) {
+            // Batas 254 dari RFC 5321. Diperiksa di sini dan tidak diserahkan
+            // ke kolom database, karena sql_mode server bukan strict: kolomnya
+            // akan memotong diam-diam tanpa satu pun galat.
+            if (!self::isEmail($cleanPhone) || strlen($cleanPhone) > 254) {
+                throw new EzdocException('Invalid recipient email address.');
+            }
+        } elseif (strlen($cleanPhone) < 8) {
             throw new EzdocException('Invalid recipient phone number.');
         }
 
@@ -259,7 +288,7 @@ class OtpService
 
         return [
             'challenge_id' => $challengeId,
-            'masked_phone' => self::maskPhone($cleanPhone),
+            'masked_phone' => self::maskRecipient($cleanPhone),
             'expires_at'   => $expiresAt,
         ];
     }
@@ -356,6 +385,92 @@ class OtpService
             return false;
         }
         return $this->repo->verifySignToken($signToken, $ttdId, $templateId, $docId);
+    }
+
+    /**
+     * Is this recipient an email address rather than a phone number?
+     *
+     * The `@` test comes first and does the real work; FILTER_VALIDATE_EMAIL
+     * then decides whether it is a usable one. Order matters: a mistyped
+     * address must still be *recognised* as an email attempt, otherwise it
+     * falls through to the phone branch and is rejected as "invalid phone
+     * number" — an error that sends the operator looking in the wrong place.
+     * {@see normalizeRecipient()} keeps that distinction; the caller validates.
+     */
+    public static function isEmail(string $recipient): bool
+    {
+        return strpos($recipient, '@') !== false
+            && filter_var($recipient, FILTER_VALIDATE_EMAIL) !== false;
+    }
+
+    /**
+     * Normalize a recipient, whichever channel it belongs to.
+     *
+     * Phone numbers are handed to {@see normalizePhone()} unchanged — that
+     * function and its rules are untouched, because the WhatsApp route depends
+     * on them and 1.595 historical rows were written by them.
+     *
+     * Email addresses are lowercased and trimmed, nothing more. Local parts are
+     * technically case-sensitive per RFC 5321, but no mail provider in practice
+     * treats them so, and folding case is what makes the "is this the address
+     * on file?" comparison in `send_ttd_otp.php` agree with itself.
+     *
+     * An address containing `@` but failing validation is returned trimmed and
+     * lowercased rather than mangled into digits, so the caller can refuse it
+     * with a message about the address.
+     */
+    public static function normalizeRecipient(string $recipient): string
+    {
+        $s = trim($recipient);
+
+        if (strpos($s, '@') !== false) {
+            return strtolower($s);
+        }
+
+        return self::normalizePhone($s);
+    }
+
+    /**
+     * Mask a recipient for display, whichever channel it belongs to.
+     *
+     * Phone numbers go to {@see maskPhone()}, byte for byte as before.
+     *
+     * Email addresses keep their domain in full and lose almost all of the
+     * local part: `budi.santoso@gmail.com` → `bu***@gmail.com`. The domain has
+     * to stay readable — it is what lets an operator confirm the code went
+     * where they meant it to — while the local part is the part that names a
+     * person. Same spirit as maskPhone(), which always hides at least four
+     * digits.
+     *
+     * Normalizes first, exactly as maskPhone() does (`$d =
+     * self::normalizePhone($phone)`). Without it the same address masks two
+     * different ways depending on how the caller happened to capitalise it,
+     * and the audit line stops matching the stored value.
+     */
+    public static function maskRecipient(string $recipient): string
+    {
+        $s = self::normalizeRecipient($recipient);
+
+        if (strpos($s, '@') === false) {
+            return self::maskPhone($s);
+        }
+
+        $at = strrpos($s, '@');
+        $local  = substr($s, 0, $at);
+        $domain = substr($s, $at);           // termasuk '@'
+
+        $len = strlen($local);
+        if ($len === 0) {
+            return $domain;
+        }
+
+        // Dua huruf pertama cukup untuk mengenali alamat sendiri tanpa
+        // menyebutkannya. Nama lokal sependek itu disembunyikan seluruhnya,
+        // dengan alasan yang sama seperti maskPhone() menyamarkan nomor pendek
+        // lebih rapat, bukan lebih longgar.
+        $head = ($len <= 2) ? '' : substr($local, 0, 2);
+
+        return $head . '***' . $domain;
     }
 
     /**

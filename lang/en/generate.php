@@ -346,6 +346,22 @@ return [
             'send_success'       => 'Code sent.',
             'verify_success'     => 'Verified.',
 
+            // ── Email channel on the send route ──
+            // Shown only when the server holds SMTP credentials
+            // (EZDOC_OTP_EMAIL_ENABLED). The QR scan route has no channel at
+            // all: the number comes from whoever scans.
+            'channel_wa'         => 'WhatsApp',
+            'channel_email'      => 'Email',
+            'step1_desc_email'   => 'The code will be sent to the patient\'s email address.',
+            'email_label'        => 'Patient email:',
+            // Said plainly: the code goes to the address that was TYPED, not to
+            // one on record — because for almost every patient there is none.
+            'email_hint'         => 'Check the address carefully — the code goes to what you type here, not to an address on record.',
+            'send_btn_email'     => 'Send OTP by email',
+            'step2_desc_email'   => 'A 6-digit code has been sent to {email}. Ask the patient for it and enter it below.',
+            'email_required'     => 'An email address is required.',
+            'email_invalid'      => 'That email address is not valid.',
+
             // ── V6: the signer requests the code by scanning a QR on the
             // operator's screen. No phone field on this route — the number
             // comes from whoever scans, so nothing can be mistyped.

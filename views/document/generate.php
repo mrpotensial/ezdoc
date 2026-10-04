@@ -2576,15 +2576,53 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                 <!-- Step 1: Kirim OTP (jalur cadangan) -->
                 <div id="signOtpStep1" class="hidden">
                     <h6 class="text-sm font-bold text-slate-800 mb-1 flex items-center gap-1.5">
-                        <i class="bi bi-whatsapp text-emerald-600 text-base"></i>
+                        <i id="signOtpChannelIcon" class="bi bi-whatsapp text-emerald-600 text-base"></i>
                         <span><?= h(t('modal.otp.step1_title', [], 'Verifikasi OTP Pasien')) ?></span>
                     </h6>
-                    <p class="text-xs text-slate-600 mb-3"><?= h(t('modal.otp.step1_desc', [], 'Fitur Tanda Tangan ini memerlukan verifikasi Kode OTP yang dikirimkan ke nomor WhatsApp pasien.')) ?></p>
-                    
-                    <div class="mb-3">
+
+                    <?php // ─── Pemilih kanal ───
+                    //
+                    // Hanya digambar kalau kanal email memang terpasang di server
+                    // ini. Tombol yang selalu gagal lebih buruk daripada tombol
+                    // yang tidak pernah ada — pola yang sama dengan
+                    // EZDOC_SCAN_URL_TEMPLATE yang menentukan jalur pindaian.
+                    //
+                    // Bawaannya WhatsApp, selalu. Seluruh pemakaian historis
+                    // adalah nomor, dan petugas yang sudah hafal alurnya tidak
+                    // boleh mendapati tombolnya berpindah arti. ?>
+                    <?php if (defined('EZDOC_OTP_EMAIL_ENABLED') && EZDOC_OTP_EMAIL_ENABLED): ?>
+                    <div class="mb-3 flex gap-1 p-1 bg-slate-100 rounded-lg" id="signOtpChannelTabs" role="group">
+                        <button type="button" data-otp-channel="whatsapp" onclick="setOtpChannel('whatsapp')"
+                                class="flex-1 py-1.5 px-2 rounded-md text-[11px] font-bold transition flex items-center justify-center gap-1
+                                       bg-white text-emerald-700 shadow-sm">
+                            <i class="bi bi-whatsapp"></i> <?= h(t('modal.otp.channel_wa', [], 'WhatsApp')) ?>
+                        </button>
+                        <button type="button" data-otp-channel="email" onclick="setOtpChannel('email')"
+                                class="flex-1 py-1.5 px-2 rounded-md text-[11px] font-bold transition flex items-center justify-center gap-1
+                                       text-slate-500 hover:text-slate-700">
+                            <i class="bi bi-envelope-fill"></i> <?= h(t('modal.otp.channel_email', [], 'Email')) ?>
+                        </button>
+                    </div>
+                    <?php endif; ?>
+
+                    <p class="text-xs text-slate-600 mb-3" id="signOtpStep1Desc"><?= h(t('modal.otp.step1_desc', [], 'Fitur Tanda Tangan ini memerlukan verifikasi Kode OTP yang dikirimkan ke nomor WhatsApp pasien.')) ?></p>
+
+                    <?php // Dua kotak isian, bukan satu yang berganti arti. Satu
+                    // kotak akan memaksa rantai prasetel nomor
+                    // (generate_scripts.php) ikut berubah, dan rantai itu juga
+                    // dipakai jalur yang tidak boleh tersentuh. ?>
+                    <div class="mb-3" id="signOtpPhoneWrap">
                         <label class="block text-xs font-semibold text-slate-700 mb-1"><?= h(t('modal.otp.phone_label', [], 'Nomor WhatsApp Pasien:')) ?></label>
                         <input type="text" id="signOtpPhoneInput" class="w-full text-xs p-2 border border-slate-300 rounded font-mono focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" placeholder="08xxxxxxxxxx / 628xxxxxxxxxx">
                         <small class="text-[11px] text-slate-500"><?= h(t('modal.otp.phone_hint', [], 'Masukkan/sesuaikan nomor WhatsApp pasien (format: 08xx / 628xx)')) ?></small>
+                    </div>
+
+                    <div class="mb-3 hidden" id="signOtpEmailWrap">
+                        <label class="block text-xs font-semibold text-slate-700 mb-1"><?= h(t('modal.otp.email_label', [], 'Email Pasien:')) ?></label>
+                        <input type="email" id="signOtpEmailInput" autocomplete="off" spellcheck="false"
+                               class="w-full text-xs p-2 border border-slate-300 rounded font-mono focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                               placeholder="nama@contoh.com">
+                        <small class="text-[11px] text-slate-500"><?= h(t('modal.otp.email_hint', [], 'Pastikan alamatnya benar — kode dikirim ke alamat yang Anda tulis, bukan ke alamat tercatat.')) ?></small>
                     </div>
 
                     <button type="button" id="btnSendOtp" onclick="sendTtdOtp()" class="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold transition flex items-center justify-center gap-2">
@@ -2829,6 +2867,13 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
         // Diputuskan server, bukan ditebak sisi tampilan: tanpa pola tautan yang
         // dikonfigurasi, tombolnya cuma akan menghasilkan 503. ?>
         window.EZDOC_SCAN_ENABLED = <?= (defined('EZDOC_SCAN_URL_TEMPLATE') && EZDOC_SCAN_URL_TEMPLATE !== '' && strpos((string) EZDOC_SCAN_URL_TEMPLATE, '{token}') !== false) ? 'true' : 'false' ?>;
+
+        <?php // Apakah kanal email terpasang. Diputuskan server dengan alasan
+        // yang sama seperti di atas: tanpa kredensial SMTP, tombolnya cuma akan
+        // menghasilkan 503. Konstantanya disetel ezdoc_otp_setup.php, dan ia
+        // bernilai true hanya kalau adapter email benar-benar berhasil dirakit
+        // dari berkas env. ?>
+        window.EZDOC_OTP_EMAIL_ENABLED = <?= (defined('EZDOC_OTP_EMAIL_ENABLED') && EZDOC_OTP_EMAIL_ENABLED) ? 'true' : 'false' ?>;
 
         // i18n dictionary — mirrors EZDOC_URLS above. spec: docs/I18N.md
         window.EZDOC_I18N = <?= json_encode($translator->all(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;

@@ -3405,11 +3405,31 @@
 
         async function sendTtdOtp() {
             if (!currentTtdId) return;
-            const phoneInput = document.getElementById('signOtpPhoneInput');
-            const phone = phoneInput ? phoneInput.value.trim() : '';
+
+            const email = (_otpChannel === 'email');
+
+            // Kotak yang sedang aktif, bukan selalu kotak nomor. Kuncinya di
+            // POST tetap 'phone' untuk kedua kanal — pohon ezdoc/ dan pemanggil
+            // lama masih mengirim nama itu, dan menggantinya akan merusak
+            // mereka tanpa menghasilkan apa pun.
+            const input = document.getElementById(email ? 'signOtpEmailInput' : 'signOtpPhoneInput');
+            const phone = input ? input.value.trim() : '';
 
             if (!phone) {
-                showToast(t('modal.otp.phone_required', {}, 'A phone number is required.'), 'error');
+                showToast(email
+                    ? t('modal.otp.email_required', {}, 'An email address is required.')
+                    : t('modal.otp.phone_required', {}, 'A phone number is required.'), 'error');
+                if (input) input.focus();
+                return;
+            }
+
+            // Diperiksa di sini juga, bukan hanya di server. Server mencatat
+            // baris challenge SEBELUM mengirim supaya provider yang lambat
+            // tetap memakan jeda 60 detik — jadi alamat yang jelas salah ketik
+            // tidak boleh sampai ke sana dan membakar jeda itu.
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(phone)) {
+                showToast(t('modal.otp.email_invalid', {}, 'That email address is not valid.'), 'error');
+                input.focus();
                 return;
             }
 
@@ -3424,6 +3444,7 @@
                 fd.append('template_id', templateId);
                 fd.append('ttd_id', currentTtdId);
                 fd.append('phone', phone);
+                fd.append('channel', _otpChannel);
                 if (CURRENT_DOC_ID) fd.append('doc_id', CURRENT_DOC_ID);
 
                 // Get patient name if available
@@ -3438,12 +3459,23 @@
                     _otpState.currentChallengeId = data.challenge_id;
                     showToast(data.message || t('modal.otp.send_success', {}, 'Code sent.'), 'success');
 
+                    // Alamat yang terbukti bisa dikirimi disimpan ke dokumen,
+                    // supaya dokumen berikutnya untuk pasien yang sama sudah
+                    // terisi. Dilakukan SESUDAH kirim berhasil, bukan sebelum:
+                    // alamat yang ditolak tidak layak diawetkan.
+                    if (email) _otpTulisBalikEmail(phone);
+
                     // Switch to Step 2
                     document.getElementById('signOtpStep1').classList.add('hidden');
                     document.getElementById('signOtpStep2').classList.remove('hidden');
 
+                    // Kanal dari balasan server, bukan dari _otpChannel —
+                    // server yang memutuskan ke mana kodenya benar-benar pergi.
+                    const lewatEmail = (data.channel || _otpChannel) === 'email';
                     const descEl = document.getElementById('signOtpStep2Desc');
-                    if (descEl) descEl.textContent = t('modal.otp.step2_desc', {phone: data.masked_phone}, `Kode OTP 6 digit telah dikirimkan ke WhatsApp ${data.masked_phone}. Silakan minta kode tersebut dari pasien dan masukkan di bawah ini.`);
+                    if (descEl) descEl.textContent = lewatEmail
+                        ? t('modal.otp.step2_desc_email', {email: data.masked_phone}, `Kode OTP 6 digit telah dikirimkan ke email ${data.masked_phone}. Silakan minta kode tersebut dari pasien dan masukkan di bawah ini.`)
+                        : t('modal.otp.step2_desc', {phone: data.masked_phone}, `Kode OTP 6 digit telah dikirimkan ke WhatsApp ${data.masked_phone}. Silakan minta kode tersebut dari pasien dan masukkan di bawah ini.`);
 
                     const codeInput = document.getElementById('signOtpCodeInput');
                     if (codeInput) { codeInput.value = ''; codeInput.focus(); }
@@ -3456,7 +3488,10 @@
                 showToast('Gagal mengirim OTP: ' + e.message, 'error');
             } finally {
                 btn.disabled = false;
-                btnText.textContent = t('modal.otp.send_btn', [], 'Kirim Kode OTP via WA');
+                // Dipulihkan ke teks kanal yang sedang dipilih. Sebelumnya di
+                // sini teks "via WA" dipaku, jadi sesudah satu kirim email
+                // tombolnya berbohong soal apa yang akan dilakukannya.
+                btnText.textContent = _otpSendLabel();
             }
         }
 
@@ -3513,6 +3548,137 @@
         }
 
         // ─────────────────────────────────────────────────────────────────
+        // Kanal jalur kirim: WhatsApp atau email
+        //
+        // Dua kotak isian yang bergantian tampil, bukan satu kotak yang
+        // berganti arti. Satu kotak akan memaksa rantai prasetel nomor di
+        // bawah ikut berubah, dan rantai itu juga dipakai jalur pindaian yang
+        // tidak boleh tersentuh.
+        //
+        // Bawaannya selalu 'whatsapp'. Petugas yang sudah hafal alur lama
+        // tidak boleh mendapati tombolnya berpindah arti.
+        // ─────────────────────────────────────────────────────────────────
+
+        let _otpChannel = 'whatsapp';
+
+        function setOtpChannel(kanal) {
+            // Email tanpa konfigurasi server tidak pernah bisa dipilih. Tanpa
+            // penjaga ini, pemanggilan dari konsol atau dari keadaan tersimpan
+            // bisa membawa petugas ke kotak isian yang kirimannya pasti 503.
+            if (kanal === 'email' && !window.EZDOC_OTP_EMAIL_ENABLED) return;
+            if (kanal !== 'email' && kanal !== 'whatsapp') return;
+
+            _otpChannel = kanal;
+            const email = (kanal === 'email');
+
+            const wrapHp = document.getElementById('signOtpPhoneWrap');
+            const wrapEm = document.getElementById('signOtpEmailWrap');
+            if (wrapHp) wrapHp.classList.toggle('hidden', email);
+            if (wrapEm) wrapEm.classList.toggle('hidden', !email);
+
+            // Tab aktif. Kelasnya ditulis di sini dan bukan lewat satu kelas
+            // CSS supaya tampilannya cocok dengan tombol lain di panel ini,
+            // yang semuanya memakai utilitas Tailwind inline.
+            document.querySelectorAll('#signOtpChannelTabs [data-otp-channel]').forEach(b => {
+                const aktif = b.getAttribute('data-otp-channel') === kanal;
+                b.classList.toggle('bg-white', aktif);
+                b.classList.toggle('text-emerald-700', aktif);
+                b.classList.toggle('shadow-sm', aktif);
+                b.classList.toggle('text-slate-500', !aktif);
+                b.classList.toggle('hover:text-slate-700', !aktif);
+            });
+
+            const ikon = document.getElementById('signOtpChannelIcon');
+            if (ikon) {
+                ikon.classList.toggle('bi-whatsapp', !email);
+                ikon.classList.toggle('bi-envelope-fill', email);
+            }
+
+            const ket = document.getElementById('signOtpStep1Desc');
+            if (ket) {
+                ket.textContent = email
+                    ? t('modal.otp.step1_desc_email', {}, 'Kode OTP akan dikirim ke alamat email pasien.')
+                    : t('modal.otp.step1_desc', {}, 'Fitur Tanda Tangan ini memerlukan verifikasi Kode OTP yang dikirimkan ke nomor WhatsApp pasien.');
+            }
+
+            const btnText = document.getElementById('btnSendOtpText');
+            if (btnText) btnText.textContent = _otpSendLabel();
+
+            // Isi kotak email dari field dokumen kalau ada. Nama fieldnya
+            // menurut konvensi — lihat _otpTulisBalikEmail() untuk alasan
+            // kenapa tidak dipakai atribut template sendiri.
+            if (email) {
+                const inp = document.getElementById('signOtpEmailInput');
+                if (inp && !inp.value) inp.value = _otpEmailTersimpan();
+            }
+        }
+
+        /** Teks tombol kirim untuk kanal yang sedang dipilih. */
+        function _otpSendLabel() {
+            return _otpChannel === 'email'
+                ? t('modal.otp.send_btn_email', {}, 'Kirim Kode OTP via Email')
+                : t('modal.otp.send_btn', {}, 'Kirim Kode OTP via WA');
+        }
+
+        /** Nama field dokumen tempat alamat email pasien disimpan. */
+        const _OTP_FIELD_EMAIL = ['email_pasien', 'email'];
+
+        /** Alamat email yang sudah tersimpan di dokumen, kalau ada. */
+        function _otpEmailTersimpan() {
+            for (const nama of _OTP_FIELD_EMAIL) {
+                const ctrl = document.querySelector(`input[name="${nama}"], textarea[name="${nama}"]`);
+                if (ctrl && ctrl.value) return ctrl.value.trim();
+                const ed = document.querySelector(`.f[data-field="${nama}"]`);
+                if (ed && ed.textContent && ed.textContent.trim()) return ed.textContent.trim();
+            }
+            return '';
+        }
+
+        /**
+         * Tulis alamat yang diketik kembali ke field dokumen.
+         *
+         * INI FITURNYA, bukan kemudahan tambahan. Kolom nomor HP kosong di
+         * 1.103 dari 1.103 dokumen bukan karena templatenya salah, tapi karena
+         * modal ini tidak pernah menulis balik apa pun: nomor diketik ulang
+         * tiap kali, selamanya. Tanpa tulis balik, alamat email akan mewarisi
+         * persis masalah yang sama.
+         *
+         * Tidak ada jalur simpan baru di sini. Alamatnya ditaruh ke field
+         * dokumen biasa, lalu ikut terawetkan oleh Simpan berikutnya seperti
+         * isian lain — itu sebabnya tidak perlu atribut template baru maupun
+         * perubahan di perancang.
+         *
+         * Hanya mengisi field yang MEMANG ADA di dokumen ini. Template tanpa
+         * field email tidak mendapat apa-apa, dan itu benar: menyuntikkan field
+         * yang tidak dideklarasikan template akan menyimpan data ke tempat yang
+         * tidak pernah ditampilkan ke siapa pun.
+         */
+        function _otpTulisBalikEmail(alamat) {
+            if (!alamat) return false;
+            for (const nama of _OTP_FIELD_EMAIL) {
+                const ctrl = document.querySelector(`input[name="${nama}"], textarea[name="${nama}"]`);
+                if (ctrl) {
+                    if (ctrl.value.trim() === alamat) return false;
+                    ctrl.value = alamat;
+                    // Memberi tahu pendengar apa pun yang menandai dokumen
+                    // "berubah"; tanpa ini Simpan bisa menganggap tidak ada
+                    // yang perlu disimpan.
+                    ctrl.dispatchEvent(new Event('input',  { bubbles: true }));
+                    ctrl.dispatchEvent(new Event('change', { bubbles: true }));
+                    return true;
+                }
+                const ed = document.querySelector(`.f[data-field="${nama}"]`);
+                if (ed) {
+                    if ((ed.textContent || '').trim() === alamat) return false;
+                    ed.textContent = alamat;
+                    ed.dispatchEvent(new Event('input', { bubbles: true }));
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // ─────────────────────────────────────────────────────────────────
         // Jalur voucher — pasien meminta kodenya sendiri lewat QR
         //
         // Jalur utama. Yang lama (petugas menekan "Kirim OTP") tetap ada di
@@ -3565,6 +3731,11 @@
             stopScanPoll();
             const el = document.getElementById('signOtpStep1');
             if (el) el.classList.remove('hidden');
+
+            // Selalu dibuka di kanal WhatsApp, apa pun yang dipilih terakhir.
+            // Kanal yang menempel antar dokumen adalah cara mengirim kode ke
+            // kanal yang salah tanpa ada yang memperhatikan.
+            setOtpChannel('whatsapp');
 
             // Jalan pulang hanya kalau ada tempat untuk pulang.
             const back = document.getElementById('signOtpBackToScan');

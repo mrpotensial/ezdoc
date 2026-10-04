@@ -130,6 +130,13 @@ return [
         'otp_not_configured' => 'OTP delivery is not configured for this application.',
         'otp_phone_override_denied' => 'The code can only be sent to the number on file.',
 
+        // ── Email channel on the send route ──
+        'otp_channel_unknown'   => 'Unknown delivery channel.',
+        'otp_email_unavailable' => 'The email channel is not configured on this server.',
+        'otp_email_required'    => 'A recipient email address is required.',
+        'otp_email_invalid'     => 'That email address is not valid.',
+        'otp_email_too_long'    => 'That email address is too long.',
+
         // ── V6: document-bound code, requested via a QR on the operator's screen ──
         'scan_not_configured' => 'Scan-to-sign is not configured for this installation.',
         'scan_request_failed' => 'Could not create the code request. Please try again.',

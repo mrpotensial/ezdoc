@@ -181,6 +181,21 @@ $samarkanNomor = static function (string $nomor) use ($showAuditDetail): string 
     if ($nomor === '' || $showAuditDetail) {
         return $nomor;
     }
+
+    // Alamat email, bukan nomor. Tanpa cabang ini preg_replace('/\D/') di
+    // bawah membuang SELURUH alamat, lalu str_repeat('*', 0) mengembalikan
+    // string kosong — jadi riwayat tidak kehilangan kodenya, ia kehilangan
+    // keterangan bahwa kode itu pernah dikirim ke mana pun. Domain tetap utuh
+    // supaya auditor bisa menilai tujuannya; nama lokalnya yang disembunyikan.
+    if (strpos($nomor, '@') !== false) {
+        $at     = strrpos($nomor, '@');
+        $local  = substr($nomor, 0, $at);
+        $domain = substr($nomor, $at);
+        $head   = (strlen($local) <= 2) ? '' : substr($local, 0, 2);
+
+        return $head . '***' . $domain;
+    }
+
     $angka = preg_replace('/\D/', '', $nomor) ?? '';
     if (strlen($angka) <= 4) {
         return str_repeat('*', strlen($angka));

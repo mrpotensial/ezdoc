@@ -375,6 +375,23 @@ return [
             'send_success'       => 'Kode OTP terkirim.',
             'verify_success'     => 'Verifikasi berhasil.',
 
+            // ── Kanal email pada jalur kirim ──
+            // Hanya muncul kalau server punya kredensial SMTP
+            // (EZDOC_OTP_EMAIL_ENABLED). Jalur pindaian QR tidak punya kanal:
+            // nomornya ketahuan dari siapa yang memindai.
+            'channel_wa'         => 'WhatsApp',
+            'channel_email'      => 'Email',
+            'step1_desc_email'   => 'Kode OTP akan dikirim ke alamat email pasien.',
+            'email_label'        => 'Email Pasien:',
+            // Dikatakan terus terang: kodenya pergi ke alamat yang DIKETIK,
+            // bukan ke alamat tercatat — karena memang tidak ada alamat
+            // tercatat untuk hampir semua pasien.
+            'email_hint'         => 'Pastikan alamatnya benar — kode dikirim ke alamat yang Anda tulis, bukan ke alamat tercatat.',
+            'send_btn_email'     => 'Kirim Kode OTP via Email',
+            'step2_desc_email'   => 'Kode OTP 6 digit telah dikirimkan ke email {email}. Silakan minta kode tersebut dari pasien dan masukkan di bawah ini.',
+            'email_required'     => 'Alamat email wajib diisi.',
+            'email_invalid'      => 'Alamat email tidak sah.',
+
             // ── V6: kode diminta penanda tangan lewat QR di layar petugas ──
             // Tidak ada kolom nomor HP di jalur ini: nomornya ketahuan dari
             // siapa yang memindai, jadi tidak ada yang bisa salah ketik.
