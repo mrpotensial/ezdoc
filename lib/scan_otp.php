@@ -82,13 +82,28 @@ function ezdoc_scan_context(string $scanToken): array
 
     $challenge = $resolved['challenge'];
     $meta = json_decode((string) ($challenge['provider_meta'] ?? ''), true);
-    $out = [
+
+    return [
         'status'       => 'ok',
         'seconds_left' => $service->secondsLeft($challenge),
         'route'        => is_array($meta) && isset($meta['route'])
             ? (string) $meta['route']
             : \Ezdoc\Signature\Otp\ScanOtpService::ROUTE_SCAN,
-    ];
+    ] + ezdoc_scan_identity($challenge);
+}
+
+/**
+ * Identitas dokumen sebuah tantangan: nama dokumen, label slot, nomor
+ * kunjungan, nama penanda tangan. Kunci yang tidak terbaca tidak ikut.
+ *
+ * @internal Dipakai {@see ezdoc_scan_context()} dan {@see ezdoc_scan_delivered()}.
+ * @param array<string,mixed> $challenge
+ * @return array{document_name?: string, signer_name?: string, context_id?: string,
+ *     label?: string, ttd_label?: string, created_at?: string}
+ */
+function ezdoc_scan_identity(array $challenge): array
+{
+    $out = [];
 
     try {
         $db = \Ezdoc\Context::default()->connection();
@@ -279,9 +294,36 @@ function ezdoc_scan_progress(string $scanToken): array
  */
 function ezdoc_scan_history(string $signerRef, int $limit = 30): array
 {
+    return ezdoc_scan_history_rows('signer', $signerRef, $limit);
+}
+
+/**
+ * Riwayat kode yang dikirim ke satu alamat email, terbaru dulu.
+ *
+ * Bentuk tiap barisnya sama dengan {@see ezdoc_scan_history()}. Aplikasi
+ * pemakai yang menjamin alamat itu milik penanya.
+ *
+ * @return list<array{
+ *     document_name: string, ttd_label: string, context_id: string,
+ *     scanned_at: string, status: string, channel: string, public_slug: string
+ * }>
+ */
+function ezdoc_scan_history_for_recipient(string $email, int $limit = 30): array
+{
+    return ezdoc_scan_history_rows('recipient', $email, $limit);
+}
+
+/**
+ * @internal
+ * @return list<array<string,string>>
+ */
+function ezdoc_scan_history_rows(string $by, string $value, int $limit): array
+{
     try {
         $repo = new \Ezdoc\Signature\Otp\OtpChallengeRepository(\Ezdoc\Context::default()->connection());
-        $rows = $repo->findBySignerRef($signerRef, $limit);
+        $rows = $by === 'recipient'
+            ? $repo->findByRecipient($value, $limit)
+            : $repo->findBySignerRef($value, $limit);
         $service = new \Ezdoc\Signature\Otp\ScanOtpService($repo);
 
         $out = [];
@@ -298,7 +340,9 @@ function ezdoc_scan_history(string $signerRef, int $limit = 30): array
                 'context_id'    => $item['context_id'],
                 'scanned_at'    => (string) ($row['scanned_at'] ?? ''),
                 'status'        => $service->progressOf($row),
-                'channel'       => isset($meta['channel']) ? (string) $meta['channel'] : '',
+                'channel'       => isset($meta['channel'])
+                    ? (string) $meta['channel']
+                    : (($meta['route'] ?? '') === \Ezdoc\Signature\Otp\ScanOtpService::ROUTE_EMAIL ? 'email' : ''),
                 'public_slug'   => $item['public_slug'],
             ];
         }
@@ -357,6 +401,95 @@ function ezdoc_scan_pending(string $subjectType, string $subjectId): array
 
         return [];
     }
+}
+
+/**
+ * Kode lewat email yang masih menunggu dibacakan, untuk satu alamat.
+ *
+ * Tokennya IKUT dikembalikan — dengan syarat yang sama seperti
+ * {@see ezdoc_scan_pending()}: aplikasi pemakai wajib sudah membuktikan alamat
+ * itu milik penanya (misalnya alamat terverifikasi akun loginnya).
+ *
+ * Kodenya TIDAK ikut. Daftar ini bisa tampil di layar mana saja; kode baru
+ * dibuka lewat {@see ezdoc_scan_delivered()} saat satu permintaan dipilih.
+ *
+ * @return list<array{
+ *     scan_token: string, document_name: string, ttd_label: string,
+ *     context_id: string, created_at: string, seconds_left: int
+ * }>
+ */
+function ezdoc_scan_pending_for_recipient(string $email): array
+{
+    try {
+        $repo = new \Ezdoc\Signature\Otp\OtpChallengeRepository(\Ezdoc\Context::default()->connection());
+        $service = new \Ezdoc\Signature\Otp\ScanOtpService($repo);
+        $rows = $repo->findPendingForRecipient($email, \Ezdoc\Signature\Otp\ScanOtpService::ROUTE_EMAIL);
+
+        $out = [];
+        foreach (ezdoc_scan_describe($rows) as $item) {
+            if ($item['deleted']) {
+                continue;
+            }
+            $row = $item['row'];
+            $out[] = [
+                'scan_token'    => (string) $row['scan_token'],
+                'document_name' => $item['document_name'],
+                'ttd_label'     => $item['ttd_label'],
+                'context_id'    => $item['context_id'],
+                'created_at'    => (string) ($row['created_at'] ?? ''),
+                'seconds_left'  => $service->secondsLeft($row),
+            ];
+        }
+
+        return $out;
+    } catch (\Throwable $e) {
+        @error_log('[ezdoc:scan:pending:recipient] ' . $e->getMessage());
+
+        return [];
+    }
+}
+
+/**
+ * Buka kode yang dikirim ke alamat email, untuk aplikasi penanda tangan.
+ *
+ * `$recipient` adalah alamat yang sudah dibuktikan milik penanya — kosong
+ * kalau penanya belum masuk. Lihat
+ * {@see \Ezdoc\Signature\Otp\ScanOtpService::openDelivered()} untuk arti tiap
+ * status.
+ *
+ * Saat `waiting`, yang dikembalikan juga identitas dokumennya dan
+ * `consent_message` — kalimat yang SAMA dengan isi suratnya, dari baris yang
+ * tersimpan. Aplikasi menampilkannya apa adanya, tidak merangkai ulang.
+ *
+ * Tidak pernah melempar.
+ *
+ * @return array{status: string, code?: string, seconds_left?: int,
+ *     masked_recipient?: string, consent_message?: string, document_name?: string,
+ *     ttd_label?: string, context_id?: string, signer_name?: string}
+ */
+function ezdoc_scan_delivered(string $scanToken, string $recipient): array
+{
+    try {
+        $opened = (new \Ezdoc\Signature\Otp\ScanOtpService())->openDelivered($scanToken, $recipient);
+    } catch (\Throwable $e) {
+        @error_log('[ezdoc:scan:delivered] ' . $e->getMessage());
+
+        return ['status' => 'error'];
+    }
+
+    $out = ['status' => $opened['status']];
+    foreach (['code', 'seconds_left', 'masked_recipient'] as $key) {
+        if (isset($opened[$key])) {
+            $out[$key] = $opened[$key];
+        }
+    }
+
+    if ($opened['challenge'] !== null) {
+        $out['consent_message'] = (string) ($opened['challenge']['consent_message'] ?? '');
+        $out += ezdoc_scan_identity($opened['challenge']);
+    }
+
+    return $out;
 }
 
 /**

@@ -3714,6 +3714,12 @@
             const el = document.getElementById('signOtpStepScan');
             if (el) el.classList.remove('hidden');
             _scanState('signScanIdle');
+
+            // Sisa jalur email dari dokumen sebelumnya tidak ikut terbawa.
+            const again = document.getElementById('signEmailAgain');
+            if (again) again.classList.add('hidden');
+            const msg = document.getElementById('signEmailMsg');
+            if (msg) { msg.textContent = ''; msg.classList.add('hidden'); }
         }
 
         /**
@@ -3906,6 +3912,93 @@
                 if (btnText) btnText.textContent = t('modal.otp.app_send_btn', {}, 'Kirim ke aplikasi penanda tangan');
             }
         }
+
+        /**
+         * Kirim kode ke alamat email penanda tangan.
+         *
+         * Berbeda dengan QR dan aplikasi, kodenya lahir saat ini juga — server
+         * membalas sesudah suratnya terkirim. Jadi tidak ada layar tunggu:
+         * panel langsung ke kolom kode, dengan alamat tujuannya disamarkan.
+         *
+         * Dokumen yang belum disimpan boleh: tidak ada yang perlu dicari dari
+         * subjeknya, alamatnya diketik petugas.
+         *
+         * Pesan gagal ditulis di bawah kolomnya (`#signEmailMsg`), bukan toast —
+         * toast tertutup modal ini.
+         */
+        async function requestEmailSign() {
+            const input = document.getElementById('signEmailAddr');
+            const msg = document.getElementById('signEmailMsg');
+            const btn = document.getElementById('btnRequestEmail');
+            const btnText = document.getElementById('btnRequestEmailText');
+            const tulisPesan = (teks) => {
+                if (!msg) return;
+                msg.textContent = teks || '';
+                msg.classList.toggle('hidden', !teks);
+            };
+
+            const email = (input?.value || '').trim();
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                tulisPesan(t('modal.otp.email_invalid', {}, 'Alamat email tidak sah.'));
+                input?.focus();
+                return;
+            }
+
+            tulisPesan('');
+            if (btn) btn.disabled = true;
+            if (btnText) btnText.textContent = t('modal.otp.email_sending', {}, 'Mengirim…');
+
+            try {
+                const fd = new FormData();
+                fd.append('_doc_action', 'request_scan_code');
+                fd.append('template_id', templateId);
+                fd.append('ttd_id', currentTtdId);
+                if (CURRENT_DOC_ID) fd.append('doc_id', CURRENT_DOC_ID);
+                fd.append('delivery', 'email');
+                fd.append('email', email);
+
+                const endpoint = typeof _ezdocEndpoint === 'function' ? _ezdocEndpoint('docAction') : 'actions/_dispatcher.php';
+                const res = await fetch(endpoint, { method: 'POST', body: fd });
+                const data = await res.json();
+
+                if (!data.success) {
+                    tulisPesan(data.message || t('modal.otp.email_failed', {}, 'Email tidak terkirim.'));
+                    return;
+                }
+
+                _otpState.currentChallengeId = data.challenge_id;
+                stopScanPoll();
+                _scanState('signScanEntry');
+
+                const by = document.getElementById('signScanScannedBy');
+                if (by) {
+                    by.textContent = t('modal.otp.email_sent_to', {email: data.masked_recipient || ''},
+                        `Kode dikirim ke ${data.masked_recipient || ''}`);
+                }
+                const again = document.getElementById('signEmailAgain');
+                if (again) again.classList.remove('hidden');
+
+                const attempts = document.getElementById('signScanAttempts');
+                if (attempts) attempts.textContent = '';
+
+                const codeInput = document.getElementById('signScanCode');
+                if (codeInput) { codeInput.value = ''; codeInput.focus(); }
+            } catch (e) {
+                tulisPesan(t('modal.otp.email_failed', {}, 'Email tidak terkirim.') + ' ' + e.message);
+            } finally {
+                if (btn) btn.disabled = false;
+                if (btnText) btnText.textContent = t('modal.otp.email_send_btn', {}, 'Kirim');
+            }
+        }
+
+        // Delegasi, bukan pengikat langsung: formulirnya ada di dalam modal yang
+        // bisa digambar sesudah skrip ini jalan.
+        document.addEventListener('submit', (e) => {
+            if (e.target && e.target.id === 'signEmailForm') {
+                e.preventDefault();
+                requestEmailSign();
+            }
+        });
 
         /**
          * Hitung mundur masa berlaku QR.

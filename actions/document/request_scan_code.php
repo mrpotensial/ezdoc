@@ -10,8 +10,16 @@ declare(strict_types=1);
  * Params:
  *   - template_id : int    (wajib)
  *   - ttd_id      : string (wajib) slot tanda tangannya
- *   - doc_id      : int    (opsional untuk qr, wajib untuk app)
- *   - delivery    : qr | app (bawaan qr)
+ *   - doc_id      : int    (opsional untuk qr dan email, wajib untuk app)
+ *   - delivery    : qr | app | email (bawaan qr)
+ *   - email       : string (wajib untuk email) alamat penanda tangan
+ *
+ * `delivery=email` melahirkan kodenya SEKARANG dan menyerahkannya ke
+ * `EZDOC_SCAN_EMAIL_DELIVERY` milik aplikasi pemakai, yang mengirim surat dan
+ * boleh juga menampilkannya di aplikasinya — lihat
+ * {@see ScanOtpService::issueToRecipient()}. Surat yang gagal terkirim
+ * mematikan kodenya. Barisnya lahir berstatus "sudah dipindai", jadi layar
+ * petugas langsung beralih ke isian kode lewat scan_code_status yang sama.
  *
  * `delivery=app` tidak menggambar QR. Ia menerbitkan token berumur
  * {@see ScanOtpService::APP_TTL_SECONDS} lalu meminta aplikasi pemakai
@@ -57,8 +65,22 @@ if ($templateId <= 0 || $ttdId === '') {
 }
 
 $delivery = strtolower(trim((string) ($_POST['delivery'] ?? 'qr')));
-if ($delivery !== 'qr' && $delivery !== 'app') {
+if (!in_array($delivery, ['qr', 'app', 'email'], true)) {
     ezdoc_respond_error(t('response.scan_delivery_unknown', [], 'Unknown delivery.'), 400);
+}
+
+$emailDeliverer = defined('EZDOC_SCAN_EMAIL_DELIVERY') ? EZDOC_SCAN_EMAIL_DELIVERY : '';
+$email = OtpService::normalizeRecipient((string) ($_POST['email'] ?? ''));
+if ($delivery === 'email') {
+    if ($emailDeliverer === '' || !is_callable($emailDeliverer)) {
+        ezdoc_respond_error(
+            t('response.scan_email_not_configured', [], 'Sending the code by email is not configured for this installation.'),
+            503
+        );
+    }
+    if (!OtpService::isEmail($email)) {
+        ezdoc_respond_error(t('response.scan_email_invalid', [], 'Invalid email address.'), 400);
+    }
 }
 
 $deliverer = defined('EZDOC_SCAN_APP_DELIVERY') ? EZDOC_SCAN_APP_DELIVERY : '';
@@ -113,6 +135,112 @@ if (!$ttdConfig['require_otp']) {
 }
 if (!ezdoc_can_sign_ttd($ttdConfig['rbac'])) {
     ezdoc_respond_error(t('response.forbidden', [], 'Not permitted'), 403);
+}
+
+if ($delivery === 'email') {
+    $repo = new \Ezdoc\Signature\Otp\OtpChallengeRepository($db);
+    $service = new ScanOtpService($repo);
+
+    try {
+        $issued = $service->issueToRecipient($templateId, $ttdId, $docId, $email);
+    } catch (\Throwable $e) {
+        @error_log('[ezdoc:scan:request:email] ' . $e->getMessage());
+        ezdoc_respond_error(t('response.scan_request_failed', [], 'Could not create the code request.'), 500);
+    }
+
+    $identity = ezdoc_scan_identity([
+        'template_id' => $templateId,
+        'ttd_id'      => $ttdId,
+        'doc_id'      => $docId,
+    ]);
+
+    // Penyusun dan pengirim suratnya milik aplikasi pemakai — kata-kata
+    // persetujuan adalah keputusannya, bukan keputusan pustaka. Ia menerima
+    // kodenya (untuk isi surat) dan tokennya (untuk tautan ke aplikasinya), dan
+    // mengembalikan kalimat persetujuan yang BENAR-BENAR terkirim.
+    $sent = ['ok' => false, 'message' => '', 'consent_message' => '', 'reached' => 0];
+    try {
+        $hasil = call_user_func($emailDeliverer, [
+            'challenge_id'  => $issued['challenge_id'],
+            'scan_token'    => $issued['scan_token'],
+            'code'          => $issued['code'],
+            'recipient'     => $email,
+            'doc_id'        => $docId,
+            'template_id'   => $templateId,
+            'ttd_id'        => $ttdId,
+            'ttd_label'     => (string) ($identity['ttd_label'] ?? $ttdConfig['label'] ?? ''),
+            'document_name' => (string) ($identity['document_name'] ?? $template['name'] ?? ''),
+            'signer_name'   => (string) ($identity['signer_name'] ?? ''),
+            'context_id'    => (string) ($identity['context_id'] ?? ''),
+            'label'         => (string) ($identity['label'] ?? ''),
+            'created_at'    => (string) ($identity['created_at'] ?? ''),
+            'expires_at'    => $issued['expires_at'],
+            'ttl_seconds'   => ScanOtpService::EMAIL_TTL_SECONDS,
+        ]);
+        if (is_array($hasil)) {
+            $sent = [
+                'ok'              => !empty($hasil['ok']),
+                'message'         => (string) ($hasil['message'] ?? ''),
+                'consent_message' => (string) ($hasil['consent_message'] ?? ''),
+                'reached'         => (int) ($hasil['reached'] ?? 0),
+            ];
+        }
+    } catch (\Throwable $e) {
+        @error_log('[ezdoc:scan:request:email:deliver] ' . $e->getMessage());
+    }
+
+    if (!$sent['ok']) {
+        // Kode yang tidak pernah sampai tidak boleh bisa diverifikasi — pola
+        // yang sama dengan OtpService::createChallenge().
+        $repo->expire($issued['challenge_id']);
+        ezdoc_respond_error(
+            $sent['message'] !== ''
+                ? $sent['message']
+                : t('response.scan_email_failed', [], 'The email was not sent. Check the address, or use the QR code.'),
+            502
+        );
+    }
+
+    if ($sent['consent_message'] !== '') {
+        $service->recordConsent($issued['challenge_id'], $sent['consent_message']);
+    }
+
+    // Kode lama untuk slot yang sama baru dimatikan SEKARANG, sesudah kode baru
+    // terbukti terkirim: dua kode hidup untuk satu tanda tangan terbaca sebagai
+    // dua permintaan, tapi alamat yang salah ketik tidak boleh mematikan kode
+    // sah yang sedang dipegang pasien. Dokumen yang belum disimpan tidak punya
+    // slot untuk dicari.
+    $retired = $docId !== null && $docId > 0
+        ? $repo->expirePendingForSlot((int) $docId, $ttdId, ScanOtpService::ROUTE_EMAIL, $issued['challenge_id'])
+        : 0;
+
+    $masked = OtpService::maskRecipient($email);
+
+    ezdoc_audit_log('otp.email_requested', [
+        'target_type' => 'document',
+        'target_id'   => (string) ($docId ?? $templateId),
+        'doc_id'      => $docId,
+        'metadata'    => [
+            'template_id'      => $templateId,
+            'ttd_id'           => $ttdId,
+            'challenge_id'     => $issued['challenge_id'],
+            'expires_at'       => $issued['expires_at'],
+            'masked_recipient' => $masked,
+            'retired'          => $retired,
+            'reached'          => $sent['reached'],
+        ],
+    ]);
+
+    // Kodenya TIDAK ikut. Petugas mendapatkannya dari mulut penanda tangan.
+    ezdoc_respond_success([
+        'challenge_id'     => $issued['challenge_id'],
+        'expires_at'       => $issued['expires_at'],
+        'ttl_seconds'      => ScanOtpService::EMAIL_TTL_SECONDS,
+        'delivery'         => 'email',
+        'masked_recipient' => $masked,
+        'reached'          => $sent['reached'],
+        'message'          => $sent['message'],
+    ]);
 }
 
 if ($delivery === 'app') {

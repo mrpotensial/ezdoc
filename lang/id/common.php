@@ -195,5 +195,8 @@ return [
         'scan_delivery_unknown'   => 'Cara pengiriman tidak dikenal.',
         'scan_app_not_configured' => 'Pengiriman ke aplikasi penanda tangan belum dikonfigurasi di aplikasi ini.',
         'scan_app_needs_saved'    => 'Simpan dokumennya dulu — permintaan ke aplikasi butuh dokumen yang sudah tersimpan.',
+        'scan_email_not_configured' => 'Pengiriman kode lewat email belum dikonfigurasi di aplikasi ini.',
+        'scan_email_invalid'      => 'Alamat email tidak sah.',
+        'scan_email_failed'       => 'Email tidak terkirim. Periksa alamatnya, atau pakai QR.',
     ],
 ];

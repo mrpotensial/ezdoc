@@ -62,9 +62,25 @@ final class ScanOtpService
     /** Batas masa berlaku yang boleh diminta pemanggil — token tidak boleh hidup selamanya. */
     public const MAX_TTL_SECONDS = 604800;
 
+    /**
+     * Berapa lama kode yang dikirim ke alamat email berlaku.
+     *
+     * Lebih panjang dari kode pindaian karena surat bisa terlambat beberapa
+     * menit dan penanda tangan perlu membuka kotak suratnya dulu. Tidak sampai
+     * berjam-jam: kodenya dibacakan kepada petugas yang sedang melayaninya.
+     */
+    public const EMAIL_TTL_SECONDS = 1800;
+
     /** Jalan lahirnya token, tersimpan di `provider_meta.route`. */
     public const ROUTE_SCAN = 'scan';
     public const ROUTE_APP = 'app';
+    public const ROUTE_EMAIL = 'email';
+
+    /** Status {@see openDelivered()} untuk penanya yang bukan alamat tujuannya. */
+    public const FORBIDDEN = 'forbidden';
+
+    /** Status {@see openDelivered()} untuk token yang tidak dikirim ke alamat. */
+    public const NOT_DELIVERED = 'not_delivered';
 
     /** Status untuk layar tunggu penanda tangan — lihat {@see progress()}. */
     public const OPEN = 'open';
@@ -81,10 +97,17 @@ final class ScanOtpService
     private OtpChallengeRepository $repo;
     private Clock $clock;
 
-    public function __construct(?OtpChallengeRepository $repo = null, ?Clock $clock = null)
-    {
+    /** Kunci kode turunan; null = dibaca dari {@see SigningKey} saat pertama dibutuhkan. */
+    private ?string $codeKey;
+
+    public function __construct(
+        ?OtpChallengeRepository $repo = null,
+        ?Clock $clock = null,
+        ?string $codeKey = null
+    ) {
         $this->clock = $clock ?? new SystemClock();
         $this->repo = $repo ?? new OtpChallengeRepository(Context::default()->db, $this->clock);
+        $this->codeKey = $codeKey;
     }
 
     /**
@@ -235,6 +258,196 @@ final class ScanOtpService
             'code'        => $code,
             'ttl_seconds' => self::CODE_TTL_SECONDS,
         ];
+    }
+
+    /**
+     * Terbitkan kode yang dikirim ke alamat email penanda tangan.
+     *
+     * Bedanya dengan {@see issue()}: kodenya lahir SEKARANG, bukan saat
+     * pindaian masuk — tidak ada yang memindai. Barisnya langsung berstatus
+     * "sudah dipindai", jadi layar petugas yang menunggu pindaian langsung
+     * beralih ke isian kode tanpa jalur baru.
+     *
+     * Kodenya tidak disimpan polos. Ia diturunkan dari `challenge_id` dengan
+     * kunci rahasia (HOTP, RFC 4226 §5.3), sehingga aplikasi penanda tangan bisa
+     * menampilkan kode yang sama dengan isi suratnya lewat {@see openDelivered()}
+     * tanpa ada salinan kode yang tersimpan. Yang tersimpan hanya hash-nya, sama
+     * seperti jalur lain — verifikasinya tidak berubah.
+     *
+     * Alamatnya di `provider_meta.recipient`, bukan di kolom `phone`. Kolom itu
+     * VARCHAR(30) dan alamat email sering lebih panjang; kolomnya diisi
+     * {@see recipientKey()}.
+     *
+     * Kalimat persetujuan belum ada di sini: aplikasi pemakai yang merangkainya
+     * saat menyusun suratnya, lalu menyimpannya lewat {@see recordConsent()}.
+     *
+     * @return array{scan_token: string, challenge_id: string, code: string, expires_at: string}
+     * @throws EzdocException Alamat tidak sah, atau kunci rahasia belum dipasang.
+     */
+    public function issueToRecipient(int $templateId, string $ttdId, ?int $docId, string $email): array
+    {
+        $recipient = OtpService::normalizeRecipient($email);
+        if (!OtpService::isEmail($recipient)) {
+            throw new EzdocException('A delivered code needs a valid email address.');
+        }
+
+        $key = $this->codeKey();
+        if ($key === null) {
+            throw new EzdocException('A delivered code needs EZDOC_HMAC_SECRET.');
+        }
+
+        $issued = $this->issue(
+            $templateId,
+            $ttdId,
+            $docId,
+            self::EMAIL_TTL_SECONDS,
+            ['route' => self::ROUTE_EMAIL, 'recipient' => $recipient]
+        );
+
+        $code = self::deriveCode($key, $issued['challenge_id']);
+        $now = $this->clock->now()->getTimestamp();
+
+        $this->repo->fulfilScan(
+            $issued['scan_token'],
+            self::recipientKey($recipient),
+            password_hash($code, PASSWORD_DEFAULT),
+            $issued['expires_at'],
+            $this->fmt($now),
+            ''
+        );
+
+        return $issued + ['code' => $code];
+    }
+
+    /**
+     * Simpan kalimat persetujuan yang benar-benar dikirim, untuk kode lewat email.
+     *
+     * Terpisah dari {@see issueToRecipient()} karena kalimatnya baru ada setelah
+     * aplikasi pemakai menyusun suratnya — dan baru boleh disimpan setelah surat
+     * itu terkirim.
+     */
+    public function recordConsent(string $challengeId, string $consentMessage): void
+    {
+        $this->repo->recordConsent($challengeId, $consentMessage);
+    }
+
+    /**
+     * Buka kode yang dikirim ke alamat email, untuk aplikasi penanda tangan.
+     *
+     * `$recipient` adalah alamat yang SUDAH dibuktikan aplikasi pemakai milik
+     * penanya (misalnya alamat terverifikasi akun loginnya). Pustaka hanya
+     * mencocokkannya dengan alamat tujuan.
+     *
+     * | Status | Artinya |
+     * |---|---|
+     * | `not_found` | Token tidak dikenal |
+     * | `not_delivered` | Token ini bukan kiriman email — pakai jalur pindaian |
+     * | `forbidden` | Penanya bukan alamat tujuan; `masked_recipient` menyebut tujuannya |
+     * | `waiting` | Kode masih berlaku; `code` dan `seconds_left` ikut |
+     * | `verified`, `signed`, `expired` | Seperti {@see progress()}, tanpa kode |
+     *
+     * @return array{status: string, challenge: array<string,mixed>|null,
+     *     code?: string, seconds_left?: int, masked_recipient?: string}
+     */
+    public function openDelivered(string $scanToken, string $recipient): array
+    {
+        $row = $scanToken === '' ? null : $this->repo->findByScanToken($scanToken);
+        if ($row === null) {
+            return ['status' => self::NOT_FOUND, 'challenge' => null];
+        }
+
+        $meta = json_decode((string) ($row['provider_meta'] ?? ''), true);
+        if (!is_array($meta) || ($meta['route'] ?? null) !== self::ROUTE_EMAIL) {
+            return ['status' => self::NOT_DELIVERED, 'challenge' => null];
+        }
+
+        $to = (string) ($meta['recipient'] ?? '');
+        $asker = $recipient === '' ? '' : OtpService::normalizeRecipient($recipient);
+        if ($to === '' || $asker === '' || !hash_equals($to, $asker)) {
+            return [
+                'status'           => self::FORBIDDEN,
+                'challenge'        => null,
+                'masked_recipient' => $to === '' ? '' : OtpService::maskRecipient($to),
+            ];
+        }
+
+        $status = $this->progressOf($row);
+        $out = ['status' => $status, 'challenge' => $row];
+
+        if ($status === self::WAITING) {
+            $code = $this->deliveredCode($row);
+            if ($code === null) {
+                // Kunci hilang atau berganti sejak kode dikirim: kode di surat
+                // masih sah, tapi aplikasi tidak bisa ikut menampilkannya.
+                return ['status' => self::EXPIRED, 'challenge' => $row];
+            }
+            $out['code'] = $code;
+            $out['seconds_left'] = $this->secondsLeft($row);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Kode turunan sebuah tantangan lewat email, atau null kalau tidak bisa.
+     *
+     * Dicocokkan dengan hash yang tersimpan sebelum dikembalikan: kunci yang
+     * berganti sejak kode dikirim akan menghasilkan angka lain, dan angka yang
+     * keliru lebih buruk daripada tidak ada angka sama sekali.
+     *
+     * @param array<string,mixed> $row
+     */
+    public function deliveredCode(array $row): ?string
+    {
+        $key = $this->codeKey();
+        $challengeId = (string) ($row['challenge_id'] ?? '');
+        $hash = (string) ($row['otp_hash'] ?? '');
+        if ($key === null || $challengeId === '' || $hash === '') {
+            return null;
+        }
+
+        $code = self::deriveCode($key, $challengeId);
+
+        return password_verify($code, $hash) ? $code : null;
+    }
+
+    /**
+     * Isi kolom `phone` untuk kode lewat email: 30 karakter, tidak bisa dibalik.
+     *
+     * Kolomnya VARCHAR(30) — alamat utuh sering tidak muat dan mode ketat MySQL
+     * menolaknya. Isinya tetap stabil per alamat, jadi pengelompokan per
+     * penerima masih bisa dilakukan.
+     */
+    public static function recipientKey(string $email): string
+    {
+        return 'em:' . substr(hash('sha256', OtpService::normalizeRecipient($email)), 0, 27);
+    }
+
+    /**
+     * Enam angka dari HMAC, dengan pemotongan dinamis HOTP (RFC 4226 §5.3).
+     *
+     * SHA-256, bukan SHA-1: RFC 6238 §1.2 mengizinkannya, dan kodenya tidak
+     * perlu cocok dengan aplikasi autentikator mana pun.
+     */
+    private static function deriveCode(string $key, string $challengeId): string
+    {
+        $mac = hash_hmac('sha256', $challengeId, $key, true);
+        $offset = ord($mac[strlen($mac) - 1]) & 0x0f;
+        $bin = ((ord($mac[$offset]) & 0x7f) << 24)
+            | (ord($mac[$offset + 1]) << 16)
+            | (ord($mac[$offset + 2]) << 8)
+            | ord($mac[$offset + 3]);
+
+        return str_pad((string) ($bin % 1000000), 6, '0', STR_PAD_LEFT);
+    }
+
+    private function codeKey(): ?string
+    {
+        if ($this->codeKey === null) {
+            $this->codeKey = \Ezdoc\Signature\SigningKey::resolve(\Ezdoc\Signature\SigningKey::PURPOSE_DELIVERED_CODE);
+        }
+
+        return $this->codeKey;
     }
 
     /**

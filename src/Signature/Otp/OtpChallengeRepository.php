@@ -426,11 +426,74 @@ final class OtpChallengeRepository
      */
     public function findBySignerRef(string $signerRef, int $limit = 30): array
     {
-        if ($signerRef === '' || $limit <= 0) {
+        return $this->findByMetaValue('signer_ref', $signerRef, $limit);
+    }
+
+    /**
+     * Tantangan yang kodenya dikirim ke satu alamat email, terbaru dulu.
+     *
+     * Pencocokannya sama dengan {@see findBySignerRef()}, pada
+     * `provider_meta.recipient`. Alamatnya dinormalkan dulu — yang tersimpan
+     * sudah dinormalkan saat terbit.
+     *
+     * @return list<array<string,mixed>> `provider_meta` sudah berupa larik.
+     */
+    public function findByRecipient(string $email, int $limit = 30): array
+    {
+        return $this->findByMetaValue('recipient', OtpService::normalizeRecipient($email), $limit);
+    }
+
+    /**
+     * Kode lewat email yang masih bisa dibacakan, untuk satu alamat.
+     *
+     * "Masih bisa" = belum diterima petugas, belum lewat tenggat, dan tebakan
+     * salahnya belum habis.
+     *
+     * @return list<array<string,mixed>> `provider_meta` sudah berupa larik.
+     */
+    public function findPendingForRecipient(string $email, string $route): array
+    {
+        $now = strtotime($this->stamp());
+
+        $out = [];
+        foreach ($this->findByRecipient($email, 50) as $row) {
+            if (($row['provider_meta']['route'] ?? null) !== $route
+                || !empty($row['verified_at'])
+                || strtotime((string) $row['expires_at']) <= $now
+                || (int) ($row['attempts'] ?? 0) >= (int) ($row['max_attempts'] ?? 3)) {
+                continue;
+            }
+            $out[] = $row;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Simpan kalimat persetujuan sebuah tantangan — hanya kalau belum ada.
+     *
+     * Yang sudah tersimpan adalah bukti; menimpanya berarti mengubah apa yang
+     * dulu diberitahukan kepada penanda tangan.
+     */
+    public function recordConsent(string $challengeId, string $consentMessage): void
+    {
+        $this->db->execute(
+            "UPDATE `ezdoc_ttd_otp_challenges` SET `consent_message` = ?
+              WHERE `challenge_id` = ? AND (`consent_message` IS NULL OR `consent_message` = '')",
+            [$consentMessage, $challengeId]
+        );
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function findByMetaValue(string $key, string $value, int $limit): array
+    {
+        if ($value === '' || $limit <= 0) {
             return [];
         }
 
-        $needle = '"signer_ref":' . json_encode($signerRef, JSON_UNESCAPED_UNICODE);
+        $needle = json_encode($key) . ':' . json_encode($value, JSON_UNESCAPED_UNICODE);
         $rows = $this->db->fetchAll(
             "SELECT * FROM `ezdoc_ttd_otp_challenges`
               WHERE `provider_meta` LIKE ? ESCAPE '!'
@@ -441,7 +504,7 @@ final class OtpChallengeRepository
         $out = [];
         foreach ($rows as $row) {
             $meta = json_decode((string) ($row['provider_meta'] ?? ''), true);
-            if (!is_array($meta) || ($meta['signer_ref'] ?? null) !== $signerRef) {
+            if (!is_array($meta) || ($meta[$key] ?? null) !== $value) {
                 continue;
             }
 
@@ -507,13 +570,20 @@ final class OtpChallengeRepository
      * permintaan hidup di aplikasi untuk tanda tangan yang sama — yang satu
      * akan terbaca sebagai permintaan lain.
      *
+     * "Tertunda" untuk kode lewat email (`route` = `email`) berarti belum
+     * diterima petugas: barisnya sudah berstatus dipindai sejak lahir. Untuk
+     * jalur lain, belum dipindai.
+     *
+     * `$keepChallengeId` dikecualikan — permintaan baru yang baru saja
+     * terbukti sampai, saat yang lama baru boleh dimatikan sesudahnya.
+     *
      * @return int Jumlah permintaan yang dimatikan.
      */
-    public function expirePendingForSlot(int $docId, string $ttdId, string $route): int
+    public function expirePendingForSlot(int $docId, string $ttdId, string $route, string $keepChallengeId = ''): int
     {
         $rows = $this->db->fetchAll(
-            "SELECT `challenge_id`, `provider_meta` FROM `ezdoc_ttd_otp_challenges`
-              WHERE `doc_id` = ? AND `ttd_id` = ? AND `scanned_at` IS NULL AND `expires_at` > ?",
+            "SELECT `challenge_id`, `provider_meta`, `scanned_at` FROM `ezdoc_ttd_otp_challenges`
+              WHERE `doc_id` = ? AND `ttd_id` = ? AND `verified_at` IS NULL AND `expires_at` > ?",
             [$docId, $ttdId, $this->stamp()]
         );
 
@@ -521,6 +591,12 @@ final class OtpChallengeRepository
         foreach ($rows as $row) {
             $meta = json_decode((string) ($row['provider_meta'] ?? ''), true);
             if (!is_array($meta) || ($meta['route'] ?? null) !== $route) {
+                continue;
+            }
+            if ($route !== ScanOtpService::ROUTE_EMAIL && !empty($row['scanned_at'])) {
+                continue;
+            }
+            if ($keepChallengeId !== '' && (string) $row['challenge_id'] === $keepChallengeId) {
                 continue;
             }
 

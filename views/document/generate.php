@@ -2550,6 +2550,31 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                         </button>
                         <p class="text-[11px] text-slate-500 mt-1 leading-snug"><?= h(t('modal.otp.app_send_hint', [], 'Untuk penanda tangan yang sudah memasang aplikasinya. Dokumen harus sudah tersimpan.')) ?></p>
                         <?php endif; ?>
+                        <?php
+                        // Kirim kode ke email penanda tangan — hanya kalau aplikasi
+                        // pemakai menyediakan pengirimnya. Kodenya lahir saat ini
+                        // juga, jadi panel langsung lompat ke kolom kode.
+                        //
+                        // Pesan hasilnya ditulis di bawah kolom, bukan toast: toast
+                        // tertutup modal ini dan petugas melihat "tidak terjadi
+                        // apa-apa".
+                        if (defined('EZDOC_SCAN_EMAIL_DELIVERY') && is_callable(EZDOC_SCAN_EMAIL_DELIVERY)): ?>
+                        <form id="signEmailForm" class="mt-3 pt-3 border-t border-slate-200" novalidate>
+                            <label for="signEmailAddr" class="block text-xs font-semibold text-slate-700 mb-1"><?= h(t('modal.otp.email_send_label', [], 'Atau kirim kode ke email penanda tangan')) ?></label>
+                            <div class="flex gap-2">
+                                <input type="email" id="signEmailAddr" autocomplete="off" spellcheck="false"
+                                       class="flex-1 min-w-0 text-xs p-2 border border-slate-300 rounded focus:border-slate-800"
+                                       placeholder="<?= h(t('modal.otp.email_placeholder', [], 'nama@contoh.com')) ?>">
+                                <button type="submit" id="btnRequestEmail"
+                                        class="shrink-0 py-2 px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 rounded text-xs font-bold transition flex items-center gap-1.5">
+                                    <i class="bi bi-envelope"></i>
+                                    <span id="btnRequestEmailText"><?= h(t('modal.otp.email_send_btn', [], 'Kirim')) ?></span>
+                                </button>
+                            </div>
+                            <p id="signEmailMsg" role="alert" class="hidden text-[11px] text-red-600 mt-1 leading-snug"></p>
+                            <p class="text-[11px] text-slate-500 mt-1 leading-snug"><?= h(t('modal.otp.email_send_hint', [], 'Kode juga tampil di aplikasi penanda tangan bila ia masuk dengan email yang sama.')) ?></p>
+                        </form>
+                        <?php endif; ?>
                     </div>
 
                     <?php // Keadaan 2 — menunggu dipindai (QR) atau dibuka di aplikasi ?>
@@ -2574,6 +2599,8 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                         <div class="text-[11px] text-emerald-700 mb-2 flex items-center gap-1">
                             <i class="bi bi-check-circle-fill"></i>
                             <span id="signScanScannedBy"></span>
+                            <button type="button" id="signEmailAgain" onclick="showScanRoute()"
+                                    class="hidden ml-auto text-slate-500 hover:text-slate-800 underline underline-offset-2"><?= h(t('modal.otp.email_again', [], 'Ganti alamat')) ?></button>
                         </div>
                         <label class="block text-xs font-semibold text-slate-700 mb-1"><?= h(t('modal.otp.scan_code_label', [], 'Kode dari penanda tangan (6 digit):')) ?></label>
                         <input type="text" id="signScanCode" maxlength="6" inputmode="numeric"

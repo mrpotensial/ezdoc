@@ -64,6 +64,12 @@ if (!empty($challenge['verified_at'])) {
     $state = 'expired';
 }
 
+// Kode lewat email menyimpan alamatnya di provider_meta, bukan di kolom
+// `phone` (yang berisi kunci tak terbaca — lihat ScanOtpService::recipientKey()).
+// findById() sudah mengurai provider_meta jadi larik.
+$meta = $challenge['provider_meta'] ?? null;
+$recipient = is_array($meta) && is_string($meta['recipient'] ?? null) ? $meta['recipient'] : '';
+
 $attemptsLeft = max(
     0,
     (int) ($challenge['max_attempts'] ?? 3) - (int) ($challenge['attempts'] ?? 0)
@@ -76,7 +82,9 @@ ezdoc_respond_success([
     'attempts_left' => $state === 'scanned' ? $attemptsLeft : null,
     // Nomor yang memindai, disamarkan. Petugas bisa mencocokkan sekilas dengan
     // nomor pasien tanpa nomornya ikut terbaca orang yang lewat di belakang.
-    'masked_phone' => !empty($challenge['phone'])
-        ? \Ezdoc\Signature\Otp\OtpService::maskPhone((string) $challenge['phone'])
-        : null,
+    'masked_phone' => $recipient !== ''
+        ? \Ezdoc\Signature\Otp\OtpService::maskRecipient($recipient)
+        : (!empty($challenge['phone'])
+            ? \Ezdoc\Signature\Otp\OtpService::maskPhone((string) $challenge['phone'])
+            : null),
 ]);

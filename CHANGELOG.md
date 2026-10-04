@@ -6,6 +6,44 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — kirim kode tanda tangan ke email penanda tangan, sekaligus tampil di aplikasinya (2026-10-04)**
+
+Petugas mengetik alamat email; kodenya lahir saat itu juga, dikirim lewat
+surat, dan tampil SAMA di aplikasi penanda tangan untuk akun dengan alamat
+terverifikasi yang sama. Penanda tangan membacakannya ke petugas — verifikasi
+memakai jalur yang sudah ada.
+
+- `ScanOtpService::issueToRecipient()` (route `email`, 30 menit). Kodenya
+  diturunkan dari `challenge_id` dengan kunci rahasia — pemotongan dinamis HOTP
+  (RFC 4226 §5.3) di atas HMAC-SHA256 — jadi tidak ada salinan polos yang
+  tersimpan; hanya hash-nya, seperti jalur lain. Kunci baru
+  `SigningKey::PURPOSE_DELIVERED_CODE` (HKDF dari `EZDOC_HMAC_SECRET`); tanpa
+  kunci, penerbitan ditolak.
+- Alamatnya di `provider_meta.recipient`, bukan di kolom `phone` (VARCHAR(30) —
+  alamat panjang ditolak mode ketat MySQL). Kolom itu berisi
+  `recipientKey()`, 30 karakter, tidak bisa dibalik.
+- `openDelivered()` / `ezdoc_scan_delivered($token, $recipient)`: kode hanya
+  untuk alamat tujuan (dinormalkan, `hash_equals`), hanya selama menunggu
+  petugas, dan hanya bila cocok dengan hash tersimpan — kunci yang berganti
+  menghasilkan "tidak berlaku", bukan angka keliru.
+- `ezdoc_scan_pending_for_recipient()`, `ezdoc_scan_history_for_recipient()`;
+  repositori `findByRecipient()`, `findPendingForRecipient()`,
+  `recordConsent()` (tidak pernah menimpa bukti yang sudah ada).
+- `request_scan_code` `delivery=email`: memanggil `EZDOC_SCAN_EMAIL_DELIVERY`
+  milik aplikasi pemakai (yang menyusun suratnya dan mengembalikan kalimat
+  persetujuan yang terkirim). Surat gagal → kodenya dimatikan dan petugas
+  diberi tahu. Kode lama untuk slot yang sama baru dimatikan SESUDAH surat baru
+  terbukti terkirim — alamat salah ketik tidak boleh mematikan kode sah yang
+  sedang dipegang penanda tangan. Kode tidak pernah ada di jawaban ke petugas.
+  Dokumen yang belum disimpan boleh.
+- `expirePendingForSlot()` mengerti route `email` (lahir sudah "dipindai") dan
+  menerima pengecualian; perilaku route lain tidak berubah.
+- `scan_code_status` menyamarkan alamat email (`maskRecipient`) alih-alih
+  kunci di kolom `phone`.
+- Layar petugas: isian email di bawah tombol QR, dengan pesan di bawah
+  kolomnya (bukan toast, yang tertutup modal). Sesudah terkirim langsung ke
+  kolom kode: "Kode dikirim ke bu***@gmail.com" + "Ganti alamat".
+
 **Added — tanda tangan dari aplikasi penanda tangan, sebagai kanal kedua pindai QR (2026-10-04)**
 
 Jalur pindai QR sudah memisahkan kanal dari pustakanya; yang ditambahkan di

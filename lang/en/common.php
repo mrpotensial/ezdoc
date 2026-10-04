@@ -145,5 +145,8 @@ return [
         'scan_delivery_unknown' => 'Unknown delivery.',
         'scan_app_not_configured' => 'Sending to the signer app is not configured for this installation.',
         'scan_app_needs_saved' => 'Save the document first — a request sent to the app needs a saved document.',
+        'scan_email_not_configured' => 'Sending the code by email is not configured for this installation.',
+        'scan_email_invalid' => 'Invalid email address.',
+        'scan_email_failed' => 'The email was not sent. Check the address, or use the QR code.',
     ],
 ];

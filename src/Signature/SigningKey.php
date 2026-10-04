@@ -49,6 +49,9 @@ final class SigningKey
     /** HKDF label for L1 document-content signing. Versioned on purpose. */
     public const PURPOSE_L1_CONTENT = 'ezdoc/signature/l1-content/v1';
 
+    /** HKDF label for OTP codes derived per challenge (HOTP-style, RFC 4226). */
+    public const PURPOSE_DELIVERED_CODE = 'ezdoc/otp/delivered-code/v1';
+
     /** @var array<string,string> derived keys, per purpose */
     private static $derived = [];
 
