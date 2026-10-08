@@ -3555,17 +3555,28 @@
         // bawah ikut berubah, dan rantai itu juga dipakai jalur pindaian yang
         // tidak boleh tersentuh.
         //
-        // Bawaannya selalu 'whatsapp'. Petugas yang sudah hafal alur lama
-        // tidak boleh mendapati tombolnya berpindah arti.
+        // Bawaannya WhatsApp SELAMA kanal itu hidup — petugas yang sudah hafal
+        // alur lama tidak boleh mendapati tombolnya berpindah arti. Begitu
+        // WhatsApp dimatikan di server (SIMPEL_OTP_WA_ENABLED), bawaannya
+        // pindah ke email dengan sendirinya.
         // ─────────────────────────────────────────────────────────────────
 
-        let _otpChannel = 'whatsapp';
+        /** Kanal pertama yang benar-benar tersedia, atau '' kalau tidak ada. */
+        function _otpKanalBawaan() {
+            if (window.EZDOC_OTP_WA_ENABLED)    return 'whatsapp';
+            if (window.EZDOC_OTP_EMAIL_ENABLED) return 'email';
+            return '';
+        }
+
+        let _otpChannel = _otpKanalBawaan();
 
         function setOtpChannel(kanal) {
-            // Email tanpa konfigurasi server tidak pernah bisa dipilih. Tanpa
-            // penjaga ini, pemanggilan dari konsol atau dari keadaan tersimpan
-            // bisa membawa petugas ke kotak isian yang kirimannya pasti 503.
-            if (kanal === 'email' && !window.EZDOC_OTP_EMAIL_ENABLED) return;
+            // Kanal yang tidak dikonfigurasi di server tidak pernah bisa
+            // dipilih. Tanpa penjaga ini, pemanggilan dari konsol atau dari
+            // keadaan tersimpan bisa membawa petugas ke kotak isian yang
+            // kirimannya pasti ditolak 503.
+            if (kanal === 'email'    && !window.EZDOC_OTP_EMAIL_ENABLED) return;
+            if (kanal === 'whatsapp' && !window.EZDOC_OTP_WA_ENABLED)    return;
             if (kanal !== 'email' && kanal !== 'whatsapp') return;
 
             _otpChannel = kanal;
@@ -3738,10 +3749,15 @@
             const el = document.getElementById('signOtpStep1');
             if (el) el.classList.remove('hidden');
 
-            // Selalu dibuka di kanal WhatsApp, apa pun yang dipilih terakhir.
+            // Selalu dibuka di kanal BAWAAN, apa pun yang dipilih terakhir.
             // Kanal yang menempel antar dokumen adalah cara mengirim kode ke
             // kanal yang salah tanpa ada yang memperhatikan.
-            setOtpChannel('whatsapp');
+            //
+            // Bawaannya dihitung dari kanal yang benar-benar hidup, bukan
+            // dipaku 'whatsapp': begitu WhatsApp dimatikan di server, memaksa
+            // tab itu hanya akan membuka kotak isian yang kirimannya ditolak.
+            const kanalAwal = _otpKanalBawaan();
+            if (kanalAwal !== '') setOtpChannel(kanalAwal);
 
             // Jalan pulang hanya kalau ada tempat untuk pulang.
             const back = document.getElementById('signOtpBackToScan');

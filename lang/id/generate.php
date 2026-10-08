@@ -391,6 +391,10 @@ return [
             'step2_desc_email'   => 'Kode OTP 6 digit telah dikirimkan ke email {email}. Silakan minta kode tersebut dari pasien dan masukkan di bawah ini.',
             'email_required'     => 'Alamat email wajib diisi.',
             'email_invalid'      => 'Alamat email tidak sah.',
+            // Muncul kalau TIDAK ADA kanal kirim yang aktif — WhatsApp
+            // dimatikan dan email belum dikonfigurasi. Jalur pindai QR tidak
+            // terpengaruh, jadi arahannya ke situ.
+            'no_channel'         => 'Belum ada kanal pengiriman OTP yang aktif di server ini. Pakai jalur QR, atau hubungi IT.',
 
             // ── V6: kode diminta penanda tangan lewat QR di layar petugas ──
             // Tidak ada kolom nomor HP di jalur ini: nomornya ketahuan dari

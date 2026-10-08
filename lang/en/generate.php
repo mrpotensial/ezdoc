@@ -361,6 +361,10 @@ return [
             'step2_desc_email'   => 'A 6-digit code has been sent to {email}. Ask the patient for it and enter it below.',
             'email_required'     => 'An email address is required.',
             'email_invalid'      => 'That email address is not valid.',
+            // Shown when NO send channel is active — WhatsApp switched off and
+            // email not configured. The QR scan route is unaffected, so that is
+            // where this points.
+            'no_channel'         => 'No OTP delivery channel is active on this server. Use the QR route, or contact IT.',
 
             // ── V6: the signer requests the code by scanning a QR on the
             // operator's screen. No phone field on this route — the number

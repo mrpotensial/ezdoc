@@ -2623,22 +2623,40 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
 
                 <!-- Step 1: Kirim OTP (jalur cadangan) -->
                 <div id="signOtpStep1" class="hidden">
+                    <?php // Ikonnya mengikuti kanal bawaan. Dihitung di sini dan
+                    // bukan dibiarkan 'bi-whatsapp' lalu ditukar JS, supaya
+                    // panel tidak sempat berkedip WhatsApp sebelum skripnya
+                    // jalan — dan supaya ia tetap benar kalau JS-nya gagal.
+                    $otpIkonBawaan = (defined('EZDOC_OTP_WA_ENABLED') && EZDOC_OTP_WA_ENABLED)
+                        ? 'bi-whatsapp' : 'bi-envelope-fill'; ?>
                     <h6 class="text-sm font-bold text-slate-800 mb-1 flex items-center gap-1.5">
-                        <i id="signOtpChannelIcon" class="bi bi-whatsapp text-emerald-600 text-base"></i>
+                        <i id="signOtpChannelIcon" class="bi <?= $otpIkonBawaan ?> text-emerald-600 text-base"></i>
                         <span><?= h(t('modal.otp.step1_title', [], 'Verifikasi OTP Pasien')) ?></span>
                     </h6>
 
-                    <?php // ─── Pemilih kanal ───
+                    <?php
+                    // ─── Kanal yang benar-benar tersedia ───
                     //
-                    // Hanya digambar kalau kanal email memang terpasang di server
-                    // ini. Tombol yang selalu gagal lebih buruk daripada tombol
-                    // yang tidak pernah ada — pola yang sama dengan
-                    // EZDOC_SCAN_URL_TEMPLATE yang menentukan jalur pindaian.
-                    //
-                    // Bawaannya WhatsApp, selalu. Seluruh pemakaian historis
-                    // adalah nomor, dan petugas yang sudah hafal alurnya tidak
-                    // boleh mendapati tombolnya berpindah arti. ?>
-                    <?php if (defined('EZDOC_OTP_EMAIL_ENABLED') && EZDOC_OTP_EMAIL_ENABLED): ?>
+                    // Keduanya punya saklar sendiri di ezdoc_otp_setup.php
+                    // (SIMPEL_OTP_WA_ENABLED dan baris pengaturan `otp_email`).
+                    // Yang digambar hanya yang providernya memang terdaftar —
+                    // tombol yang selalu gagal lebih buruk daripada tombol yang
+                    // tidak pernah ada, pola yang sama dengan
+                    // EZDOC_SCAN_URL_TEMPLATE untuk jalur pindaian.
+                    $otpWaOn    = defined('EZDOC_OTP_WA_ENABLED')    && EZDOC_OTP_WA_ENABLED;
+                    $otpEmailOn = defined('EZDOC_OTP_EMAIL_ENABLED') && EZDOC_OTP_EMAIL_ENABLED;
+
+                    // Bawaan: WhatsApp selama ia hidup — petugas yang sudah hafal
+                    // alurnya tidak boleh mendapati tombolnya berpindah arti.
+                    // Begitu WA mati, bawaannya pindah ke email dengan sendirinya.
+                    $otpKanalBawaan = $otpWaOn ? 'whatsapp' : ($otpEmailOn ? 'email' : '');
+
+                    // Tab hanya kalau memang ADA YANG DIPILIH. Tab berisi satu
+                    // pilihan tidak memberi tahu apa pun, ia cuma memakan ruang
+                    // dan menyarankan ada pilihan lain yang sebenarnya tidak ada.
+                    $otpAdaPilihan = $otpWaOn && $otpEmailOn;
+                    ?>
+                    <?php if ($otpAdaPilihan): ?>
                     <div class="mb-3 flex gap-1 p-1 bg-slate-100 rounded-lg" id="signOtpChannelTabs" role="group">
                         <button type="button" data-otp-channel="whatsapp" onclick="setOtpChannel('whatsapp')"
                                 class="flex-1 py-1.5 px-2 rounded-md text-[11px] font-bold transition flex items-center justify-center gap-1
@@ -2653,29 +2671,51 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
                     </div>
                     <?php endif; ?>
 
-                    <p class="text-xs text-slate-600 mb-3" id="signOtpStep1Desc"><?= h(t('modal.otp.step1_desc', [], 'Fitur Tanda Tangan ini memerlukan verifikasi Kode OTP yang dikirimkan ke nomor WhatsApp pasien.')) ?></p>
+                    <p class="text-xs text-slate-600 mb-3" id="signOtpStep1Desc"><?= h($otpKanalBawaan === 'email'
+                        ? t('modal.otp.step1_desc_email', [], 'Kode OTP akan dikirim ke alamat email pasien.')
+                        : t('modal.otp.step1_desc', [], 'Fitur Tanda Tangan ini memerlukan verifikasi Kode OTP yang dikirimkan ke nomor WhatsApp pasien.')) ?></p>
 
                     <?php // Dua kotak isian, bukan satu yang berganti arti. Satu
                     // kotak akan memaksa rantai prasetel nomor
                     // (generate_scripts.php) ikut berubah, dan rantai itu juga
-                    // dipakai jalur yang tidak boleh tersentuh. ?>
-                    <div class="mb-3" id="signOtpPhoneWrap">
+                    // dipakai jalur yang tidak boleh tersentuh.
+                    //
+                    // Kotak kanal yang mati tidak digambar sama sekali — bukan
+                    // sekadar disembunyikan. Kotak tersembunyi yang tidak bisa
+                    // dicapai tetap terkirim isinya kalau ada yang memanggil
+                    // sendTtdOtp() dengan kanal itu. ?>
+                    <?php if ($otpWaOn): ?>
+                    <div class="mb-3<?= $otpKanalBawaan === 'whatsapp' ? '' : ' hidden' ?>" id="signOtpPhoneWrap">
                         <label class="block text-xs font-semibold text-slate-700 mb-1"><?= h(t('modal.otp.phone_label', [], 'Nomor WhatsApp Pasien:')) ?></label>
                         <input type="text" id="signOtpPhoneInput" class="w-full text-xs p-2 border border-slate-300 rounded font-mono focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" placeholder="08xxxxxxxxxx / 628xxxxxxxxxx">
                         <small class="text-[11px] text-slate-500"><?= h(t('modal.otp.phone_hint', [], 'Masukkan/sesuaikan nomor WhatsApp pasien (format: 08xx / 628xx)')) ?></small>
                     </div>
+                    <?php endif; ?>
 
-                    <div class="mb-3 hidden" id="signOtpEmailWrap">
+                    <?php if ($otpEmailOn): ?>
+                    <div class="mb-3<?= $otpKanalBawaan === 'email' ? '' : ' hidden' ?>" id="signOtpEmailWrap">
                         <label class="block text-xs font-semibold text-slate-700 mb-1"><?= h(t('modal.otp.email_label', [], 'Email Pasien:')) ?></label>
                         <input type="email" id="signOtpEmailInput" autocomplete="off" spellcheck="false"
                                class="w-full text-xs p-2 border border-slate-300 rounded font-mono focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                                placeholder="nama@contoh.com">
                         <small class="text-[11px] text-slate-500"><?= h(t('modal.otp.email_hint', [], 'Pastikan alamatnya benar — kode dikirim ke alamat yang Anda tulis, bukan ke alamat tercatat.')) ?></small>
                     </div>
+                    <?php endif; ?>
 
+                    <?php // Tidak ada kanal kirim sama sekali. Jangan menggambar
+                    // tombol yang pasti gagal — katakan keadaannya, dan arahkan
+                    // ke jalur pindaian yang memang masih hidup. ?>
+                    <?php if ($otpKanalBawaan === ''): ?>
+                    <div class="mb-3 p-3 rounded border border-amber-200 bg-amber-50 text-[11px] text-amber-800">
+                        <?= h(t('modal.otp.no_channel', [], 'Belum ada kanal pengiriman OTP yang aktif di server ini. Pakai jalur QR, atau hubungi IT.')) ?>
+                    </div>
+                    <?php else: ?>
                     <button type="button" id="btnSendOtp" onclick="sendTtdOtp()" class="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold transition flex items-center justify-center gap-2">
-                        <i class="bi bi-send-fill"></i> <span id="btnSendOtpText"><?= h(t('modal.otp.send_btn', [], 'Kirim Kode OTP via WA')) ?></span>
+                        <i class="bi bi-send-fill"></i> <span id="btnSendOtpText"><?= h($otpKanalBawaan === 'email'
+                            ? t('modal.otp.send_btn_email', [], 'Kirim Kode OTP via Email')
+                            : t('modal.otp.send_btn', [], 'Kirim Kode OTP via WA')) ?></span>
                     </button>
+                    <?php endif; ?>
 
                     <?php // Jalan pulang ke jalur pindaian. Tanpa ini, petugas yang
                     // salah menekan tautan cadangan hanya punya satu pilihan:
@@ -2922,6 +2962,11 @@ $__bacaSaja = $param_is_locked || ($preview_deleted && $param_is_deleted);
         // bernilai true hanya kalau adapter email benar-benar berhasil dirakit
         // dari berkas env. ?>
         window.EZDOC_OTP_EMAIL_ENABLED = <?= (defined('EZDOC_OTP_EMAIL_ENABLED') && EZDOC_OTP_EMAIL_ENABLED) ? 'true' : 'false' ?>;
+
+        <?php // Kanal WhatsApp pada jalur KIRIM. Terpisah dari jalur pindaian
+        // (window.EZDOC_SCAN_ENABLED): keduanya sering disebut "OTP WhatsApp"
+        // padahal dimatikan lewat saklar yang berbeda. ?>
+        window.EZDOC_OTP_WA_ENABLED = <?= (defined('EZDOC_OTP_WA_ENABLED') && EZDOC_OTP_WA_ENABLED) ? 'true' : 'false' ?>;
 
         // i18n dictionary — mirrors EZDOC_URLS above. spec: docs/I18N.md
         window.EZDOC_I18N = <?= json_encode($translator->all(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
