@@ -113,7 +113,22 @@ final class AllExamplesTest extends TestCase
 
         preg_match_all('/\{\{([a-z_][a-z0-9_]*)\}\}/', $template, $m);
         $dipakai = array_unique($m[1]);
-        self::assertNotEmpty($dipakai, $slug . ': tidak ada field sama sekali');
+
+        // Laporan yang seluruh isinya dari kueri (mis. laporan operasi yang
+        // dicetak langsung dari data) memang tidak punya field untuk diisi.
+        // Ia boleh tanpa field HANYA kalau tiap namespace kuerinya punya baris
+        // contoh — syarat yang sama dengan "pratinjau tidak setengah kosong".
+        if ($dipakai === []) {
+            preg_match_all('/\{\{tabledb\.([a-z_][a-z0-9_]*)\./', $template, $ns);
+            $namespace = array_unique($ns[1]);
+            self::assertNotEmpty($namespace, $slug . ': tidak ada field maupun tabel kueri sama sekali');
+            foreach ($namespace as $satu) {
+                self::assertNotEmpty(
+                    $data['sample_table_rows'][$satu] ?? [],
+                    $slug . ': tabel kueri ' . $satu . ' tanpa baris contoh — pratinjaunya akan kosong'
+                );
+            }
+        }
 
         foreach ($dipakai as $field) {
             if (isset($hitung[$field])) {
@@ -252,7 +267,10 @@ final class AllExamplesTest extends TestCase
      */
     public function testTipeFieldnyaDikenali(string $slug): void
     {
-        preg_match_all('/data-type="([a-z]+)"/', self::template($slug), $m);
+        $template = self::template($slug);
+        self::assertNotSame('', $template, $slug . ': templatenya kosong');
+
+        preg_match_all('/data-type="([a-z]+)"/', $template, $m);
         foreach (array_unique($m[1]) as $tipe) {
             self::assertContains($tipe, self::TIPE_DIKENAL, $slug . ': tipe field "' . $tipe . '" tidak dikenali perender');
         }

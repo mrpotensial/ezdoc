@@ -6,6 +6,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — contoh "Laporan Operasi": laporan yang seluruh isinya dari kueri (2026-10-13)**
+
+- `examples/laporan-operasi/`: satu kueri `op` (laporan terbaru untuk
+  `{nopen}`), teks turunan (TTV, puasa, diet, cairan) dihitung di SELECT, teks
+  berbaris lewat `white-space: pre-line`, QR dari field `qr_operator` yang
+  boleh dikirim lewat URL. Mode `paged`, tiap bagian `page-break-inside:
+  avoid` supaya judul tidak tertinggal di dasar halaman. Dibandingkan dengan
+  cetakan lama untuk data nyata: isi sama.
+- `AllExamplesTest`: contoh tanpa field sama sekali kini sah — asal tiap
+  namespace kuerinya punya baris contoh (pratinjau tetap tidak boleh kosong).
+
 **Added — kirim kode tanda tangan ke email penanda tangan, sekaligus tampil di aplikasinya (2026-10-04)**
 
 Petugas mengetik alamat email; kodenya lahir saat itu juga, dikirim lewat

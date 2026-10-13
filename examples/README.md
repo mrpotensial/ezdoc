@@ -27,6 +27,7 @@ Tiga pintu untuk tiap contoh:
 | `klasifikasi-robson/` | Klasifikasi Robson (WHO) | Field pilihan, 16 field centang dalam tabel, blok bersyarat atas field centang |
 | `skor-flamm-geiger/` | Skor Flamm &amp; Geiger | Field hitung menjumlahkan lima parameter, field angka dengan batas berbeda-beda, field centang syarat |
 | `skor-bishop/` | Lembar Skor Bishop | Field hitung, field angka berbatas, blok bersyarat |
+| `laporan-operasi/` | Laporan operasi | **Tanpa field**: seluruh isi dari satu kueri satu baris; teks turunan di SELECT; teks berbaris (`pre-line`); QR dari parameter URL; mode halaman dengan bagian yang tidak terbelah |
 
 Empat yang terakhir satu rangkaian: bentuk kertasnya berasal dari satu berkas
 cetak obstetri yang dipecah jadi empat template terpisah, karena keempatnya
