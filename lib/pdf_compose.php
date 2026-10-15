@@ -1398,7 +1398,7 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     $hVal = date('d/m/Y', $timestamp);
                 }
             }
-            return '<span class="f-pdf">' . ($hVal ?: '........') . '</span>';
+            return '<span class="f-pdf">' . ($hVal !== '' ? $hVal : '........') . '</span>';
 
         case 'time':
             // `strtotime('14:30')` mengembalikan jam itu HARI INI, jadi hasilnya
@@ -1411,13 +1411,13 @@ function renderFieldForPdf($name, $type, $val, $label) {
                     $hVal = date('H:i', $timestamp);
                 }
             }
-            return '<span class="f-pdf">' . ($hVal ?: '.....') . '</span>';
+            return '<span class="f-pdf">' . ($hVal !== '' ? $hVal : '.....') . '</span>';
 
         case 'number':
         case 'radio':
         case 'select':
         default:
-            return '<span class="f-pdf">' . ($hVal ?: '........') . '</span>';
+            return '<span class="f-pdf">' . ($hVal !== '' ? $hVal : '........') . '</span>';
     }
 }
 
@@ -1693,6 +1693,121 @@ function ezdoc_document_pdf_html(array $in): string
 }
 
 /**
+ * Selamatkan karakter yang tidak ada di WinAnsi sebelum masuk ke perender.
+ *
+ * MASALAHNYA. Templat dirender dengan font "Times" — font INTI PDF, bukan
+ * berkas font yang ditanam. Dompdf menulis font inti dengan
+ * `/Encoding /WinAnsiEncoding`, dan karakter di luar tabel itu TIDAK
+ * dibuang diam-diam: ia diganti tanda tanya. Jadi "≤ 2 cm" tercetak
+ * "? 2 cm" — salah, dan di lembar skor klinis itu berbahaya karena
+ * membalik makna batas nilai.
+ *
+ * Terukur 10 Okt 2026 pada templat 33 (Lembar Skor Bishop): 6 karakter
+ * jadi "?" — empat "≥" dan dua "≤". Sementara "–" (U+2013), "—" (U+2014)
+ * dan "·" (U+00B7) MEMANG ADA di WinAnsi (0x96, 0x97, 0xB7) dan tercetak
+ * benar; keduanya diperiksa di aliran isi PDF, bukan dikira-kira.
+ *
+ * KENAPA BUKAN "GANTI SAJA FONTNYA". Mengganti seluruh dokumen ke DejaVu
+ * Serif memang menyelesaikan semua glif sekaligus, tapi mengubah rupa
+ * SETIAP dokumen yang sudah pernah dicetak dan ditandatangani — lebar
+ * baris bergeser, jumlah halaman bisa berubah. Pilihan "Times" juga
+ * disengaja (lihat catatan font-family di ezdoc_compose_pdf_html).
+ *
+ * KENAPA BUKAN "GANTI ≤ JADI <=". Itu menambal dua karakter hari ini dan
+ * menunda masalah yang sama untuk →, ±, ×, ™, dan huruf beraksen.
+ *
+ * YANG DILAKUKAN DI SINI: hanya karakter yang benar-benar tidak terpetakan
+ * ke WinAnsi yang dibungkus span berfont DejaVu Serif — font Unicode penuh
+ * yang sudah disertakan dompdf. Sisa teks tetap Times, jadi rupa dokumen
+ * tidak bergeser. Font pembungkusnya serif supaya menyatu.
+ *
+ * Yang TIDAK disentuh: isi <style>, <script>, <head>, dan seluruh atribut
+ * tag — membungkus span di sana akan merusak CSS, JS, atau atribut itu.
+ */
+function ezdoc_pdf_aman_glif(string $html): string
+{
+    if ($html === '' || !preg_match('/[^\x00-\x7F]/', $html)) {
+        return $html;   /* murni ASCII: tidak ada yang perlu diselamatkan */
+    }
+
+    /* Sisihkan blok yang isinya bukan teks tampil. Ditukar penanda dulu,
+       dikembalikan di akhir — lebih aman daripada mencoba menghindarinya
+       dengan satu regex besar. */
+    $simpan = array();
+    $html = preg_replace_callback(
+        '#<(style|script|head)\b[^>]*>.*?</\1>#is',
+        function ($m) use (&$simpan) {
+            $k = "\x01EZDOC" . count($simpan) . "\x02";
+            $simpan[$k] = $m[0];
+            return $k;
+        },
+        $html
+    );
+
+    /* Pisahkan tag dari teks; indeks ganjil = tag, jangan disentuh. */
+    $bagian = preg_split('/(<[^>]*>)/', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+
+    foreach ($bagian as $i => $b) {
+        if (($i % 2) === 1 || $b === '' || !preg_match('/[^\x00-\x7F]/', $b)) {
+            continue;
+        }
+        $bagian[$i] = preg_replace_callback('/[^\x00-\x7F]+/u', function ($m) {
+            $keluar = '';
+            $buf    = '';
+            /* Kumpulkan karakter gagal yang berdampingan jadi satu span. */
+            $n = mb_strlen($m[0], 'UTF-8');
+            for ($k = 0; $k < $n; $k++) {
+                $ch = mb_substr($m[0], $k, 1, 'UTF-8');
+                $bisa = @iconv('UTF-8', 'Windows-1252', $ch);
+                if ($bisa !== false && $bisa !== '') {
+                    if ($buf !== '') {
+                        $keluar .= ezdoc_pdf_bungkus_glif($buf);
+                        $buf = '';
+                    }
+                    $keluar .= $ch;
+                } else {
+                    $buf .= $ch;
+                }
+            }
+            if ($buf !== '') $keluar .= ezdoc_pdf_bungkus_glif($buf);
+            return $keluar;
+        }, $b);
+    }
+
+    $html = implode('', $bagian);
+
+    if ($simpan) $html = strtr($html, $simpan);
+    return $html;
+}
+
+/**
+ * Pembungkus satu rentetan karakter non-WinAnsi.
+ *
+ * FONTNYA DejaVu SANS, BUKAN SERIF — dan itu disengaja.
+ *
+ * DejaVu Serif terlihat lebih menyatu dengan Times, dan itu pilihan
+ * pertama saya. Tapi diperiksa langsung ke tabel cmap kedua font
+ * (10 Okt 2026): **DejaVu Serif TIDAK punya U+2714 ✔ maupun
+ * U+2610 ☐**. Keduanya dipakai lima templat persetujuan dan
+ * penolakan tindakan medis (id 5, 15, 17, 18, 19). Memakai Serif akan
+ * membuat centang di formulir persetujuan gagal lagi — hanya berganti
+ * bentuk: dari "?" jadi kotak kosong notdef.
+ *
+ * DejaVu Sans menutupi KETUJUH karakter non-WinAnsi yang dipakai
+ * seluruh templat: → ✔ ₂ ☐ ≥ − ≤ (diperiksa satu per satu, 0 yang
+ * meleset). Karena yang dibungkus hanya simbol — bukan kalimat —
+ * bedanya dengan Times nyaris tidak terlihat, dan jauh lebih baik
+ * daripada simbol yang hilang.
+ *
+ * Kalau suatu saat ada karakter baru: periksa dulu cmap-nya, jangan
+ * berasumsi fontnya punya. Itu pelajaran dari ✔.
+ */
+function ezdoc_pdf_bungkus_glif(string $teks): string
+{
+    return '<span style="font-family:\'DejaVu Sans\',sans-serif">' . $teks . '</span>';
+}
+
+/**
  * Byte PDF dokumen, sesuai tata letak templatenya.
  *
  * Satu jawaban untuk cetak dan untuk pembekuan. Template `continuous` jadi satu
@@ -1704,6 +1819,12 @@ function ezdoc_document_pdf_html(array $in): string
  */
 function ezdoc_render_pdf_bytes(\Ezdoc\Rendering\PdfRenderer $perender, string $html, array $tataLetak): string
 {
+    /* Satu-satunya gerbang sebelum HTML jadi PDF — dipakai jalur cetak
+       (views/document/generate.php) DAN jalur pembekuan
+       (actions/document/save_document.php). Ditaruh di sini supaya yang
+       dicetak dan yang disimpan sebagai bukti tidak pernah berbeda. */
+    $html = ezdoc_pdf_aman_glif($html);
+
     $kertas = $tataLetak['paperDim'];
 
     if (($tataLetak['layoutMode'] ?? '') === 'continuous'

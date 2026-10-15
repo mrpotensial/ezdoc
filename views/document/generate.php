@@ -1134,7 +1134,7 @@ function renderContent($html, $logos, $logoSizes, $configTtd, $ttdValues, $dbFie
             <div class="ttd-label">' . h($label) . '</div>
             ' . $modeToggle . '
             <div class="ttd-img" id="preview_' . h($ttdId) . '">' . $imgArea . $qrArea . '</div>
-            <div class="ttd-name">(<span class="' . $namaClass . '" contenteditable="' . $namaEditable . '" data-field="' . h($namaField) . '"' . $namaTitle . '>' . ($namaValue ?: '') . '</span><input type="hidden" name="' . h($namaField) . '" id="ttd_nama_' . h($ttdId) . '" value="' . $namaValue . '">)</div>
+            <div class="ttd-name">(<span class="' . $namaClass . '" contenteditable="' . $namaEditable . '" data-field="' . h($namaField) . '"' . $namaTitle . '>' . $namaValue . '</span><input type="hidden" name="' . h($namaField) . '" id="ttd_nama_' . h($ttdId) . '" value="' . $namaValue . '">)</div>
             <input type="hidden" name="' . h($ttdId) . '" id="ttd_' . h($ttdId) . '" value="' . h($ttdImg) . '">
             <input type="hidden" name="_ttd_mode_' . h($ttdId) . '" id="ttd_mode_' . h($ttdId) . '" value="' . h($activeMode) . '">
             <input type="hidden" name="_ttd_qr_data_' . h($ttdId) . '" id="ttd_qr_data_' . h($ttdId) . '" value="' . h($qrDataTpl) . '">
@@ -1503,12 +1503,12 @@ function renderFieldInputRaw($name, $type, $val, $options, $label, $validation =
                 . ' data-calc-formula="' . h((string) ($hitung['formula'] ?? '')) . '"'
                 . ' data-calc-decimals="' . (int) ($hitung['decimals'] ?? 0) . '"'
                 . ' title="' . h(t('field.calc_title', [], 'Filled automatically from a formula')) . '">'
-                . ($hVal ?: '') . '</span><input type="hidden" name="' . $hName . '" value="' . $hVal . '">' . $reqMark . '</span>';
+                . $hVal . '</span><input type="hidden" name="' . $hName . '" value="' . $hVal . '">' . $reqMark . '</span>';
 
         case 'number':
             // Filter non-numeric on input (contenteditable tidak respect type="number").
             // Allowed: digits + optional decimal point + leading minus (industri standard).
-            return '<span class="f-wrap"' . $vAttrs . '><span class="f field-number" contenteditable="true" inputmode="decimal" data-field="' . $hName . '" oninput="filterNumeric(this)" onpaste="handleNumericPaste(event)">' . ($hVal ?: '') . '</span><input type="hidden" name="' . $hName . '" value="' . $hVal . '">' . $reqMark . '</span>';
+            return '<span class="f-wrap"' . $vAttrs . '><span class="f field-number" contenteditable="true" inputmode="decimal" data-field="' . $hName . '" oninput="filterNumeric(this)" onpaste="handleNumericPaste(event)">' . $hVal . '</span><input type="hidden" name="' . $hName . '" value="' . $hVal . '">' . $reqMark . '</span>';
 
         case 'date':
             return '<span class="f-wrap"' . $vAttrs . '><input type="date" class="field-date" name="' . $hName . '" value="' . $hVal . '" data-field="' . $hName . '">' . $reqMark . '</span>';
@@ -1554,7 +1554,7 @@ function renderFieldInputRaw($name, $type, $val, $options, $label, $validation =
             return $html;
 
         default: // text
-            return '<span class="f-wrap"' . $vAttrs . '><span class="f" contenteditable="true" data-field="' . $hName . '">' . ($hVal ?: '') . '</span><input type="hidden" name="' . $hName . '" value="' . $hVal . '">' . $reqMark . '</span>';
+            return '<span class="f-wrap"' . $vAttrs . '><span class="f" contenteditable="true" data-field="' . $hName . '">' . $hVal . '</span><input type="hidden" name="' . $hName . '" value="' . $hVal . '">' . $reqMark . '</span>';
     }
 }
 
