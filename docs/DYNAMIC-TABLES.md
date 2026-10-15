@@ -315,6 +315,53 @@ Old marker `{{tabledb.ns.col}}` (tanpa format pipe) tetap works **identical** to
 
 ---
 
+## Blok berulang, prosedur tersimpan, dan format tambahan (v4, 2026-10-15)
+
+### Blok berulang — `data-repeat`
+
+Satu bagian tata letak diulang per baris kueri, bukan hanya satu `<tr>`:
+
+```html
+<div data-repeat="bayi" data-repeat-break="page">
+  <p>Bayi ke-{{tabledb.bayi.urut}}: {{tabledb.bayi.nama}}</p>   <!-- di paragraf pun boleh -->
+  <table><tr><td>Berat</td><td>{{tabledb.bayi.berat|number}} g</td></tr></table>
+</div>
+```
+
+- Semua penanda `{{tabledb.<ns>.*}}` di dalam blok diisi dari baris itu, di mana saja letaknya; agregat (`sum:` dst) dihitung atas seluruh baris `<ns>`.
+- Kueri namespace lain di dalam blok dijalankan ulang **per baris induk**, dengan kolom induk sebagai parameter `{<ns>__<kolom>}`, mis. `CALL layanan.CetakHasilRad({tind__ID})` di dalam `<div data-repeat="tind">`.
+- `data-repeat-break="page"` = pemisah halaman di antara blok. Tidak ada baris = bloknya hilang. Blok boleh bersarang. Hanya `<div>` dan `<section>`.
+- Pola region berulang mail-merge Word / `for` Jinja.
+
+### Prosedur tersimpan — `CALL`
+
+`sql` boleh berupa satu `CALL skema.prosedur(arg, ...)` **hanya** untuk prosedur yang didaftarkan aplikasi pemakai:
+
+```php
+define('EZDOC_TABLEDB_PROCEDURES', ['bpjs.CetakSEP', 'layanan.CetakHasilRad']);
+```
+
+Argumen hanya `{param}`, teks `'...'` tanpa kutip/backslash, angka, atau `NULL` — tanpa subkueri, fungsi, atau pernyataan kedua. Result set tambahan dari `CALL` dikuras supaya kueri berikutnya tidak gagal "out of sync". Tanpa konstanta = tidak ada prosedur yang boleh (perilaku lama). Pola daftar izin (OWASP allowlist); sumber data prosedur di JasperReports/SSRS diatur administrator dengan cara yang sama.
+
+### Format tambahan
+
+| Pipe | Contoh | Hasil |
+|---|---|---|
+| `\|qr[:lebar]` | `{{tabledb.rad.DOKTER\|qr:80}}` | gambar QR berisi nilai kolom (tanpa pembuat QR: teks ter-escape) |
+| `\|default:<teks>` | `{{tabledb.sep.PRB\|default:}}`, `\|default:-` | isi pengganti saat kosong (filter `default` Jinja/Twig); tanpa ini kosong = "—" |
+
+Perbaikan: argumen `date`/`datetime`/`default` kini boleh memuat `:` — `|datetime:d/m/y H:i` dulu terpotong jadi `H` dan menitnya hilang.
+
+### Contoh template milik aplikasi pemakai — `EZDOC_EXAMPLES_PATHS`
+
+Template yang memanggil skema basis data pemakai bukan milik pustaka. Folder contoh tambahan:
+
+```php
+define('EZDOC_EXAMPLES_PATHS', [__DIR__ . '/ezdoc_contoh']);
+```
+
+Dibaca sesudah `examples/` bawaan; slug yang sama → bawaan menang.
+
 ## FAQ / Non-goals
 
 ### Q: Bisa formula pakai date arithmetic?

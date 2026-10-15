@@ -6,6 +6,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Added — tabel kueri: blok berulang, prosedur tersimpan berdaftar izin, `|qr`, `|default`; folder contoh milik pemakai (2026-10-15)**
+
+Untuk memindah cetakan laporan yang datanya dari prosedur SIMGOS tanpa
+menyalin logikanya. Lihat docs/DYNAMIC-TABLES.md §"Blok berulang…".
+
+- `data-repeat="ns"` (+ `data-repeat-break="page"`): satu blok tata letak per
+  baris; kueri lain di dalamnya menerima kolom induk sebagai `{ns__kolom}`.
+- `CALL skema.prosedur(...)` hanya untuk `EZDOC_TABLEDB_PROCEDURES`; argumen
+  sederhana saja; result set tambahan dikuras. Tanpa konstanta = perilaku lama.
+- `|qr[:lebar]`, `|default:<teks>`.
+- **Fixed**: argumen format yang memuat `:` (`|datetime:d/m/y H:i`) tidak lagi
+  terpotong.
+- `Example::roots()` + `EZDOC_EXAMPLES_PATHS`: contoh milik aplikasi pemakai
+  di luar pustaka; slug bawaan tidak bisa ditimpa.
+
+Uji: 2330 PHPUnit, PHPStan src & views bersih, MySQL sungguhan (CALL, CALL
+anak per induk, kueri sesudah CALL), mutasi 13/17 tertangkap — 3 setara, 1
+dijaga uji MySQL.
+
 **Added — contoh "Laporan Operasi": laporan yang seluruh isinya dari kueri (2026-10-13)**
 
 - `examples/laporan-operasi/`: satu kueri `op` (laporan terbaru untuk

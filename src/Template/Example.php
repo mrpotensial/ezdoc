@@ -33,10 +33,43 @@ final class Example
     /** Contoh yang dibuka kalau tidak disebut namanya. */
     public const DEFAULT_SLUG = 'surat-keterangan-tindakan';
 
-    /** Folder tempat semua contoh tinggal. */
+    /** Folder contoh bawaan pustaka. */
     public static function root(): string
     {
         return dirname(__DIR__, 2) . '/examples';
+    }
+
+    /**
+     * Semua folder contoh: bawaan pustaka dulu, lalu milik aplikasi pemakai.
+     *
+     * `EZDOC_EXAMPLES_PATHS` (larik jalur, atau JSON larik) menambahkan folder
+     * contoh milik pemakai — template yang memanggil skema basis datanya sendiri
+     * tidak termasuk pustaka yang netral, dan tidak boleh hilang saat pustakanya
+     * diganti versi baru. Pola folder tambahan yang sama dengan view override
+     * Laravel atau child theme WordPress.
+     *
+     * Slug yang sama di dua folder: yang bawaan menang — folder pemakai menambah,
+     * tidak menimpa diam-diam.
+     *
+     * @return list<string>
+     */
+    public static function roots(): array
+    {
+        $keluar = [self::root()];
+        if (defined('EZDOC_EXAMPLES_PATHS')) {
+            $tambahan = constant('EZDOC_EXAMPLES_PATHS');
+            if (is_string($tambahan)) {
+                $urai = json_decode($tambahan, true);
+                $tambahan = is_array($urai) ? $urai : [$tambahan];
+            }
+            foreach ((array) $tambahan as $jalur) {
+                if (is_string($jalur) && $jalur !== '' && is_dir($jalur)) {
+                    $keluar[] = rtrim($jalur, '/\\');
+                }
+            }
+        }
+
+        return array_values(array_unique($keluar));
     }
 
     /**
@@ -69,15 +102,22 @@ final class Example
      */
     public static function catalogue(): array
     {
-        $keluar = [];
-        $dasar = self::root();
-        if (!is_dir($dasar)) {
-            return $keluar;
-        }
-        foreach ((array) scandir($dasar) as $nama) {
-            if (!is_string($nama) || $nama === '.' || $nama === '..') {
+        // Nama folder dari semua akar; load() yang menentukan folder mana yang
+        // dipakai bila sama (bawaan dulu).
+        $semua = [];
+        foreach (self::roots() as $dasar) {
+            if (!is_dir($dasar)) {
                 continue;
             }
+            foreach ((array) scandir($dasar) as $nama) {
+                if (is_string($nama) && $nama !== '.' && $nama !== '..') {
+                    $semua[$nama] = true;
+                }
+            }
+        }
+
+        $keluar = [];
+        foreach (array_keys($semua) as $nama) {
             $muat = self::load($nama);  // tanpa config: kopnya tidak dipakai di sini
             if ($muat === null) {
                 continue;
@@ -109,9 +149,17 @@ final class Example
             return null;
         }
 
-        $dasar = realpath(self::root());
-        $dir = $dasar === false ? false : realpath($dasar . '/' . $slug);
-        if ($dasar === false || $dir === false || strpos($dir, $dasar) !== 0 || !is_dir($dir)) {
+        // Folder pertama yang punya slug ini — bawaan dulu, lalu milik pemakai.
+        $dir = false;
+        foreach (self::roots() as $akar) {
+            $dasar = realpath($akar);
+            $calon = $dasar === false ? false : realpath($dasar . '/' . $slug);
+            if ($dasar !== false && $calon !== false && strpos($calon, $dasar) === 0 && is_dir($calon)) {
+                $dir = $calon;
+                break;
+            }
+        }
+        if ($dir === false) {
             return null;
         }
 

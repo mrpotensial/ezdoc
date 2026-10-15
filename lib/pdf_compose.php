@@ -352,9 +352,15 @@ function executeDynQuery($query, $param_norm, $param_nopen, $dbFields, $conn) {
         return [];
     }
 
-    // Validate SELECT only
+    // Validate SELECT only — kecuali CALL ke prosedur yang didaftarkan aplikasi
+    // pemakai (lihat ezdoc_tabledb_procedure_allowed()).
     $normalized = preg_replace('/\s+/', ' ', strtoupper(ltrim($query)));
-    if (strpos($normalized, 'SELECT') !== 0 && strpos($normalized, 'WITH') !== 0) {
+    $isCall = strpos($normalized, 'CALL ') === 0;
+    if ($isCall) {
+        if (!ezdoc_tabledb_procedure_allowed($query)) {
+            return [];
+        }
+    } elseif (strpos($normalized, 'SELECT') !== 0 && strpos($normalized, 'WITH') !== 0) {
         return [];
     }
     $blocked = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'CREATE', 'REPLACE', 'GRANT', 'REVOKE'];
@@ -396,8 +402,18 @@ function executeDynQuery($query, $param_norm, $param_nopen, $dbFields, $conn) {
 
     $result = mysqli_stmt_get_result($stmt);
     $rows = [];
-    while ($row = mysqli_fetch_assoc($result)) {
+    while ($result && ($row = mysqli_fetch_assoc($result))) {
         $rows[] = $row;
+    }
+    // CALL selalu mengirim result set tambahan (status). Tanpa dikuras, kueri
+    // berikutnya di sambungan yang sama gagal "Commands out of sync".
+    if ($isCall) {
+        while (mysqli_stmt_more_results($stmt) && mysqli_stmt_next_result($stmt)) {
+            $sisa = mysqli_stmt_get_result($stmt);
+            if ($sisa) {
+                mysqli_free_result($sisa);
+            }
+        }
     }
     mysqli_stmt_close($stmt);
     return $rows;
@@ -479,6 +495,12 @@ function processTabledbRows($html, $tableDbQueries, $param_norm, $param_nopen, $
         ? $GLOBALS['ezdocTableRowsReady']
         : [];
 
+    // Blok berulang (data-repeat) diproses lebih dulu: penanda di dalamnya diisi
+    // per baris induk, dan baris tabel di dalamnya ikut dirender di situ.
+    if (stripos($html, 'data-repeat=') !== false) {
+        $html = _tabledbProcessRepeatBlocks($html, $tableDbQueries, $param_norm, $param_nopen, $dbFields, $conn, $barisSiap);
+    }
+
     // Regex captures: (1) namespace optional, (2) selector, (3) format pipe optional
     // Selector allows: word chars, `=`, `*`, `:` (for verb:field), operators inside formulas
     // Selector allows spaces (untuk formulas seperti `=qty * harga`); trim di parser.
@@ -530,6 +552,164 @@ function processTabledbRows($html, $tableDbQueries, $param_norm, $param_nopen, $
         }
         return $output;
     }, $html);
+}
+
+/**
+ * Prosedur tersimpan yang boleh dipanggil sebagai sumber tabel kueri.
+ *
+ * Daftar izin milik aplikasi pemakai: `EZDOC_TABLEDB_PROCEDURES`, larik nama
+ * `skema.prosedur` (atau JSON larik). Kosong / tidak didefinisikan = tidak ada
+ * prosedur yang boleh dipanggil — perilaku sebelum fitur ini ada.
+ *
+ * Kenapa daftar izin, bukan pola: penulis template bukan pemilik basis data.
+ * Prosedur bisa menulis; yang menentukan prosedur mana yang aman dibaca
+ * adalah pemilik basis data (OWASP: allowlist, bukan denylist). Sumber data
+ * prosedur tersimpan di alat laporan umum (JasperReports, SSRS) memakai prinsip
+ * yang sama: koneksi dan daftar sumbernya diatur administrator, bukan perancang.
+ *
+ * @return list<string> nama huruf kecil, tanpa backtick
+ */
+function ezdoc_tabledb_procedures(): array
+{
+    if (!defined('EZDOC_TABLEDB_PROCEDURES')) {
+        return [];
+    }
+    $daftar = constant('EZDOC_TABLEDB_PROCEDURES');
+    if (is_string($daftar)) {
+        $daftar = json_decode($daftar, true);
+    }
+    if (!is_array($daftar)) {
+        return [];
+    }
+
+    $out = [];
+    foreach ($daftar as $nama) {
+        if (is_string($nama) && preg_match('/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?$/', trim($nama)) === 1) {
+            $out[] = strtolower(trim($nama));
+        }
+    }
+
+    return $out;
+}
+
+/**
+ * Apakah `$query` satu panggilan CALL ke prosedur yang diizinkan, dengan
+ * argumen sederhana saja.
+ *
+ * Argumen yang diterima: penanda `{param}`, teks bertanda kutip tunggal tanpa
+ * kutip/backslash di dalamnya, angka, dan NULL. Tidak ada subkueri, fungsi,
+ * atau pernyataan kedua — bukan karena prepared statement tidak menahannya
+ * (ia menahan), tapi supaya yang lolos daftar izin benar-benar hanya
+ * "panggil prosedur ini dengan nilai ini".
+ *
+ * @param list<string>|null $allowed null = baca {@see ezdoc_tabledb_procedures()}
+ */
+function ezdoc_tabledb_procedure_allowed(string $query, ?array $allowed = null): bool
+{
+    $allowed = $allowed ?? ezdoc_tabledb_procedures();
+    if ($allowed === []) {
+        return false;
+    }
+
+    if (preg_match('/^\s*CALL\s+`?([A-Za-z0-9_]+)`?(?:\.`?([A-Za-z0-9_]+)`?)?\s*\((.*)\)\s*;?\s*$/is', $query, $m) !== 1) {
+        return false;
+    }
+    $nama = strtolower(($m[2] ?? '') !== '' ? $m[1] . '.' . $m[2] : $m[1]);
+    if (!in_array($nama, array_map('strtolower', $allowed), true)) {
+        return false;
+    }
+
+    $satu = '(?:\{[A-Za-z_][A-Za-z0-9_]*\}|\'[^\'\\\\]*\'|-?\d+(?:\.\d+)?|NULL)';
+    $argumen = trim($m[3]);
+
+    return $argumen === '' || preg_match('/^' . $satu . '(?:\s*,\s*' . $satu . ')*$/i', $argumen) === 1;
+}
+
+/**
+ * Blok berulang: `<div data-repeat="ns">…</div>` digandakan per baris kueri `ns`.
+ *
+ * Di dalam blok, SEMUA penanda `{{tabledb.ns.*}}` — di paragraf, sel, di mana
+ * saja — diisi dari baris itu; agregat (`sum:` dst) dihitung atas seluruh
+ * baris `ns`. Kueri lain di dalam blok dijalankan ulang per baris, dengan
+ * kolom baris induk tersedia sebagai parameter `{ns__kolom}` — misalnya
+ * `CALL layanan.CetakHasilRad({tindakan__ID})` di dalam blok per tindakan.
+ *
+ * Pola yang sama dengan region berulang mail-merge Word dan `for` di Jinja:
+ * satu bagian tata letak, diulang untuk tiap rekaman.
+ *
+ * Atribut opsional:
+ *   data-repeat-break="page"  pemisah halaman di antara blok
+ *
+ * Tidak ada baris = bloknya hilang. Blok bersarang didukung (diproses dari
+ * luar ke dalam). Atribut data-repeat* tidak ikut ke keluaran, supaya hasilnya
+ * tidak diproses dua kali.
+ */
+function _tabledbProcessRepeatBlocks(string $html, array $tableDbQueries, $param_norm, $param_nopen, $dbFields, $conn, array $barisSiap): string
+{
+    $pembuka = '/<(div|section)\b([^>]*?)\sdata-repeat="([A-Za-z_]\w*)"([^>]*)>/i';
+    $pos = 0;
+    $hasil = '';
+
+    while (preg_match($pembuka, $html, $m, PREG_OFFSET_CAPTURE, $pos) === 1) {
+        $mulai = $m[0][1];
+        $tag = strtolower($m[1][0]);
+        $ns = $m[3][0];
+        $akhirBuka = $mulai + strlen($m[0][0]);
+
+        // Penutup yang sepasang: hitung kedalaman tag yang sama.
+        $dalam = 1;
+        $cari = $akhirBuka;
+        $tutup = -1;
+        while ($dalam > 0 && preg_match('/<(\/?)' . $tag . '\b[^>]*>/i', $html, $t, PREG_OFFSET_CAPTURE, $cari) === 1) {
+            $dalam += $t[1][0] === '/' ? -1 : 1;
+            $cari = $t[0][1] + strlen($t[0][0]);
+            if ($dalam === 0) {
+                $tutup = $t[0][1];
+            }
+        }
+        if ($tutup < 0) {
+            break; // tag tidak tertutup: biarkan apa adanya
+        }
+
+        $isi = substr($html, $akhirBuka, $tutup - $akhirBuka);
+        $atribut = $m[2][0] . $m[4][0];
+        $pisahHalaman = preg_match('/\sdata-repeat-break="page"/i', $atribut) === 1;
+        $atribut = preg_replace('/\sdata-repeat(?:-[a-z]+)?="[^"]*"/i', '', $atribut);
+
+        $cfg = $tableDbQueries[$ns] ?? null;
+        $rows = [];
+        if (isset($barisSiap[$ns]) && is_array($barisSiap[$ns])) {
+            $rows = $barisSiap[$ns];
+        } elseif (is_array($cfg) && !empty($cfg['sql'])) {
+            $rows = executeDynQuery($cfg['sql'], $param_norm, $param_nopen, $dbFields, $conn);
+        }
+
+        $penanda = '/\{\{tabledb\.(' . preg_quote($ns, '/') . ')\.([^|}]+?)(?:\|([^}]+))?\}\}/';
+        $blok = [];
+        foreach ($rows as $baris) {
+            if (!is_array($baris)) {
+                continue;
+            }
+            $isiBaris = _tabledbRenderRow($isi, $penanda, $baris, $baris, $rows);
+
+            // Kueri lain di dalam blok: kolom induk jadi parameter {ns__kolom}.
+            $medanAnak = is_array($dbFields) ? $dbFields : [];
+            foreach ($baris as $kolom => $nilai) {
+                if (is_string($kolom) && preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $kolom) === 1) {
+                    $medanAnak[$ns . '__' . $kolom] = is_scalar($nilai) ? (string) $nilai : '';
+                }
+            }
+            $isiBaris = processTabledbRows($isiBaris, $tableDbQueries, $param_norm, $param_nopen, $medanAnak, $conn);
+
+            $blok[] = '<' . $tag . $atribut . '>' . $isiBaris . '</' . $tag . '>';
+        }
+
+        $hasil .= substr($html, $pos, $mulai - $pos)
+            . implode($pisahHalaman ? '<div style="page-break-before:always;"></div>' : '', $blok);
+        $pos = $cari;
+    }
+
+    return $hasil . substr($html, $pos);
 }
 
 /**
@@ -587,7 +767,14 @@ function _tabledbParseFormat(?string $fmt): array {
         return ['type' => 'text', 'args' => []];
     }
     $parts = explode(':', $fmt);
-    return ['type' => strtolower(trim($parts[0])), 'args' => array_slice($parts, 1)];
+    $type = strtolower(trim($parts[0]));
+    // Argumen tunggal yang boleh memuat ':' sendiri — format jam ("d/m/y H:i")
+    // dan teks pengganti. Dulu "H:i" terpotong jadi "H" dan jamnya tercetak
+    // tanpa menit.
+    if (in_array($type, ['date', 'datetime', 'default'], true) && count($parts) > 1) {
+        return ['type' => $type, 'args' => [implode(':', array_slice($parts, 1))]];
+    }
+    return ['type' => $type, 'args' => array_slice($parts, 1)];
 }
 
 /**
@@ -650,6 +837,15 @@ function _tabledbRenderRow(string $rowHtml, string $markerRegex, array $rowConte
         }
 
         // Format
+        //
+        // |default:<teks> — isi pengganti saat kosong, boleh kosong sama sekali
+        // ({{x|default:}}). Filter `default` Jinja/Twig. Tanpanya nilai kosong
+        // tampil "—" bergaris titik, yang berguna di layar perancang tapi bukan
+        // isi dokumen yang semestinya.
+        if ($format['type'] === 'default') {
+            $teks = ($rawValue === null || $rawValue === '') ? (string) ($format['args'][0] ?? '') : (string) $rawValue;
+            return \Ezdoc\Table\Formatter::escapeHtml($teks);
+        }
         if ($rawValue === null || $rawValue === '') {
             // Show dash BUT dgn title tooltip yg explain WHY — user bisa hover cek
             $titleAttr = $nullReason !== ''
@@ -752,6 +948,17 @@ function _tabledbFormatValue($value, array $format): string {
         case 'datetime':
             $fmt = $args[0] ?? 'd/m/Y H:i';
             return \Ezdoc\Table\Formatter::formatDate($value, $fmt, $locale);
+        case 'qr':
+            // Gambar QR berisi nilai kolom — mis. nama dokter yang menandatangani
+            // per tindakan, atau nomor kartu. Field barcode/QR di alat laporan
+            // umum bekerja sama: isinya dari data, bukan diketik.
+            //   {{tabledb.ns.kolom|qr}} atau |qr:80 (lebar px)
+            $lebar = isset($args[0]) && ctype_digit((string) $args[0]) ? max(20, min(400, (int) $args[0])) : 80;
+            $src = function_exists('ezdoc_qr_data_uri') ? ezdoc_qr_data_uri((string) $value, 200, 5) : '';
+            if ($src === '') {
+                return \Ezdoc\Table\Formatter::escapeHtml((string) $value);
+            }
+            return '<img src="' . htmlspecialchars($src, ENT_QUOTES) . '" class="qr-img" style="width:' . $lebar . 'px;height:auto;" alt="QR">';
         case 'text':
         default:
             return \Ezdoc\Table\Formatter::escapeHtml((string) $value);
