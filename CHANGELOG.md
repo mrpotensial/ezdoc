@@ -6,6 +6,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Ver
 
 ## [Unreleased]
 
+**Removed — contoh `laporan-operasi` dipindah ke aplikasi pemakai (2026-10-15)**
+
+Contoh itu memanggil `gambar.laporan_operasi` (skema basis data pemakai), jadi
+bukan milik pustaka yang netral. Kini tinggal di folder contoh pemakai
+(`EZDOC_EXAMPLES_PATHS`). Aturan `AllExamplesTest` untuk contoh tanpa field
+tetap berlaku bagi contoh apa pun yang memakainya.
+
 **Added — tabel kueri: blok berulang, prosedur tersimpan berdaftar izin, `|qr`, `|default`; folder contoh milik pemakai (2026-10-15)**
 
 Untuk memindah cetakan laporan yang datanya dari prosedur SIMGOS tanpa
