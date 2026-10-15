@@ -958,7 +958,10 @@ function _tabledbFormatValue($value, array $format): string {
             if ($src === '') {
                 return \Ezdoc\Table\Formatter::escapeHtml((string) $value);
             }
-            return '<img src="' . htmlspecialchars($src, ENT_QUOTES) . '" class="qr-img" style="width:' . $lebar . 'px;height:auto;" alt="QR">';
+            // inline-block ditulis langsung: CSS dasar halaman (mis. preflight
+            // Tailwind `img { display: block }`) membuat gambar jadi blok sendiri
+            // dan menempel ke kiri, mengabaikan text-align sel/blok di sekitarnya.
+            return '<img src="' . htmlspecialchars($src, ENT_QUOTES) . '" class="qr-img" style="display:inline-block;vertical-align:middle;width:' . $lebar . 'px;height:auto;" alt="QR">';
         case 'text':
         default:
             return \Ezdoc\Table\Formatter::escapeHtml((string) $value);
@@ -1256,7 +1259,9 @@ function renderContentForPdf($html, $logos, $logoSizes, $configTtd, $ttdValues, 
         if ($qrData) {
             // Generate QR code
             $qrSrc = ezdoc_qr_data_uri($qrData, 200, 5);
-            $style = "width:" . h($width) . ";height:auto;";
+            // inline-block: CSS dasar halaman (preflight Tailwind) menjadikan img
+            // blok yang mengabaikan text-align di sekitarnya — lihat format |qr.
+            $style = "display:inline-block;vertical-align:middle;width:" . h($width) . ";height:auto;";
             $imgClass = "qr-img";
 
             if ($isFloating) {
